@@ -1,5 +1,5 @@
 <template>
-  <div class="dashboard-page">
+  <div class="dashboard-page" v-loading="loading">
     <div class="kpi-grid">
       <el-card v-for="card in kpiCards" :key="card.title" shadow="never" class="kpi-card">
         <div class="kpi-content">
@@ -20,374 +20,948 @@
     </div>
 
     <div class="panel-grid">
-      <el-card shadow="never" class="panel-card">
-        <template #header>
-          <div class="panel-header">
-            <span>Brand 库存占比分析</span>
-            <el-icon><InfoFilled /></el-icon>
+      <el-card shadow="never" class="panel-card brand-analysis-card">
+        <div class="brand-card-head">
+          <div>
+            <div class="brand-title">
+              <span>Brand 库存占比分析</span>
+            </div>
+            <div class="brand-subtitle">全部仓库内不同 Brand 的库存价值占比及具体数量</div>
           </div>
-        </template>
-        <div class="panel-subtitle">全部仓库内不同 Brand 的库存占比及具体数量</div>
-        <div class="panel-content two-col">
-          <div ref="brandPieRef" class="chart-box small"></div>
-          <div class="brand-table">
-            <div class="brand-head">
-              <span>Brand</span><span>数量（件）</span><span>占比</span>
+        </div>
+        <div class="brand-analysis-body">
+          <div ref="brandPieRef" class="brand-chart"></div>
+          <div class="brand-summary-side">
+            <div class="brand-table-head">
+              <span>品牌</span>
+              <span>数量</span>
             </div>
-            <div v-for="row in brandRows" :key="row.name" class="brand-row">
-              <span class="brand-name">
-                <i class="dot" :style="{ backgroundColor: row.color }"></i>{{ row.name }}
-              </span>
-              <span>{{ row.value }}</span>
-              <span>{{ row.rate }}%</span>
+            <div class="brand-legend-grid">
+              <div v-for="row in brandChartRows" :key="row.name" class="brand-legend-item">
+                <span class="legend-left">
+                  <i class="dot" :style="{ backgroundColor: row.color }"></i>
+                  <span class="legend-name">{{ row.name }}</span>
+                </span>
+                <span>{{ formatNumber(row.value) }}件</span>
+              </div>
             </div>
-            <div class="top-brand">Top Brand: <b>CHANEL</b></div>
+            <button type="button" class="view-all-brand" @click="openAllBrandDialog">
+              <span>查看全部品牌</span>
+              <b>{{ brandRows.length }}</b>
+              <el-icon><ArrowRight /></el-icon>
+            </button>
           </div>
         </div>
       </el-card>
 
-      <el-card shadow="never" class="panel-card">
-        <template #header>
-          <div class="panel-header"><span>库存周转天数分布</span></div>
-        </template>
-        <div class="panel-subtitle">按周转周期分组，突出高周转与滞销库存</div>
-        <div class="turnover-rows">
-          <div v-for="row in turnoverRows" :key="row.label" class="turnover-row">
-            <span class="t-label">{{ row.label }}</span>
-            <div class="t-bar-wrap">
-              <div class="t-bar" :style="{ width: row.width + '%', background: row.color }"></div>
+      <el-card shadow="never" class="panel-card brand-analysis-card">
+        <div class="brand-card-head">
+          <div>
+            <div class="brand-title">
+              <span>库存周转天数分布</span>
             </div>
-            <span class="t-value">{{ row.value }}件</span>
-            <span class="t-rate">{{ row.rate }}%</span>
-            <el-tag size="small" :type="row.tagType" effect="light">{{ row.tag }}</el-tag>
+            <div class="brand-subtitle">按周转周期分组，突出高周转与滞销库存</div>
           </div>
         </div>
-        <div class="panel-warning">滞销库存预警：15天以上库存占比偏高</div>
+        <div ref="turnoverBarRef" class="chart-box turnover-chart"></div>
+        <div v-if="slowMovingWarning" class="panel-warning">{{ slowMovingWarning }}</div>
       </el-card>
 
-      <el-card shadow="never" class="panel-card">
-        <template #header>
-          <div class="panel-header">
-            <span>货物价值区间分布</span>
-            <el-icon><InfoFilled /></el-icon>
+      <el-card shadow="never" class="panel-card brand-analysis-card">
+        <div class="brand-card-head">
+          <div>
+            <div class="brand-title">
+              <span>商品销售价区间分布</span>
+            </div>
+            <div class="brand-subtitle">固定按 SKU 销售价展示当前有效库存的数量与销售价值</div>
           </div>
-        </template>
-        <div class="panel-subtitle">展示库存货物按价值区间的数量与占比</div>
-        <div ref="valueBarRef" class="chart-box medium"></div>
-        <div class="panel-footnote">高价值库存（5001以上）占比 23%</div>
-      </el-card>
-
-      <el-card shadow="never" class="panel-card">
-        <template #header>
-          <div class="panel-header">
-            <span>毛利润对比分析</span>
-            <el-icon><InfoFilled /></el-icon>
-          </div>
-        </template>
-        <div class="compare-toolbar">
-          <div class="toolbar-item">时间段A：2026-03-01 至 2026-03-31</div>
-          <div class="toolbar-item">时间段B：2026-04-01 至 2026-04-30</div>
-          <el-radio-group v-model="period" size="small">
-            <el-radio-button label="1个月" />
-            <el-radio-button label="季度" />
-            <el-radio-button label="半年" />
-            <el-radio-button label="一年" />
-          </el-radio-group>
         </div>
-        <div class="chart-mode-row">
-          <el-radio-group v-model="compareMode" size="small">
-            <el-radio-button label="aligned">按周期第N天对比</el-radio-button>
-            <el-radio-button label="realDate">按真实日期展示</el-radio-button>
-          </el-radio-group>
+        <div class="value-analysis-body">
+          <div ref="valueBarRef" class="chart-box medium value-chart"></div>
+          <div class="value-insight-side">
+            <div class="brand-table-head">
+              <span>价格结构</span>
+              <span>表现</span>
+            </div>
+            <div class="value-insight-row">
+              <span>主力价格带</span>
+              <b>{{ valueRangeInsight.dominantLabel }}</b>
+            </div>
+            <div class="value-insight-row">
+              <span>覆盖库存</span>
+              <b>{{ formatNumber(valueRangeInsight.totalQty) }}件</b>
+            </div>
+            <div class="value-insight-row">
+              <span>高价库存占比</span>
+              <b>{{ valueRangeInsight.highRate }}%</b>
+            </div>
+            <div v-if="valueRangeInsight.advice" class="value-advice">{{ valueRangeInsight.advice }}</div>
+          </div>
+        </div>
+      </el-card>
+
+      <el-card shadow="never" class="panel-card brand-analysis-card profit-analysis-card">
+        <div class="brand-card-head">
+          <div>
+            <div class="brand-title">
+              <span>毛利润趋势分析</span>
+            </div>
+            <div class="brand-subtitle">追踪毛利润金额变化，支持预设周期与时间段对比</div>
+          </div>
+        </div>
+        <div class="profit-filter-panel">
+          <el-form :inline="true" class="analytics-filter" @submit.prevent>
+            <el-form-item label="毛利润模式">
+              <el-radio-group v-model="filters.profitMode" size="default">
+                <el-radio-button label="preset">预设周期</el-radio-button>
+                <el-radio-button label="compare">时间段对比</el-radio-button>
+              </el-radio-group>
+            </el-form-item>
+            <el-form-item v-if="filters.profitMode === 'preset'" label="周期">
+              <el-select v-model="filters.rangeType" style="width: 140px">
+                <el-option label="过去7天" value="week" />
+                <el-option label="过去15天" value="halfMonth" />
+                <el-option label="过去4周" value="month" />
+                <el-option label="过去3个月" value="quarter" />
+              </el-select>
+            </el-form-item>
+            <div v-if="filters.profitMode === 'compare'" class="profit-filter-break"></div>
+            <el-form-item v-if="filters.profitMode === 'compare'" class="profit-date-item" label="时间段A">
+              <el-date-picker
+                v-model="periodADateRangeModel"
+                type="daterange"
+                range-separator="至"
+                start-placeholder="开始日期"
+                end-placeholder="结束日期"
+                value-format="YYYY-MM-DD"
+                clearable
+                style="width: 390px"
+              />
+            </el-form-item>
+            <el-form-item v-if="filters.profitMode === 'compare'" class="profit-date-item" label="时间段B">
+              <el-date-picker
+                v-model="periodBDateRangeModel"
+                type="daterange"
+                range-separator="至"
+                start-placeholder="开始日期"
+                end-placeholder="结束日期"
+                value-format="YYYY-MM-DD"
+                clearable
+                style="width: 390px"
+              />
+            </el-form-item>
+          </el-form>
+          <div class="compare-toolbar">
+            <div class="toolbar-item">
+            预设周期展示单条利润金额趋势；时间段对比按第 N 天对齐展示两条线。
+          </div>
+          </div>
         </div>
         <div class="compare-kpis">
           <div class="mini-kpi">
-            <div>时间段A毛利润</div>
-            <b>￥{{ formatNumber(compareSummary.aTotal) }}</b>
+            <div>毛利润合计</div>
+            <b class="positive">￥{{ formatNumber(profitSummary.total) }}</b>
           </div>
           <div class="mini-kpi">
-            <div>时间段B毛利润</div>
-            <b class="positive">￥{{ formatNumber(compareSummary.bTotal) }}</b>
+            <div>{{ filters.profitMode === 'compare' ? '时间段A利润' : '最高利润金额' }}</div>
+            <b>￥{{ formatNumber(profitSummary.primary) }}</b>
           </div>
           <div class="mini-kpi">
-            <div>差值</div>
-            <b class="warning">{{ compareSummary.diff >= 0 ? '+' : '-' }}￥{{ formatNumber(Math.abs(compareSummary.diff)) }}</b>
+            <div>{{ filters.profitMode === 'compare' ? '时间段B利润' : '最低利润金额' }}</div>
+            <b>￥{{ formatNumber(profitSummary.secondary) }}</b>
           </div>
           <div class="mini-kpi">
-            <div>增幅</div>
-            <b :class="compareSummary.growth >= 0 ? 'positive' : 'warning'">
-              {{ compareSummary.growth >= 0 ? '+' : '' }}{{ compareSummary.growth.toFixed(1) }}%
-            </b>
-          </div>
-          <div class="trend-box">
-            <el-icon><TrendCharts /></el-icon>
-            <span>{{ compareSummary.diff >= 0 ? '当前趋势向好' : '当前趋势承压' }}</span>
+            <div>数据点</div>
+            <b>{{ profitSummary.count }}</b>
           </div>
         </div>
-        <div ref="profitLineRef" class="chart-box medium"></div>
-        <div v-if="compareMode === 'aligned' && hasDifferentRangeLength" class="chart-tip warning">
-          两个时间段天数不一致，当前图表已按较短周期对齐比较。
-        </div>
-        <div v-if="compareMode === 'realDate'" class="chart-tip info">
-          当前为按真实日期展示（非对齐比较模式），用于观察趋势，不用于同日严格对比。
-        </div>
+        <div ref="profitLineRef" class="chart-box medium profit-chart"></div>
       </el-card>
     </div>
+
+    <el-dialog
+      v-model="allBrandDialogVisible"
+      class="all-brand-dialog"
+      width="860px"
+      :show-close="false"
+      append-to-body
+    >
+      <template #header>
+        <div class="all-brand-header">
+          <span>全部品牌</span>
+          <button type="button" @click="allBrandDialogVisible = false">
+            <el-icon><Close /></el-icon>
+          </button>
+        </div>
+      </template>
+      <div class="all-brand-toolbar">
+        <el-input v-model="brandSearchKeyword" clearable placeholder="搜索 Brand" class="brand-search">
+          <template #prefix>
+            <el-icon><Search /></el-icon>
+          </template>
+        </el-input>
+        <el-select v-model="allBrandSort" class="brand-sort">
+          <template #prefix>
+            <el-icon><Sort /></el-icon>
+          </template>
+          <el-option label="按数量降序" value="quantityDesc" />
+          <el-option label="按数量升序" value="quantityAsc" />
+          <el-option label="按库存价值降序" value="valueDesc" />
+          <el-option label="按库存价值升序" value="valueAsc" />
+          <el-option label="按 Brand 排序" value="nameAsc" />
+        </el-select>
+      </div>
+      <div class="all-brand-table brand-value-table">
+        <div class="all-brand-table-head">
+          <span>品牌</span>
+          <span>数量</span>
+          <span>库存价值</span>
+          <span>价值占比</span>
+        </div>
+        <div v-for="row in pagedAllBrandRows" :key="row.name" class="all-brand-table-row">
+          <span class="brand-rank-name">
+            <i class="dot" :style="{ backgroundColor: row.color }"></i>
+            {{ row.name }}
+          </span>
+          <span>{{ formatNumber(row.value) }}件</span>
+          <span>{{ formatDollarStr(row.inventoryValue) }}</span>
+          <span>{{ row.valueRate.toFixed(1) }}%</span>
+        </div>
+        <el-empty v-if="!pagedAllBrandRows.length" description="暂无匹配品牌" :image-size="72" />
+      </div>
+      <div class="all-brand-footer">
+        <span>共 {{ filteredAllBrandRows.length }} 个品牌</span>
+        <span>{{ allBrandPageStart }}-{{ allBrandPageEnd }} / {{ filteredAllBrandRows.length }}</span>
+        <el-pagination
+          v-model:current-page="allBrandPage"
+          small
+          layout="prev, pager, next"
+          :page-size="ALL_BRAND_PAGE_SIZE"
+          :total="filteredAllBrandRows.length"
+          :pager-count="5"
+        />
+      </div>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import * as echarts from 'echarts'
-import { Box, Coin, TrendCharts, WarningFilled, InfoFilled } from '@element-plus/icons-vue'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { ArrowRight, Box, Close, Coin, InfoFilled, Search, Sort, TrendCharts, WarningFilled } from '@element-plus/icons-vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import {
+  getAnalyticsOverview,
+  getBrandInventoryRatio,
+  getGrossProfitTrend,
+  getTurnoverDaysDistribution,
+  getValueRangeDistribution
+} from '@/api/wms/analytics'
 
-const period = ref('1个月')
-const compareMode = ref('aligned')
+const loading = ref(false)
 const brandPieRef = ref(null)
+const turnoverBarRef = ref(null)
 const valueBarRef = ref(null)
 const profitLineRef = ref(null)
 let brandPieChart = null
+let turnoverBarChart = null
 let valueBarChart = null
 let profitLineChart = null
 
-const kpiCards = [
-  { title: '当前库存总量', value: '1,248', unit: '件', icon: Box, iconClass: 'blue' },
-  { title: '库存总价值', value: '¥3,860,000', icon: Coin, iconClass: 'purple' },
-  { title: '本月毛利润', value: '¥152,400', subText: '+18.5%', icon: TrendCharts, iconClass: 'green' },
-  { title: '15天以上库存占比', value: '29%', tag: '预警', icon: WarningFilled, iconClass: 'red' }
-]
+const BRAND_COLORS = ['#2478ff', '#22c4cf', '#44c77d', '#ffbd2e', '#7256ed', '#8492a6', '#ef4f4f', '#24b989', '#745df0', '#2f80ed']
+const OTHER_BRAND_COLOR = '#dce3ec'
+const ALL_BRAND_PAGE_SIZE = 12
 
-const brandRows = [
-  { name: 'CHANEL', value: 320, rate: 26, color: '#2f75ff' },
-  { name: 'LOUIS VUITTON', value: 260, rate: 21, color: '#17c2d1' },
-  { name: 'HERMES', value: 180, rate: 15, color: '#41cc84' },
-  { name: 'GUCCI', value: 160, rate: 13, color: '#f3c347' },
-  { name: 'DIOR', value: 140, rate: 11, color: '#8d71ee' },
-  { name: '其他', value: 188, rate: 14, color: '#a6adbb' }
-]
+const allBrandDialogVisible = ref(false)
+const brandSearchKeyword = ref('')
+const allBrandSort = ref('quantityDesc')
+const allBrandPage = ref(1)
 
-const turnoverRows = [
-  { label: '1-7天', value: 420, rate: 38, width: 100, color: '#24c08a', tag: '健康', tagType: 'success' },
-  { label: '8-14天', value: 360, rate: 33, width: 86, color: '#f5ac2e', tag: '提醒', tagType: 'warning' },
-  { label: '15天以上', value: 320, rate: 29, width: 76, color: '#ef5454', tag: '预警', tagType: 'danger' }
-]
-
-const periodA = {
-  label: '时间段A',
-  startDate: '2026-03-01',
-  endDate: '2026-03-31',
-  values: [
-    9000, 12000, 11000, 14000, 13000, 18000, 16500, 20000, 18500, 22000,
-    21000, 24000, 23800, 25000, 13800, 22000, 21000, 23200, 24500, 26000,
-    25500, 26800, 27400, 28200, 28800, 29700, 30500, 31200, 32000, 32900, 33500
-  ]
-}
-
-const periodB = {
-  label: '时间段B',
-  startDate: '2026-04-01',
-  endDate: '2026-04-30',
-  values: [
-    11000, 10500, 15000, 14500, 17000, 25000, 23000, 27500, 26000, 29000,
-    32000, 30000, 34000, 33200, 28900, 31800, 32500, 33800, 35200, 36000,
-    37200, 36600, 37800, 39000, 40200, 41500, 42200, 43800, 44600, 45800
-  ]
-}
-
-const alignedDayTicks = [1, 5, 10, 15, 20, 25, 30]
-
-const minCompareLength = computed(() => Math.min(periodA.values.length, periodB.values.length))
-const hasDifferentRangeLength = computed(() => periodA.values.length !== periodB.values.length)
-
-const compareSummary = computed(() => {
-  const aTotal = periodA.values.reduce((sum, n) => sum + n, 0)
-  const bTotal = periodB.values.reduce((sum, n) => sum + n, 0)
-  const diff = bTotal - aTotal
-  const growth = aTotal ? (diff / aTotal) * 100 : 0
-  return { aTotal, bTotal, diff, growth }
+const filters = reactive({
+  profitMode: 'preset',
+  rangeType: 'week',
+  periodAStartDate: undefined,
+  periodAEndDate: undefined,
+  periodBStartDate: undefined,
+  periodBEndDate: undefined
 })
 
-const formatNumber = (num) => Number(num || 0).toLocaleString('en-US')
+const periodADateRangeModel = computed({
+  get() {
+    if (filters.periodAStartDate && filters.periodAEndDate) {
+      return [filters.periodAStartDate, filters.periodAEndDate]
+    }
+    return null
+  },
+  set(val) {
+    if (val && val.length === 2) {
+      filters.periodAStartDate = val[0]
+      filters.periodAEndDate = val[1]
+    } else {
+      filters.periodAStartDate = undefined
+      filters.periodAEndDate = undefined
+    }
+  }
+})
 
-const dateAt = (startDate, dayIndex) => {
-  const dt = new Date(startDate)
-  dt.setDate(dt.getDate() + dayIndex - 1)
-  const y = dt.getFullYear()
-  const m = `${dt.getMonth() + 1}`.padStart(2, '0')
-  const d = `${dt.getDate()}`.padStart(2, '0')
-  return `${y}-${m}-${d}`
+const periodBDateRangeModel = computed({
+  get() {
+    if (filters.periodBStartDate && filters.periodBEndDate) {
+      return [filters.periodBStartDate, filters.periodBEndDate]
+    }
+    return null
+  },
+  set(val) {
+    if (val && val.length === 2) {
+      filters.periodBStartDate = val[0]
+      filters.periodBEndDate = val[1]
+    } else {
+      filters.periodBStartDate = undefined
+      filters.periodBEndDate = undefined
+    }
+  }
+})
+
+function parseNum(v) {
+  if (v === null || v === undefined || v === '') return 0
+  const n = Number(v)
+  return Number.isFinite(n) ? n : 0
 }
+
+function formatNumber(num) {
+  return Number(num || 0).toLocaleString('en-US')
+}
+
+function formatMoneyStr(v) {
+  const n = parseNum(v)
+  return `¥${formatNumber(n)}`
+}
+
+function formatDollarStr(v) {
+  const n = parseNum(v)
+  return `$${formatNumber(n)}`
+}
+
+const overviewVo = ref(null)
+const brandRatioList = ref([])
+const turnoverDistList = ref([])
+const valueDistList = ref([])
+const profitTrendList = ref([])
+
+function buildProfitTrendQuery() {
+  if (hasCompleteCompareRange()) {
+    const q = {}
+    if (filters.periodAStartDate) q.periodAStartDate = filters.periodAStartDate
+    if (filters.periodAEndDate) q.periodAEndDate = filters.periodAEndDate
+    if (filters.periodBStartDate) q.periodBStartDate = filters.periodBStartDate
+    if (filters.periodBEndDate) q.periodBEndDate = filters.periodBEndDate
+    return q
+  }
+  return { rangeType: filters.rangeType }
+}
+
+function hasCompleteCompareRange() {
+  return (
+    filters.profitMode === 'compare' &&
+    filters.periodAStartDate &&
+    filters.periodAEndDate &&
+    filters.periodBStartDate &&
+    filters.periodBEndDate
+  )
+}
+
+const kpiCards = computed(() => {
+  const o = overviewVo.value
+  if (!o) {
+    return [
+      { title: '当前库存总量', value: '-', unit: '件', icon: Box, iconClass: 'blue' },
+      { title: '库存总价值', value: '-', icon: Coin, iconClass: 'purple' },
+      { title: '当月售罄率', value: '-', icon: TrendCharts, iconClass: 'green' },
+      { title: '平均库龄', value: '-', unit: '天', icon: WarningFilled, iconClass: 'red' }
+    ]
+  }
+  const sellPct = (parseNum(o.sellThroughRate) * 100).toFixed(2)
+  return [
+    {
+      title: '当前库存总量',
+      value: formatNumber(parseNum(o.totalInventoryQuantity)),
+      unit: '件',
+      icon: Box,
+      iconClass: 'blue'
+    },
+    {
+      title: '库存总价值',
+      value: formatDollarStr(o.totalInventoryValue),
+      icon: Coin,
+      iconClass: 'purple'
+    },
+    {
+      title: '当月售罄率',
+      value: sellPct,
+      unit: '%',
+      icon: TrendCharts,
+      iconClass: 'green'
+    },
+    {
+      title: '平均库龄',
+      value: parseNum(o.averageAge).toFixed(1),
+      unit: '天',
+      icon: WarningFilled,
+      iconClass: 'red'
+    }
+  ]
+})
+
+const brandRows = computed(() => {
+  const list = brandRatioList.value || []
+  const rows = list
+    .map((row) => ({
+      name: row.brandName || 'Unknown',
+      value: parseNum(row.quantity),
+      inventoryValue: parseNum(row.inventoryValue)
+    }))
+    .sort((a, b) => b.value - a.value)
+  const totalInventoryValue = rows.reduce((sum, row) => sum + row.inventoryValue, 0)
+  return rows
+    .map((row, i) => ({
+      ...row,
+      rank: i + 1,
+      valueRate: totalInventoryValue ? (row.inventoryValue / totalInventoryValue) * 100 : 0,
+      color: BRAND_COLORS[i % BRAND_COLORS.length]
+    }))
+})
+
+const brandChartRows = computed(() => {
+  const rows = brandRows.value
+  const topRows = rows.slice(0, 10)
+  const otherRows = rows.slice(10)
+  if (!otherRows.length) return topRows
+  const otherQty = otherRows.reduce((sum, row) => sum + row.value, 0)
+  const otherValue = otherRows.reduce((sum, row) => sum + row.inventoryValue, 0)
+  const otherValueRate = otherRows.reduce((sum, row) => sum + row.valueRate, 0)
+  return [
+    ...topRows,
+    {
+      name: '其他品牌',
+      value: otherQty,
+      valueRate: otherValueRate,
+      inventoryValue: otherValue,
+      color: OTHER_BRAND_COLOR
+    }
+  ]
+})
+
+const filteredAllBrandRows = computed(() => {
+  const keyword = brandSearchKeyword.value.trim().toLowerCase()
+  const rows = keyword
+    ? brandRows.value.filter((row) => row.name.toLowerCase().includes(keyword))
+    : [...brandRows.value]
+  const sortMap = {
+    quantityDesc: (a, b) => b.value - a.value,
+    quantityAsc: (a, b) => a.value - b.value,
+    valueDesc: (a, b) => b.inventoryValue - a.inventoryValue,
+    valueAsc: (a, b) => a.inventoryValue - b.inventoryValue,
+    nameAsc: (a, b) => a.name.localeCompare(b.name)
+  }
+  return rows.sort(sortMap[allBrandSort.value] || sortMap.quantityDesc)
+})
+
+const pagedAllBrandRows = computed(() => {
+  const start = (allBrandPage.value - 1) * ALL_BRAND_PAGE_SIZE
+  return filteredAllBrandRows.value.slice(start, start + ALL_BRAND_PAGE_SIZE)
+})
+
+const allBrandPageStart = computed(() => {
+  if (!filteredAllBrandRows.value.length) return 0
+  return (allBrandPage.value - 1) * ALL_BRAND_PAGE_SIZE + 1
+})
+
+const allBrandPageEnd = computed(() => Math.min(allBrandPage.value * ALL_BRAND_PAGE_SIZE, filteredAllBrandRows.value.length))
+
+function openAllBrandDialog() {
+  allBrandDialogVisible.value = true
+}
+
+const TURNOVER_LABELS = ['1-7', '8-15', '15+']
+const TURNOVER_ORDER = { '1-7': 0, '8-15': 1, '15+': 2 }
+
+function turnoverLabel(apiLabel) {
+  if (apiLabel === '15+') return '15天以上'
+  if (apiLabel === '1-7') return '1-7天'
+  if (apiLabel === '8-15') return '8-15天'
+  return apiLabel
+}
+
+function turnoverMeta(apiLabel) {
+  if (apiLabel === '15+') return { tag: '预警', tagType: 'danger', color: '#ef5454' }
+  if (apiLabel === '8-15') return { tag: '提醒', tagType: 'warning', color: '#f5ac2e' }
+  return { tag: '健康', tagType: 'success', color: '#24c08a' }
+}
+
+const turnoverRows = computed(() => {
+  const rawMap = new Map((turnoverDistList.value || []).map((r) => [r.rangeLabel, r]))
+  const raw = TURNOVER_LABELS.map((label) => rawMap.get(label) || { rangeLabel: label, quantity: 0 }).sort(
+    (a, b) => (TURNOVER_ORDER[a.rangeLabel] ?? 99) - (TURNOVER_ORDER[b.rangeLabel] ?? 99)
+  )
+  const totalQty = raw.reduce((s, r) => s + parseNum(r.quantity), 0)
+  const maxQty = raw.reduce((m, r) => Math.max(m, parseNum(r.quantity)), 0) || 1
+  return raw.map((r) => {
+    const qty = parseNum(r.quantity)
+    const rate = totalQty ? (qty / totalQty) * 100 : 0
+    const meta = turnoverMeta(r.rangeLabel)
+    return {
+      label: turnoverLabel(r.rangeLabel),
+      value: qty,
+      rate: rate.toFixed(0),
+      width: (qty / maxQty) * 100,
+      color: meta.color,
+      tag: meta.tag,
+      tagType: meta.tagType
+    }
+  })
+})
+
+const VALUE_RANGE_ORDER = {
+  '0-500': 0,
+  '501-1000': 1,
+  '1001-2000': 2,
+  '2001-5000': 3,
+  '5001-10000': 4,
+  '10000+': 5
+}
+const VALUE_RANGE_LABELS = ['0-500', '501-1000', '1001-2000', '2001-5000', '5001-10000', '10000+']
+const VALUE_BAR_COLORS = ['#4b9cff', '#5aa6ff', '#66afff', '#8d71ee', '#41cc84', '#f3c347']
+
+const valueRangeInsight = computed(() => {
+  const rawMap = new Map((valueDistList.value || []).map((r) => [r.rangeLabel, r]))
+  const rows = VALUE_RANGE_LABELS.map((label) => rawMap.get(label) || { rangeLabel: label, quantity: 0, totalValue: 0 })
+  const totalQty = rows.reduce((sum, row) => sum + parseNum(row.quantity), 0)
+  const dominant = rows.reduce((best, row) => (parseNum(row.quantity) > parseNum(best.quantity) ? row : best), rows[0])
+  const highQty = rows
+    .filter((row) => ['5001-10000', '10000+'].includes(row.rangeLabel))
+    .reduce((sum, row) => sum + parseNum(row.quantity), 0)
+  const highRate = totalQty ? ((highQty / totalQty) * 100).toFixed(1) : '0.0'
+  const dominantRate = totalQty ? ((parseNum(dominant.quantity) / totalQty) * 100).toFixed(1) : '0.0'
+  const advice = totalQty
+    ? Number(highRate) >= 25
+      ? `建议：高价库存占比已达到${highRate}%，优先核查高价SKU动销和周转，减少低动销高客单库存积压。`
+      : `建议：围绕${dominant.rangeLabel}主力价格带优化补货和展示；目前该区间覆盖${dominantRate}%库存。`
+    : ''
+  return {
+    dominantLabel: dominant?.rangeLabel || '-',
+    totalQty,
+    highRate,
+    advice
+  }
+})
+
+const profitSummary = computed(() => {
+  const rows = profitTrendList.value || []
+  if (filters.profitMode === 'compare') {
+    const periodA = rows.reduce((s, r) => s + parseNum(r.periodAProfit), 0)
+    const periodB = rows.reduce((s, r) => s + parseNum(r.periodBProfit), 0)
+    return { total: periodA + periodB, primary: periodA, secondary: periodB, count: rows.length }
+  }
+  const values = rows.map((r) => parseNum(r.profit))
+  const total = values.reduce((s, n) => s + n, 0)
+  const max = values.length ? Math.max(...values) : 0
+  const min = values.length ? Math.min(...values) : 0
+  return { total, primary: max, secondary: min, count: rows.length }
+})
+
+const slowMovingWarning = computed(() => {
+  const rows = turnoverRows.value
+  const slow = rows.find((r) => String(r.label).includes('15'))
+  if (!slow) return ''
+  return Number(slow.rate) >= 25
+    ? `建议：优先复核15天以上库存的滞销SKU，结合促销、调拨或补货暂停策略降低积压；目前15天以上库存为${formatNumber(slow.value)}件，占总库存${slow.rate}%。`
+    : ''
+})
 
 const handleResize = () => {
   brandPieChart?.resize()
+  turnoverBarChart?.resize()
   valueBarChart?.resize()
   profitLineChart?.resize()
 }
 
-const initBrandPie = () => {
+function ensureBrandPie() {
   if (!brandPieRef.value) return
-  brandPieChart = echarts.init(brandPieRef.value)
-  brandPieChart.setOption({
-    tooltip: { trigger: 'item', formatter: '{b}<br/>{c}件 ({d}%)' },
-    graphic: [
-      { type: 'text', left: 'center', top: '42%', style: { text: '总库存', fill: '#8b95a7', fontSize: 12 } },
-      { type: 'text', left: 'center', top: '50%', style: { text: '1,248', fill: '#101828', fontSize: 26, fontWeight: 700 } },
-      { type: 'text', left: 'center', top: '63%', style: { text: '件', fill: '#8b95a7', fontSize: 12 } }
-    ],
-    series: [{
-      type: 'pie',
-      radius: ['55%', '74%'],
-      center: ['40%', '56%'],
-      label: { formatter: '{d}%' },
-      data: brandRows.map((item) => ({ value: item.value, name: item.name, itemStyle: { color: item.color } }))
-    }]
-  })
+  if (!brandPieChart) brandPieChart = echarts.init(brandPieRef.value)
 }
 
-const initValueBar = () => {
+function ensureTurnoverBar() {
+  if (!turnoverBarRef.value) return
+  if (!turnoverBarChart) turnoverBarChart = echarts.init(turnoverBarRef.value)
+}
+
+function ensureValueBar() {
   if (!valueBarRef.value) return
-  valueBarChart = echarts.init(valueBarRef.value)
-  valueBarChart.setOption({
-    grid: { top: 20, left: 40, right: 20, bottom: 28 },
-    xAxis: {
-      type: 'category',
-      data: ['0-500', '501-1000', '1001-2000', '2001-5000', '5001-10000', '10000以上'],
-      axisTick: { show: false }
-    },
-    yAxis: { type: 'value', name: '数量（件）' },
-    series: [{
-      type: 'bar',
-      barWidth: 24,
-      data: [
-        { value: 140, itemStyle: { color: '#4b9cff' } },
-        { value: 220, itemStyle: { color: '#5aa6ff' } },
-        { value: 310, itemStyle: { color: '#66afff' } },
-        { value: 290, itemStyle: { color: '#4e9cff' } },
-        { value: 180, itemStyle: { color: '#8d71ee' } },
-        { value: 108, itemStyle: { color: '#7f62e4' } }
-      ],
-      label: { show: true, position: 'top', color: '#344054' }
-    }]
-  })
+  if (!valueBarChart) valueBarChart = echarts.init(valueBarRef.value)
 }
 
-const initProfitLine = () => {
+function ensureProfitLine() {
   if (!profitLineRef.value) return
-  profitLineChart = echarts.init(profitLineRef.value)
-  setProfitLineOptions()
+  if (!profitLineChart) profitLineChart = echarts.init(profitLineRef.value)
 }
 
-const setProfitLineOptions = () => {
-  if (!profitLineChart) return
+function refreshBrandPie() {
+  ensureBrandPie()
+  if (!brandPieChart) return
+  const rows = brandChartRows.value
+  const totalQty = overviewVo.value
+    ? parseNum(overviewVo.value.totalInventoryQuantity)
+    : rows.reduce((s, r) => s + r.value, 0)
+  const centerText = formatNumber(totalQty)
+  brandPieChart.setOption(
+    {
+      tooltip: {
+        trigger: 'item',
+        formatter: ({ data }) =>
+          `${data.name}<br/>数量：${formatNumber(data.quantity)}件<br/>库存价值：${formatDollarStr(data.inventoryValue)}<br/>价值占比：${data.valuePercentage}%`
+      },
+      graphic: [
+        { type: 'text', left: 'center', top: '38%', style: { text: '总库存', fill: '#667085', fontSize: 15 } },
+        {
+          type: 'text',
+          left: 'center',
+          top: '47%',
+          style: { text: centerText, fill: '#101828', fontSize: 28, fontWeight: 700 }
+        },
+        { type: 'text', left: 'center', top: '61%', style: { text: '件', fill: '#667085', fontSize: 15 } }
+      ],
+      series: [
+        {
+          type: 'pie',
+          radius: ['50%', '78%'],
+          center: ['50%', '51%'],
+          avoidLabelOverlap: true,
+          label: {
+            color: '#ffffff',
+            fontSize: 11,
+            fontWeight: 600,
+            formatter: ({ data }) => `${data.valuePercentage}%`
+          },
+          labelLine: { show: false },
+          data: rows.map((item) => ({
+            value: item.inventoryValue,
+            quantity: item.value,
+            name: item.name,
+            valuePercentage: item.valueRate.toFixed(1),
+            inventoryValue: item.inventoryValue,
+            itemStyle: { color: item.color }
+          }))
+        }
+      ]
+    },
+    true
+  )
+}
 
-  const isAligned = compareMode.value === 'aligned'
-  const xData = isAligned
-    ? Array.from({ length: minCompareLength.value }, (_, i) => i + 1)
-    : Array.from(
-      { length: Math.max(periodA.values.length, periodB.values.length) },
-      (_, i) => dateAt(periodA.startDate, i + 1)
-    )
-
-  const seriesAData = isAligned
-    ? periodA.values.slice(0, minCompareLength.value)
-    : periodA.values
-
-  const seriesBData = isAligned
-    ? periodB.values.slice(0, minCompareLength.value)
-    : [...periodB.values, ...Array(Math.max(0, xData.length - periodB.values.length)).fill(null)]
-
-  profitLineChart.setOption({
-    tooltip: {
-      trigger: 'axis',
-      formatter: (params) => {
-        if (!params?.length) return ''
-        const aPoint = params.find((item) => item.seriesName === periodA.label)
-        const bPoint = params.find((item) => item.seriesName === periodB.label)
-        const xIndex = params[0].dataIndex + 1
-
-        if (isAligned) {
-          const aValue = Number(aPoint?.data ?? 0)
-          const bValue = Number(bPoint?.data ?? 0)
-          const diff = bValue - aValue
-          const growth = aValue ? (diff / aValue) * 100 : 0
+function refreshTurnoverBar() {
+  ensureTurnoverBar()
+  if (!turnoverBarChart) return
+  const rows = turnoverRows.value
+  turnoverBarChart.setOption(
+    {
+      color: rows.map((row) => row.color),
+      tooltip: {
+        trigger: 'axis',
+        axisPointer: { type: 'shadow' },
+        formatter: (params) => {
+          const item = params?.[0]
+          if (!item) return ''
+          const data = item.data || {}
           return [
-            `第${xIndex}天`,
-            `${periodA.label}：${dateAt(periodA.startDate, xIndex)}，毛利润 ￥${formatNumber(aValue)}`,
-            `${periodB.label}：${dateAt(periodB.startDate, xIndex)}，毛利润 ￥${formatNumber(bValue)}`,
-            `差值：${diff >= 0 ? '+' : '-'}￥${formatNumber(Math.abs(diff))}`,
-            `增长：${growth >= 0 ? '+' : ''}${growth.toFixed(1)}%`
+            `周转天数：${item.name}`,
+            `库存数量：${formatNumber(data.quantity)}件`,
+            `占比：${data.rate}%`,
+            `状态：${data.tag}`
           ].join('<br/>')
         }
-
-        const aDate = dateAt(periodA.startDate, xIndex)
-        const bDate = xIndex <= periodB.values.length ? dateAt(periodB.startDate, xIndex) : '无数据'
-        return [
-          `真实日期：${params[0].axisValue}`,
-          `${periodA.label}（${aDate}）：￥${aPoint?.data != null ? formatNumber(aPoint.data) : '-'}`,
-          `${periodB.label}（${bDate}）：￥${bPoint?.data != null ? formatNumber(bPoint.data) : '-'}`
-        ].join('<br/>')
-      }
+      },
+      grid: { top: 16, left: 58, right: 82, bottom: 44, containLabel: true },
+      xAxis: {
+        type: 'value',
+        name: '数量（件）',
+        nameLocation: 'middle',
+        nameGap: 28,
+        nameTextStyle: { color: '#667085', padding: [0, 0, 0, 8] },
+        splitLine: { lineStyle: { color: '#eef2f7' } },
+        axisLine: { show: false },
+        axisTick: { show: false },
+        axisLabel: { color: '#98a2b3' }
+      },
+      yAxis: {
+        type: 'category',
+        data: rows.map((row) => row.label),
+        axisTick: { show: false },
+        axisLine: { show: false },
+        axisLabel: { color: '#344054', fontWeight: 600 }
+      },
+      series: [
+        {
+          type: 'bar',
+          barWidth: 18,
+          data: rows.map((row) => ({
+            value: row.value,
+            quantity: row.value,
+            rate: row.rate,
+            tag: row.tag,
+            itemStyle: { color: row.color, borderRadius: [0, 10, 10, 0] }
+          })),
+          label: {
+            show: true,
+            position: 'right',
+            color: '#344054',
+            fontWeight: 600,
+            formatter: ({ data }) => `${formatNumber(data.quantity)}件 · ${data.rate}%`
+          }
+        }
+      ]
     },
-    legend: { bottom: 0, data: [periodA.label, periodB.label] },
-    grid: { top: 20, left: 45, right: 20, bottom: 32 },
-    xAxis: {
-      type: 'category',
-      data: xData,
-      axisTick: { show: false },
-      axisLabel: {
-        formatter: (value) => {
-          if (!isAligned) return value.slice(5)
-          const day = Number(value)
-          return alignedDayTicks.includes(day) ? `第${day}天` : ''
+    true
+  )
+}
+
+function refreshValueBar() {
+  ensureValueBar()
+  if (!valueBarChart) return
+  const rawMap = new Map((valueDistList.value || []).map((r) => [r.rangeLabel, r]))
+  const list = VALUE_RANGE_LABELS.map((label) => rawMap.get(label) || { rangeLabel: label, quantity: 0, totalValue: 0 }).sort(
+    (a, b) => (VALUE_RANGE_ORDER[a.rangeLabel] ?? 99) - (VALUE_RANGE_ORDER[b.rangeLabel] ?? 99)
+  )
+  const categories = list.map((r) => r.rangeLabel)
+  const barData = list.map((r, i) => ({
+    value: parseNum(r.quantity),
+    totalValue: parseNum(r.totalValue),
+    itemStyle: { color: VALUE_BAR_COLORS[i % VALUE_BAR_COLORS.length] }
+  }))
+  valueBarChart.setOption(
+    {
+      tooltip: {
+        trigger: 'axis',
+        formatter: (params) => {
+          const item = params?.[0]
+          if (!item) return ''
+          const data = item.data || {}
+          return [
+            `销售价区间：${item.axisValue}`,
+            `库存数量：${formatNumber(parseNum(data.value))}件`,
+            `销售价值：${formatMoneyStr(data.totalValue)}`
+          ].join('<br/>')
         }
       },
-      name: isAligned ? '周期对齐坐标' : '真实日期'
-    },
-    yAxis: { type: 'value', name: '毛利润（¥）' },
-    series: [
-      {
-        name: periodA.label,
-        type: 'line',
-        smooth: true,
-        symbol: 'circle',
-        symbolSize: 6,
-        itemStyle: { color: '#2f75ff' },
-        data: seriesAData
+      grid: { top: 34, left: 58, right: 24, bottom: 34, containLabel: true },
+      xAxis: {
+        type: 'category',
+        data: categories,
+        axisTick: { show: false },
+        axisLine: { show: false },
+        axisLabel: {
+          color: '#667085',
+          interval: 0,
+          rotate: 0,
+          margin: 12,
+          fontSize: 12,
+          hideOverlap: false
+        }
       },
-      {
-        name: periodB.label,
-        type: 'line',
-        smooth: true,
-        symbol: 'circle',
-        symbolSize: 6,
-        itemStyle: { color: '#2dbf8e' },
-        data: seriesBData
-      }
-    ]
-  })
+      yAxis: {
+        type: 'value',
+        splitLine: { lineStyle: { color: '#eef2f7' } },
+        axisLine: { show: false },
+        axisTick: { show: false },
+        axisLabel: { color: '#98a2b3', margin: 10 }
+      },
+      series: [
+        {
+          type: 'bar',
+          barWidth: 22,
+          barGap: '36%',
+          data: barData,
+          label: {
+            show: true,
+            position: 'top',
+            color: '#344054',
+            fontWeight: 600,
+            formatter: ({ data }) => `${formatNumber(parseNum(data.value))}件`
+          }
+        }
+      ]
+    },
+    true
+  )
 }
+
+function refreshProfitLine() {
+  ensureProfitLine()
+  if (!profitLineChart) return
+  const rows = profitTrendList.value || []
+  const xData = rows.map((r) => r.label || r.period)
+  const isCompare = filters.profitMode === 'compare'
+  const series = isCompare
+    ? [
+        {
+          name: '时间段A毛利润',
+          type: 'line',
+          smooth: true,
+          symbol: 'circle',
+          symbolSize: 6,
+          itemStyle: { color: '#2f75ff' },
+          data: rows.map((r) => parseNum(r.periodAProfit))
+        },
+        {
+          name: '时间段B毛利润',
+          type: 'line',
+          smooth: true,
+          symbol: 'circle',
+          symbolSize: 6,
+          itemStyle: { color: '#17c2d1' },
+          data: rows.map((r) => parseNum(r.periodBProfit))
+        }
+      ]
+    : [
+        {
+          name: '毛利润',
+          type: 'line',
+          smooth: true,
+          symbol: 'circle',
+          symbolSize: 6,
+          itemStyle: { color: '#2f75ff' },
+          data: rows.map((r) => parseNum(r.profit))
+        }
+      ]
+  profitLineChart.setOption(
+    {
+      tooltip: {
+        trigger: 'axis',
+        formatter: (params) => {
+          if (!params?.length) return ''
+          const idx = params[0].dataIndex
+          const row = rows[idx]
+          if (!row) return ''
+          if (isCompare) {
+            return [
+              `期间：${row.label}`,
+              `时间段A毛利润：${formatMoneyStr(row.periodAProfit)}`,
+              `时间段B毛利润：${formatMoneyStr(row.periodBProfit)}`
+            ].join('<br/>')
+          }
+          return [
+            `期间：${row.label}`,
+            row.period ? `周期：${row.period}` : '',
+            `毛利润：${formatMoneyStr(row.profit)}`
+          ]
+            .filter(Boolean)
+            .join('<br/>')
+        }
+      },
+      legend: {
+        bottom: 4,
+        itemWidth: 16,
+        itemHeight: 8,
+        textStyle: { color: '#344054' },
+        data: series.map((item) => item.name)
+      },
+      grid: { top: 22, left: 58, right: 34, bottom: 58, containLabel: true },
+      xAxis: {
+        type: 'category',
+        data: xData,
+        axisTick: { show: false },
+        axisLine: { show: false },
+        axisLabel: { color: '#667085', margin: 14 }
+      },
+      yAxis: {
+        type: 'value',
+        splitLine: { lineStyle: { color: '#eef2f7' } },
+        axisLine: { show: false },
+        axisTick: { show: false },
+        axisLabel: { color: '#98a2b3', margin: 10 }
+      },
+      series
+    },
+    true
+  )
+}
+
+async function loadDashboard() {
+  loading.value = true
+  const trendQ = buildProfitTrendQuery()
+  const shouldLoadTrend = filters.profitMode === 'preset' || hasCompleteCompareRange()
+  try {
+    const [overview, brands, turnover, valueDist, trend] = await Promise.all([
+      getAnalyticsOverview(),
+      getBrandInventoryRatio(),
+      getTurnoverDaysDistribution(),
+      getValueRangeDistribution(),
+      shouldLoadTrend ? getGrossProfitTrend(trendQ) : Promise.resolve([])
+    ])
+    overviewVo.value = overview
+    brandRatioList.value = Array.isArray(brands) ? brands : []
+    turnoverDistList.value = Array.isArray(turnover) ? turnover : []
+    valueDistList.value = Array.isArray(valueDist) ? valueDist : []
+    profitTrendList.value = Array.isArray(trend) ? trend : []
+    await nextTick()
+    refreshBrandPie()
+    refreshTurnoverBar()
+    refreshValueBar()
+    refreshProfitLine()
+  } catch {
+    /* 错误提示由 request 拦截器统一处理 */
+  } finally {
+    loading.value = false
+  }
+}
+
+let filterWatchTimer = null
+watch(
+  () => ({ ...filters }),
+  () => {
+    clearTimeout(filterWatchTimer)
+    filterWatchTimer = setTimeout(() => {
+      loadDashboard()
+    }, 200)
+  },
+  { deep: true }
+)
+
+watch(
+  () => [brandSearchKeyword.value, allBrandSort.value],
+  () => {
+    allBrandPage.value = 1
+  }
+)
+
+watch(
+  () => filteredAllBrandRows.value.length,
+  (total) => {
+    const maxPage = Math.max(1, Math.ceil(total / ALL_BRAND_PAGE_SIZE))
+    if (allBrandPage.value > maxPage) allBrandPage.value = maxPage
+  }
+)
 
 onMounted(() => {
   nextTick(() => {
-    initBrandPie()
-    initValueBar()
-    initProfitLine()
+    ensureBrandPie()
+    ensureTurnoverBar()
+    ensureValueBar()
+    ensureProfitLine()
     window.addEventListener('resize', handleResize)
+    loadDashboard()
   })
 })
 
 onBeforeUnmount(() => {
+  clearTimeout(filterWatchTimer)
   window.removeEventListener('resize', handleResize)
   brandPieChart?.dispose()
+  turnoverBarChart?.dispose()
   valueBarChart?.dispose()
   profitLineChart?.dispose()
   brandPieChart = null
+  turnoverBarChart = null
   valueBarChart = null
   profitLineChart = null
-})
-
-watch(compareMode, () => {
-  setProfitLineOptions()
 })
 </script>
 
@@ -396,6 +970,10 @@ watch(compareMode, () => {
   padding: 12px;
   background: #f5f7fb;
   min-height: calc(100vh - 84px);
+}
+
+.analytics-filter {
+  margin-bottom: -8px;
 }
 
 .kpi-grid {
@@ -473,6 +1051,218 @@ watch(compareMode, () => {
   border: 1px solid #e8edf5;
 }
 
+.brand-analysis-card {
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(16, 24, 40, 0.08);
+}
+
+.brand-analysis-card :deep(.el-card__body) {
+  padding: 18px 20px 20px;
+}
+
+.brand-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.brand-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #101828;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.brand-subtitle {
+  margin-top: 8px;
+  color: #667085;
+  font-size: 12px;
+}
+
+.brand-analysis-body {
+  display: grid;
+  grid-template-columns: minmax(210px, 0.85fr) minmax(0, 1fr);
+  gap: 18px;
+  align-items: center;
+}
+
+.brand-chart {
+  width: 100%;
+  height: 248px;
+}
+
+.brand-summary-side {
+  min-width: 0;
+}
+
+.value-analysis-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.value-chart {
+  width: 100%;
+  height: 300px;
+  min-height: 300px;
+}
+
+.value-insight-side {
+  min-width: 0;
+}
+
+.value-insight-side .brand-table-head {
+  margin-bottom: 0;
+}
+
+.value-insight-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 0;
+  border-bottom: 1px solid #edf0f5;
+  color: #667085;
+  font-size: 13px;
+}
+
+.value-insight-row b {
+  color: #1d2939;
+  font-size: 14px;
+  text-align: right;
+}
+
+.value-advice {
+  margin-top: 10px;
+  color: #344054;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.brand-table-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid #edf0f5;
+  color: #667085;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.brand-legend-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+  color: #1d2939;
+  font-size: 11px;
+}
+
+.brand-legend-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-width: 0;
+}
+
+.legend-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.legend-name,
+.brand-rank-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.all-brand-table.brand-value-table .all-brand-table-head,
+.all-brand-table.brand-value-table .all-brand-table-row {
+  grid-template-columns: minmax(0, 1fr) 100px 130px 90px;
+}
+
+.all-brand-table.brand-value-table .brand-rank-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.brand-rank-head,
+.brand-rank-row,
+.all-brand-table-head,
+.all-brand-table-row {
+  display: grid;
+  grid-template-columns: 70px minmax(0, 1fr) 120px 90px;
+  align-items: center;
+}
+
+.brand-rank-head,
+.all-brand-table-head {
+  color: #667085;
+  font-size: 15px;
+  padding: 0 0 12px;
+  border-bottom: 1px solid #e4e7ec;
+}
+
+.brand-rank-row,
+.all-brand-table-row {
+  min-height: 52px;
+  color: #101828;
+  font-size: 16px;
+  border-bottom: 1px solid #edf0f5;
+}
+
+.rank-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  color: #fff;
+  font-weight: 800;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.28);
+}
+
+.rank-badge.small {
+  width: 26px;
+  height: 26px;
+  font-size: 13px;
+}
+
+.view-all-brand {
+  width: 100%;
+  height: 38px;
+  margin-top: 14px;
+  border: 1px solid #e4e7ec;
+  border-radius: 8px;
+  background: #fff;
+  color: #1677ff;
+  font-size: 13px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 0 14px;
+  cursor: pointer;
+}
+
+.view-all-brand .el-icon {
+  font-size: 15px;
+}
+
 .panel-header {
   display: flex;
   align-items: center;
@@ -498,7 +1288,7 @@ watch(compareMode, () => {
 }
 
 .chart-box.medium {
-  height: 260px;
+  height: 236px;
 }
 
 .brand-table {
@@ -544,34 +1334,8 @@ watch(compareMode, () => {
   font-size: 13px;
 }
 
-.turnover-rows {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  margin-top: 8px;
-}
-
-.turnover-row {
-  display: grid;
-  grid-template-columns: 56px minmax(0, 1fr) 60px 50px 56px;
-  gap: 8px;
-  align-items: center;
-}
-
-.t-label { color: #344054; }
-.t-value { color: #344054; font-weight: 600; }
-.t-rate { color: #667085; }
-
-.t-bar-wrap {
-  height: 16px;
-  border-radius: 10px;
-  background: #f2f4f7;
-  overflow: hidden;
-}
-
-.t-bar {
-  height: 100%;
-  border-radius: 10px;
+.turnover-chart {
+  height: 236px;
 }
 
 .panel-warning {
@@ -598,23 +1362,55 @@ watch(compareMode, () => {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-  margin-bottom: 8px;
+  margin-top: 8px;
+  margin-bottom: 0;
+}
+
+.profit-filter-panel {
+  margin-bottom: 12px;
+  padding: 14px 16px 12px;
+  border: 1px solid #e8edf5;
+  border-radius: 8px;
+  background: #fbfcff;
+}
+
+.profit-filter-panel :deep(.el-form-item) {
+  margin: 0;
+  margin-right: 26px;
+}
+
+.profit-filter-panel :deep(.el-form-item__label) {
+  color: #475467;
+  font-weight: 700;
+  padding-right: 12px;
+}
+
+.analytics-filter {
+  display: flex;
+  margin-bottom: 0;
+  align-items: center;
+  flex-wrap: wrap;
+  row-gap: 12px;
+}
+
+.profit-filter-break {
+  flex: 0 0 100%;
+  height: 0;
 }
 
 .toolbar-item {
-  border: 1px solid #e4e7ed;
-  border-radius: 6px;
-  padding: 6px 10px;
+  padding: 0;
   font-size: 12px;
-  color: #475467;
-  background: #fff;
+  line-height: 1.6;
+  color: #667085;
+  background: transparent;
 }
 
 .compare-kpis {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 8px;
-  margin-bottom: 6px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 8px;
 }
 
 .chart-mode-row {
@@ -645,15 +1441,15 @@ watch(compareMode, () => {
 .mini-kpi {
   border: 1px solid #eaecf0;
   border-radius: 8px;
-  background: #fafbfd;
-  padding: 8px 10px;
+  background: #ffffff;
+  padding: 10px 12px;
   font-size: 12px;
   color: #667085;
 }
 
 .mini-kpi b {
   display: block;
-  font-size: 24px;
+  font-size: 22px;
   color: #344054;
   margin-top: 4px;
 }
@@ -661,17 +1457,77 @@ watch(compareMode, () => {
 .mini-kpi b.positive { color: #12b76a; }
 .mini-kpi b.warning { color: #f79009; }
 
-.trend-box {
-  border: 1px dashed #b2f1d5;
-  border-radius: 8px;
-  background: #edfff5;
-  color: #12b76a;
+.profit-chart {
+  height: 310px;
+}
+
+:deep(.all-brand-dialog) {
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 18px 42px rgba(16, 24, 40, 0.18);
+}
+
+:deep(.all-brand-dialog .el-dialog__header) {
+  margin: 0;
+  padding: 20px 24px 14px;
+  border-bottom: 1px solid #e4e7ec;
+}
+
+:deep(.all-brand-dialog .el-dialog__body) {
+  padding: 20px 24px 18px;
+}
+
+.all-brand-header,
+.all-brand-toolbar,
+.all-brand-footer {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 6px;
-  font-size: 13px;
-  font-weight: 600;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.all-brand-header {
+  color: #101828;
+  font-size: 21px;
+  font-weight: 800;
+}
+
+.all-brand-header button {
+  width: 30px;
+  height: 30px;
+  border: 0;
+  background: transparent;
+  color: #475467;
+  cursor: pointer;
+  font-size: 20px;
+}
+
+.brand-search {
+  width: 300px;
+}
+
+.brand-sort {
+  width: 192px;
+}
+
+.all-brand-table {
+  margin-top: 18px;
+  min-height: 540px;
+}
+
+.all-brand-table-row {
+  min-height: 45px;
+  font-size: 15px;
+}
+
+.all-brand-footer {
+  margin-top: 14px;
+  color: #667085;
+  font-size: 14px;
+}
+
+.all-brand-footer :deep(.el-pagination) {
+  margin-left: auto;
 }
 
 @media (max-width: 1400px) {
@@ -685,8 +1541,44 @@ watch(compareMode, () => {
   .kpi-grid,
   .panel-grid,
   .compare-kpis,
-  .panel-content.two-col {
+  .panel-content.two-col,
+  .brand-analysis-body,
+  .value-analysis-body,
+  .brand-legend-grid {
     grid-template-columns: 1fr;
+  }
+
+  .brand-analysis-card :deep(.el-card__body) {
+    padding: 20px;
+  }
+
+  .brand-card-head,
+  .all-brand-toolbar,
+  .all-brand-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .brand-search,
+  .brand-sort {
+    width: 100%;
+  }
+
+  .brand-chart {
+    height: 320px;
+  }
+
+  .brand-rank-head,
+  .brand-rank-row,
+  .all-brand-table-head,
+  .all-brand-table-row {
+    grid-template-columns: 52px minmax(0, 1fr) 86px 62px;
+    font-size: 13px;
+  }
+
+  .all-brand-table.brand-value-table .all-brand-table-head,
+  .all-brand-table.brand-value-table .all-brand-table-row {
+    grid-template-columns: minmax(0, 1fr) 64px 92px 64px;
   }
 }
 </style>
