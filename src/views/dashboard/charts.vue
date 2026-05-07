@@ -24,17 +24,17 @@
         <div class="brand-card-head">
           <div>
             <div class="brand-title">
-              <span>Brand 库存占比分析</span>
+              <span>{{ tr('Brand 库存占比分析') }}</span>
             </div>
-            <div class="brand-subtitle">全部仓库内不同 Brand 的库存价值占比及具体数量</div>
+            <div class="brand-subtitle">{{ tr('全部仓库内不同 Brand 的库存价值占比及具体数量') }}</div>
           </div>
         </div>
         <div class="brand-analysis-body">
           <div ref="brandPieRef" class="brand-chart"></div>
           <div class="brand-summary-side">
             <div class="brand-table-head">
-              <span>品牌</span>
-              <span>数量</span>
+              <span>{{ tr('品牌') }}</span>
+              <span>{{ tr('数量') }}</span>
             </div>
             <div class="brand-legend-grid">
               <div v-for="row in brandChartRows" :key="row.name" class="brand-legend-item">
@@ -42,11 +42,11 @@
                   <i class="dot" :style="{ backgroundColor: row.color }"></i>
                   <span class="legend-name">{{ row.name }}</span>
                 </span>
-                <span>{{ formatNumber(row.value) }}件</span>
+                <span>{{ formatNumber(row.value) }}{{ tr('件') }}</span>
               </div>
             </div>
             <button type="button" class="view-all-brand" @click="openAllBrandDialog">
-              <span>查看全部品牌</span>
+              <span>{{ tr('查看全部品牌') }}</span>
               <b>{{ brandRows.length }}</b>
               <el-icon><ArrowRight /></el-icon>
             </button>
@@ -58,9 +58,9 @@
         <div class="brand-card-head">
           <div>
             <div class="brand-title">
-              <span>库存周转天数分布</span>
+              <span>{{ tr('库存周转天数分布') }}</span>
             </div>
-            <div class="brand-subtitle">按周转周期分组，突出高周转与滞销库存</div>
+            <div class="brand-subtitle">{{ tr('按周转周期分组，突出高周转与滞销库存') }}</div>
           </div>
         </div>
         <div ref="turnoverBarRef" class="chart-box turnover-chart"></div>
@@ -77,28 +77,28 @@
         <div class="brand-card-head">
           <div>
             <div class="brand-title">
-              <span>商品销售价区间分布</span>
+              <span>{{ tr('商品销售价区间分布') }}</span>
             </div>
-            <div class="brand-subtitle">固定按 SKU 销售价展示当前有效库存的数量与销售价值</div>
+            <div class="brand-subtitle">{{ tr('固定按 SKU 销售价展示当前有效库存的数量与销售价值') }}</div>
           </div>
         </div>
         <div class="value-analysis-body">
           <div ref="valueBarRef" class="chart-box medium value-chart"></div>
           <div class="value-insight-side">
             <div class="brand-table-head">
-              <span>价格结构</span>
-              <span>表现</span>
+              <span>{{ tr('价格结构') }}</span>
+              <span>{{ tr('表现') }}</span>
             </div>
             <div class="value-insight-row">
-              <span>主力价格带</span>
+              <span>{{ tr('主力价格带') }}</span>
               <b>{{ valueRangeInsight.dominantLabel }}</b>
             </div>
             <div class="value-insight-row">
-              <span>覆盖库存</span>
-              <b>{{ formatNumber(valueRangeInsight.totalQty) }}件</b>
+              <span>{{ tr('覆盖库存') }}</span>
+              <b>{{ formatNumber(valueRangeInsight.totalQty) }}{{ tr('件') }}</b>
             </div>
             <div class="value-insight-row">
-              <span>高价库存占比</span>
+              <span>{{ tr('高价库存占比') }}</span>
               <b>{{ valueRangeInsight.highRate }}%</b>
             </div>
             <div v-if="valueRangeInsight.advice" class="value-advice">{{ valueRangeInsight.advice }}</div>
@@ -110,47 +110,47 @@
         <div class="brand-card-head">
           <div>
             <div class="brand-title">
-              <span>毛利润趋势分析</span>
+              <span>{{ tr('毛利润趋势分析') }}</span>
             </div>
-            <div class="brand-subtitle">追踪毛利润金额变化，支持预设周期与时间段对比</div>
+            <div class="brand-subtitle">{{ tr('追踪毛利润金额变化，支持预设周期与时间段对比') }}</div>
           </div>
         </div>
         <div class="profit-filter-panel">
           <el-form :inline="true" class="analytics-filter" @submit.prevent>
-            <el-form-item label="毛利润模式">
+            <el-form-item :label="tr('毛利润模式')">
               <el-radio-group v-model="filters.profitMode" size="default">
-                <el-radio-button label="preset">预设周期</el-radio-button>
-                <el-radio-button label="compare">时间段对比</el-radio-button>
+                <el-radio-button label="preset">{{ tr('预设周期') }}</el-radio-button>
+                <el-radio-button label="compare">{{ tr('时间段对比') }}</el-radio-button>
               </el-radio-group>
             </el-form-item>
-            <el-form-item v-if="filters.profitMode === 'preset'" label="周期">
+            <el-form-item v-if="filters.profitMode === 'preset'" :label="tr('周期')">
               <el-select v-model="filters.rangeType" style="width: 140px">
-                <el-option label="过去7天" value="week" />
-                <el-option label="过去15天" value="halfMonth" />
-                <el-option label="过去4周" value="month" />
-                <el-option label="过去3个月" value="quarter" />
+                <el-option :label="tr('过去7天')" value="week" />
+                <el-option :label="tr('过去15天')" value="halfMonth" />
+                <el-option :label="tr('过去4周')" value="month" />
+                <el-option :label="tr('过去3个月')" value="quarter" />
               </el-select>
             </el-form-item>
             <div v-if="filters.profitMode === 'compare'" class="profit-filter-break"></div>
-            <el-form-item v-if="filters.profitMode === 'compare'" class="profit-date-item" label="时间段A">
+            <el-form-item v-if="filters.profitMode === 'compare'" class="profit-date-item" :label="tr('时间段A')">
               <el-date-picker
                 v-model="periodADateRangeModel"
                 type="daterange"
-                range-separator="至"
-                start-placeholder="开始日期"
-                end-placeholder="结束日期"
+                :range-separator="tr('至')"
+                :start-placeholder="tr('开始日期')"
+                :end-placeholder="tr('结束日期')"
                 value-format="YYYY-MM-DD"
                 clearable
                 style="width: 390px"
               />
             </el-form-item>
-            <el-form-item v-if="filters.profitMode === 'compare'" class="profit-date-item" label="时间段B">
+            <el-form-item v-if="filters.profitMode === 'compare'" class="profit-date-item" :label="tr('时间段B')">
               <el-date-picker
                 v-model="periodBDateRangeModel"
                 type="daterange"
-                range-separator="至"
-                start-placeholder="开始日期"
-                end-placeholder="结束日期"
+                :range-separator="tr('至')"
+                :start-placeholder="tr('开始日期')"
+                :end-placeholder="tr('结束日期')"
                 value-format="YYYY-MM-DD"
                 clearable
                 style="width: 390px"
@@ -159,25 +159,25 @@
           </el-form>
           <div class="compare-toolbar">
             <div class="toolbar-item">
-            预设周期展示单条利润金额趋势；时间段对比按第 N 天对齐展示两条线。
+            {{ tr('预设周期展示单条利润金额趋势；时间段对比按第 N 天对齐展示两条线。') }}
           </div>
           </div>
         </div>
         <div class="compare-kpis">
           <div class="mini-kpi">
-            <div>毛利润合计</div>
-            <b class="positive">￥{{ formatNumber(profitSummary.total) }}</b>
+            <div>{{ tr('毛利润合计') }}</div>
+            <b class="positive">{{ formatMoneyStr(profitSummary.total) }}</b>
           </div>
           <div class="mini-kpi">
-            <div>{{ filters.profitMode === 'compare' ? '时间段A利润' : '最高利润金额' }}</div>
-            <b>￥{{ formatNumber(profitSummary.primary) }}</b>
+            <div>{{ tr(filters.profitMode === 'compare' ? '时间段A利润' : '最高利润金额') }}</div>
+            <b>{{ formatMoneyStr(profitSummary.primary) }}</b>
           </div>
           <div class="mini-kpi">
-            <div>{{ filters.profitMode === 'compare' ? '时间段B利润' : '最低利润金额' }}</div>
-            <b>￥{{ formatNumber(profitSummary.secondary) }}</b>
+            <div>{{ tr(filters.profitMode === 'compare' ? '时间段B利润' : '最低利润金额') }}</div>
+            <b>{{ formatMoneyStr(profitSummary.secondary) }}</b>
           </div>
           <div class="mini-kpi">
-            <div>数据点</div>
+            <div>{{ tr('数据点') }}</div>
             <b>{{ profitSummary.count }}</b>
           </div>
         </div>
@@ -194,14 +194,14 @@
     >
       <template #header>
         <div class="all-brand-header">
-          <span>全部品牌</span>
+          <span>{{ tr('全部品牌') }}</span>
           <button type="button" @click="allBrandDialogVisible = false">
             <el-icon><Close /></el-icon>
           </button>
         </div>
       </template>
       <div class="all-brand-toolbar">
-        <el-input v-model="brandSearchKeyword" clearable placeholder="搜索 Brand" class="brand-search">
+        <el-input v-model="brandSearchKeyword" clearable :placeholder="tr('搜索 Brand')" class="brand-search">
           <template #prefix>
             <el-icon><Search /></el-icon>
           </template>
@@ -210,33 +210,33 @@
           <template #prefix>
             <el-icon><Sort /></el-icon>
           </template>
-          <el-option label="按数量降序" value="quantityDesc" />
-          <el-option label="按数量升序" value="quantityAsc" />
-          <el-option label="按库存价值降序" value="valueDesc" />
-          <el-option label="按库存价值升序" value="valueAsc" />
-          <el-option label="按 Brand 排序" value="nameAsc" />
+          <el-option :label="tr('按数量降序')" value="quantityDesc" />
+          <el-option :label="tr('按数量升序')" value="quantityAsc" />
+          <el-option :label="tr('按库存价值降序')" value="valueDesc" />
+          <el-option :label="tr('按库存价值升序')" value="valueAsc" />
+          <el-option :label="tr('按 Brand 排序')" value="nameAsc" />
         </el-select>
       </div>
       <div class="all-brand-table brand-value-table">
         <div class="all-brand-table-head">
-          <span>品牌</span>
-          <span>数量</span>
-          <span>库存价值</span>
-          <span>价值占比</span>
+          <span>{{ tr('品牌') }}</span>
+          <span>{{ tr('数量') }}</span>
+          <span>{{ tr('库存价值') }}</span>
+          <span>{{ tr('价值占比') }}</span>
         </div>
         <div v-for="row in pagedAllBrandRows" :key="row.name" class="all-brand-table-row">
           <span class="brand-rank-name">
             <i class="dot" :style="{ backgroundColor: row.color }"></i>
             {{ row.name }}
           </span>
-          <span>{{ formatNumber(row.value) }}件</span>
+          <span>{{ formatNumber(row.value) }}{{ tr('件') }}</span>
           <span>{{ formatDollarStr(row.inventoryValue) }}</span>
           <span>{{ row.valueRate.toFixed(1) }}%</span>
         </div>
-        <el-empty v-if="!pagedAllBrandRows.length" description="暂无匹配品牌" :image-size="72" />
+        <el-empty v-if="!pagedAllBrandRows.length" :description="tr('暂无匹配品牌')" :image-size="72" />
       </div>
       <div class="all-brand-footer">
-        <span>共 {{ filteredAllBrandRows.length }} 个品牌</span>
+        <span>{{ tr('共') }} {{ filteredAllBrandRows.length }} {{ tr('个品牌') }}</span>
         <span>{{ allBrandPageStart }}-{{ allBrandPageEnd }} / {{ filteredAllBrandRows.length }}</span>
         <el-pagination
           v-model:current-page="allBrandPage"
@@ -255,6 +255,8 @@
 import * as echarts from 'echarts'
 import { ArrowRight, Box, Close, Coin, InfoFilled, Search, Sort, TrendCharts, WarningFilled } from '@element-plus/icons-vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { translateByMap } from '@/locales/runtime-map'
+import useSettingsStore from '@/store/modules/settings'
 import {
   getAnalyticsOverview,
   getBrandInventoryRatio,
@@ -264,6 +266,7 @@ import {
 } from '@/api/wms/analytics'
 
 const loading = ref(false)
+const settingsStore = useSettingsStore()
 const brandPieRef = ref(null)
 const turnoverBarRef = ref(null)
 const valueBarRef = ref(null)
@@ -281,6 +284,9 @@ const allBrandDialogVisible = ref(false)
 const brandSearchKeyword = ref('')
 const allBrandSort = ref('quantityDesc')
 const allBrandPage = ref(1)
+
+const tr = (text) => translateByMap(text, settingsStore.language || 'zh-cn')
+const isEn = computed(() => (settingsStore.language || 'zh-cn') === 'en')
 
 const filters = reactive({
   profitMode: 'preset',
@@ -339,7 +345,7 @@ function formatNumber(num) {
 
 function formatMoneyStr(v) {
   const n = parseNum(v)
-  return `¥${formatNumber(n)}`
+  return `$${formatNumber(n)}`
 }
 
 function formatDollarStr(v) {
@@ -379,38 +385,38 @@ const kpiCards = computed(() => {
   const o = overviewVo.value
   if (!o) {
     return [
-      { title: '当前库存总量', value: '-', unit: '件', icon: Box, iconClass: 'blue' },
-      { title: '库存总价值', value: '-', icon: Coin, iconClass: 'purple' },
-      { title: '当月售罄率', value: '-', icon: TrendCharts, iconClass: 'green' },
-      { title: '平均库龄', value: '-', unit: '天', icon: WarningFilled, iconClass: 'red' }
+      { title: tr('当前库存总量'), value: '-', unit: tr('件'), icon: Box, iconClass: 'blue' },
+      { title: tr('库存总价值'), value: '-', icon: Coin, iconClass: 'purple' },
+      { title: tr('当月售罄率'), value: '-', icon: TrendCharts, iconClass: 'green' },
+      { title: tr('平均库龄'), value: '-', unit: tr('天'), icon: WarningFilled, iconClass: 'red' }
     ]
   }
   const sellPct = (parseNum(o.sellThroughRate) * 100).toFixed(2)
   return [
     {
-      title: '当前库存总量',
+      title: tr('当前库存总量'),
       value: formatNumber(parseNum(o.totalInventoryQuantity)),
-      unit: '件',
+      unit: tr('件'),
       icon: Box,
       iconClass: 'blue'
     },
     {
-      title: '库存总价值',
+      title: tr('库存总价值'),
       value: formatDollarStr(o.totalInventoryValue),
       icon: Coin,
       iconClass: 'purple'
     },
     {
-      title: '当月售罄率',
+      title: tr('当月售罄率'),
       value: sellPct,
       unit: '%',
       icon: TrendCharts,
       iconClass: 'green'
     },
     {
-      title: '平均库龄',
+      title: tr('平均库龄'),
       value: parseNum(o.averageAge).toFixed(1),
-      unit: '天',
+      unit: tr('天'),
       icon: WarningFilled,
       iconClass: 'red'
     }
@@ -447,7 +453,7 @@ const brandChartRows = computed(() => {
   return [
     ...topRows,
     {
-      name: '其他品牌',
+      name: tr('其他品牌'),
       value: otherQty,
       valueRate: otherValueRate,
       inventoryValue: otherValue,
@@ -491,16 +497,16 @@ const TURNOVER_LABELS = ['1-7', '8-15', '15+']
 const TURNOVER_ORDER = { '1-7': 0, '8-15': 1, '15+': 2 }
 
 function turnoverLabel(apiLabel) {
-  if (apiLabel === '15+') return '15天以上'
-  if (apiLabel === '1-7') return '1-7天'
-  if (apiLabel === '8-15') return '8-15天'
+  if (apiLabel === '15+') return tr('15天以上')
+  if (apiLabel === '1-7') return tr('1-7天')
+  if (apiLabel === '8-15') return tr('8-15天')
   return apiLabel
 }
 
 function turnoverMeta(apiLabel) {
-  if (apiLabel === '15+') return { tag: '预警', tagType: 'danger', color: '#ef5454' }
-  if (apiLabel === '8-15') return { tag: '提醒', tagType: 'warning', color: '#f5ac2e' }
-  return { tag: '健康', tagType: 'success', color: '#24c08a' }
+  if (apiLabel === '15+') return { tag: tr('预警'), tagType: 'danger', color: '#ef5454' }
+  if (apiLabel === '8-15') return { tag: tr('提醒'), tagType: 'warning', color: '#f5ac2e' }
+  return { tag: tr('健康'), tagType: 'success', color: '#24c08a' }
 }
 
 const turnoverRows = computed(() => {
@@ -549,8 +555,12 @@ const valueRangeInsight = computed(() => {
   const dominantRate = totalQty ? ((parseNum(dominant.quantity) / totalQty) * 100).toFixed(1) : '0.0'
   const advice = totalQty
     ? Number(highRate) >= 25
-      ? `建议：高价库存占比已达到${highRate}%，优先核查高价SKU动销和周转，减少低动销高客单库存积压。`
-      : `建议：围绕${dominant.rangeLabel}主力价格带优化补货和展示；目前该区间覆盖${dominantRate}%库存。`
+      ? isEn.value
+        ? `High-price inventory has reached ${highRate}%. Prioritize high-price SKU sell-through and turnover to reduce slow-moving high-ticket stock.`
+        : `建议：高价库存占比已达到${highRate}%，优先核查高价SKU动销和周转，减少低动销高客单库存积压。`
+      : isEn.value
+        ? `Optimize replenishment and display around the ${dominant.rangeLabel} main price band; it currently covers ${dominantRate}% of inventory.`
+        : `建议：围绕${dominant.rangeLabel}主力价格带优化补货和展示；目前该区间覆盖${dominantRate}%库存。`
     : ''
   return {
     dominantLabel: dominant?.rangeLabel || '-',
@@ -576,24 +586,30 @@ const profitSummary = computed(() => {
 
 const slowMovingInsight = computed(() => {
   const rows = turnoverRows.value
-  const slow = rows.find((r) => r.label === '15天以上')
+  const slow = rows.find((r) => r.label === tr('15天以上'))
   if (!slow) return { type: 'success', text: '' }
   const rate = Number(slow.rate)
   if (rate < 25) {
     return {
       type: 'success',
-      text: `目前库存周转整体健康，15天以上库存为${formatNumber(slow.value)}件，占总库存${slow.rate}%，建议保持当前补货节奏并持续关注低动销SKU。`
+      text: isEn.value
+        ? `Inventory turnover is healthy overall. 15+ day inventory is ${formatNumber(slow.value)} pcs, ${slow.rate}% of total inventory. Keep the current replenishment pace and monitor slow-moving SKUs.`
+        : `目前库存周转整体健康，15天以上库存为${formatNumber(slow.value)}件，占总库存${slow.rate}%，建议保持当前补货节奏并持续关注低动销SKU。`
     }
   }
   if (rate < 50) {
     return {
       type: 'warning',
-      text: `提醒：15天以上库存占比达到${slow.rate}%，建议复核滞销SKU，结合促销、调拨或补货暂停策略降低积压。`
+      text: isEn.value
+        ? `Warning: 15+ day inventory has reached ${slow.rate}%. Review slow-moving SKUs and reduce buildup with promotions, transfers, or paused replenishment.`
+        : `提醒：15天以上库存占比达到${slow.rate}%，建议复核滞销SKU，结合促销、调拨或补货暂停策略降低积压。`
     }
   }
   return {
     type: 'danger',
-    text: `预警：15天以上库存占比已达到${slow.rate}%，建议优先处理滞销SKU，减少低动销库存积压；当前15天以上库存为${formatNumber(slow.value)}件。`
+    text: isEn.value
+      ? `Alert: 15+ day inventory has reached ${slow.rate}%. Prioritize slow-moving SKUs to reduce low-turnover stock; current 15+ day inventory is ${formatNumber(slow.value)} pcs.`
+      : `预警：15天以上库存占比已达到${slow.rate}%，建议优先处理滞销SKU，减少低动销库存积压；当前15天以上库存为${formatNumber(slow.value)}件。`
   }
 })
 
@@ -637,17 +653,17 @@ function refreshBrandPie() {
       tooltip: {
         trigger: 'item',
         formatter: ({ data }) =>
-          `${data.name}<br/>数量：${formatNumber(data.quantity)}件<br/>库存价值：${formatDollarStr(data.inventoryValue)}<br/>价值占比：${data.valuePercentage}%`
+          `${data.name}<br/>${tr('数量')}：${formatNumber(data.quantity)}${tr('件')}<br/>${tr('库存价值')}：${formatDollarStr(data.inventoryValue)}<br/>${tr('价值占比')}：${data.valuePercentage}%`
       },
       graphic: [
-        { type: 'text', left: 'center', top: '38%', style: { text: '总库存', fill: '#667085', fontSize: 15 } },
+        { type: 'text', left: 'center', top: '38%', style: { text: tr('总库存'), fill: '#667085', fontSize: 15 } },
         {
           type: 'text',
           left: 'center',
           top: '47%',
           style: { text: centerText, fill: '#101828', fontSize: 28, fontWeight: 700 }
         },
-        { type: 'text', left: 'center', top: '61%', style: { text: '件', fill: '#667085', fontSize: 15 } }
+        { type: 'text', left: 'center', top: '61%', style: { text: tr('件'), fill: '#667085', fontSize: 15 } }
       ],
       series: [
         {
@@ -692,17 +708,17 @@ function refreshTurnoverBar() {
           if (!item) return ''
           const data = item.data || {}
           return [
-            `周转天数：${item.name}`,
-            `库存数量：${formatNumber(data.quantity)}件`,
-            `占比：${data.rate}%`,
-            `状态：${data.tag}`
+            `${tr('周转天数')}：${item.name}`,
+            `${tr('库存数量')}：${formatNumber(data.quantity)}${tr('件')}`,
+            `${tr('占比')}：${data.rate}%`,
+            `${tr('状态')}：${data.tag}`
           ].join('<br/>')
         }
       },
       grid: { top: 16, left: 58, right: 82, bottom: 44, containLabel: true },
       xAxis: {
         type: 'value',
-        name: '数量（件）',
+        name: tr('数量（件）'),
         nameLocation: 'middle',
         nameGap: 28,
         nameTextStyle: { color: '#667085', padding: [0, 0, 0, 8] },
@@ -734,7 +750,7 @@ function refreshTurnoverBar() {
             position: 'right',
             color: '#344054',
             fontWeight: 600,
-            formatter: ({ data }) => `${formatNumber(data.quantity)}件 · ${data.rate}%`
+            formatter: ({ data }) => `${formatNumber(data.quantity)}${tr('件')} · ${data.rate}%`
           }
         }
       ]
@@ -765,9 +781,9 @@ function refreshValueBar() {
           if (!item) return ''
           const data = item.data || {}
           return [
-            `销售价区间：${item.axisValue}`,
-            `库存数量：${formatNumber(parseNum(data.value))}件`,
-            `销售价值：${formatMoneyStr(data.totalValue)}`
+            `${tr('销售价区间')}：${item.axisValue}`,
+            `${tr('库存数量')}：${formatNumber(parseNum(data.value))}${tr('件')}`,
+            `${tr('销售价值')}：${formatMoneyStr(data.totalValue)}`
           ].join('<br/>')
         }
       },
@@ -804,7 +820,7 @@ function refreshValueBar() {
             position: 'top',
             color: '#344054',
             fontWeight: 600,
-            formatter: ({ data }) => `${formatNumber(parseNum(data.value))}件`
+            formatter: ({ data }) => `${formatNumber(parseNum(data.value))}${tr('件')}`
           }
         }
       ]
@@ -822,7 +838,7 @@ function refreshProfitLine() {
   const series = isCompare
     ? [
         {
-          name: '时间段A毛利润',
+          name: tr('时间段A毛利润'),
           type: 'line',
           smooth: true,
           symbol: 'circle',
@@ -831,7 +847,7 @@ function refreshProfitLine() {
           data: rows.map((r) => parseNum(r.periodAProfit))
         },
         {
-          name: '时间段B毛利润',
+          name: tr('时间段B毛利润'),
           type: 'line',
           smooth: true,
           symbol: 'circle',
@@ -842,7 +858,7 @@ function refreshProfitLine() {
       ]
     : [
         {
-          name: '毛利润',
+          name: tr('毛利润'),
           type: 'line',
           smooth: true,
           symbol: 'circle',
@@ -862,15 +878,15 @@ function refreshProfitLine() {
           if (!row) return ''
           if (isCompare) {
             return [
-              `期间：${row.label}`,
-              `时间段A毛利润：${formatMoneyStr(row.periodAProfit)}`,
-              `时间段B毛利润：${formatMoneyStr(row.periodBProfit)}`
+              `${tr('期间')}：${row.label}`,
+              `${tr('时间段A毛利润')}：${formatMoneyStr(row.periodAProfit)}`,
+              `${tr('时间段B毛利润')}：${formatMoneyStr(row.periodBProfit)}`
             ].join('<br/>')
           }
           return [
-            `期间：${row.label}`,
-            row.period ? `周期：${row.period}` : '',
-            `毛利润：${formatMoneyStr(row.profit)}`
+            `${tr('期间')}：${row.label}`,
+            row.period ? `${tr('周期')}：${row.period}` : '',
+            `${tr('毛利润')}：${formatMoneyStr(row.profit)}`
           ]
             .filter(Boolean)
             .join('<br/>')
@@ -949,6 +965,18 @@ watch(
   () => [brandSearchKeyword.value, allBrandSort.value],
   () => {
     allBrandPage.value = 1
+  }
+)
+
+watch(
+  () => settingsStore.language,
+  () => {
+    nextTick(() => {
+      refreshBrandPie()
+      refreshTurnoverBar()
+      refreshValueBar()
+      refreshProfitLine()
+    })
   }
 )
 
