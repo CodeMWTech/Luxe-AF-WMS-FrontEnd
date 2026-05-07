@@ -148,6 +148,34 @@ export function filterDynamicRoutes(routes) {
   return res
 }
 
+function normalizePath(path) {
+  if (!path) return ''
+  const normalized = String(path).replace(/\/+/g, '/')
+  return normalized.startsWith('/') ? normalized : `/${normalized}`
+}
+
+function resolveRoutePath(basePath, routePath) {
+  if (!routePath) return normalizePath(basePath)
+  if (routePath.startsWith('/')) return normalizePath(routePath)
+  return normalizePath(`${basePath}/${routePath}`)
+}
+
+export function hasAccessibleRoutePath(routes, targetPath) {
+  const target = normalizePath(targetPath)
+  if (!target) return false
+  const stack = (routes || []).map(route => ({ route, basePath: '' }))
+  while (stack.length) {
+    const { route, basePath } = stack.shift()
+    if (!route || route.hidden) continue
+    const routePath = resolveRoutePath(basePath, route.path)
+    if (routePath === target) return true
+    if (route.children?.length) {
+      stack.push(...route.children.map(child => ({ route: child, basePath: routePath })))
+    }
+  }
+  return false
+}
+
 export const loadView = (view) => {
   let res;
   for (const path in modules) {
