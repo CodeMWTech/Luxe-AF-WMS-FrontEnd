@@ -64,7 +64,13 @@
           </div>
         </div>
         <div ref="turnoverBarRef" class="chart-box turnover-chart"></div>
-        <div v-if="slowMovingWarning" class="panel-warning">{{ slowMovingWarning }}</div>
+        <div
+          v-if="slowMovingInsight.text"
+          class="panel-warning"
+          :class="`panel-warning--${slowMovingInsight.type}`"
+        >
+          {{ slowMovingInsight.text }}
+        </div>
       </el-card>
 
       <el-card shadow="never" class="panel-card brand-analysis-card">
@@ -568,13 +574,27 @@ const profitSummary = computed(() => {
   return { total, primary: max, secondary: min, count: rows.length }
 })
 
-const slowMovingWarning = computed(() => {
+const slowMovingInsight = computed(() => {
   const rows = turnoverRows.value
-  const slow = rows.find((r) => String(r.label).includes('15'))
-  if (!slow) return ''
-  return Number(slow.rate) >= 25
-    ? `建议：优先复核15天以上库存的滞销SKU，结合促销、调拨或补货暂停策略降低积压；目前15天以上库存为${formatNumber(slow.value)}件，占总库存${slow.rate}%。`
-    : ''
+  const slow = rows.find((r) => r.label === '15天以上')
+  if (!slow) return { type: 'success', text: '' }
+  const rate = Number(slow.rate)
+  if (rate < 25) {
+    return {
+      type: 'success',
+      text: `目前库存周转整体健康，15天以上库存为${formatNumber(slow.value)}件，占总库存${slow.rate}%，建议保持当前补货节奏并持续关注低动销SKU。`
+    }
+  }
+  if (rate < 50) {
+    return {
+      type: 'warning',
+      text: `提醒：15天以上库存占比达到${slow.rate}%，建议复核滞销SKU，结合促销、调拨或补货暂停策略降低积压。`
+    }
+  }
+  return {
+    type: 'danger',
+    text: `预警：15天以上库存占比已达到${slow.rate}%，建议优先处理滞销SKU，减少低动销库存积压；当前15天以上库存为${formatNumber(slow.value)}件。`
+  }
 })
 
 const handleResize = () => {
@@ -1340,12 +1360,28 @@ onBeforeUnmount(() => {
 
 .panel-warning {
   margin-top: 14px;
-  background: #fff3f0;
-  color: #d94841;
-  border: 1px solid #ffd9d3;
   border-radius: 8px;
   padding: 8px 10px;
   font-size: 13px;
+  line-height: 1.6;
+}
+
+.panel-warning--success {
+  background: #ecfdf3;
+  color: #027a48;
+  border: 1px solid #abefc6;
+}
+
+.panel-warning--warning {
+  background: #fffaeb;
+  color: #b54708;
+  border: 1px solid #fedf89;
+}
+
+.panel-warning--danger {
+  background: #fff3f0;
+  color: #d94841;
+  border: 1px solid #ffd9d3;
 }
 
 .panel-footnote {
