@@ -7,7 +7,12 @@
             <component :is="card.icon" />
           </div>
           <div class="kpi-main">
-            <div class="kpi-title">{{ card.title }}</div>
+            <div class="kpi-title">
+              <span>{{ card.title }}</span>
+              <el-tooltip v-if="card.tip" :content="card.tip" placement="top">
+                <el-icon class="kpi-tip-icon"><InfoFilled /></el-icon>
+              </el-tooltip>
+            </div>
             <div class="kpi-value-row">
               <span class="kpi-value">{{ card.value }}</span>
               <span class="kpi-unit" v-if="card.unit">{{ card.unit }}</span>
@@ -77,20 +82,20 @@
         <div class="brand-card-head">
           <div>
             <div class="brand-title">
-              <span>{{ tr('商品销售价区间分布') }}</span>
+              <span>{{ tr('商品入库价区间分布') }}</span>
             </div>
-            <div class="brand-subtitle">{{ tr('固定按 SKU 销售价展示当前有效库存的数量与销售价值') }}</div>
+            <div class="brand-subtitle">{{ tr('固定按 SKU 入库价展示当前有效库存的数量与入库价值') }}</div>
           </div>
         </div>
         <div class="value-analysis-body">
           <div ref="valueBarRef" class="chart-box medium value-chart"></div>
           <div class="value-insight-side">
             <div class="brand-table-head">
-              <span>{{ tr('价格结构') }}</span>
+              <span>{{ tr('入库价结构') }}</span>
               <span>{{ tr('表现') }}</span>
             </div>
             <div class="value-insight-row">
-              <span>{{ tr('主力价格带') }}</span>
+              <span>{{ tr('主力入库价带') }}</span>
               <b>{{ valueRangeInsight.dominantLabel }}</b>
             </div>
             <div class="value-insight-row">
@@ -98,7 +103,7 @@
               <b>{{ formatNumber(valueRangeInsight.totalQty) }}{{ tr('件') }}</b>
             </div>
             <div class="value-insight-row">
-              <span>{{ tr('高价库存占比') }}</span>
+              <span>{{ tr('入库价5000以上库存占比') }}</span>
               <b>{{ valueRangeInsight.highRate }}%</b>
             </div>
             <div v-if="valueRangeInsight.advice" class="value-advice">{{ valueRangeInsight.advice }}</div>
@@ -386,8 +391,8 @@ const kpiCards = computed(() => {
   if (!o) {
     return [
       { title: tr('当前库存总量'), value: '-', unit: tr('件'), icon: Box, iconClass: 'blue' },
-      { title: tr('库存总价值'), value: '-', icon: Coin, iconClass: 'purple' },
-      { title: tr('当月售罄率'), value: '-', icon: TrendCharts, iconClass: 'green' },
+      { title: tr('库存总价值'), value: '-', icon: Coin, iconClass: 'purple', tip: tr('当前计算是入库时的入库价值') },
+      { title: tr('当月售罄率'), value: '-', icon: TrendCharts, iconClass: 'green', tip: tr('当前计算方式为：本月出库 / (月初库存 + 当月入库)') },
       { title: tr('平均库龄'), value: '-', unit: tr('天'), icon: WarningFilled, iconClass: 'red' }
     ]
   }
@@ -404,14 +409,16 @@ const kpiCards = computed(() => {
       title: tr('库存总价值'),
       value: formatDollarStr(o.totalInventoryValue),
       icon: Coin,
-      iconClass: 'purple'
+      iconClass: 'purple',
+      tip: tr('当前计算是入库时的入库价值')
     },
     {
       title: tr('当月售罄率'),
       value: sellPct,
       unit: '%',
       icon: TrendCharts,
-      iconClass: 'green'
+      iconClass: 'green',
+      tip: tr('当前计算方式为：本月出库 / (月初库存 + 当月入库)')
     },
     {
       title: tr('平均库龄'),
@@ -556,11 +563,11 @@ const valueRangeInsight = computed(() => {
   const advice = totalQty
     ? Number(highRate) >= 25
       ? isEn.value
-        ? `High-price inventory has reached ${highRate}%. Prioritize high-price SKU sell-through and turnover to reduce slow-moving high-ticket stock.`
-        : `建议：高价库存占比已达到${highRate}%，优先核查高价SKU动销和周转，减少低动销高客单库存积压。`
+        ? `High inbound-price inventory has reached ${highRate}%. Prioritize high inbound-price SKU sell-through and turnover to reduce slow-moving high-cost stock.`
+        : `建议：高入库价库存占比已达到${highRate}%，优先核查高入库价SKU动销和周转，减少低动销高成本库存积压。`
       : isEn.value
-        ? `Optimize replenishment and display around the ${dominant.rangeLabel} main price band; it currently covers ${dominantRate}% of inventory.`
-        : `建议：围绕${dominant.rangeLabel}主力价格带优化补货和展示；目前该区间覆盖${dominantRate}%库存。`
+        ? `Optimize replenishment and display around the ${dominant.rangeLabel} main inbound-price band; it currently covers ${dominantRate}% of inventory.`
+        : `建议：围绕${dominant.rangeLabel}主力入库价带优化补货和展示；目前该区间覆盖${dominantRate}%库存。`
     : ''
   return {
     dominantLabel: dominant?.rangeLabel || '-',
@@ -781,9 +788,9 @@ function refreshValueBar() {
           if (!item) return ''
           const data = item.data || {}
           return [
-            `${tr('销售价区间')}：${item.axisValue}`,
+            `${tr('入库价区间')}：${item.axisValue}`,
             `${tr('库存数量')}：${formatNumber(parseNum(data.value))}${tr('件')}`,
-            `${tr('销售价值')}：${formatMoneyStr(data.totalValue)}`
+            `${tr('入库价值')}：${formatMoneyStr(data.totalValue)}`
           ].join('<br/>')
         }
       },
@@ -1058,9 +1065,19 @@ onBeforeUnmount(() => {
 .kpi-icon.red { background: #fff1ef; color: #ef5454; }
 
 .kpi-title {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   font-size: 13px;
   color: #667085;
   margin-bottom: 6px;
+}
+
+.kpi-tip-icon {
+  color: #98a2b3;
+  cursor: help;
+  font-size: 14px;
+  line-height: 1;
 }
 
 .kpi-value-row {
