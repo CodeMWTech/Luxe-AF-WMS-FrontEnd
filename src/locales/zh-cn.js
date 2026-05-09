@@ -64,5 +64,55 @@ export default {
     unitDay: '日',
     unitMonth: '月',
   },
+  projectIntro: {
+    title: '库存系统操作注意事项',
+    accountSecurity: {
+      title: '1. 账号安全',
+      line1: '请勿将您的账号、密码分享给任何人。',
+      line2: '所有操作都会记录在系统中，请使用本人账号登录并完成相关操作。',
+    },
+    productInfo: {
+      title: '2. 商品信息维护',
+      line1: '所有商品在进行入库、出库或库存管理之前，必须先完成商品信息编辑。',
+      line2: '商品资料不完整可能会影响后续库存记录、成本统计、销售分析和报表结果。',
+    },
+    warehouse: {
+      title: '3. 仓库选择要求',
+      line1: '进行入库或出库操作时，必须选择正确的仓库。',
+      line2: '仓库选择错误会导致库存数量、库存位置和数据分析结果不准确。',
+    },
+    inbound: {
+      title: '4. 入库流程说明',
+      line1: '入库操作正式完成前，会先进入预入库阶段。',
+      line2: '在确认入库前，请务必检查以下内容：',
+      checkItemInfo: '商品信息是否正确',
+      checkWarehouse: '入库仓库是否正确',
+      checkQuantity: '入库数量是否正确',
+      checkCost: 'Cost 是否填写正确',
+      warning: '特别注意：Cost 不能为 0。',
+      line3: 'Cost 会影响库存成本、利润分析和管理层数据判断，请务必准确填写。',
+    },
+    outbound: {
+      title: '5. 出库流程说明',
+      line1: '出库操作正式完成前，会先进入预出库阶段。',
+      line2: '在确认出库前，请务必检查以下内容：',
+      checkItemInfo: '商品信息是否正确',
+      checkWarehouse: '出库仓库是否正确',
+      checkQuantity: '出库数量是否正确',
+      checkSalesPrice: 'Sales Price 是否填写正确',
+      line3: 'Sales Price 会影响销售金额、利润分析和经营数据统计，请务必准确填写。',
+    },
+    irreversible: {
+      title: '6. 操作不可撤销',
+      line1: '一旦入库或出库操作正式完成，系统将视为有效库存记录，无法随意撤销。',
+      line2: '相关数据会同步反映到数据分析模块，并作为管理者查看库存、成本、销售和利润情况的重要依据。',
+    },
+    dataResponsibility: {
+      title: '7. 数据填写责任',
+      line1: '库存系统中的每一项数据都会影响公司后续的库存管理、财务分析和经营决策。',
+      line2: '请在提交前认真核对，确保所有信息准确无误。',
+    },
+    finalReminder: '请谨慎操作，准确填写，确认无误后再提交。',
+  },
 }
 

@@ -64,5 +64,55 @@ export default {
     unitDay: 'Day',
     unitMonth: 'Month',
   },
+  projectIntro: {
+    title: 'Inventory System Operation Notes',
+    accountSecurity: {
+      title: '1. Account Security',
+      line1: 'Do not share your account or password with anyone.',
+      line2: 'All operations are recorded in the system. Please log in with your own account and complete the relevant operations yourself.',
+    },
+    productInfo: {
+      title: '2. Product Information Maintenance',
+      line1: 'Before inbound, outbound, or inventory management operations, all products must have their product information completed first.',
+      line2: 'Incomplete product information may affect later inventory records, cost statistics, sales analysis, and report results.',
+    },
+    warehouse: {
+      title: '3. Warehouse Selection Requirements',
+      line1: 'When performing inbound or outbound operations, you must select the correct warehouse.',
+      line2: 'Selecting the wrong warehouse will cause inaccurate inventory quantities, inventory locations, and data analysis results.',
+    },
+    inbound: {
+      title: '4. Inbound Process',
+      line1: 'Before an inbound operation is officially completed, it first enters the pre-inbound stage.',
+      line2: 'Before confirming inbound, please carefully check the following:',
+      checkItemInfo: 'Whether the product information is correct',
+      checkWarehouse: 'Whether the inbound warehouse is correct',
+      checkQuantity: 'Whether the inbound quantity is correct',
+      checkCost: 'Whether Cost is filled in correctly',
+      warning: 'Special note: Cost cannot be 0.',
+      line3: 'Cost affects inventory cost, profit analysis, and management data judgment. Please make sure it is filled in accurately.',
+    },
+    outbound: {
+      title: '5. Outbound Process',
+      line1: 'Before an outbound operation is officially completed, it first enters the pre-outbound stage.',
+      line2: 'Before confirming outbound, please carefully check the following:',
+      checkItemInfo: 'Whether the product information is correct',
+      checkWarehouse: 'Whether the outbound warehouse is correct',
+      checkQuantity: 'Whether the outbound quantity is correct',
+      checkSalesPrice: 'Whether Sales Price is filled in correctly',
+      line3: 'Sales Price affects sales amount, profit analysis, and operating data statistics. Please make sure it is filled in accurately.',
+    },
+    irreversible: {
+      title: '6. Operations Cannot Be Reversed',
+      line1: 'Once an inbound or outbound operation is officially completed, the system will treat it as a valid inventory record and it cannot be casually reversed.',
+      line2: 'The related data will be reflected in the data analysis module and used by management as an important basis for reviewing inventory, costs, sales, and profit.',
+    },
+    dataResponsibility: {
+      title: '7. Data Entry Responsibility',
+      line1: 'Every piece of data in the inventory system affects the company\'s later inventory management, financial analysis, and business decisions.',
+      line2: 'Please carefully verify everything before submitting to ensure all information is accurate.',
+    },
+    finalReminder: 'Please operate carefully, enter data accurately, and submit only after confirming everything is correct.',
+  },
 }
 
