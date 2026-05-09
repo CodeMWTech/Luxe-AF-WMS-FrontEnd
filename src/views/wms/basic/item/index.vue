@@ -1528,6 +1528,12 @@ const initItemCategoryDataIfNeeded = async () => {
     await Promise.all(tasks)
   }
 }
+const initItemBrandDataIfNeeded = async () => {
+  const wmsStore = useWmsStore()
+  if (!Array.isArray(wmsStore.itemBrandList) || wmsStore.itemBrandList.length === 0) {
+    await wmsStore.getItemBrandList()
+  }
+}
 /** 删除按钮操作 */
 const handleDelete = async (row) => {
   const _ids = row?.itemId || ids.value;
@@ -1574,7 +1580,10 @@ const downloadQrcode = async (row) => {
 }
 onMounted(async () => {
   try {
-    await initItemCategoryDataIfNeeded()
+    await Promise.all([
+      initItemCategoryDataIfNeeded(),
+      initItemBrandDataIfNeeded()
+    ])
   } catch (_) {
     // 分类数据加载失败不阻断列表渲染
   }
