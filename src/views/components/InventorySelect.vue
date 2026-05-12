@@ -75,6 +75,7 @@ import {computed, getCurrentInstance, nextTick, onMounted, reactive, ref, watch}
 import {useWmsStore} from '@/store/modules/wms'
 import {listInventory} from "@/api/wms/inventory";
 import {getWarehouseAndSkuKey} from "@/utils/wmsUtil";
+import { ElMessage } from "element-plus";
 
 const {proxy} = getCurrentInstance()
 
@@ -212,12 +213,17 @@ async function handleSkuEnter() {
     })
     const rows = res.rows || []
     if (!rows.length) {
+      ElMessage.warning('未找到该SKU')
       return
     }
     const exactMatched = rows.find(
       (it) => String(it.itemSku?.skuCode ?? it.skuCode ?? '').trim() === skuCode
     )
-    const pickedRow = exactMatched || rows[0]
+    if (!exactMatched) {
+      ElMessage.warning('未找到该SKU')
+      return
+    }
+    const pickedRow = exactMatched
     if (!props.selectedInventory.find(selected => getWarehouseAndSkuKey(selected) === getWarehouseAndSkuKey(pickedRow))) {
       inventorySelectFormRef.value?.toggleRowSelection(pickedRow, true)
     }
@@ -311,4 +317,3 @@ watch(() => props.selectedInventory, () => {
   font-size: 14px;
 }
 </style>
-

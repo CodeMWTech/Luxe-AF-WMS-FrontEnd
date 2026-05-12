@@ -163,7 +163,11 @@ async function handleSkuEnter() {
 
     const normalizedRows = rows.map((it) => normalizeSkuRow(it))
     const exactMatched = normalizedRows.find((it) => (it.itemSku?.skuCode || '').trim() === skuCode)
-    const pickedRow = exactMatched || normalizedRows[0]
+    if (!exactMatched) {
+      ElMessage.warning('未找到该SKU')
+      return
+    }
+    const pickedRow = exactMatched
     const normalized = { ...pickedRow, checked: false }
 
     if (!props.selectedSku.find(selected => selected.id === normalized.id)) {
@@ -178,9 +182,6 @@ async function handleSkuEnter() {
     await nextTick()
     await Promise.resolve(loadAll())
 
-    if (rows.length > 1 && !exactMatched) {
-      ElMessage.warning('匹配到多个SKU，已自动选择第一条')
-    }
   } finally {
     loading.value = false
   }
@@ -358,4 +359,3 @@ defineExpose({
   min-height: 22px;
 }
 </style>
-
