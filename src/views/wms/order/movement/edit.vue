@@ -243,28 +243,42 @@ const getBrandName = (brandId) => {
   if (brandId === null || brandId === undefined) return ''
   return wmsStore.itemBrandMap.get(brandId)?.brandName || ''
 }
-const normalizeDetailRow = (detail = {}) => {
+const normalizeDetailRow = (detail = {}, { inventoryRow = false } = {}) => {
   const skuId = detail.skuId ?? detail.itemSku?.id ?? detail.itemSkuId
-  const itemSku = detail.itemSku || {
-    id: skuId,
-    skuCode: detail.skuCode,
-    barcode: detail.barcode,
-    costPrice: detail.costPrice,
-    sellingPrice: detail.sellingPrice
+  const itemSku = {
+    ...(detail.itemSku || {}),
+    id: detail.itemSku?.id ?? skuId,
+    skuCode: detail.itemSku?.skuCode ?? detail.skuCode,
+    barcode: detail.itemSku?.barcode ?? detail.barcode,
+    costPrice: detail.itemSku?.costPrice ?? detail.costPrice,
+    avgReceiptCost: detail.itemSku?.avgReceiptCost ?? detail.avgReceiptCost,
+    sellingPrice: detail.itemSku?.sellingPrice ?? detail.sellingPrice
   }
-  const item = detail.item || {
-    id: detail.itemId,
-    itemName: detail.itemName,
-    itemCode: detail.itemCode,
-    itemBrand: detail.itemBrand
+  const item = {
+    ...(detail.item || {}),
+    id: detail.item?.id ?? detail.itemId,
+    itemName: detail.item?.itemName ?? detail.itemName,
+    itemCode: detail.item?.itemCode ?? detail.itemCode,
+    itemBrand: detail.item?.itemBrand ?? detail.itemBrand
   }
   return {
     ...detail,
     skuId,
     itemSku,
-    item
+    item,
+    sourceWarehouseId: detail.sourceWarehouseId ?? detail.warehouseId,
+    targetWarehouseId: detail.targetWarehouseId,
+    inventoryId: detail.inventoryId ?? (inventoryRow ? detail.id : undefined)
   }
 }
+
+const toInventorySelection = (row = {}) => ({
+  id: row.inventoryId ?? row.id,
+  skuId: row.skuId ?? row.itemSku?.id,
+  warehouseId: row.sourceWarehouseId ?? row.warehouseId
+})
+
+const getMovementCost = (row = {}) => row.avgReceiptCost ?? row.itemSku?.avgReceiptCost ?? row.itemSku?.costPrice
 
 // 选择商品 start
 const showAddItem = () => {
@@ -284,27 +298,30 @@ const handleOkClick = (item) => {
   if (!scanMode.value) {
     inventorySelectShow.value = false
   }
+  const normalizedRows = item.map((it) => normalizeDetailRow(it, { inventoryRow: true }))
   const selectedMap = new Map((selectedInventory.value || []).map((it) => [getWarehouseAndSkuKey(it), it]))
-  item.forEach((it) => {
-    selectedMap.set(getWarehouseAndSkuKey(it), it)
+  normalizedRows.forEach((normalized) => {
+    selectedMap.set(getWarehouseAndSkuKey(normalized), toInventorySelection(normalized))
   })
   selectedInventory.value = Array.from(selectedMap.values())
   const newDetails = []
-  item.forEach(it => {
-    if (!form.value.details.find(detail => getSourceWarehouseAndSkuKey(detail) === getWarehouseAndSkuKey(it))) {
+  normalizedRows.forEach(normalized => {
+    if (!form.value.details.find(detail => getSourceWarehouseAndSkuKey(detail) === getWarehouseAndSkuKey(normalized))) {
       const quantity = 1
-      const costPrice = it.itemSku?.costPrice
-      let amount = undefined
-      if (costPrice || costPrice === 0) {
+      const costPrice = getMovementCost(normalized)
+      let amount = normalized.amount
+      if ((amount === null || amount === undefined || amount === '') && (costPrice || costPrice === 0)) {
         amount = Number(costPrice) * quantity
       }
       newDetails.push({
-        itemSku: it.itemSku,
-        item: it.item,
-        skuId: it.skuId,
+        itemSku: normalized.itemSku,
+        item: normalized.item,
+        skuId: normalized.skuId,
         quantity,
         amount,
-        sourceWarehouseId: form.value.sourceWarehouseId
+        sourceWarehouseId: normalized.sourceWarehouseId ?? form.value.sourceWarehouseId,
+        targetWarehouseId: normalized.targetWarehouseId ?? form.value.targetWarehouseId,
+        inventoryId: normalized.inventoryId,
       })
     }
   })
@@ -456,13 +473,7 @@ const loadDetail = (id) => {
       ? response.data.details.map((it) => normalizeDetailRow(it))
       : []
     if (detailRows.length) {
-      selectedInventory.value = detailRows.map(it => {
-        return {
-          id: it.id,
-          skuId: it.skuId ?? it.itemSku?.id,
-          warehouseId: it.sourceWarehouseId
-        }
-      })
+      selectedInventory.value = detailRows.map(it => toInventorySelection(it))
     }
     form.value = {
       ...response.data,
@@ -510,7 +521,7 @@ const updateTotals = () => {
 }
 
 const handleChangeQuantity = (row) => {
-  const costPrice = row.itemSku?.costPrice
+  const costPrice = getMovementCost(row)
   if (costPrice || costPrice === 0) {
     const quantity = Number(row.quantity || 0)
     row.amount = quantity ? Number(costPrice) * quantity : 0
