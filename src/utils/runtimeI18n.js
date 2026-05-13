@@ -14,14 +14,20 @@ function isInDataArea(node) {
   const el = node?.parentElement
   if (!el || !el.closest) return false
   if (el.closest('[data-runtime-i18n-ignore="true"]')) return true
-  // Avoid mutating user-entered/business data in table/menu/tree/list contents.
+  // Avoid mutating user-entered/business data and dynamic Element Plus poppers.
+  // Date-picker cells reuse DOM nodes; rewriting their text nodes makes the
+  // visible calendar drift away from the real selected date.
   return Boolean(
     el.closest('.el-table__body') ||
     el.closest('.el-table__row') ||
     el.closest('.el-menu') ||
     el.closest('.el-tree') ||
     el.closest('.el-dropdown-menu') ||
-    el.closest('.el-select-dropdown')
+    el.closest('.el-select-dropdown') ||
+    el.closest('.el-picker-panel') ||
+    el.closest('.el-date-picker') ||
+    el.closest('.el-date-range-picker') ||
+    el.closest('.el-popper')
   )
 }
 
@@ -40,6 +46,12 @@ function translateTextNode(node, language) {
 function translateElementAttrs(el, language) {
   if (!el || !el.getAttribute) return
   if (el.closest('[data-runtime-i18n-ignore="true"]')) return
+  if (
+    el.closest('.el-picker-panel') ||
+    el.closest('.el-date-picker') ||
+    el.closest('.el-date-range-picker') ||
+    el.closest('.el-popper')
+  ) return
   let originMap = elementAttrOrigin.get(el)
   if (!originMap) {
     originMap = {}

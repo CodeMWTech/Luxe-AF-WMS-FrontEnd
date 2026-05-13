@@ -286,21 +286,24 @@ const handleOkClick = (item) => {
     selectedMap.set(it.id, it)
   })
   selectedSku.value = Array.from(selectedMap.values())
+  const newDetails = []
   item.forEach(it => {
     if (!form.value.details.find(detail => detail.itemSku.id === it.id)) {
-      form.value.details.push(
-        {
-          itemSku: it.itemSku,
-          item: it.item,
-          skuId: it.id,
-          warehouseId: form.value.warehouseId,
-          inventoryId: null,
-          quantity: 0,
-          checkQuantity: 0,
-          newInventory: true
-        })
+      newDetails.push({
+        itemSku: it.itemSku,
+        item: it.item,
+        skuId: it.id,
+        warehouseId: form.value.warehouseId,
+        inventoryId: null,
+        quantity: 0,
+        checkQuantity: 0,
+        newInventory: true
+      })
     }
   })
+  if (newDetails.length) {
+    form.value.details.unshift(...newDetails)
+  }
   handleChangeQuantity()
 }
 

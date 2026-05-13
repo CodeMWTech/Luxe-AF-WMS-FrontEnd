@@ -71,8 +71,8 @@
                 v-model="queryParams.createTimeRange"
                 type="datetimerange"
                 range-separator="至"
+                format="MM/DD/YYYY HH:mm:ss"
                 value-format="YYYY-MM-DD HH:mm:ss"
-                format="YYYY-MM-DD HH:mm:ss"
                 :default-time="defaultTime"
                 start-placeholder="开始时间"
                 end-placeholder="结束时间"
@@ -571,6 +571,7 @@ import JSBarcode from 'jsbarcode'
 import {useWmsStore} from '@/store/modules/wms'
 import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
+import { formatDateTimeForQuery } from '@/utils/laTime'
 
 const barcode = ref(null)
 const route = useRoute()
@@ -621,7 +622,7 @@ const multiple = ref(true);
 const total = ref(0);
 const skuLoading = ref(false)
 /** 创建时间选择器默认时间：当天 00:00:00 - 23:59:59（参考库存记录） */
-const defaultTime = reactive([new Date(0, 0, 0, 0, 0, 0), new Date(0, 0, 0, 23, 59, 59)])
+const defaultTime = reactive([new Date(2000, 0, 1, 0, 0, 0), new Date(2000, 0, 1, 23, 59, 59)])
 const queryFormRef = ref(ElForm);
 const itemFormRef = ref(ElForm);
 const itemCategoryFormRef = ref(ElForm);
@@ -808,7 +809,7 @@ const data = reactive({
     defaultQty: undefined,      // 默认数量
     authAgency: undefined,      // 鉴定机构
     consignInfo: undefined,     // 寄售信息
-    createTimeRange: undefined, // 创建时间区间 [开始, 结束]
+    createTimeRange: [],        // 创建时间区间 [开始, 结束]
     sellingPriceMin: undefined, // 销售价下限(元)
     sellingPriceMax: undefined, // 销售价上限(元)
   },
@@ -870,8 +871,8 @@ const getList = async () => {
     delete query.sellingPriceMax;
   }
   if (query.createTimeRange && query.createTimeRange.length === 2) {
-    query.startTime = query.createTimeRange[0];
-    query.endTime = query.createTimeRange[1];
+    query.startTime = formatDateTimeForQuery(query.createTimeRange[0]);
+    query.endTime = formatDateTimeForQuery(query.createTimeRange[1]);
   }
   loading.value = true;
   const res = await listItemSkuPage(query);

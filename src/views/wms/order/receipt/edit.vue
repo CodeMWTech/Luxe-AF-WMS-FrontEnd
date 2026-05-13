@@ -300,6 +300,7 @@ const handleOkClick = (item) => {
   })
   // 维护“当前入库单全部已存在商品”集合，避免后续刷新丢失灰色禁用状态
   selectedSku.value = Array.from(selectedMap.values())
+  const newDetails = []
   item.forEach((it) => {
     if (!form.value.details.find(detail => detail.itemSku.id === it.id)) {
       const quantity = 1
@@ -308,17 +309,18 @@ const handleOkClick = (item) => {
       if (costPrice || costPrice === 0) {
         amount = Number(costPrice) * quantity
       }
-      form.value.details.push(
-        {
-          itemSku: it.itemSku,
-          item: it.item,
-          amount,
-          quantity,
-          warehouseId: form.value.warehouseId
-        }
-      )
+      newDetails.push({
+        itemSku: it.itemSku,
+        item: it.item,
+        amount,
+        quantity,
+        warehouseId: form.value.warehouseId
+      })
     }
   })
+  if (newDetails.length) {
+    form.value.details.unshift(...newDetails)
+  }
   updateTotals()
 }
 // 选择商品 end

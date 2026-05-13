@@ -47,8 +47,8 @@
             v-model="queryParams.createTimeRange"
             type="datetimerange"
             :range-separator="tr('至')"
+            format="MM/DD/YYYY HH:mm:ss"
             value-format="YYYY-MM-DD HH:mm:ss"
-            format="YYYY-MM-DD HH:mm:ss"
             :default-time="defaultTime"
             :start-placeholder="tr('开始时间')"
             :end-placeholder="tr('结束时间')"
@@ -116,7 +116,9 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column :label="tr('操作时间')" prop="createTime" min-width="180"/>
+        <el-table-column :label="tr('操作时间')" prop="createTime" min-width="180">
+          <template #default="{ row }">{{ formatLosAngelesTime(row.createTime) }}</template>
+        </el-table-column>
       </el-table>
 
       <el-row>
@@ -139,7 +141,8 @@ import {computed, getCurrentInstance, onMounted, reactive, ref} from "vue";
 import {useWmsStore} from '@/store/modules/wms'
 import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
-const defaultTime = reactive([new Date(0,0,0,0,0,0), new Date(0,0,0,23,59,59)])
+import { formatDateTimeForQuery, formatLosAngelesTime } from '@/utils/laTime'
+const defaultTime = reactive([new Date(2000,0,1,0,0,0), new Date(2000,0,1,23,59,59)])
 const {proxy} = getCurrentInstance();
 const {wms_inventory_history_type} = proxy.useDict('wms_inventory_history_type');
 const settingsStore = useSettingsStore()
@@ -155,6 +158,7 @@ const queryParams = ref({
   orderNo: undefined,
   itemName: undefined,
   skuCode: undefined,
+  createTimeRange: [],
   warehouseId: undefined,
 })
 
@@ -176,9 +180,9 @@ function getList() {
   if (query.orderType === -1) {
     query.orderType = null
   }
-  if (query.createTimeRange) {
-    query.startTime = query.createTimeRange[0]
-    query.endTime = query.createTimeRange[1]
+  if (query.createTimeRange && query.createTimeRange.length === 2) {
+    query.startTime = formatDateTimeForQuery(query.createTimeRange[0])
+    query.endTime = formatDateTimeForQuery(query.createTimeRange[1])
   }
   loading.value = true;
   listInventoryHistory(query).then(response => {

@@ -318,6 +318,7 @@ const handleOkClick = (item) => {
   })
   // 维护“当前出库单全部已存在库存”集合，保证刷新后已加载状态可全量回填
   selectedInventory.value = Array.from(selectedMap.values())
+  const newDetails = []
   normalizedRows.forEach((normalized) => {
     if (!form.value.details.find((detail) => getWarehouseAndSkuKey(detail) === getWarehouseAndSkuKey(normalized))) {
       const quantity = 1
@@ -326,7 +327,7 @@ const handleOkClick = (item) => {
       if (sellingPrice || sellingPrice === 0) {
         amount = Number(sellingPrice) * quantity
       }
-      form.value.details.push({
+      newDetails.push({
         itemSku: normalized.itemSku,
         item: normalized.item,
         skuId: normalized.skuId,
@@ -337,6 +338,9 @@ const handleOkClick = (item) => {
       })
     }
   })
+  if (newDetails.length) {
+    form.value.details.unshift(...newDetails)
+  }
   updateTotals()
 }
 // 选择商品 end

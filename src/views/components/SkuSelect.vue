@@ -152,6 +152,7 @@ async function handleSkuEnter() {
     const res = await listItemSkuPage({
       itemName: undefined,
       skuCode,
+      skuCodeExact: true,
       pageNum: 1,
       pageSize: 10
     })
@@ -162,12 +163,7 @@ async function handleSkuEnter() {
     }
 
     const normalizedRows = rows.map((it) => normalizeSkuRow(it))
-    const exactMatched = normalizedRows.find((it) => (it.itemSku?.skuCode || '').trim() === skuCode)
-    if (!exactMatched) {
-      ElMessage.warning('未找到该SKU')
-      return
-    }
-    const pickedRow = exactMatched
+    const pickedRow = normalizedRows[0]
     const normalized = { ...pickedRow, checked: false }
 
     if (!props.selectedSku.find(selected => selected.id === normalized.id)) {

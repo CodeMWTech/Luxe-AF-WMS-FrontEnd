@@ -289,6 +289,7 @@ const handleOkClick = (item) => {
     selectedMap.set(getWarehouseAndSkuKey(it), it)
   })
   selectedInventory.value = Array.from(selectedMap.values())
+  const newDetails = []
   item.forEach(it => {
     if (!form.value.details.find(detail => getSourceWarehouseAndSkuKey(detail) === getWarehouseAndSkuKey(it))) {
       const quantity = 1
@@ -297,17 +298,19 @@ const handleOkClick = (item) => {
       if (costPrice || costPrice === 0) {
         amount = Number(costPrice) * quantity
       }
-      form.value.details.push(
-        {
-          itemSku: it.itemSku,
-          item: it.item,
-          skuId: it.skuId,
-          quantity,
-          amount,
-          sourceWarehouseId: form.value.sourceWarehouseId
-        })
+      newDetails.push({
+        itemSku: it.itemSku,
+        item: it.item,
+        skuId: it.skuId,
+        quantity,
+        amount,
+        sourceWarehouseId: form.value.sourceWarehouseId
+      })
     }
   })
+  if (newDetails.length) {
+    form.value.details.unshift(...newDetails)
+  }
   updateTotals()
 }
 // 选择商品 end

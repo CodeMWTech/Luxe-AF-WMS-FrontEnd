@@ -205,6 +205,7 @@ async function handleSkuEnter() {
     const res = await listInventory({
       itemName: undefined,
       skuCode,
+      skuCodeExact: true,
       minQuantity: query.minQuantity,
       areaId: query.areaId,
       warehouseId: query.warehouseId,
@@ -216,14 +217,7 @@ async function handleSkuEnter() {
       ElMessage.warning('未找到该SKU')
       return
     }
-    const exactMatched = rows.find(
-      (it) => String(it.itemSku?.skuCode ?? it.skuCode ?? '').trim() === skuCode
-    )
-    if (!exactMatched) {
-      ElMessage.warning('未找到该SKU')
-      return
-    }
-    const pickedRow = exactMatched
+    const pickedRow = rows[0]
     if (!props.selectedInventory.find(selected => getWarehouseAndSkuKey(selected) === getWarehouseAndSkuKey(pickedRow))) {
       inventorySelectFormRef.value?.toggleRowSelection(pickedRow, true)
     }

@@ -144,6 +144,7 @@
                 :range-separator="tr('至')"
                 :start-placeholder="tr('开始日期')"
                 :end-placeholder="tr('结束日期')"
+                format="MM/DD/YYYY"
                 value-format="YYYY-MM-DD"
                 clearable
                 style="width: 390px"
@@ -156,6 +157,7 @@
                 :range-separator="tr('至')"
                 :start-placeholder="tr('开始日期')"
                 :end-placeholder="tr('结束日期')"
+                format="MM/DD/YYYY"
                 value-format="YYYY-MM-DD"
                 clearable
                 style="width: 390px"
@@ -262,6 +264,7 @@ import { ArrowRight, Box, Close, Coin, InfoFilled, Search, Sort, TrendCharts, Wa
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { translateByMap } from '@/locales/runtime-map'
 import useSettingsStore from '@/store/modules/settings'
+import { formatDateForQuery } from '@/utils/laTime'
 import {
   getAnalyticsOverview,
   getBrandInventoryRatio,
@@ -307,7 +310,7 @@ const periodADateRangeModel = computed({
     if (filters.periodAStartDate && filters.periodAEndDate) {
       return [filters.periodAStartDate, filters.periodAEndDate]
     }
-    return null
+    return []
   },
   set(val) {
     if (val && val.length === 2) {
@@ -325,7 +328,7 @@ const periodBDateRangeModel = computed({
     if (filters.periodBStartDate && filters.periodBEndDate) {
       return [filters.periodBStartDate, filters.periodBEndDate]
     }
-    return null
+    return []
   },
   set(val) {
     if (val && val.length === 2) {
@@ -367,10 +370,10 @@ const profitTrendList = ref([])
 function buildProfitTrendQuery() {
   if (hasCompleteCompareRange()) {
     const q = {}
-    if (filters.periodAStartDate) q.periodAStartDate = filters.periodAStartDate
-    if (filters.periodAEndDate) q.periodAEndDate = filters.periodAEndDate
-    if (filters.periodBStartDate) q.periodBStartDate = filters.periodBStartDate
-    if (filters.periodBEndDate) q.periodBEndDate = filters.periodBEndDate
+    if (filters.periodAStartDate) q.periodAStartDate = formatDateForQuery(filters.periodAStartDate)
+    if (filters.periodAEndDate) q.periodAEndDate = formatDateForQuery(filters.periodAEndDate)
+    if (filters.periodBStartDate) q.periodBStartDate = formatDateForQuery(filters.periodBStartDate)
+    if (filters.periodBEndDate) q.periodBEndDate = formatDateForQuery(filters.periodBEndDate)
     return q
   }
   return { rangeType: filters.rangeType }
