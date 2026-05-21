@@ -132,6 +132,19 @@ const loadAll = () => {
   return getList()
 };
 
+const buildSkuQueryParams = (extra = {}) => {
+  const data = {
+    ...query,
+    ...extra,
+    pageNum: pageReq.page,
+    pageSize: pageReq.size
+  }
+  if (props.onlyShipped) {
+    data.onlyShipped = true
+  }
+  return data
+}
+
 const resetQuery = () => {
   proxy?.resetForm('queryRef')
   query.itemName = ''
@@ -150,9 +163,11 @@ async function handleSkuEnter() {
   loading.value = true
   try {
     const res = await listItemSkuPage({
-      itemName: undefined,
-      skuCode,
-      skuCodeExact: true,
+      ...buildSkuQueryParams({
+        itemName: undefined,
+        skuCode,
+        skuCodeExact: true
+      }),
       pageNum: 1,
       pageSize: 10
     })
@@ -204,11 +219,7 @@ const markLoadedItems = (rows = []) => {
 }
 
 const getList = () => {
-  const data = {
-    ...query,
-    pageNum: pageReq.page,
-    pageSize: pageReq.size
-  }
+  const data = buildSkuQueryParams()
   loading.value = true
   return listItemSkuPage(data).then((res) => {
     const content = Array.isArray(res?.rows) ? res.rows.map((it) => normalizeSkuRow(it)) : []
@@ -247,6 +258,10 @@ const props = defineProps({
   warehouseId: {
     type: [String, Number],
     default: undefined
+  },
+  onlyShipped: {
+    type: Boolean,
+    default: false
   }
 })
 
@@ -267,6 +282,12 @@ watch(show, (visible) => {
     query.skuCode = ''
     pageReq.page = 1
     getList()
+  }
+})
+
+watch(() => props.onlyShipped, () => {
+  if (show.value) {
+    loadAll()
   }
 })
 
