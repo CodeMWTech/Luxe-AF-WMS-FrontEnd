@@ -157,6 +157,20 @@ export const dynamicRoutes = [
         meta: { title: '修改生成配置', activeMenu: '/tool/gen' }
       }
     ]
+  },
+  {
+    path: '/wms/platform/tiktok/orders',
+    component: Layout,
+    hidden: true,
+    permissions: ['wms:platform:tiktok:list'],
+    children: [
+      {
+        path: '',
+        component: () => import('@/views/wms/platform/tiktok/orders/index'),
+        name: 'TiktokOrders',
+        meta: { title: 'TikTok订单同步', activeMenu: '/wms/platform/tiktok/orders' }
+      }
+    ]
   }
 ]
 
