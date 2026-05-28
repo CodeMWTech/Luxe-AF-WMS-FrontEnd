@@ -47,7 +47,6 @@ router.beforeEach((to, from, next) => {
             next({ path: '/' })
           })
         })
-        initData()
       } else {
         next()
       }
@@ -64,13 +63,6 @@ router.beforeEach((to, from, next) => {
   }
 })
 
-async function initData() {
-  await useWmsStore().getWarehouseList()
-  await useWmsStore().getMerchantList()
-  await useWmsStore().getItemCategoryList()
-  await useWmsStore().getItemCategoryTreeList()
-  await useWmsStore().getItemBrandList()
-}
 
 router.afterEach(() => {
   NProgress.done()

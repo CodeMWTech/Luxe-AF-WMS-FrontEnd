@@ -1,149 +1,169 @@
 <template>
   <div class="app-container home">
-    <el-row class="pl20 pr20 pb20 pt20" :gutter="10">
-      <el-col :span="12">
-        <el-card shadow="always" style="padding-bottom: 20px;font-size: 14px" >
-          <div slot="header" data-runtime-i18n-ignore="true">
-            <span style="font-size: large;font-weight: bold" >商品字段结构说明（Item 2.26更新）</span>
-          </div>
-          <div style="display: flex;align-items: center">
-            <div class="first" style="font-size:16px;line-height: 32px;" data-runtime-i18n-ignore="true">
-              基础信息：<br/>
-              · 商品名称（itemName）：String，必填，用于展示和搜索。<br/>
-              · 商品分类（itemCategory）：Long，必填，分类 ID。<br/>
-              · 商品品牌（itemBrand）：Long，必填，品牌 ID。<br/>
-              · 成色（itemCondition）：String，必填，如“全新”“九成新”。<br/>
-              · 年份（year）：Number，可选，四位年份。<br/>
-              · 是否已护理（cared）：可选 Boolean，true/false。<br/>
-              · 数量（defaultQty）：可选 Number，默认 1。<br/>
-              · 鉴定机构（authAgency）：String，可选。<br/>
-              · 寄售信息（consignInfo）：String，可选，文本描述。<br/>
-              · 备注（remark）：String，可选，文本备注。<br/>
-              · 商品图片（imageList）：List&lt;Image&gt;，包含 id、url、isMain、sort 等字段。<br/>
-              SKU信息（挂在 sku 列表上）：<br/>
-              · skuCode：String，必填，一个商品仅对应一个 SKU。。<br/>
-              · costPrice：Number，成本价，保留两位小数。<br/>
-              · sellingPrice：Number，销售价，保留两位小数。<br/>
-              时间信息（由后端维护）：<br/>
-              · createTime：DateTime，创建时间。<br/>
-              · updateTime：DateTime，最后更新时间。
-            </div>
-          </div>
-        </el-card>
-      </el-col>
-      <el-col :span="12">
-        <el-card shadow="always" style="padding-bottom: 20px;font-size: 14px" >
-          <div slot="header" data-runtime-i18n-ignore="true">
-            <span style="font-size: large;font-weight: bold">商品过滤结构说明（Item Filter 2.26更新）</span>
-          </div>
-          <div style="display: flex;align-items: center">
-            <div class="first" style="font-size:16px;line-height: 30px;" data-runtime-i18n-ignore="true">
-              基础筛选字段：<br/>
-              · 商品名称（itemName）：String，模糊匹配名称。<br/>
-              · SKU 编码（skuCode）：String，精确匹配 SKU。<br/>
-              · 商品分类（itemCategory）：Long，分类 ID，左侧分类框选择。<br/>
-              · 商品品牌（itemBrand）：Long，品牌 ID，下拉选择。<br/>
-              · 成色（itemCondition）：String，文本匹配，如“全新”“九成新”。<br/>
-              · 年份（year）：Number，按年份精确筛选。<br/>
-              · 鉴定机构（authAgency）：String，文本匹配。<br/>
-              · 默认数量（defaultQty）：Number，按数量精确筛选。<br/>
-              · 已护理（cared）：Boolean，是/否 开关。<br/>
-              · 寄售信息（consignInfo）：String，关键字模糊匹配。<br/>
-              时间与价格筛选：<br/>
-              · 创建时间区间（createTimeRange → startTime/endTime）：DateTime，按创建时间段筛选。<br/>
-              · 销售价下限（sellingPriceMin）：Number，筛选不低于此价格的商品。<br/>
-              · 销售价上限（sellingPriceMax）：Number，筛选不高于此价格的商品。
-            </div>
-          </div>
-        </el-card>
-      </el-col>
-    </el-row>
-    <el-row class="pl20 pr20 pb20" :gutter="10">
-      <el-col :span="24">
-        <el-card shadow="always" style="padding-bottom: 20px;font-size: 14px">
-          <div slot="header" data-runtime-i18n-ignore="true">
-            <span style="font-size: large;font-weight: bold">更新记录（2.28）</span>
-          </div>
-          <div class="first" style="font-size:16px;line-height: 28px;" data-runtime-i18n-ignore="true">
-            · 商品字段新增：材质（material）、瑕疵（defect）、配件（accessories）。<br/>
-            · 成色（itemCondition）改为 Enum 可选（如 S/A/B/C/D）。<br/>
-            · 鉴定机构（authAgency）改为 Enum 可选（如 Entrupy、Real Authentication 等）。
-          </div>
-        </el-card>
-      </el-col>
-    </el-row>
+    <div class="notice-page" data-runtime-i18n-ignore="true">
+      <h1>{{ t('projectIntro.title') }}</h1>
+
+      <section v-for="section in sections" :key="section.title" class="notice-section">
+        <h2>{{ section.title }}</h2>
+        <template v-for="item in section.content" :key="item.key">
+          <p v-if="item.type === 'text'" :class="{ warning: item.warning }">{{ item.text }}</p>
+          <ul v-else>
+            <li v-for="entry in item.items" :key="entry">{{ entry }}</li>
+          </ul>
+        </template>
+      </section>
+
+      <p class="final-reminder">{{ t('projectIntro.finalReminder') }}</p>
+    </div>
   </div>
 </template>
 
 <script setup name="Index">
-const version = ref('5.2.0')
+import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 
-function goTarget(url) {
-  window.open(url, '__blank')
-}
+const { t, locale } = useI18n()
+
+const sections = computed(() => {
+  locale.value
+
+  return [
+    {
+      title: t('projectIntro.accountSecurity.title'),
+      content: [
+        { key: 'accountSecurity.line1', type: 'text', text: t('projectIntro.accountSecurity.line1') },
+        { key: 'accountSecurity.line2', type: 'text', text: t('projectIntro.accountSecurity.line2') },
+      ],
+    },
+    {
+      title: t('projectIntro.productInfo.title'),
+      content: [
+        { key: 'productInfo.line1', type: 'text', text: t('projectIntro.productInfo.line1') },
+        { key: 'productInfo.line2', type: 'text', text: t('projectIntro.productInfo.line2') },
+      ],
+    },
+    {
+      title: t('projectIntro.warehouse.title'),
+      content: [
+        { key: 'warehouse.line1', type: 'text', text: t('projectIntro.warehouse.line1') },
+        { key: 'warehouse.line2', type: 'text', text: t('projectIntro.warehouse.line2') },
+      ],
+    },
+    {
+      title: t('projectIntro.inbound.title'),
+      content: [
+        { key: 'inbound.line1', type: 'text', text: t('projectIntro.inbound.line1') },
+        { key: 'inbound.line2', type: 'text', text: t('projectIntro.inbound.line2') },
+        {
+          key: 'inbound.checklist',
+          type: 'list',
+          items: [
+            t('projectIntro.inbound.checkItemInfo'),
+            t('projectIntro.inbound.checkWarehouse'),
+            t('projectIntro.inbound.checkQuantity'),
+            t('projectIntro.inbound.checkCost'),
+          ],
+        },
+        { key: 'inbound.warning', type: 'text', text: t('projectIntro.inbound.warning'), warning: true },
+        { key: 'inbound.line3', type: 'text', text: t('projectIntro.inbound.line3') },
+      ],
+    },
+    {
+      title: t('projectIntro.outbound.title'),
+      content: [
+        { key: 'outbound.line1', type: 'text', text: t('projectIntro.outbound.line1') },
+        { key: 'outbound.line2', type: 'text', text: t('projectIntro.outbound.line2') },
+        {
+          key: 'outbound.checklist',
+          type: 'list',
+          items: [
+            t('projectIntro.outbound.checkItemInfo'),
+            t('projectIntro.outbound.checkWarehouse'),
+            t('projectIntro.outbound.checkQuantity'),
+            t('projectIntro.outbound.checkSalesPrice'),
+          ],
+        },
+        { key: 'outbound.line3', type: 'text', text: t('projectIntro.outbound.line3') },
+      ],
+    },
+    {
+      title: t('projectIntro.irreversible.title'),
+      content: [
+        { key: 'irreversible.line1', type: 'text', text: t('projectIntro.irreversible.line1') },
+        { key: 'irreversible.line2', type: 'text', text: t('projectIntro.irreversible.line2') },
+      ],
+    },
+    {
+      title: t('projectIntro.dataResponsibility.title'),
+      content: [
+        { key: 'dataResponsibility.line1', type: 'text', text: t('projectIntro.dataResponsibility.line1') },
+        { key: 'dataResponsibility.line2', type: 'text', text: t('projectIntro.dataResponsibility.line2') },
+      ],
+    },
+  ]
+})
 </script>
 
 <style scoped lang="scss">
 .home {
-  blockquote {
-    padding: 10px 20px;
-    margin: 0 0 20px;
-    font-size: 17.5px;
-    border-left: 5px solid #eee;
-  }
-  hr {
-    margin-top: 20px;
-    margin-bottom: 20px;
-    border: 0;
-    border-top: 1px solid #eee;
-  }
-  .col-item {
-    margin-bottom: 20px;
-  }
-
-  ul {
-    padding: 0;
-    margin: 0;
-  }
-
   font-family: "open sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
-  font-size: 13px;
-  color: #676a6c;
+  color: #303133;
   overflow-x: hidden;
+  background: #fff;
+}
 
-  ul {
-    list-style-type: none;
+.notice-page {
+  padding: 26px 28px 40px;
+  font-size: 15px;
+  line-height: 1.75;
+
+  h1 {
+    margin: 0 0 22px;
+    font-size: 24px;
+    font-weight: 700;
+    color: #1f2d3d;
   }
+}
 
-  h4 {
-    margin-top: 0px;
+.notice-section {
+  padding: 14px 0 18px;
+  border-bottom: 1px solid #ebeef5;
+
+  &:first-child {
+    padding-top: 0;
   }
 
   h2 {
-    margin-top: 10px;
-    font-size: 26px;
-    font-weight: 100;
+    margin: 0 0 8px;
+    font-size: 17px;
+    font-weight: 700;
+    color: #1f2d3d;
   }
 
   p {
-    margin-top: 10px;
-
-    b {
-      font-weight: 700;
-    }
+    margin: 6px 0;
   }
 
-  .update-log {
-    ol {
-      display: block;
-      list-style-type: decimal;
-      margin-block-start: 1em;
-      margin-block-end: 1em;
-      margin-inline-start: 0;
-      margin-inline-end: 0;
-      padding-inline-start: 40px;
-    }
+  ul {
+    margin: 8px 0 8px 20px;
+    padding: 0;
+  }
+
+  li {
+    margin: 4px 0;
   }
 }
-</style>
 
+.warning {
+  margin-top: 10px !important;
+  color: #c45656;
+  font-weight: 700;
+}
+
+.final-reminder {
+  margin: 18px 0 0;
+  color: #1f2d3d;
+  font-size: 16px;
+  font-weight: 700;
+}
+</style>

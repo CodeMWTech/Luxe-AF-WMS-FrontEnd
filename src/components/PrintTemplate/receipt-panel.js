@@ -4,7 +4,7 @@ export default {
     "name": 1,
     "height": 297,
     "width": 210,
-    "paperHeader": 49.5,
+    "paperHeader": 35,
     "paperFooter": 780,
     "printElements": [{
       "options": {
@@ -27,7 +27,9 @@ export default {
         ],
         "field": "orderNo",
         "coordinateSync": false,
-        "widthHeightSync": false
+        "widthHeightSync": false,
+        "fixed": false,
+        "showInPage": "first"
       },
       "printElementType": {
         "title": "条形码",
@@ -80,7 +82,9 @@ export default {
           "fontSize": 18,
           "fontWeight": "600",
           "lineHeight": 26.25,
-          "qrCodeLevel": 0
+          "qrCodeLevel": 0,
+          "fixed": false,
+          "showInPage": "first"
         },
         "printElementType": {
           "title": "文本",
@@ -127,6 +131,8 @@ export default {
           "coordinateSync": false,
           "widthHeightSync": false,
           "qrCodeLevel": 0,
+          "fixed": false,
+          "showInPage": "first",
           "right": 139.5,
           "bottom": 108,
           "vCenter": 79.5,
@@ -176,7 +182,9 @@ export default {
           "field": "orderStatus",
           "coordinateSync": false,
           "widthHeightSync": false,
-          "qrCodeLevel": 0
+          "qrCodeLevel": 0,
+          "fixed": false,
+          "showInPage": "first"
         },
         "printElementType": {
           "title": "文本",
@@ -222,7 +230,9 @@ export default {
           "field": "merchantName",
           "coordinateSync": false,
           "widthHeightSync": false,
-          "qrCodeLevel": 0
+          "qrCodeLevel": 0,
+          "fixed": false,
+          "showInPage": "first"
         },
         "printElementType": {
           "title": "文本",
@@ -269,6 +279,8 @@ export default {
           "coordinateSync": false,
           "widthHeightSync": false,
           "qrCodeLevel": 0,
+          "fixed": false,
+          "showInPage": "first",
           "right": 489.75,
           "bottom": 131.25,
           "vCenter": 414.75,
@@ -318,7 +330,9 @@ export default {
           "field": "warehouseName",
           "coordinateSync": false,
           "widthHeightSync": false,
-          "qrCodeLevel": 0
+          "qrCodeLevel": 0,
+          "fixed": false,
+          "showInPage": "first"
         },
         "printElementType": {
           "title": "文本",
@@ -364,7 +378,9 @@ export default {
           "field": "totalQuantity",
           "coordinateSync": false,
           "widthHeightSync": false,
-          "qrCodeLevel": 0
+          "qrCodeLevel": 0,
+          "fixed": false,
+          "showInPage": "first"
         },
         "printElementType": {
           "title": "文本",
@@ -411,6 +427,8 @@ export default {
           "coordinateSync": false,
           "widthHeightSync": false,
           "qrCodeLevel": 0,
+          "fixed": false,
+          "showInPage": "first",
           "right": 489.75,
           "bottom": 131.25,
           "vCenter": 414.75,
@@ -460,7 +478,9 @@ export default {
           "field": "createBy",
           "coordinateSync": false,
           "widthHeightSync": false,
-          "qrCodeLevel": 0
+          "qrCodeLevel": 0,
+          "fixed": false,
+          "showInPage": "first"
         },
         "printElementType": {
           "title": "文本",
@@ -507,6 +527,8 @@ export default {
           "coordinateSync": false,
           "widthHeightSync": false,
           "qrCodeLevel": 0,
+          "fixed": false,
+          "showInPage": "first",
           "right": 489.75,
           "bottom": 131.25,
           "vCenter": 414.75,
@@ -556,7 +578,9 @@ export default {
           "field": "updateBy",
           "coordinateSync": false,
           "widthHeightSync": false,
-          "qrCodeLevel": 0
+          "qrCodeLevel": 0,
+          "fixed": false,
+          "showInPage": "first"
         },
         "printElementType": {
           "title": "文本",
@@ -603,6 +627,8 @@ export default {
           "coordinateSync": false,
           "widthHeightSync": false,
           "qrCodeLevel": 0,
+          "fixed": false,
+          "showInPage": "first",
           "right": 489.75,
           "bottom": 131.25,
           "vCenter": 414.75,
@@ -616,14 +642,15 @@ export default {
       {
         "options": {
           "left": 17.5,
-          "top": 272.5,
-          "height": 54,
+          "top": 285,
+          "height": 50,
           "width": 550,
           "field": "table",
           "groupFieldsFormatter": "function(type,options,data){ return [\"name\"] }",
           "columns": [
             [{
-              "width": 78.57142857142857,
+              "width": 260,
+              "align": "center",
               "title": "商品名称",
               "field": "itemName",
               "checked": true,
@@ -633,7 +660,8 @@ export default {
               "colspan": 1
             },
               {
-                "width": 78.57142857142857,
+                "width": 100,
+                "align": "center",
                 "title": "SKU编号",
                 "field": "skuCode",
                 "checked": true,
@@ -643,8 +671,8 @@ export default {
                 "colspan": 1
               },
               {
-                "width": 78.57142857142857,
-                "align": "right",
+                "width": 60,
+                "align": "center",
                 "title": "数量",
                 "field": "quantity",
                 "checked": true,
@@ -653,13 +681,13 @@ export default {
                 "rowspan": 1,
                 "colspan": 1,
                 "tableSummary": "sum",
-                "tableSummaryAlign": "right",
+                "tableSummaryAlign": "center",
                 "tableSummaryNumFormat": "0"
               },
               {
-                "width": 78.57142857142857,
-                "align": "right",
-                "title": "金额(元)",
+                "width": 130,
+                "align": "center",
+                "title": "金额(美元)",
                 "field": "amount",
                 "checked": true,
                 "columnId": "amount",
@@ -667,7 +695,7 @@ export default {
                 "rowspan": 1,
                 "colspan": 1,
                 "tableSummary": "sum",
-                "tableSummaryAlign": "right"
+                "tableSummaryAlign": "center"
               }
             ]
           ]
@@ -730,6 +758,8 @@ export default {
           "coordinateSync": false,
           "widthHeightSync": false,
           "qrCodeLevel": 0,
+          "fixed": false,
+          "showInPage": "first",
           "right": 139.5,
           "bottom": 233.25,
           "vCenter": 79.5,
@@ -741,8 +771,8 @@ export default {
         }
       }
     ],
-    "paperNumberLeft": 565.5,
-    "paperNumberTop": 819,
+    "paperNumberLeft": 550,
+    "paperNumberTop": 815,
     "paperNumberContinue": true,
     "watermarkOptions": {}
   }]

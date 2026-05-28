@@ -11,19 +11,21 @@
 
 <script setup>
 import useSettingsStore from '@/store/modules/settings'
+import usePermissionStore, { hasAccessibleRoutePath } from '@/store/modules/permission'
 import { getRouteTitle } from '@/utils/routeTitle'
 
 const route = useRoute();
 const router = useRouter();
 const levelList = ref([])
 const settingsStore = useSettingsStore()
+const permissionStore = usePermissionStore()
 
 function getBreadcrumb() {
   // only show routes with meta.title
   let matched = route.matched.filter(item => item.meta && item.meta.title);
   const first = matched[0]
   // 判断是否为首页
-  if (!isDashboard(first)) {
+  if (!isDashboard(first) && hasAccessibleRoutePath(permissionStore.addRoutes, '/index')) {
     matched = [{ path: '/index', meta: { title: '首页' } }].concat(matched)
   }
 

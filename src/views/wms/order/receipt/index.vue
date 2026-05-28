@@ -61,7 +61,7 @@
             plain
             icon="Plus"
             @click="handleAdd"
-            v-hasPermi="['wms:receipt:all']"
+            v-hasPermi="['wms:receipt:edit']"
           >{{ tr('新增') }}</el-button>
         </el-col>
       </el-row>
@@ -169,7 +169,7 @@
                 :content="'入库单【' + scope.row.orderNo + '】已' + (scope.row.orderStatus === 1 ? '入库' : '作废') + '，无法修改！' "
               >
                 <template #reference>
-                  <el-button link type="primary" @click="handleUpdate(scope.row)" v-hasPermi="['wms:receipt:all']" :disabled="[-1, 1].includes(scope.row.orderStatus)">{{ tr('修改') }}</el-button>
+                  <el-button link type="primary" @click="handleUpdate(scope.row)" v-hasPermi="['wms:receipt:edit']" :disabled="[-1, 1].includes(scope.row.orderStatus)">{{ tr('修改') }}</el-button>
                 </template>
               </el-popover>
               <el-button link type="primary" @click="handleGoDetail(scope.row)" v-hasPermi="['wms:receipt:all']">{{ expandedRowKeys.includes(scope.row.id) ? tr('收起') : tr('查看') }}</el-button>
@@ -184,7 +184,7 @@
                 :content="'入库单【' + scope.row.orderNo + '】已入库，无法删除！' "
               >
                 <template #reference>
-                  <el-button link type="danger" @click="handleDelete(scope.row)" v-hasPermi="['wms:receipt:all']" :disabled="scope.row.orderStatus === 1">{{ tr('删除') }}</el-button>
+                  <el-button link type="danger" @click="handleDelete(scope.row)" v-hasPermi="['wms:receipt:edit']" :disabled="scope.row.orderStatus === 1">{{ tr('删除') }}</el-button>
                 </template>
               </el-popover>
               <el-button link type="primary" @click="handlePrint(scope.row)" v-hasPermi="['wms:receipt:all']">{{ tr('打印') }}</el-button>
@@ -208,7 +208,7 @@
 
 <script setup name="ReceiptOrder">
 import {delReceiptOrder, getReceiptOrder, listReceiptOrder} from "@/api/wms/receiptOrder";
-import {computed, getCurrentInstance, reactive, ref, toRefs} from "vue";
+import {computed, getCurrentInstance, onMounted, reactive, ref, toRefs} from "vue";
 import {useWmsStore} from "../../../../store/modules/wms";
 import {listByReceiptOrderId} from "@/api/wms/receiptOrderDetail";
 import {ElMessageBox} from "element-plus";
@@ -249,6 +249,7 @@ const isEn = computed(() => (settingsStore.language || 'zh-cn') === 'en')
 const formLabelWidth = computed(() => '80px')
 const translatedReceiptStatusOptions = computed(() => (wms_receipt_status.value || []).map(it => ({ ...it, label: tr(it.label) })))
 const translatedReceiptTypeOptions = computed(() => (wms_receipt_type.value || []).map(it => ({ ...it, label: tr(it.label) })))
+const wmsStore = useWmsStore()
 
 /** 查询入库单列表 */
 function getList() {
@@ -353,7 +354,80 @@ async function handlePrint(row) {
   let printTemplate = new proxy.$hiprint.PrintTemplate({template: receiptPanel})
   printTemplate.print(printData, {}, {
     styleHandler: () => {
-      return '<link href="https://cyl-press.oss-cn-shenzhen.aliyuncs.com/print-lock.css" media="print" rel="stylesheet">'
+      return `
+        <link href="https://cyl-press.oss-cn-shenzhen.aliyuncs.com/print-lock.css" media="print" rel="stylesheet">
+        <style>
+          @media print {
+            @page {
+              size: A4;
+              margin: 10mm 8mm 12mm 8mm;
+            }
+          }
+
+          /* 仅覆盖打印明细表，防止外部样式把英文挤成竖排 */
+          table {
+            width: 100% !important;
+            table-layout: fixed !important;
+            border-collapse: collapse !important;
+          }
+
+          table tr {
+            height: auto !important;
+          }
+
+          table td,
+          table th {
+            box-sizing: border-box !important;
+            padding: 2px 4px !important;
+            line-height: 1.25 !important;
+            font-size: 9.5px !important;
+            text-align: center !important;
+            white-space: normal !important;
+            word-break: normal !important;
+            overflow-wrap: break-word !important;
+            overflow: visible !important;
+            text-overflow: clip !important;
+            vertical-align: middle !important;
+          }
+
+          /* 商品名称列：允许多行，但禁止逐字竖排 */
+          table td:nth-child(1),
+          table th:nth-child(1) {
+            width: 42% !important;
+            white-space: normal !important;
+            word-break: normal !important;
+            overflow-wrap: break-word !important;
+          }
+
+          /* SKU/数量/金额列尽量单行 */
+          table td:nth-child(2),
+          table th:nth-child(2) {
+            width: 18% !important;
+            white-space: nowrap !important;
+          }
+          table td:nth-child(3),
+          table th:nth-child(3) {
+            width: 11% !important;
+            white-space: nowrap !important;
+          }
+          table td:nth-child(4),
+          table th:nth-child(4) {
+            width: 29% !important;
+            white-space: nowrap !important;
+          }
+
+          /* 页码单行显示兜底，避免 "13-\n13" */
+          .hiprint-paper-number,
+          .hiprint-paperNumber,
+          [class*="paper-number"],
+          [class*="paperNumber"] {
+            white-space: nowrap !important;
+            word-break: keep-all !important;
+            overflow-wrap: normal !important;
+            line-height: 1 !important;
+          }
+        </style>
+      `
     }
   })
 }
@@ -396,7 +470,20 @@ function ifExpand(expandedRows) {
 function getRowKey(row) {
   return row.id
 }
-getList();
+
+function initLookupOptions() {
+  if (!wmsStore.warehouseList.length) {
+    wmsStore.getWarehouseList()
+  }
+  if (!wmsStore.merchantList.length) {
+    wmsStore.getMerchantList()
+  }
+}
+
+onMounted(() => {
+  initLookupOptions()
+  getList()
+})
 </script>
 <style lang="scss">
 .receipt-order-page .filter-form {

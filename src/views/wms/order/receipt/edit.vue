@@ -112,14 +112,16 @@
           <el-table :data="form.details" border :empty-text="tr('暂无商品明细')">
             <el-table-column :label="tr('商品信息')" prop="itemSku.itemName">
               <template #default="{ row }">
-                <div>{{ row.item.itemName + (row.item.itemCode ? ('(' + row.item.itemCode + ')') : '') }}</div>
-                <div v-if="row.item.itemBrand">{{ tr('品牌') }}：{{ useWmsStore().itemBrandMap.get(row.item.itemBrand).brandName }}</div>
+                <div>{{ (row.item?.itemName || '-') + (row.item?.itemCode ? ('(' + row.item.itemCode + ')') : '') }}</div>
+                <div v-if="row.item?.itemBrand && getBrandName(row.item.itemBrand)">
+                  {{ tr('品牌') }}：{{ getBrandName(row.item.itemBrand) }}
+                </div>
               </template>
             </el-table-column>
             <el-table-column :label="tr('规格信息')">
               <template #default="{ row }">
-                <div>{{ row.itemSku.skuCode }}</div>
-                <div v-if="row.itemSku.barcode">{{ tr('条码') }}：{{row.itemSku.barcode}}</div>
+                <div>{{ row.itemSku?.skuCode || '-' }}</div>
+                <div v-if="row.itemSku?.barcode">{{ tr('条码') }}：{{row.itemSku.barcode}}</div>
               </template>
             </el-table-column>
             <el-table-column :label="tr('数量')" prop="quantity" width="180">
@@ -158,6 +160,8 @@
         :model-value="skuSelectShow"
         :scan-mode="scanMode"
         :selected-sku="selectedSku"
+        :warehouse-id="form.warehouseId"
+        :only-shipped="isReturnInbound"
         @handleOkClick="handleOkClick"
         @handleCancelClick="skuSelectShow = false"
         :size="'50%'"
@@ -193,6 +197,7 @@ import { translateByMap } from '@/locales/runtime-map'
 
 const {proxy} = getCurrentInstance();
 const { wms_receipt_type } = proxy.useDict("wms_receipt_type");
+const wmsStore = useWmsStore()
 const settingsStore = useSettingsStore()
 const isEn = computed(() => (settingsStore.language || 'zh-cn') === 'en')
 const tr = (text) => translateByMap(text, settingsStore.language || 'zh-cn')
@@ -237,6 +242,12 @@ const data = reactive({
   }
 });
 const { form, rules} = toRefs(data);
+const returnInboundLabel = '\u9000\u8d27\u5165\u5e93'
+const returnInboundLabels = [returnInboundLabel, 'Return Inbound']
+const isReturnInbound = computed(() => {
+  const currentType = (wms_receipt_type.value || []).find((it) => String(it.value) === String(form.value.optType))
+  return returnInboundLabels.includes(currentType?.label) || currentType?.label === tr(returnInboundLabel)
+})
 
 const cancel = async () => {
   await proxy?.$modal.confirm('确认取消编辑入库单吗？');
@@ -247,17 +258,41 @@ const close = () => {
   proxy?.$tab.closeOpenPage(obj);
 }
 const skuSelectShow = ref(false)
+const getBrandName = (brandId) => {
+  if (brandId === null || brandId === undefined) return ''
+  return wmsStore.itemBrandMap.get(brandId)?.brandName || ''
+}
+const normalizeDetailRow = (detail = {}) => {
+  const skuId = detail.skuId ?? detail.itemSku?.id ?? detail.itemSkuId
+  const itemSku = detail.itemSku || {
+    id: skuId,
+    skuCode: detail.skuCode,
+    barcode: detail.barcode,
+    costPrice: detail.costPrice,
+    sellingPrice: detail.sellingPrice
+  }
+  const item = detail.item || {
+    id: detail.itemId,
+    itemName: detail.itemName,
+    itemCode: detail.itemCode,
+    itemBrand: detail.itemBrand
+  }
+  return {
+    ...detail,
+    skuId,
+    itemSku,
+    item
+  }
+}
 
 // 选择商品 start
 const showAddItem = () => {
   scanMode.value = false
-  skuSelectRef.value.getList()
   skuSelectShow.value = true
 }
 
 const showScanAddItem = () => {
   scanMode.value = true
-  skuSelectRef.value.getList()
   skuSelectShow.value = true
 }
 // 选择成功
@@ -272,6 +307,7 @@ const handleOkClick = (item) => {
   })
   // 维护“当前入库单全部已存在商品”集合，避免后续刷新丢失灰色禁用状态
   selectedSku.value = Array.from(selectedMap.values())
+  const newDetails = []
   item.forEach((it) => {
     if (!form.value.details.find(detail => detail.itemSku.id === it.id)) {
       const quantity = 1
@@ -280,17 +316,18 @@ const handleOkClick = (item) => {
       if (costPrice || costPrice === 0) {
         amount = Number(costPrice) * quantity
       }
-      form.value.details.push(
-        {
-          itemSku: it.itemSku,
-          item: it.item,
-          amount,
-          quantity,
-          warehouseId: form.value.warehouseId
-        }
-      )
+      newDetails.push({
+        itemSku: it.itemSku,
+        item: it.item,
+        amount,
+        quantity,
+        warehouseId: form.value.warehouseId
+      })
     }
   })
+  if (newDetails.length) {
+    form.value.details.unshift(...newDetails)
+  }
   updateTotals()
 }
 // 选择商品 end
@@ -383,6 +420,12 @@ const doWarehousing = async () => {
       if (invalidQuantityList?.length) {
         return ElMessage.error('请选择数量')
       }
+      const invalidAmountList = form.value.details.filter(
+        it => it.amount === null || it.amount === undefined || it.amount === '' || Number(it.amount) === 0
+      )
+      if (invalidAmountList?.length) {
+        return ElMessage.warning('入库商品金额不能为空且不能为0')
+      }
     }
     const params = getParamsBeforeSave(1);
     loading.value = true
@@ -406,6 +449,15 @@ const updateToInvalid = async () => {
 
 const route = useRoute();
 onMounted(() => {
+  if (!wmsStore.warehouseList.length) {
+    wmsStore.getWarehouseList()
+  }
+  if (!wmsStore.merchantList.length) {
+    wmsStore.getMerchantList()
+  }
+  if (!wmsStore.itemBrandList.length) {
+    wmsStore.getItemBrandList()
+  }
   const id = route.query && route.query.id;
   if (id) {
     loadDetail(id)
@@ -419,12 +471,18 @@ onMounted(() => {
 const loadDetail = (id) => {
   loading.value = true
   getReceiptOrder(id).then((response) => {
-    form.value = {...response.data}
+    const detailRows = Array.isArray(response?.data?.details)
+      ? response.data.details.map((it) => normalizeDetailRow(it))
+      : []
+    form.value = {
+      ...response.data,
+      details: detailRows
+    }
     updateTotals()
-    if (response.data.details?.length) {
-      selectedSku.value = response.data.details.map(it => {
+    if (detailRows.length) {
+      selectedSku.value = detailRows.map(it => {
         return {
-          id: it.skuId
+          id: it.skuId ?? it.itemSku?.id
         }
       })
     }

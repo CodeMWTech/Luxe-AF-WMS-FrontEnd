@@ -10,7 +10,7 @@
             plain
             icon="Plus"
             @click="handleAdd"
-            v-hasPermi="['wms:itemBrand:add']"
+            v-hasPermi="['wms:warehouse:edit']"
           >{{ tr('新增') }}</el-button>
         </el-col>
       </el-row>
@@ -19,10 +19,10 @@
         <el-table-column :label="tr('仓库名称')" prop="warehouseName" min-width="180" show-overflow-tooltip />
         <el-table-column :label="tr('仓库编号')" prop="warehouseCode" min-width="160" show-overflow-tooltip />
         <el-table-column :label="tr('创建时间')" prop="createTime" width="180"/>
-        <el-table-column :label="tr('操作')" align="right" class-name="small-padding fixed-width" width="180">
+        <el-table-column v-hasPermi="['wms:warehouse:edit']" :label="tr('操作')" align="right" class-name="small-padding fixed-width" width="180">
           <template #default="scope">
-            <el-button link type="primary" icon="Edit" @click="handleUpdate(scope.row)" v-hasPermi="['wms:itemBrand:edit']">{{ tr('修改') }}</el-button>
-            <el-button link type="primary" icon="Delete" @click="handleDelete(scope.row)" v-hasPermi="['wms:itemBrand:remove']">{{ tr('删除') }}</el-button>
+            <el-button link type="primary" icon="Edit" @click="handleUpdate(scope.row)" v-hasPermi="['wms:warehouse:edit']">{{ tr('修改') }}</el-button>
+            <el-button link type="primary" icon="Delete" @click="handleDelete(scope.row)" v-hasPermi="['wms:warehouse:edit']">{{ tr('删除') }}</el-button>
           </template>
         </el-table-column>
       </el-table>

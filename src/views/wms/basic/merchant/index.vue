@@ -45,7 +45,7 @@
             plain
             icon="Plus"
             @click="handleAdd"
-            v-hasPermi="['wms:merchant:add']"
+            v-hasPermi="['wms:merchant:edit']"
           >{{ tr('新增') }}</el-button>
         </el-col>
       </el-row>
@@ -62,10 +62,10 @@
         <el-table-column :label="tr('级别')" prop="merchantLevel" min-width="110" show-overflow-tooltip />
         <el-table-column :label="tr('联系人')" prop="contactPerson" min-width="140" show-overflow-tooltip />
         <el-table-column :label="tr('备注')" prop="remark" min-width="180" show-overflow-tooltip />
-        <el-table-column :label="tr('操作')" align="right" class-name="small-padding fixed-width" width="160">
+        <el-table-column v-hasPermi="['wms:merchant:edit']" :label="tr('操作')" align="right" class-name="small-padding fixed-width" width="160">
             <template #default="scope">
                 <el-button link type="primary" icon="Edit" @click="handleUpdate(scope.row)" v-hasPermi="['wms:merchant:edit']">{{ tr('修改') }}</el-button>
-                <el-button link type="primary" icon="Delete" @click="handleDelete(scope.row)" v-hasPermi="['wms:merchant:remove']">{{ tr('删除') }}</el-button>
+                <el-button link type="primary" icon="Delete" @click="handleDelete(scope.row)" v-hasPermi="['wms:merchant:edit']">{{ tr('删除') }}</el-button>
             </template>
         </el-table-column>
       </el-table>

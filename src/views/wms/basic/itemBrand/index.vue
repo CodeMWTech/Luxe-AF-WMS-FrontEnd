@@ -27,7 +27,7 @@
             plain
             icon="Plus"
             @click="handleAdd"
-            v-hasPermi="['wms:itemBrand:add']"
+            v-hasPermi="['wms:itemBrand:edit']"
           >{{ tr('新增') }}</el-button>
         </el-col>
       </el-row>
@@ -35,10 +35,10 @@
       <el-table v-loading="loading" :data="itemBrandList" border class="mt20" :empty-text="tr('暂无') + tr('品牌')">
         <el-table-column :label="tr('品牌名称')" prop="brandName" min-width="220" show-overflow-tooltip />
         <el-table-column :label="tr('创建时间')" prop="createTime" width="200"/>
-        <el-table-column :label="tr('操作')" align="right" class-name="small-padding fixed-width" width="180">
+        <el-table-column v-hasPermi="['wms:itemBrand:edit']" :label="tr('操作')" align="right" class-name="small-padding fixed-width" width="180">
           <template #default="scope">
             <el-button link type="primary" icon="Edit" @click="handleUpdate(scope.row)" v-hasPermi="['wms:itemBrand:edit']">{{ tr('修改') }}</el-button>
-            <el-button link type="primary" icon="Delete" @click="handleDelete(scope.row)" v-hasPermi="['wms:itemBrand:remove']">{{ tr('删除') }}</el-button>
+            <el-button link type="primary" icon="Delete" @click="handleDelete(scope.row)" v-hasPermi="['wms:itemBrand:edit']">{{ tr('删除') }}</el-button>
           </template>
         </el-table-column>
       </el-table>

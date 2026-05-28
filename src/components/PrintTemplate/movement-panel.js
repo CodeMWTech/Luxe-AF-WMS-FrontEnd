@@ -5,8 +5,8 @@ export default {
       "name": 1,
       "height": 297,
       "width": 210,
-      "paperHeader": 49.5,
-      "paperFooter": 780,
+      "paperHeader": 35,
+      "paperFooter": 760,
       "printElements": [
         {
           "options": {
@@ -482,15 +482,15 @@ export default {
         {
           "options": {
             "left": 17.5,
-            "top": 247.5,
-            "height": 54,
+            "top": 285,
+            "height": 50,
             "width": 550,
             "field": "table",
             "groupFieldsFormatter": "function(type,options,data){ return [\"name\"] }",
             "columns": [
               [
                 {
-                  "width": 78.57142857142857,
+                  "width": 300,
                   "title": "商品名称",
                   "field": "itemName",
                   "checked": true,
@@ -500,7 +500,7 @@ export default {
                   "colspan": 1
                 },
                 {
-                  "width": 78.57142857142857,
+                  "width": 150,
                   "title": "SKU编号",
                   "field": "skuCode",
                   "checked": true,
@@ -510,8 +510,8 @@ export default {
                   "colspan": 1
                 },
                 {
-                  "width": 78.57142857142857,
-                  "align": "right",
+                  "width": 100,
+                  "align": "center",
                   "title": "数量",
                   "field": "quantity",
                   "checked": true,
@@ -520,7 +520,7 @@ export default {
                   "rowspan": 1,
                   "colspan": 1,
                   "tableSummary": "sum",
-                  "tableSummaryAlign": "right",
+                  "tableSummaryAlign": "center",
                   "tableSummaryNumFormat": "0"
                 }
               ]
@@ -596,8 +596,8 @@ export default {
           }
         }
       ],
-      "paperNumberLeft": 565.5,
-      "paperNumberTop": 819,
+      "paperNumberLeft": 550,
+      "paperNumberTop": 815,
       "paperNumberContinue": true,
       "watermarkOptions": {}
     }

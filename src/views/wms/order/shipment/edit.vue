@@ -41,8 +41,8 @@
               </el-form-item>
             </el-col>
             <el-col :span="6">
-              <el-form-item :label="tr('客户')" prop="merchantId">
-                <el-select v-model="form.merchantId" :placeholder="tr('请选择') + tr('客户')" clearable filterable>
+             <el-form-item :label="tr('平台')" prop="merchantId">
+                <el-select v-model="form.merchantId" :placeholder="tr('请选择') + tr('平台')" clearable filterable>
                   <el-option v-for="item in useWmsStore().merchantList" :key="item.id" :label="item.merchantName"
                              :value="item.id"/>
                 </el-select>
@@ -120,17 +120,17 @@
             <el-table-column label="商品信息" prop="itemSku.itemName">
               <template #default="{ row }">
                 <div>{{
-                    row.item.itemName + (row.item.itemCode ? ('(' + row.item.itemCode + ')') : '')
+                    (row.item?.itemName || '-') + (row.item?.itemCode ? ('(' + row.item.itemCode + ')') : '')
                   }}
                 </div>
-                <div v-if="row.item.itemBrand">
-                  品牌：{{ useWmsStore().itemBrandMap.get(row.item.itemBrand).brandName }}
+                <div v-if="row.item?.itemBrand && getBrandName(row.item.itemBrand)">
+                  品牌：{{ getBrandName(row.item.itemBrand) }}
                 </div>
               </template>
             </el-table-column>
             <el-table-column label="规格信息">
               <template #default="{ row }">
-                <div>{{ row.itemSku.skuCode }}</div>
+                <div>{{ row.itemSku?.skuCode || '-' }}</div>
               </template>
             </el-table-column>
             <el-table-column label="出库数量" prop="quantity" width="180">
@@ -208,6 +208,7 @@ import { translateByMap } from '@/locales/runtime-map'
 
 const {proxy} = getCurrentInstance();
 const {wms_shipment_type} = proxy.useDict("wms_shipment_type");
+const wmsStore = useWmsStore()
 const settingsStore = useSettingsStore()
 const isEn = computed(() => (settingsStore.language || 'zh-cn') === 'en')
 const tr = (text) => translateByMap(text, settingsStore.language || 'zh-cn')
@@ -255,6 +256,42 @@ const close = () => {
   proxy?.$tab.closeOpenPage(obj);
 }
 const inventorySelectShow = ref(false)
+const getBrandName = (brandId) => {
+  if (brandId === null || brandId === undefined) return ''
+  return wmsStore.itemBrandMap.get(brandId)?.brandName || ''
+}
+const normalizeDetailRow = (detail = {}, { inventoryRow = false } = {}) => {
+  const skuId = detail.skuId ?? detail.itemSku?.id ?? detail.itemSkuId
+  const itemSku = {
+    ...(detail.itemSku || {}),
+    id: detail.itemSku?.id ?? skuId,
+    skuCode: detail.itemSku?.skuCode ?? detail.skuCode,
+    barcode: detail.itemSku?.barcode ?? detail.barcode,
+    costPrice: detail.itemSku?.costPrice ?? detail.costPrice,
+    sellingPrice: detail.itemSku?.sellingPrice ?? detail.sellingPrice
+  }
+  const item = {
+    ...(detail.item || {}),
+    id: detail.item?.id ?? detail.itemId,
+    itemName: detail.item?.itemName ?? detail.itemName,
+    itemCode: detail.item?.itemCode ?? detail.itemCode,
+    itemBrand: detail.item?.itemBrand ?? detail.itemBrand
+  }
+
+  return {
+    ...detail,
+    skuId,
+    itemSku,
+    item,
+    inventoryId: detail.inventoryId ?? (inventoryRow ? detail.id : undefined)
+  }
+}
+
+const toInventorySelection = (row = {}) => ({
+  id: row.inventoryId ?? row.id,
+  skuId: row.skuId ?? row.itemSku?.id,
+  warehouseId: row.warehouseId
+})
 
 // 选择商品 start
 const showAddItem = () => {
@@ -274,32 +311,36 @@ const handleOkClick = (item) => {
   if (!scanMode.value) {
     inventorySelectShow.value = false
   }
+  const normalizedRows = item.map((it) => normalizeDetailRow(it, { inventoryRow: true }))
   const selectedMap = new Map((selectedInventory.value || []).map((it) => [getWarehouseAndSkuKey(it), it]))
-  item.forEach((it) => {
-    selectedMap.set(getWarehouseAndSkuKey(it), it)
+  normalizedRows.forEach((normalized) => {
+    selectedMap.set(getWarehouseAndSkuKey(normalized), toInventorySelection(normalized))
   })
   // 维护“当前出库单全部已存在库存”集合，保证刷新后已加载状态可全量回填
   selectedInventory.value = Array.from(selectedMap.values())
-  item.forEach(it => {
-    if (!form.value.details.find(detail => getWarehouseAndSkuKey(detail) === getWarehouseAndSkuKey(it))) {
+  const newDetails = []
+  normalizedRows.forEach((normalized) => {
+    if (!form.value.details.find((detail) => getWarehouseAndSkuKey(detail) === getWarehouseAndSkuKey(normalized))) {
       const quantity = 1
-      const sellingPrice = it.itemSku?.sellingPrice
+      const sellingPrice = normalized.itemSku?.sellingPrice
       let amount = undefined
       if (sellingPrice || sellingPrice === 0) {
         amount = Number(sellingPrice) * quantity
       }
-      form.value.details.push(
-        {
-          itemSku: it.itemSku,
-          item: it.item,
-          skuId: it.skuId,
-          amount,
-          quantity,
-          warehouseId: form.value.warehouseId,
-          inventoryId: it.id,
-        })
+      newDetails.push({
+        itemSku: normalized.itemSku,
+        item: normalized.item,
+        skuId: normalized.skuId,
+        amount,
+        quantity,
+        warehouseId: form.value.warehouseId,
+        inventoryId: normalized.inventoryId,
+      })
     }
   })
+  if (newDetails.length) {
+    form.value.details.unshift(...newDetails)
+  }
   updateTotals()
 }
 // 选择商品 end
@@ -316,11 +357,11 @@ const getParamsBeforeSave = (orderStatus) => {
   let details = []
   if (form.value.details?.length) {
     // 构建参数
-    details = form.value.details.map(it => {
+    details = form.value.details.map((it) => {
+      const skuId = it.skuId ?? it.itemSku?.id
       return {
         id: it.id,
-        receiptOrderId: form.value.id,
-        skuId: it.skuId,
+        skuId,
         amount: it.amount,
         quantity: it.quantity,
         warehouseId: form.value.warehouseId
@@ -395,6 +436,12 @@ const doShipment = async () => {
     if (invalidQuantityList?.length) {
       return ElMessage.error('请选择数量')
     }
+    const invalidAmountList = form.value.details.filter(
+      it => it.amount === null || it.amount === undefined || it.amount === '' || Number(it.amount) === 0
+    )
+    if (invalidAmountList?.length) {
+      return ElMessage.warning('出库商品金额不能为空且不能为0')
+    }
     const params = getParamsBeforeSave(1)
 
     loading.value = true
@@ -418,6 +465,15 @@ const updateToInvalid = async () => {
 
 const route = useRoute();
 onMounted(() => {
+  if (!wmsStore.warehouseList.length) {
+    wmsStore.getWarehouseList()
+  }
+  if (!wmsStore.merchantList.length) {
+    wmsStore.getMerchantList()
+  }
+  if (!wmsStore.itemBrandList.length) {
+    wmsStore.getItemBrandList()
+  }
   const id = route.query && route.query.id;
   if (id) {
     loadDetail(id)
@@ -431,16 +487,16 @@ onMounted(() => {
 const loadDetail = (id) => {
   loading.value = true
   getShipmentOrder(id).then((response) => {
-    if (response.data.details?.length) {
-      selectedInventory.value = response.data.details.map(it => {
-        return {
-          id: it.id,
-          skuId: it.skuId,
-          warehouseId: it.warehouseId
-        }
-      })
+    const detailRows = Array.isArray(response?.data?.details)
+      ? response.data.details.map((it) => normalizeDetailRow(it))
+      : []
+    if (detailRows.length) {
+      selectedInventory.value = detailRows.map((it) => toInventorySelection(it))
     }
-    form.value = {...response.data}
+    form.value = {
+      ...response.data,
+      details: detailRows
+    }
     inventorySelectRef.value.setWarehouseId(form.value.warehouseId)
     updateTotals()
     Promise.resolve();

@@ -57,19 +57,6 @@ export const constantRoutes = [
     component: () => import('@/views/error/401'),
     hidden: true
   },
-  // {
-  //   path: '',
-  //   component: Layout,
-  //   redirect: '/index',
-  //   children: [
-  //     {
-  //       path: '/index',
-  //       component: () => import('@/views/dashboard/charts'),
-  //       name: 'Index',
-  //       meta: { title: '首页', icon: 'redis', affix: true }
-  //     }
-  //   ]
-  // },
   {
     path: '',
     component: Layout,

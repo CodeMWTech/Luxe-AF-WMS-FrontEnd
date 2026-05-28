@@ -44,7 +44,7 @@
             plain
             icon="Plus"
             @click="handleAdd"
-            v-hasPermi="['wms:movement:all']"
+            v-hasPermi="['wms:movement:edit']"
           >{{ tr('新增') }}</el-button>
         </el-col>
       </el-row>
@@ -139,7 +139,7 @@
                 :content="'移库单【' + scope.row.orderNo + '】已' + (scope.row.orderStatus === 1 ? '移库' : '作废') + '，无法修改！' "
               >
                 <template #reference>
-                  <el-button link type="primary" @click="handleUpdate(scope.row)" v-hasPermi="['wms:movement:all']" :disabled="[-1, 1].includes(scope.row.orderStatus)">{{ tr('修改') }}</el-button>
+                  <el-button link type="primary" @click="handleUpdate(scope.row)" v-hasPermi="['wms:movement:edit']" :disabled="[-1, 1].includes(scope.row.orderStatus)">{{ tr('修改') }}</el-button>
                 </template>
               </el-popover>
               <el-button link type="primary" @click="handleGoDetail(scope.row)" v-hasPermi="['wms:movement:all']">{{ expandedRowKeys.includes(scope.row.id) ? tr('收起') : tr('查看') }}</el-button>
@@ -154,7 +154,7 @@
                 :content="'移库单【' + scope.row.orderNo + '】已移库，无法删除！' "
               >
                 <template #reference>
-                  <el-button link type="danger" @click="handleDelete(scope.row)" v-hasPermi="['wms:movement:all']" :disabled="scope.row.orderStatus === 1">{{ tr('删除') }}</el-button>
+                  <el-button link type="danger" @click="handleDelete(scope.row)" v-hasPermi="['wms:movement:edit']" :disabled="scope.row.orderStatus === 1">{{ tr('删除') }}</el-button>
                 </template>
               </el-popover>
               <el-button link type="primary" @click="handlePrint(scope.row)" v-hasPermi="['wms:movement:all']">{{ tr('打印') }}</el-button>
@@ -179,7 +179,7 @@
 <script setup name="MovementOrder">
 import {listMovementOrder, delMovementOrder, getMovementOrder} from "@/api/wms/movementOrder";
 import {listByMovementOrderId} from "@/api/wms/movementOrderDetail";
-import {computed, getCurrentInstance, reactive, ref, toRefs} from "vue";
+import {computed, getCurrentInstance, onMounted, reactive, ref, toRefs} from "vue";
 import {useWmsStore} from "../../../../store/modules/wms";
 import {ElMessageBox} from "element-plus";
 import movementPanel from "@/components/PrintTemplate/movement-panel";
@@ -214,6 +214,7 @@ const tr = (text) => translateByMap(text, settingsStore.language || 'zh-cn')
 const isEn = computed(() => (settingsStore.language || 'zh-cn') === 'en')
 const formLabelWidth = computed(() => '98px')
 const translatedMovementStatusOptions = computed(() => (wms_movement_status.value || []).map(it => ({ ...it, label: tr(it.label) })))
+const wmsStore = useWmsStore()
 
 /** 查询入库单列表 */
 function getList() {
@@ -317,9 +318,70 @@ async function handlePrint(row) {
   let printTemplate = new proxy.$hiprint.PrintTemplate({template: movementPanel})
   printTemplate.print(printData, {}, {
     styleHandler: () => {
-      let css = '<link href="https://cyl-press.oss-cn-shenzhen.aliyuncs.com/print-lock.css" media="print" rel="stylesheet">';
-      console.info("css:", css)
-      return css
+      return `
+        <link href="https://cyl-press.oss-cn-shenzhen.aliyuncs.com/print-lock.css" media="print" rel="stylesheet">
+        <style>
+          @media print {
+            @page {
+              size: A4;
+              margin: 10mm 8mm 12mm 8mm;
+            }
+          }
+
+          table {
+            width: 100% !important;
+            table-layout: fixed !important;
+            border-collapse: collapse !important;
+          }
+
+          table tr {
+            height: auto !important;
+          }
+
+          table td,
+          table th {
+            box-sizing: border-box !important;
+            padding: 2px 4px !important;
+            line-height: 1.25 !important;
+            font-size: 9.5px !important;
+            text-align: center !important;
+            white-space: normal !important;
+            word-break: normal !important;
+            overflow-wrap: break-word !important;
+            overflow: visible !important;
+            text-overflow: clip !important;
+            vertical-align: middle !important;
+          }
+
+          table td:nth-child(1),
+          table th:nth-child(1) {
+            width: 55% !important;
+            white-space: normal !important;
+            word-break: normal !important;
+            overflow-wrap: break-word !important;
+          }
+          table td:nth-child(2),
+          table th:nth-child(2) {
+            width: 27% !important;
+            white-space: nowrap !important;
+          }
+          table td:nth-child(3),
+          table th:nth-child(3) {
+            width: 18% !important;
+            white-space: nowrap !important;
+          }
+
+          .hiprint-paper-number,
+          .hiprint-paperNumber,
+          [class*="paper-number"],
+          [class*="paperNumber"] {
+            white-space: nowrap !important;
+            word-break: keep-all !important;
+            overflow-wrap: normal !important;
+            line-height: 1 !important;
+          }
+        </style>
+      `
     }
   })
 }
@@ -363,7 +425,17 @@ function ifExpand(expandedRows) {
 function getRowKey(row) {
   return row.id
 }
-getList();
+
+function initLookupOptions() {
+  if (!wmsStore.warehouseList.length) {
+    wmsStore.getWarehouseList()
+  }
+}
+
+onMounted(() => {
+  initLookupOptions()
+  getList()
+})
 </script>
 <style lang="scss">
 .movement-order-page .filter-form {

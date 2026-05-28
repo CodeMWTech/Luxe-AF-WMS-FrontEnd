@@ -71,8 +71,8 @@
                 v-model="queryParams.createTimeRange"
                 type="datetimerange"
                 range-separator="至"
+                format="MM/DD/YYYY HH:mm:ss"
                 value-format="YYYY-MM-DD HH:mm:ss"
-                format="YYYY-MM-DD HH:mm:ss"
                 :default-time="defaultTime"
                 start-placeholder="开始时间"
                 end-placeholder="结束时间"
@@ -107,6 +107,7 @@
             <span style="font-size: 18px;line-height: 18px">商品分类</span>
             <el-button class="mr10" style="font-size:12px;line-height: 14px" plain
                      @click="handleAddType(false)"
+                     v-hasPermi="['wms:item:edit']"
                      type="primary" icon="Plus">新增分类
             </el-button>
           </div>
@@ -131,11 +132,17 @@
               <span>{{ node.label }}</span>
               <span>
                 <el-button type="primary" @click.stop="append(data)" link
-                         v-if="data.label !== '全部' && node.level < 2" icon="Plus" style="font-size: 12px">新增子分类</el-button>
+                         v-if="data.label !== '全部' && node.level < 2"
+                         v-hasPermi="['wms:item:edit']"
+                         icon="Plus" style="font-size: 12px">新增子分类</el-button>
                 <el-button type="primary" @click.stop="remove(node, data)" link
-                         v-if="data.label !== '全部'" icon="Delete" style="font-size: 12px">删除</el-button>
+                         v-if="data.label !== '全部'"
+                         v-hasPermi="['wms:item:edit']"
+                         icon="Delete" style="font-size: 12px">删除</el-button>
                 <el-button type="primary" icon="Edit" @click.stop="edit(node, data)" link
-                         v-if="data.label !== '全部'" style="font-size: 12px">修改</el-button>
+                         v-if="data.label !== '全部'"
+                         v-hasPermi="['wms:item:edit']"
+                         style="font-size: 12px">修改</el-button>
               </span>
             </span>
             </template>
@@ -144,7 +151,7 @@
         <div style="width: 100%;position: relative">
           <div style="display: flex;align-items: start;justify-content: space-between">
             <span class="mr10" style="font-size: 18px;">商品列表</span>
-            <el-button type="primary" plain icon="Plus" @click="handleAdd" class="mb10">新增商品</el-button>
+            <el-button type="primary" plain icon="Plus" @click="handleAdd" class="mb10" v-hasPermi="['wms:item:edit']">新增商品</el-button>
           </div>
           <el-table :data="itemList" @selection-change="handleSelectionChange" :span-method="spanMethod" border empty-text="暂无商品" v-loading="loading" cell-class-name="my-cell">
             <el-table-column label="商品信息" prop="itemId">
@@ -167,9 +174,22 @@
                 </div>
               </template>
             </el-table-column>
-            <el-table-column label="规格信息" prop="skuName" align="left">
+            <el-table-column label="SKU编码" prop="skuName" align="left">
               <template #default="{ row }">
                 <div v-if="row.itemSku.skuCode">SKU编码：{{ row.itemSku.skuCode }}</div>
+              </template>
+            </el-table-column>
+            <el-table-column label="商品图片" width="110" align="center">
+              <template #default="{ row }">
+                <el-image
+                  v-if="getMainImageUrl(row)"
+                  :src="getMainImageUrl(row)"
+                  fit="cover"
+                  class="item-main-image"
+                  :preview-src-list="[getMainImageUrl(row)]"
+                  preview-teleported
+                />
+                <span v-else>-</span>
               </template>
             </el-table-column>
             <el-table-column v-if="canViewCostPrice || canViewSellingPrice" label="金额(元)" width="160" align="left">
@@ -184,10 +204,10 @@
                 </div>
               </template>
             </el-table-column>
-            <el-table-column label="操作" align="right" prop="itemId" width="200">
+            <el-table-column v-hasPermi="['wms:item:edit']" label="操作" align="right" prop="itemId" width="200">
               <template #default="scope">
-                <el-button link type="primary" @click="handleDelete(scope.row)" icon="Delete">删除</el-button>
-                <el-button link type="primary" @click="handleUpdate(scope.row)" icon="Edit">修改</el-button>
+                <el-button link type="primary" @click="handleDelete(scope.row)" icon="Delete" v-hasPermi="['wms:item:edit']">删除</el-button>
+                <el-button link type="primary" @click="handleUpdate(scope.row)" icon="Edit" v-hasPermi="['wms:item:edit']">修改</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -229,6 +249,7 @@
               </el-col>
               <el-col :span="2">
                 <el-button link icon="Plus" type="primary" style="height: 32px!important;line-height: 32px!important;"
+                           v-hasPermi="['wms:item:edit']"
                            @click="handleAddType(true)">新增分类
                 </el-button>
               </el-col>
@@ -272,7 +293,7 @@
             <el-row :gutter="24">
               <el-col :span="12" v-if="canViewCostPrice">
                 <el-form-item label="成本价">
-                  <el-input-number v-model="form.costPrice" :disabled="!canEditCostPrice" :min="0" :precision="2" :controls="false" style="width: 100%"/>
+                  <el-input-number v-model="form.costPrice" :disabled="!canEditCostPrice" :min="0" :precision="2" :controls="false" style="width: 100%" @change="handleCostPriceChange"/>
                 </el-form-item>
               </el-col>
               <el-col :span="12" v-if="canViewSellingPrice">
@@ -550,6 +571,7 @@ import JSBarcode from 'jsbarcode'
 import {useWmsStore} from '@/store/modules/wms'
 import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
+import { formatDateTimeForQuery } from '@/utils/laTime'
 
 const barcode = ref(null)
 const route = useRoute()
@@ -561,6 +583,25 @@ const canViewSellingPrice = computed(() => proxy?.$auth?.hasPermi('wms:itemSelli
 const canEditSellingPrice = computed(() => proxy?.$auth?.hasPermi('wms:itemSellingPrice:edit'));
 const canViewCostPrice = computed(() => proxy?.$auth?.hasPermi('wms:itemCostPrice:view'));
 const canEditCostPrice = computed(() => proxy?.$auth?.hasPermi('wms:itemCostPrice:edit'));
+/** 成本价变更时，销售价 = 成本价 × 该系数（保留两位小数） */
+const SELLING_PRICE_FROM_COST_MULTIPLIER = 1.8
+/**
+ * 用户修改成本价后同步建议销售价（不监听 v-model，避免打开编辑回填时覆盖已有销售价）
+ */
+function handleCostPriceChange(val) {
+  if (!canEditCostPrice.value) return
+  if (!canViewSellingPrice.value && !canEditSellingPrice.value) return
+  if (val === null || val === undefined || val === '') {
+    form.value.sellingPrice = null
+    return
+  }
+  const n = Number(val)
+  if (!Number.isFinite(n) || n < 0) {
+    form.value.sellingPrice = null
+    return
+  }
+  form.value.sellingPrice = Math.round(n * SELLING_PRICE_FROM_COST_MULTIPLIER * 100) / 100
+}
 const itemList = ref([]);
 const itemCategoryTreeSelectList = computed(() => useWmsStore().itemCategoryTreeList);
 const itemCategoryTreeOptionsList = computed(() => {
@@ -581,7 +622,7 @@ const multiple = ref(true);
 const total = ref(0);
 const skuLoading = ref(false)
 /** 创建时间选择器默认时间：当天 00:00:00 - 23:59:59（参考库存记录） */
-const defaultTime = reactive([new Date(0, 0, 0, 0, 0, 0), new Date(0, 0, 0, 23, 59, 59)])
+const defaultTime = reactive([new Date(2000, 0, 1, 0, 0, 0), new Date(2000, 0, 1, 23, 59, 59)])
 const queryFormRef = ref(ElForm);
 const itemFormRef = ref(ElForm);
 const itemCategoryFormRef = ref(ElForm);
@@ -671,6 +712,60 @@ const appendAccessoryTag = (tag) => {
   if (parts.includes(tag)) return
   form.value.accessories = parts.length ? parts.concat(tag).join(', ') : tag
 }
+/** 列表主图缓存与加载状态（兜底按 itemId 请求） */
+const listMainImageUrlMap = ref(new Map())
+const listMainImageLoadingSet = ref(new Set())
+const listMainImageNoImageSet = ref(new Set())
+const listMainImageErrorAtMap = ref(new Map())
+const MAIN_IMAGE_RETRY_DELAY_MS = 30000
+
+const getMainImageUrl = (row) => {
+  const itemId = row?.itemId
+  if (!itemId) return ''
+  return listMainImageUrlMap.value.get(itemId) || ''
+}
+
+const ensureMainImageLoaded = (row) => {
+  const itemId = row?.itemId
+  const cachedUrl = getMainImageUrl(row)
+  if (cachedUrl) return cachedUrl
+  if (!itemId) return ''
+  if (listMainImageNoImageSet.value.has(itemId)) return ''
+  if (listMainImageLoadingSet.value.has(itemId)) return ''
+  const lastErrorAt = listMainImageErrorAtMap.value.get(itemId) || 0
+  if (lastErrorAt && Date.now() - lastErrorAt < MAIN_IMAGE_RETRY_DELAY_MS) return ''
+  listMainImageLoadingSet.value.add(itemId)
+  ;(async () => {
+    try {
+      const res = await getItemImages(itemId)
+      const imageList = getImageListFromResponse(res) || []
+      if (!imageList.length) {
+        listMainImageNoImageSet.value.add(itemId)
+        return
+      }
+      const mainImage = imageList.find((img) => Number(img?.isMain) === 1) || imageList[0]
+      const nextUrl = mainImage?.thumbUrl || mainImage?.url || mainImage?.imageUrl || ''
+      if (nextUrl) {
+        listMainImageUrlMap.value.set(itemId, nextUrl)
+      } else {
+        listMainImageNoImageSet.value.add(itemId)
+      }
+    } catch (_) {
+      // 兜底失败时静默，不影响列表展示；记录错误时间避免短时间内重试风暴
+      listMainImageErrorAtMap.value.set(itemId, Date.now())
+    } finally {
+      listMainImageLoadingSet.value.delete(itemId)
+    }
+  })()
+  return ''
+}
+
+const preloadMainImages = (rows) => {
+  if (!Array.isArray(rows) || !rows.length) return
+  rows.forEach((row) => {
+    ensureMainImageLoaded(row)
+  })
+}
 const initFormData = {
   id: undefined,
   itemName: undefined,
@@ -714,7 +809,7 @@ const data = reactive({
     defaultQty: undefined,      // 默认数量
     authAgency: undefined,      // 鉴定机构
     consignInfo: undefined,     // 寄售信息
-    createTimeRange: undefined, // 创建时间区间 [开始, 结束]
+    createTimeRange: [],        // 创建时间区间 [开始, 结束]
     sellingPriceMin: undefined, // 销售价下限(元)
     sellingPriceMax: undefined, // 销售价上限(元)
   },
@@ -776,13 +871,17 @@ const getList = async () => {
     delete query.sellingPriceMax;
   }
   if (query.createTimeRange && query.createTimeRange.length === 2) {
-    query.startTime = query.createTimeRange[0];
-    query.endTime = query.createTimeRange[1];
+    query.startTime = formatDateTimeForQuery(query.createTimeRange[0]);
+    query.endTime = formatDateTimeForQuery(query.createTimeRange[1]);
   }
   loading.value = true;
   const res = await listItemSkuPage(query);
   const content = [...res.rows];
   itemList.value = content.map((it) => ({...it, id: it.skuId,itemId: it?.item?.id}));
+  listMainImageLoadingSet.value.clear()
+  listMainImageNoImageSet.value.clear()
+  listMainImageErrorAtMap.value.clear()
+  preloadMainImages(itemList.value)
   total.value = res.total;
   loading.value = false;
 }
@@ -1417,6 +1516,25 @@ const submitCategoryForm = () => {
     }
   });
 }
+const initItemCategoryDataIfNeeded = async () => {
+  const wmsStore = useWmsStore()
+  const tasks = []
+  if (!Array.isArray(wmsStore.itemCategoryList) || wmsStore.itemCategoryList.length === 0) {
+    tasks.push(wmsStore.getItemCategoryList())
+  }
+  if (!Array.isArray(wmsStore.itemCategoryTreeList) || wmsStore.itemCategoryTreeList.length === 0) {
+    tasks.push(wmsStore.getItemCategoryTreeList())
+  }
+  if (tasks.length > 0) {
+    await Promise.all(tasks)
+  }
+}
+const initItemBrandDataIfNeeded = async () => {
+  const wmsStore = useWmsStore()
+  if (!Array.isArray(wmsStore.itemBrandList) || wmsStore.itemBrandList.length === 0) {
+    await wmsStore.getItemBrandList()
+  }
+}
 /** 删除按钮操作 */
 const handleDelete = async (row) => {
   const _ids = row?.itemId || ids.value;
@@ -1461,8 +1579,16 @@ const downloadQrcode = async (row) => {
   //提示信息
   // this.$message.warn('下载中，请稍后...')
 }
-onMounted(() => {
-  nextTick(()=>{
+onMounted(async () => {
+  try {
+    await Promise.all([
+      initItemCategoryDataIfNeeded(),
+      initItemBrandDataIfNeeded()
+    ])
+  } catch (_) {
+    // 分类数据加载失败不阻断列表渲染
+  }
+  nextTick(() => {
     getList();
     if (route.query.openDrawer) {
       handleAdd()
@@ -1493,6 +1619,12 @@ onMounted(() => {
 
 .el-table__empty-text {
   width: 100%;
+}
+.item-main-image {
+  width: 72px;
+  height: 72px;
+  border-radius: 6px;
+  display: inline-block;
 }
 
 .item-image-upload {

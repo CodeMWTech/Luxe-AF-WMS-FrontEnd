@@ -30,13 +30,14 @@
       <el-table-column type="selection" width="55" :reserve-selection="true" :selectable="judgeSelectable"/>
       <el-table-column label="商品信息" prop="itemId">
         <template #default="{ row }">
-          <div>{{ row.item.itemName }}</div>
-          <div v-if="row.item.itemBrand">品牌：{{ useWmsStore().itemBrandMap.get(row.item.itemBrand).brandName }}</div>
+          <div>{{
+            (getRowItemName(row) || '-')
+          }}</div>
         </template>
       </el-table-column>
       <el-table-column label="SKU编号">
         <template #default="{ row }">
-          <div v-if="row.itemSku.skuCode">{{ row.itemSku.skuCode }}</div>
+          <div>{{ getRowSkuCode(row) || '-' }}</div>
         </template>
       </el-table-column>
       <el-table-column label="剩余库存" prop="quantity" align="right">
@@ -74,10 +75,24 @@ import {computed, getCurrentInstance, nextTick, onMounted, reactive, ref, watch}
 import {useWmsStore} from '@/store/modules/wms'
 import {listInventory} from "@/api/wms/inventory";
 import {getWarehouseAndSkuKey} from "@/utils/wmsUtil";
+import { ElMessage } from "element-plus";
 
 const {proxy} = getCurrentInstance()
 
 const loading = ref(false)
+const wmsStore = useWmsStore()
+const getBrandName = (brandId) => {
+  if (brandId === null || brandId === undefined) return ''
+  return wmsStore.itemBrandMap.get(brandId)?.brandName || ''
+}
+
+/** boardList/warehouse 多在根字段返回 itemName、skuCode；部分接口嵌套 item/itemSku，两处都兼容 */
+function getRowItemName(row) {
+  return row?.itemName
+}
+function getRowSkuCode(row) {
+  return row?.skuCode
+}
 const deptOptions = ref([]);
 const query = reactive({
   itemName: '',
@@ -190,6 +205,7 @@ async function handleSkuEnter() {
     const res = await listInventory({
       itemName: undefined,
       skuCode,
+      skuCodeExact: true,
       minQuantity: query.minQuantity,
       areaId: query.areaId,
       warehouseId: query.warehouseId,
@@ -198,10 +214,10 @@ async function handleSkuEnter() {
     })
     const rows = res.rows || []
     if (!rows.length) {
+      ElMessage.warning('未找到该SKU')
       return
     }
-    const exactMatched = rows.find((it) => (it.itemSku?.skuCode || '').trim() === skuCode)
-    const pickedRow = exactMatched || rows[0]
+    const pickedRow = rows[0]
     if (!props.selectedInventory.find(selected => getWarehouseAndSkuKey(selected) === getWarehouseAndSkuKey(pickedRow))) {
       inventorySelectFormRef.value?.toggleRowSelection(pickedRow, true)
     }
@@ -259,6 +275,9 @@ defineExpose({
   getList
 })
 onMounted(() => {
+  if (!wmsStore.itemBrandList.length) {
+    wmsStore.getItemBrandList()
+  }
   loadAll();
 })
 
@@ -292,4 +311,3 @@ watch(() => props.selectedInventory, () => {
   font-size: 14px;
 }
 </style>
-

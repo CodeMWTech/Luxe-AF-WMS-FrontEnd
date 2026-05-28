@@ -22,23 +22,22 @@
               <el-table-column type="selection" width="55" :reserve-selection="true" v-if="!singleSelect" :selectable="judgeSelectable"/>
               <el-table-column label="商品信息" prop="itemId" min-width="150" show-overflow-tooltip>
                 <template #default="{ row }">
-                  <div>{{ row.item.itemName }}</div>
-                  <div v-if="row.item.itemBrand">品牌：{{ useWmsStore().itemBrandMap.get(row.item.itemBrand).brandName }}</div>
+                  <div>{{ row.item?.itemName || '-' }}</div>
+                  <div v-if="row.item?.itemBrand && getBrandName(row.item.itemBrand)">品牌：{{ getBrandName(row.item.itemBrand) }}</div>
                 </template>
               </el-table-column>
               <el-table-column label="SKU编号" min-width="200" show-overflow-tooltip>
                 <template #default="{ row }">
-                  <div>{{ row.itemSku.skuName }}</div>
                   <div v-if="row.itemSku.skuCode">{{ row.itemSku.skuCode }}</div>
                 </template>
               </el-table-column>
               <el-table-column label="价格(元)" min-width="100" align="left" class-name="price-col">
                 <template #default="{ row }">
-                  <div v-if="row.itemSku.costPrice" class="flex-space-between price-line">
+                  <div v-if="row.itemSku.costPrice || row.itemSku.costPrice === 0" class="flex-space-between price-line">
                     <span>成本价：</span>
                     <div>{{ (row.itemSku.costPrice || row.itemSku.costPrice === 0) ? row.itemSku.costPrice : '' }}</div>
                   </div>
-                  <div v-if="row.itemSku.sellingPrice" class="flex-space-between price-line">
+                  <div v-if="row.itemSku.sellingPrice || row.itemSku.sellingPrice === 0" class="flex-space-between price-line">
                     <span>销售价：</span>
                     <div>{{ (row.itemSku.sellingPrice || row.itemSku.sellingPrice === 0) ? row.itemSku.sellingPrice : '' }}</div>
                   </div>
@@ -96,6 +95,32 @@ const pageReq = reactive({
 });
 const list = ref([]);
 const rightList = ref([]);
+const wmsStore = useWmsStore()
+const getBrandName = (brandId: any) => {
+  if (brandId === null || brandId === undefined) return ''
+  return wmsStore.itemBrandMap.get(brandId)?.brandName || ''
+}
+const normalizeSkuRow = (raw: any) => {
+  const skuId = raw?.skuId ?? raw?.id ?? raw?.itemSkuId
+  const itemSku = raw?.itemSku || {
+    skuCode: raw?.skuCode,
+    barcode: raw?.barcode,
+    costPrice: raw?.costPrice,
+    sellingPrice: raw?.sellingPrice
+  }
+  const item = raw?.item || {
+    id: raw?.itemId,
+    itemName: raw?.itemName,
+    itemBrand: raw?.itemBrand
+  }
+  return {
+    ...raw,
+    skuId,
+    id: skuId,
+    itemSku,
+    item
+  }
+}
 const rightListKeySet = computed(() => {
   const set = new Set();
   rightList.value.forEach((it) => set.add(it.id));
@@ -106,6 +131,19 @@ const loadAll = () => {
   pageReq.page = 1
   return getList()
 };
+
+const buildSkuQueryParams = (extra = {}) => {
+  const data = {
+    ...query,
+    ...extra,
+    pageNum: pageReq.page,
+    pageSize: pageReq.size
+  }
+  if (props.onlyShipped) {
+    data.onlyShipped = true
+  }
+  return data
+}
 
 const resetQuery = () => {
   proxy?.resetForm('queryRef')
@@ -125,20 +163,23 @@ async function handleSkuEnter() {
   loading.value = true
   try {
     const res = await listItemSkuPage({
-      itemName: undefined,
-      skuCode,
+      ...buildSkuQueryParams({
+        itemName: undefined,
+        skuCode,
+        skuCodeExact: true
+      }),
       pageNum: 1,
       pageSize: 10
     })
-    const rows = res.rows || []
+    const rows = Array.isArray(res?.rows) ? res.rows : []
     if (!rows.length) {
       ElMessage.warning('未找到该SKU')
       return
     }
 
-    const exactMatched = rows.find((it) => (it.itemSku?.skuCode || '').trim() === skuCode)
-    const pickedRow = exactMatched || rows[0]
-    const normalized = { ...pickedRow, id: pickedRow.skuId, checked: false }
+    const normalizedRows = rows.map((it) => normalizeSkuRow(it))
+    const pickedRow = normalizedRows[0]
+    const normalized = { ...pickedRow, checked: false }
 
     if (!props.selectedSku.find(selected => selected.id === normalized.id)) {
       // 与当前表格选择方式保持一致，先自动勾选再走确认逻辑
@@ -152,9 +193,6 @@ async function handleSkuEnter() {
     await nextTick()
     await Promise.resolve(loadAll())
 
-    if (rows.length > 1 && !exactMatched) {
-      ElMessage.warning('匹配到多个SKU，已自动选择第一条')
-    }
   } finally {
     loading.value = false
   }
@@ -162,8 +200,12 @@ async function handleSkuEnter() {
 const getRowKey = (row: any) => {
   return row.id;
 }
+const normalizeSkuKey = (id: any) => {
+  if (id === null || id === undefined) return ''
+  return String(id)
+}
 const getLoadedSkuIdSet = () => {
-  return new Set((props.selectedSku || []).map((it) => Number(it.id)))
+  return new Set((props.selectedSku || []).map((it) => normalizeSkuKey(it.id)))
 }
 
 const markLoadedItems = (rows = []) => {
@@ -171,22 +213,18 @@ const markLoadedItems = (rows = []) => {
   return rows.map((it) => ({
     ...it,
     id: it.skuId,
-    isLoaded: selectedIdSet.has(Number(it.skuId)),
-    checked: selectedIdSet.has(Number(it.skuId))
+    isLoaded: selectedIdSet.has(normalizeSkuKey(it.skuId)),
+    checked: selectedIdSet.has(normalizeSkuKey(it.skuId))
   }))
 }
 
 const getList = () => {
-  const data = {
-    ...query,
-    pageNum: pageReq.page,
-    pageSize: pageReq.size
-  }
+  const data = buildSkuQueryParams()
   loading.value = true
   return listItemSkuPage(data).then((res) => {
-    const content = [...res.rows];
+    const content = Array.isArray(res?.rows) ? res.rows.map((it) => normalizeSkuRow(it)) : []
     list.value = markLoadedItems(content);
-    total.value = res.total;
+    total.value = Number(res?.total) || 0;
   }).then(() => toggleSelection()).finally(() => loading.value = false);
 }
 const goCreateItem = () => {
@@ -216,11 +254,25 @@ const props = defineProps({
   selectedSku: {
     type: Array,
     default: []
+  },
+  warehouseId: {
+    type: [String, Number],
+    default: undefined
+  },
+  onlyShipped: {
+    type: Boolean,
+    default: false
   }
 })
 
 const show = computed(() => {
   return props.modelValue;
+})
+
+onMounted(() => {
+  if (!wmsStore.itemBrandList.length) {
+    wmsStore.getItemBrandList()
+  }
 })
 
 // 每次打开抽屉时清空查询条件并重新拉取，便于看到全部商品
@@ -230,6 +282,12 @@ watch(show, (visible) => {
     query.skuCode = ''
     pageReq.page = 1
     getList()
+  }
+})
+
+watch(() => props.onlyShipped, () => {
+  if (show.value) {
+    loadAll()
   }
 })
 
@@ -265,7 +323,7 @@ const handleSelectionChange = (selection) => {
 
 const toggleSelection = () => {
   props.selectedSku.forEach(selected => {
-    const index = list.value.findIndex(it => Number(it.skuId) === Number(selected.id))
+    const index = list.value.findIndex(it => normalizeSkuKey(it.skuId) === normalizeSkuKey(selected.id))
     if (index !== -1) {
       skuSelectFormRef.value.toggleRowSelection(list.value[index], true)
     }
@@ -273,7 +331,7 @@ const toggleSelection = () => {
 }
 
 const judgeSelectable = (row) => {
-  if (row.isLoaded || getLoadedSkuIdSet().has(Number(row.skuId))) {
+  if (row.isLoaded || getLoadedSkuIdSet().has(normalizeSkuKey(row.skuId))) {
     return false;
   }
   return true
@@ -318,4 +376,3 @@ defineExpose({
   min-height: 22px;
 }
 </style>
-

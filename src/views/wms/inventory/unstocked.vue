@@ -1,9 +1,6 @@
 <template>
   <div class="app-container inventory-unstocked-page" :class="{ 'is-en': isEn }">
     <el-card>
-      <el-alert type="info" :closable="false" show-icon class="unstocked-scope-alert">
-        {{ tr('未入库列表说明') }}
-      </el-alert>
       <el-form
         :model="queryParams"
         ref="queryRef"
@@ -57,7 +54,7 @@
             <el-form-item :label="tr('商品品牌')" prop="itemBrand">
               <el-select v-model="queryParams.itemBrand" clearable filterable style="width: 100%">
                 <el-option
-                  v-for="item in useWmsStore().itemBrandList"
+                  v-for="item in wmsStore.itemBrandList"
                   :key="item.id"
                   :label="item.brandName"
                   :value="item.id"
@@ -129,52 +126,60 @@
         </el-row>
         <el-row v-if="canViewCostPrice || canViewSellingPrice" :gutter="16">
           <el-col v-if="canViewCostPrice" :xs="24" :md="canViewSellingPrice ? 12 : 24">
-            <el-form-item :label="tr('成本价')" prop="costPriceMin">
+            <el-form-item :label="tr('成本价')">
               <div class="query-price-range">
-                <el-input-number
-                  v-model="queryParams.costPriceMin"
-                  :min="0"
-                  :precision="2"
-                  :controls="false"
-                  :placeholder="tr('最低')"
-                  style="width: 100%"
-                  @keyup.enter="handleQuery"
-                />
+                <el-form-item prop="costPriceMin" class="query-price-range-item">
+                  <el-input-number
+                    v-model="queryParams.costPriceMin"
+                    :min="0"
+                    :precision="2"
+                    :controls="false"
+                    :placeholder="tr('最低')"
+                    style="width: 100%"
+                    @keyup.enter="handleQuery"
+                  />
+                </el-form-item>
                 <span class="query-price-range-separator">{{ tr('至') }}</span>
-                <el-input-number
-                  v-model="queryParams.costPriceMax"
-                  :min="0"
-                  :precision="2"
-                  :controls="false"
-                  :placeholder="tr('最高')"
-                  style="width: 100%"
-                  @keyup.enter="handleQuery"
-                />
+                <el-form-item prop="costPriceMax" class="query-price-range-item">
+                  <el-input-number
+                    v-model="queryParams.costPriceMax"
+                    :min="0"
+                    :precision="2"
+                    :controls="false"
+                    :placeholder="tr('最高')"
+                    style="width: 100%"
+                    @keyup.enter="handleQuery"
+                  />
+                </el-form-item>
               </div>
             </el-form-item>
           </el-col>
           <el-col v-if="canViewSellingPrice" :xs="24" :md="canViewCostPrice ? 12 : 24">
-            <el-form-item :label="tr('销售价')" prop="sellingPriceMin">
+            <el-form-item :label="tr('销售价')">
               <div class="query-price-range">
-                <el-input-number
-                  v-model="queryParams.sellingPriceMin"
-                  :min="0"
-                  :precision="2"
-                  :controls="false"
-                  :placeholder="tr('最低')"
-                  style="width: 100%"
-                  @keyup.enter="handleQuery"
-                />
+                <el-form-item prop="sellingPriceMin" class="query-price-range-item">
+                  <el-input-number
+                    v-model="queryParams.sellingPriceMin"
+                    :min="0"
+                    :precision="2"
+                    :controls="false"
+                    :placeholder="tr('最低')"
+                    style="width: 100%"
+                    @keyup.enter="handleQuery"
+                  />
+                </el-form-item>
                 <span class="query-price-range-separator">{{ tr('至') }}</span>
-                <el-input-number
-                  v-model="queryParams.sellingPriceMax"
-                  :min="0"
-                  :precision="2"
-                  :controls="false"
-                  :placeholder="tr('最高')"
-                  style="width: 100%"
-                  @keyup.enter="handleQuery"
-                />
+                <el-form-item prop="sellingPriceMax" class="query-price-range-item">
+                  <el-input-number
+                    v-model="queryParams.sellingPriceMax"
+                    :min="0"
+                    :precision="2"
+                    :controls="false"
+                    :placeholder="tr('最高')"
+                    style="width: 100%"
+                    @keyup.enter="handleQuery"
+                  />
+                </el-form-item>
               </div>
             </el-form-item>
           </el-col>
@@ -204,9 +209,20 @@
     </el-card>
 
     <el-card class="mt20">
-      <el-row :gutter="10" class="mb8" type="flex" justify="space-between">
+      <el-row :gutter="10" class="mb8" type="flex" justify="space-between" align="middle">
         <el-col :span="12">
           <span class="page-title">{{ tr('未入库商品') }}</span>
+        </el-col>
+        <el-col :span="12" class="stats-col">
+          <span class="stats-label">{{ tr('未入库总金额') }}：</span>
+          <span class="stats-value">
+            {{ totalAmountDisplay }}
+          </span>
+          <span class="stats-separator">|</span>
+          <span class="stats-label">{{ tr('未入库总件数') }}：</span>
+          <span class="stats-value">
+            {{ totalCountDisplay }}{{ tr('件') }}
+          </span>
         </el-col>
       </el-row>
       <el-table
@@ -222,6 +238,23 @@
       >
         <el-table-column :label="tr('商品名称')" prop="itemName" min-width="160" align="center" show-overflow-tooltip>
           <template #default="{ row }">{{ cellText(row.itemName) }}</template>
+        </el-table-column>
+        <el-table-column :label="tr('商品图片')" width="110" align="center">
+          <template #default="{ row }">
+            <el-image
+              v-if="row.thumbUrl"
+              :src="row.thumbUrl"
+              fit="cover"
+              class="item-main-image"
+              :preview-src-list="[row.thumbUrl]"
+              preview-teleported
+            >
+              <template #error>
+                <div class="image-empty">{{ tr('暂无图片') }}</div>
+              </template>
+            </el-image>
+            <div v-else class="image-empty">{{ tr('暂无图片') }}</div>
+          </template>
         </el-table-column>
         <el-table-column :label="tr('SKU编号')" prop="skuCode" min-width="140" align="center" show-overflow-tooltip>
           <template #default="{ row }">{{ cellText(row.skuCode) }}</template>
@@ -240,30 +273,6 @@
         </el-table-column>
         <el-table-column :label="tr('年份')" prop="year" width="80" align="center" sortable="custom">
           <template #default="{ row }">{{ cellNumberOrDash(row.year, 0) }}</template>
-        </el-table-column>
-        <el-table-column :label="tr('材质')" prop="material" min-width="100" align="center" show-overflow-tooltip>
-          <template #default="{ row }">{{ cellText(row.material) }}</template>
-        </el-table-column>
-        <el-table-column :label="tr('缺陷')" prop="defect" min-width="100" align="center" show-overflow-tooltip>
-          <template #default="{ row }">{{ cellText(row.defect) }}</template>
-        </el-table-column>
-        <el-table-column :label="tr('配件')" prop="accessories" min-width="100" align="center" show-overflow-tooltip>
-          <template #default="{ row }">{{ cellText(row.accessories) }}</template>
-        </el-table-column>
-        <el-table-column :label="tr('护理')" prop="cared" width="88" align="center">
-          <template #default="{ row }">{{ formatCared(row.cared) }}</template>
-        </el-table-column>
-        <el-table-column :label="tr('鉴定机构')" prop="authAgency" min-width="120" align="center" show-overflow-tooltip>
-          <template #default="{ row }">{{ cellText(row.authAgency) }}</template>
-        </el-table-column>
-        <el-table-column :label="tr('寄售信息')" prop="consignInfo" min-width="120" align="center" show-overflow-tooltip>
-          <template #default="{ row }">{{ cellText(row.consignInfo) }}</template>
-        </el-table-column>
-        <el-table-column :label="tr('默认数量')" prop="defaultQty" width="100" align="center">
-          <template #default="{ row }">{{ cellNumberOrDash(row.defaultQty, 0) }}</template>
-        </el-table-column>
-        <el-table-column :label="tr('备注')" prop="remark" min-width="120" align="center" show-overflow-tooltip>
-          <template #default="{ row }">{{ cellText(row.remark) }}</template>
         </el-table-column>
         <el-table-column
           v-if="canViewCostPrice"
@@ -290,6 +299,30 @@
             <span v-if="row.sellingPrice != null && row.sellingPrice !== ''">{{ formatMoney(row.sellingPrice) }}</span>
             <span v-else>-</span>
           </template>
+        </el-table-column>
+        <el-table-column :label="tr('材质')" prop="material" min-width="100" align="center" show-overflow-tooltip>
+          <template #default="{ row }">{{ cellText(row.material) }}</template>
+        </el-table-column>
+        <el-table-column :label="tr('缺陷')" prop="defect" min-width="100" align="center" show-overflow-tooltip>
+          <template #default="{ row }">{{ cellText(row.defect) }}</template>
+        </el-table-column>
+        <el-table-column :label="tr('配件')" prop="accessories" min-width="100" align="center" show-overflow-tooltip>
+          <template #default="{ row }">{{ cellText(row.accessories) }}</template>
+        </el-table-column>
+        <el-table-column :label="tr('护理')" prop="cared" width="88" align="center">
+          <template #default="{ row }">{{ formatCared(row.cared) }}</template>
+        </el-table-column>
+        <el-table-column :label="tr('鉴定机构')" prop="authAgency" min-width="120" align="center" show-overflow-tooltip>
+          <template #default="{ row }">{{ cellText(row.authAgency) }}</template>
+        </el-table-column>
+        <el-table-column :label="tr('寄售信息')" prop="consignInfo" min-width="120" align="center" show-overflow-tooltip>
+          <template #default="{ row }">{{ cellText(row.consignInfo) }}</template>
+        </el-table-column>
+        <el-table-column :label="tr('默认数量')" prop="defaultQty" width="100" align="center">
+          <template #default="{ row }">{{ cellNumberOrDash(row.defaultQty, 0) }}</template>
+        </el-table-column>
+        <el-table-column :label="tr('备注')" prop="remark" min-width="120" align="center" show-overflow-tooltip>
+          <template #default="{ row }">{{ cellText(row.remark) }}</template>
         </el-table-column>
         <el-table-column :label="tr('创建人')" prop="createBy" width="100" align="center" show-overflow-tooltip>
           <template #default="{ row }">{{ cellText(row.createBy) }}</template>
@@ -329,8 +362,8 @@
 
 <script setup name="UnstockedSkus">
 import { QuestionFilled } from '@element-plus/icons-vue'
-import { listUnstockedSkus } from '@/api/wms/inventory'
-import { computed, getCurrentInstance, ref } from 'vue'
+import { getUnstockedSkusTotalAmount, getUnstockedSkusTotalCount, listUnstockedSkus } from '@/api/wms/inventory'
+import { computed, getCurrentInstance, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useWmsStore } from '@/store/modules/wms'
 import useSettingsStore from '@/store/modules/settings'
@@ -341,6 +374,7 @@ const AUTH_AGENCY_OPTIONS = ['Entrupy', 'Real Authentication', 'Legitmark', 'Che
 
 const { proxy } = getCurrentInstance()
 const router = useRouter()
+const wmsStore = useWmsStore()
 const settingsStore = useSettingsStore()
 const tr = (text) => translateByMap(text, settingsStore.language || 'zh-cn')
 const isEn = computed(() => (settingsStore.language || 'zh-cn') === 'en')
@@ -349,11 +383,13 @@ const formLabelWidth = computed(() => (isEn.value ? '128px' : '96px'))
 const canViewCostPrice = computed(() => proxy?.$auth?.hasPermi('wms:itemCostPrice:view'))
 const canViewSellingPrice = computed(() => proxy?.$auth?.hasPermi('wms:itemSellingPrice:view'))
 
-const itemCategoryTreeSelectList = computed(() => useWmsStore().itemCategoryTreeList)
+const itemCategoryTreeSelectList = computed(() => wmsStore.itemCategoryTreeList)
 
 const list = ref([])
 const loading = ref(true)
 const total = ref(0)
+const totalAmount = ref(null)
+const totalCount = ref(0)
 const tableRef = ref(null)
 
 const queryParams = ref({
@@ -459,6 +495,24 @@ function buildRequestQuery() {
   return q
 }
 
+function buildAmountRequestQuery() {
+  const q = buildRequestQuery()
+  delete q.pageNum
+  delete q.pageSize
+  return q
+}
+
+const totalAmountDisplay = computed(() => {
+  if (totalAmount.value === null || totalAmount.value === undefined || totalAmount.value === '') return '--'
+  return formatMoney(totalAmount.value)
+})
+
+const totalCountDisplay = computed(() => {
+  const n = Number(totalCount.value)
+  if (!Number.isFinite(n)) return 0
+  return Math.max(0, Math.trunc(n))
+})
+
 function getList() {
   loading.value = true
   listUnstockedSkus(buildRequestQuery())
@@ -472,9 +526,35 @@ function getList() {
     })
 }
 
+function getTotalAmount(showError = true) {
+  getUnstockedSkusTotalAmount(buildAmountRequestQuery())
+    .then((res) => {
+      totalAmount.value = res?.data
+    })
+    .catch(() => {
+      totalAmount.value = null
+      if (showError) {
+        proxy?.$modal?.msgWarning(tr('未入库总金额获取失败'))
+      }
+    })
+}
+
+function getTotalCount() {
+  getUnstockedSkusTotalCount(buildAmountRequestQuery())
+    .then((res) => {
+      const n = Number(res?.data)
+      totalCount.value = Number.isFinite(n) ? Math.max(0, Math.trunc(n)) : 0
+    })
+    .catch(() => {
+      totalCount.value = 0
+    })
+}
+
 function handleQuery() {
   queryParams.value.pageNum = 1
   getList()
+  getTotalAmount()
+  getTotalCount()
 }
 
 function resetQuery() {
@@ -501,14 +581,31 @@ function goItem(row) {
   router.push({ name: 'Item', query: q }).catch(() => {})
 }
 
-getList()
+function initLookupOptions() {
+  const tasks = []
+  if (!wmsStore.itemBrandList.length) {
+    tasks.push(wmsStore.getItemBrandList())
+  }
+  if (!wmsStore.itemCategoryList.length) {
+    tasks.push(wmsStore.getItemCategoryList())
+  }
+  if (!wmsStore.itemCategoryTreeList.length) {
+    tasks.push(wmsStore.getItemCategoryTreeList())
+  }
+  if (tasks.length) {
+    Promise.allSettled(tasks)
+  }
+}
+
+onMounted(() => {
+  initLookupOptions()
+  getList()
+  getTotalAmount(false)
+  getTotalCount()
+})
 </script>
 
 <style scoped lang="scss">
-.unstocked-scope-alert {
-  margin-bottom: 0;
-}
-
 .page-title {
   font-size: large;
 }
@@ -542,12 +639,29 @@ getList()
 }
 
 .query-price-range :deep(.el-input-number) {
+  width: 100%;
+}
+
+.query-price-range-item {
   flex: 1;
 }
 
+.query-price-range :deep(.query-price-range-item.el-form-item) {
+  margin-bottom: 0;
+}
+
+.query-price-range :deep(.query-price-range-item .el-form-item__content) {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
 .query-price-range-separator {
+  display: inline-flex;
+  align-items: center;
   color: var(--el-text-color-regular, #606266);
   flex-shrink: 0;
+  line-height: 1;
 }
 
 .inventory-unstocked-page .action-btn {
@@ -564,5 +678,43 @@ getList()
 
 .unstocked-table {
   width: 100%;
+}
+
+.stats-col {
+  text-align: right;
+}
+
+.stats-label {
+  color: var(--el-text-color-regular, #606266);
+}
+
+.stats-value {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--el-color-primary);
+}
+
+.stats-separator {
+  margin: 0 12px;
+  color: var(--el-border-color-darker, #d4d7de);
+}
+
+.item-main-image {
+  width: 72px;
+  height: 72px;
+  border-radius: 6px;
+  display: inline-block;
+}
+
+.image-empty {
+  width: 72px;
+  height: 72px;
+  border-radius: 6px;
+  border: 1px dashed var(--el-border-color, #dcdfe6);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--el-text-color-secondary, #909399);
+  font-size: 12px;
 }
 </style>
