@@ -471,7 +471,7 @@
                       <el-icon class="avatar-uploader-icon"><Plus /></el-icon>
                       <div class="upload-main-text">将图片拖拽到此处，或点击上传</div>
                       <div class="upload-tip-text">
-                        请上传大小不超过 20MB 的图片，格式 png/jpg/jpeg，最多 {{ IMAGE_LIMIT }} 张。
+                        请上传大小不超过 20MB 的图片，格式 png/jpg/jpeg，最多上传{{ IMAGE_LIMIT }}张图片。
                         <br />
                         支持拖拽调整顺序，点击图片预览原图
                       </div>
@@ -906,7 +906,7 @@ const IMAGE_POLL_TIMEOUT_MS = 120000
 
 // 商品图片（方案B）：新增时暂存的待上传文件 { file, url }
 const pendingImageFiles = ref([])
-const IMAGE_LIMIT = 10
+const IMAGE_LIMIT = 20
 const IMAGE_SIZE_MB = 20
 const imageDragState = reactive({ type: '', fromIndex: -1 })
 const uploadedImagePreviewList = computed(() => (form.value.imageList || []).map(it => it.url || it.thumbUrl).filter(Boolean))
@@ -1002,7 +1002,7 @@ function beforeImageUpload(file) {
 }
 
 function handleImageExceed() {
-  proxy?.$modal.msgError(`最多上传 ${IMAGE_LIMIT} 张图片`)
+  proxy?.$modal.msgError(`商品图片最多上传${IMAGE_LIMIT}张`)
 }
 
 /** 编辑时：自定义上传，走 /item/{itemId}/image/upload，不阻塞界面 */
