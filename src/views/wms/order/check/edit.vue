@@ -134,7 +134,7 @@
     <div class="footer-global" v-if="checking">
       <div class="btn-box">
         <div>
-          <el-button @click="doCheck" type="primary" class="ml10 action-btn">{{ isEn ? 'Finalize Result' : '完成盘点' }}</el-button>
+          <el-button @click="doCheck" type="primary" class="ml10 action-btn">{{ isEn ? 'Finalize Result' : '库存核查' }}</el-button>
           <el-button @click="updateToInvalid" type="danger" v-if="form.id" class="action-btn">{{ tr('作废') }}</el-button>
         </div>
         <div>
@@ -366,7 +366,9 @@ const updateToInvalid = async () => {
 }
 
 const doCheck = async () => {
-  await proxy?.$modal.confirm('确认完成盘点并固化盘点对照结果吗？此操作只保存盘点结果，不会变更仓库库存。');
+  await proxy?.$modal.confirm('确认完成盘点并固化盘点对照结果吗？此操作只保存盘点结果，不会变更仓库库存。<br><span style="color: #f56c6c;">一旦确认，永久保存不可撤销</span>', {
+    dangerouslyUseHTMLString: true
+  });
   checkForm.value?.validate((valid) => {
     // 校验
     if (!valid) {

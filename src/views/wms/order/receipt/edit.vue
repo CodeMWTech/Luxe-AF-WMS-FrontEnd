@@ -405,7 +405,9 @@ const doSave = async (orderStatus = 0) => {
 }
 
 const doWarehousing = async () => {
-  await proxy?.$modal.confirm('确认入库吗？');
+  await proxy?.$modal.confirm('确认入库吗？<br><span style="color: #f56c6c;">一旦确认，永久保存不可撤销</span>', {
+    dangerouslyUseHTMLString: true
+  });
   receiptForm.value?.validate((valid) => {
     // 校验
     if (!valid) {
