@@ -50,7 +50,7 @@
               </el-form-item>
             </el-col>
             <el-col :span="6">
-              <el-form-item :label="tr('盈亏数')" prop="totalQuantity">
+              <el-form-item :label="isEn ? 'Counted Qty' : '盘点数量'" prop="totalQuantity">
                 <el-input-number v-model="form.totalQuantity" :controls="false" :precision="0"
                                  :disabled="true"></el-input-number>
               </el-form-item>
@@ -63,7 +63,7 @@
           <div class="flex-space-between mb8">
             <div>
               <el-button type="primary" plain="plain" size="default" @click="showSkuSelect" icon="Plus"
-                :disabled="!form.warehouseId">{{ tr('新增') + tr('库存') }}
+                :disabled="!form.warehouseId">{{ isEn ? 'Add SKU' : '新增SKU' }}
               </el-button>
               <el-button
                 type="primary"
@@ -100,21 +100,11 @@
                 </template>
               </template>
             </el-table-column>
-            <el-table-column label="账面库存" align="right" width="150">
-              <template #default="{ row }">
-                <el-statistic :value="Number(row.quantity)" :precision="0"/>
-              </template>
-            </el-table-column>
-            <el-table-column label="盈亏数" prop="remainQuantity" align="right" width="150">
-              <template #default="{ row }">
-                <el-statistic :value="Number(row.checkQuantity) - Number(row.quantity)" :precision="0"/>
-              </template>
-            </el-table-column>
-            <el-table-column label="实际库存" prop="checkQuantity" width="180">
+            <el-table-column :label="isEn ? 'Counted Quantity' : '盘点到的库存'" prop="checkQuantity" width="180">
               <template #default="scope">
                 <el-input-number
                   v-model="scope.row.checkQuantity"
-                  placeholder="实际库存"
+                  :placeholder="isEn ? 'Counted Quantity' : '盘点到的库存'"
                   :min="0"
                   :precision="0"
                   @change="handleChangeQuantity"
@@ -123,10 +113,8 @@
             </el-table-column>
             <el-table-column label="操作" width="100" align="center">
               <template #default="scope">
-                <el-button icon="Delete" type="danger" plain size="small" v-if="scope.row.newInventory"
-                           @click="handleDeleteDetail(scope.row, scope.$index)" link>删除
-                </el-button>
-                <div v-else> - </div>
+                <el-button icon="Delete" type="danger" plain size="small"
+                           @click="handleDeleteDetail(scope.row, scope.$index)" link>删除</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -146,7 +134,7 @@
     <div class="footer-global" v-if="checking">
       <div class="btn-box">
         <div>
-          <el-button @click="doCheck" type="primary" class="ml10 action-btn">{{ tr('盘库完成') || 'Complete Stocktake' }}</el-button>
+          <el-button @click="doCheck" type="primary" class="ml10 action-btn">{{ isEn ? 'Finalize Result' : '库存核查' }}</el-button>
           <el-button @click="updateToInvalid" type="danger" v-if="form.id" class="action-btn">{{ tr('作废') }}</el-button>
         </div>
         <div>
@@ -159,21 +147,19 @@
 </template>
 
 <script setup name="CheckOrderEdit">
-import {computed, getCurrentInstance, onMounted, reactive, ref, toRef, toRefs, watch} from "vue";
+import {computed, getCurrentInstance, onMounted, reactive, ref, toRefs} from "vue";
 const skuSelectRef = ref(null)
 import {addCheckOrder, getCheckOrder, updateCheckOrder, check} from "@/api/wms/checkOrder";
 import {delCheckOrderDetail} from "@/api/wms/checkOrderDetail";
-import {listInventoryNoPage} from "@/api/wms/inventory";
-import {ElMessage, ElMessageBox} from "element-plus";
+import {ElMessage} from "element-plus";
 import {useRoute} from "vue-router";
 import {useWmsStore} from '@/store/modules/wms'
-import {numSub, generateNo} from '@/utils/ruoyi'
+import {generateNo} from '@/utils/ruoyi'
 import SkuSelect from "@/views/components/SkuSelect.vue";
 import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
 
 const {proxy} = getCurrentInstance();
-const {wms_shipment_type} = proxy.useDict("wms_shipment_type");
 const wmsStore = useWmsStore()
 const settingsStore = useSettingsStore()
 const isEn = computed(() => (settingsStore.language || 'zh-cn') === 'en')
@@ -210,9 +196,7 @@ const close = () => {
   const obj = {path: "/checkOrder"};
   proxy?.$tab.closeOpenPage(obj);
 }
-const inventorySelectShow = ref(false)
 const skuSelectShow = ref(false)
-const currentSkuSelectIndex = ref(null)
 const getBrandName = (brandId) => {
   if (brandId === null || brandId === undefined) return ''
   return wmsStore.itemBrandMap.get(brandId)?.brandName || ''
@@ -235,9 +219,18 @@ const normalizeDetailRow = (detail = {}) => {
   return {
     ...detail,
     skuId,
+    warehouseId: detail.warehouseId ?? form.value.warehouseId,
+    quantity: detail.actualQuantity ?? detail.quantity,
+    checkQuantity: detail.countedQuantity ?? detail.checkQuantity ?? 1,
     itemSku,
     item
   }
+}
+const getDetailCheckQuantity = (detail = {}) => {
+  return Number(detail.countedQuantity ?? detail.checkQuantity ?? 0)
+}
+const isCountedDetail = (detail = {}) => {
+  return getDetailCheckQuantity(detail) > 0
 }
 // 盘库中标识
 const checking = ref(false)
@@ -249,58 +242,40 @@ const startCheck = () => {
   if (!form.value.warehouseId) {
     return ElMessage.error('请先选择仓库！')
   }
-  const query = {
-    warehouseId: form.value.warehouseId,
-  }
+  form.value.details = []
+  selectedSku.value = []
+  form.value.totalQuantity = 0
   checking.value = true
-  loading.value = true
-  listInventoryNoPage(query).then(res => {
-    selectedSku.value = res.data.map(it => {
-      return {
-        id: it.skuId
-      }
-    })
-    res.data.forEach(it => {
-        form.value.details.push({
-            itemSku: it.itemSku,
-            item: it.item,
-            inventoryId: it.id,
-            skuId: it.itemSku.id,
-            warehouseId: it.warehouseId,
-            quantity: Number(it.quantity),
-            checkQuantity: Number(it.quantity),
-            newInventory: false
-          }
-        )
-    })
-    handleChangeQuantity()
-  }).finally(() => loading.value = false)
 }
 // 选择成功
 const handleOkClick = (item) => {
   if (!scanMode.value) {
     skuSelectShow.value = false
   }
-  const selectedMap = new Map((selectedSku.value || []).map((it) => [it.id, it]))
-  item.forEach((it) => {
-    selectedMap.set(it.id, it)
-  })
-  selectedSku.value = Array.from(selectedMap.values())
+  const selectedMap = new Map((selectedSku.value || []).map((it) => [String(it.id), it]))
   const newDetails = []
   item.forEach(it => {
-    if (!form.value.details.find(detail => detail.itemSku.id === it.id)) {
+    const skuId = it.id ?? it.skuId ?? it.itemSku?.id
+    const skuKey = String(skuId)
+    selectedMap.set(skuKey, {...it, id: skuId})
+    const existedDetail = form.value.details.find(detail => String(detail.skuId ?? detail.itemSku?.id) === skuKey)
+    if (existedDetail) {
+      if (scanMode.value) {
+        existedDetail.checkQuantity = Number(existedDetail.checkQuantity || 0) + 1
+      }
+    } else {
       newDetails.push({
         itemSku: it.itemSku,
         item: it.item,
-        skuId: it.id,
+        skuId,
         warehouseId: form.value.warehouseId,
         inventoryId: null,
-        quantity: 0,
-        checkQuantity: 0,
+        checkQuantity: 1,
         newInventory: true
       })
     }
   })
+  selectedSku.value = Array.from(selectedMap.values())
   if (newDetails.length) {
     form.value.details.unshift(...newDetails)
   }
@@ -329,14 +304,12 @@ const getParams = (orderStatus) => {
   let details = []
   if (form.value.details?.length) {
     // 构建参数
-    details = form.value.details.map(it => {
+    details = form.value.details.filter(isCountedDetail).map(it => {
       return {
         id: it.id,
         orderId: form.value.id,
         skuId: it.skuId,
-        quantity: it.quantity,
         checkQuantity: it.checkQuantity,
-        inventoryId: it.inventoryId,
         warehouseId: form.value.warehouseId,
       }
     })
@@ -363,7 +336,7 @@ const doSave = (orderStatus = 0) => {
     if (params.id) {
       updateCheckOrder(params).then((res) => {
         if (res.code === 200) {
-          ElMessage.success(res.msg)
+          ElMessage.success('盘库单已暂存')
           close()
         } else {
           ElMessage.error(res.msg)
@@ -374,7 +347,7 @@ const doSave = (orderStatus = 0) => {
     } else {
       addCheckOrder(params).then((res) => {
         if (res.code === 200) {
-          ElMessage.success(res.msg)
+          ElMessage.success('盘库单已暂存')
           close()
         } else {
           ElMessage.error(res.msg)
@@ -393,7 +366,9 @@ const updateToInvalid = async () => {
 }
 
 const doCheck = async () => {
-  await proxy?.$modal.confirm('确认盘库结束吗？');
+  await proxy?.$modal.confirm('确认完成盘点并固化盘点对照结果吗？此操作只保存盘点结果，不会变更仓库库存。<br><span style="color: #f56c6c;">一旦确认，永久保存不可撤销</span>', {
+    dangerouslyUseHTMLString: true
+  });
   checkForm.value?.validate((valid) => {
     // 校验
     if (!valid) {
@@ -403,7 +378,7 @@ const doCheck = async () => {
     const params = getParams(1);
     check(params).then((res) => {
       if (res.code === 200) {
-        ElMessage.success('盘库成功')
+        ElMessage.success('盘点结果已固化，仓库库存未变更')
         close()
       } else {
         ElMessage.error(res.msg)
@@ -432,16 +407,16 @@ onMounted(() => {
 })
 
 
-// 获取入库单详情
+// 获取盘库单详情
 const loadDetail = (id) => {
   loading.value = true
   getCheckOrder(id).then((response) => {
     const detailRows = Array.isArray(response?.data?.details)
-      ? response.data.details.map((it) => normalizeDetailRow(it))
+      ? response.data.details.filter(isCountedDetail).map((it) => normalizeDetailRow(it))
       : []
     if (detailRows.length) {
       detailRows.forEach(detail => {
-        detail.newInventory = !detail.inventoryId
+        detail.newInventory = true
       })
       selectedSku.value = detailRows.map(it => {
         return {
@@ -472,7 +447,8 @@ const handleDeleteDetail = (row, index) => {
   } else {
     form.value.details.splice(index, 1)
   }
-  const indexOfSelected = selectedSku.value.findIndex(it => row.itemSku.id=== it.id)
+  const rowSkuId = row.skuId ?? row.itemSku?.id
+  const indexOfSelected = selectedSku.value.findIndex(it => String(rowSkuId) === String(it.id))
   if (indexOfSelected !== -1) {
     selectedSku.value.splice(indexOfSelected, 1)
   }
@@ -482,9 +458,7 @@ const handleDeleteDetail = (row, index) => {
 const handleChangeQuantity = () => {
   let totalQuantity = 0
   form.value.details.forEach(it => {
-    if (it.quantity !== it.checkQuantity) {
-      totalQuantity += (it.checkQuantity - it.quantity)
-    }
+    totalQuantity += Number(it.checkQuantity) || 0
   })
   form.value.totalQuantity = totalQuantity
 }

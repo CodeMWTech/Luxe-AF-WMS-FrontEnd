@@ -151,7 +151,10 @@
         <div style="width: 100%;position: relative">
           <div style="display: flex;align-items: start;justify-content: space-between">
             <span class="mr10" style="font-size: 18px;">商品列表</span>
-            <el-button type="primary" plain icon="Plus" @click="handleAdd" class="mb10" v-hasPermi="['wms:item:edit']">新增商品</el-button>
+            <div class="item-toolbar-actions">
+              <el-button type="primary" plain icon="Download" @click="handleExport" class="mb10" v-hasPermi="['wms:item:list']">{{ tr('导出Excel') }}</el-button>
+              <el-button type="primary" plain icon="Plus" @click="handleAdd" class="mb10" v-hasPermi="['wms:item:edit']">新增商品</el-button>
+            </div>
           </div>
           <el-table :data="itemList" @selection-change="handleSelectionChange" :span-method="spanMethod" border empty-text="暂无商品" v-loading="loading" cell-class-name="my-cell">
             <el-table-column label="商品信息" prop="itemId">
@@ -471,7 +474,7 @@
                       <el-icon class="avatar-uploader-icon"><Plus /></el-icon>
                       <div class="upload-main-text">将图片拖拽到此处，或点击上传</div>
                       <div class="upload-tip-text">
-                        请上传大小不超过 20MB 的图片，格式 png/jpg/jpeg，最多 {{ IMAGE_LIMIT }} 张。
+                        请上传大小不超过 20MB 的图片，格式 png/jpg/jpeg，最多上传{{ IMAGE_LIMIT }}张图片。
                         <br />
                         支持拖拽调整顺序，点击图片预览原图
                       </div>
@@ -906,7 +909,7 @@ const IMAGE_POLL_TIMEOUT_MS = 120000
 
 // 商品图片（方案B）：新增时暂存的待上传文件 { file, url }
 const pendingImageFiles = ref([])
-const IMAGE_LIMIT = 10
+const IMAGE_LIMIT = 20
 const IMAGE_SIZE_MB = 20
 const imageDragState = reactive({ type: '', fromIndex: -1 })
 const uploadedImagePreviewList = computed(() => (form.value.imageList || []).map(it => it.url || it.thumbUrl).filter(Boolean))
@@ -1002,7 +1005,7 @@ function beforeImageUpload(file) {
 }
 
 function handleImageExceed() {
-  proxy?.$modal.msgError(`最多上传 ${IMAGE_LIMIT} 张图片`)
+  proxy?.$modal.msgError(`商品图片最多上传${IMAGE_LIMIT}张`)
 }
 
 /** 编辑时：自定义上传，走 /item/{itemId}/image/upload，不阻塞界面 */
@@ -1547,9 +1550,17 @@ const handleDelete = async (row) => {
 const treeRef = ref(null)
 /** 导出按钮操作 */
 const handleExport = () => {
-  proxy?.download('wms/item/export', {
-    ...queryParams.value
-  }, `item_${new Date().getTime()}.xlsx`)
+  const query = { ...queryParams.value }
+  if (!canViewSellingPrice.value) {
+    delete query.sellingPriceMin
+    delete query.sellingPriceMax
+  }
+  if (query.createTimeRange && query.createTimeRange.length === 2) {
+    query.startTime = formatDateTimeForQuery(query.createTimeRange[0])
+    query.endTime = formatDateTimeForQuery(query.createTimeRange[1])
+  }
+  delete query.createTimeRange
+  proxy?.download('wms/itemSku/export', query, 'MichaelStudioWMS-商品管理.xlsx', { timeout: 0 })
 }
 /** 下载条形码 */
 const downloadBarcode = (row) => {
@@ -1797,6 +1808,12 @@ onMounted(async () => {
 
 .item-page.is-en .el-form-item__label {
   white-space: nowrap;
+}
+
+.item-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .item-page .action-btn {

@@ -43,7 +43,7 @@ export function delCheckOrder(id) {
   })
 }
 
-// 盘库结束
+// 固化盘点结果
 export function check(data) {
   return request({
     url: '/wms/checkOrder/check',

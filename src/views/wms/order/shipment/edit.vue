@@ -423,7 +423,9 @@ const doSave = (orderStatus = 0) => {
 }
 
 const doShipment = async () => {
-  await proxy?.$modal.confirm('确认出库吗？');
+  await proxy?.$modal.confirm('确认出库吗？<br><span style="color: #f56c6c;">一旦确认，永久保存不可撤销</span>', {
+    dangerouslyUseHTMLString: true
+  });
   shipmentForm.value?.validate((valid) => {
     // 校验
     if (!valid) {

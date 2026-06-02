@@ -65,7 +65,7 @@
             <dict-tag :options="translatedCheckStatusOptions" :value="row.orderStatus" />
           </template>
         </el-table-column>
-        <el-table-column :label="tr('盈亏数')" align="right" min-width="120">
+        <el-table-column :label="isEn ? 'Difference Total' : '差额合计'" align="right" min-width="120">
           <template #default="{ row }">
             <el-statistic :value="Number(row.totalQuantity)" :precision="0"/>
           </template>
@@ -93,7 +93,7 @@
                 :width="300"
                 trigger="hover"
                 :disabled="scope.row.orderStatus === 0"
-                :content="'盘库单【' + scope.row.orderNo + '】已' + (scope.row.orderStatus === 1 ? '盘库完成' : '作废') + '，无法修改！' "
+                :content="'盘库单【' + scope.row.orderNo + '】已' + (scope.row.orderStatus === 1 ? '完成盘点' : '作废') + '，无法修改！' "
               >
                 <template #reference>
                   <el-button link type="primary" @click="handleUpdate(scope.row)" v-hasPermi="['wms:check:edit']" :disabled="[-1, 1].includes(scope.row.orderStatus)">{{ tr('修改') }}</el-button>
@@ -108,7 +108,7 @@
                 :width="300"
                 trigger="hover"
                 :disabled="[-1, 0].includes(scope.row.orderStatus)"
-                :content="'盘库单【' + scope.row.orderNo + '】已盘库完成，无法删除！' "
+                :content="'盘库单【' + scope.row.orderNo + '】已完成盘点，无法删除！' "
               >
                 <template #reference>
                   <el-button link type="danger" @click="handleDelete(scope.row)" v-hasPermi="['wms:check:edit']" :disabled="scope.row.orderStatus === 1">{{ tr('删除') }}</el-button>
@@ -179,7 +179,7 @@ const formLabelWidth = computed(() => '80px')
 const translatedCheckStatusOptions = computed(() => (wms_check_status.value || []).map(it => ({ ...it, label: tr(it.label) })))
 const wmsStore = useWmsStore()
 
-/** 查询入库单列表 */
+/** 查询盘库单列表 */
 function getList() {
   loading.value = true;
   const query = {...queryParams.value}
@@ -236,19 +236,25 @@ function handleGoDetail(row) {
   checkOrderDetailRef.value.handleQuery()
 }
 
-/** 导出按钮操作 */
+/** 打印按钮操作 */
 async function handlePrint(row) {
   const res = await getCheckOrder(row.id)
   const checkOrder = res.data
+  const detailRes = await listByCheckOrderId(row.id, {
+    pageNum: 1,
+    pageSize: 10000,
+    haveProfitAndLoss: false
+  })
   let table = []
-  if (checkOrder.details?.length) {
-    table = checkOrder.details.map(detail => {
+  const detailRows = getResponseRows(detailRes)
+  if (detailRows.length) {
+    table = detailRows.map(detail => {
       return {
-        itemName: detail.item.itemName,
-        skuCode: detail.itemSku.skuCode,
-        quantity: Number(detail.quantity).toFixed(0),
-        profitAndLoss: Number(detail.checkQuantity - detail.quantity).toFixed(0),
-        checkQuantity: Number(detail.checkQuantity).toFixed(0)
+        itemName: getDetailItemName(detail),
+        skuCode: getDetailSkuCode(detail),
+        quantity: Number(getActualQuantity(detail)).toFixed(0),
+        profitAndLoss: getDifferenceDisplay(detail),
+        checkQuantity: Number(getCountedQuantity(detail)).toFixed(0)
       }
     })
   }
@@ -341,6 +347,37 @@ async function handlePrint(row) {
 
 function getRowKey(row) {
   return row.id
+}
+
+function getResponseRows(response) {
+  if (Array.isArray(response?.rows)) return response.rows
+  if (Array.isArray(response?.data?.rows)) return response.data.rows
+  if (Array.isArray(response?.data)) return response.data
+  return []
+}
+
+function getDetailItemName(row) {
+  return row?.itemName || row?.item?.itemName || '-'
+}
+
+function getDetailSkuCode(row) {
+  return row?.skuCode || row?.itemSku?.skuCode || '-'
+}
+
+function getCountedQuantity(row) {
+  return row?.countedQuantity ?? row?.checkQuantity ?? 0
+}
+
+function getActualQuantity(row) {
+  return row?.actualQuantity ?? row?.quantity ?? 0
+}
+
+function getDifferenceDisplay(row) {
+  if (row?.differenceDisplay !== undefined && row?.differenceDisplay !== null) {
+    return row.differenceDisplay
+  }
+  const difference = Number(row?.difference ?? (getCountedQuantity(row) - getActualQuantity(row)))
+  return difference > 0 ? `+${difference}` : String(difference)
 }
 
 function initLookupOptions() {

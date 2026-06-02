@@ -44,9 +44,10 @@ export function delCheckOrderDetail(id) {
 }
 
 // 根据盘库单id查询盘库单详情列表
-export function listByCheckOrderId(checkOrderId) {
+export function listByCheckOrderId(checkOrderId, query) {
   return request({
     url: '/wms/checkOrderDetail/list/' + checkOrderId,
-    method: 'get'
+    method: 'get',
+    params: query
   })
 }

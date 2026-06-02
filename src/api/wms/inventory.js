@@ -27,6 +27,15 @@ export function getUnstockedSkusTotalCount(query) {
   })
 }
 
+export function exportUnstockedSkus(data) {
+  return request({
+    url: '/wms/inventory/unstocked-skus/export',
+    method: 'post',
+    data: data,
+    responseType: 'blob'
+  })
+}
+
 // 查询库存列表
 export function listInventory(query) {
   return request({

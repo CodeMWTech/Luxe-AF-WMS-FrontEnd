@@ -161,6 +161,7 @@
         :scan-mode="scanMode"
         :selected-sku="selectedSku"
         :warehouse-id="form.warehouseId"
+        :only-shipped="isReturnInbound"
         @handleOkClick="handleOkClick"
         @handleCancelClick="skuSelectShow = false"
         :size="'50%'"
@@ -241,6 +242,12 @@ const data = reactive({
   }
 });
 const { form, rules} = toRefs(data);
+const returnInboundLabel = '\u9000\u8d27\u5165\u5e93'
+const returnInboundLabels = [returnInboundLabel, 'Return Inbound']
+const isReturnInbound = computed(() => {
+  const currentType = (wms_receipt_type.value || []).find((it) => String(it.value) === String(form.value.optType))
+  return returnInboundLabels.includes(currentType?.label) || currentType?.label === tr(returnInboundLabel)
+})
 
 const cancel = async () => {
   await proxy?.$modal.confirm('确认取消编辑入库单吗？');
@@ -398,7 +405,9 @@ const doSave = async (orderStatus = 0) => {
 }
 
 const doWarehousing = async () => {
-  await proxy?.$modal.confirm('确认入库吗？');
+  await proxy?.$modal.confirm('确认入库吗？<br><span style="color: #f56c6c;">一旦确认，永久保存不可撤销</span>', {
+    dangerouslyUseHTMLString: true
+  });
   receiptForm.value?.validate((valid) => {
     // 校验
     if (!valid) {
