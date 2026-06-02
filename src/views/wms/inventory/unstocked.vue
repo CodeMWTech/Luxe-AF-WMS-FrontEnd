@@ -210,19 +210,31 @@
 
     <el-card class="mt20">
       <el-row :gutter="10" class="mb8" type="flex" justify="space-between" align="middle">
-        <el-col :span="12">
+        <el-col :xs="24" :sm="8" :md="10" :lg="12">
           <span class="page-title">{{ tr('未入库商品') }}</span>
         </el-col>
-        <el-col :span="12" class="stats-col">
-          <span class="stats-label">{{ tr('未入库总金额') }}：</span>
-          <span class="stats-value">
-            {{ totalAmountDisplay }}
-          </span>
-          <span class="stats-separator">|</span>
-          <span class="stats-label">{{ tr('未入库总件数') }}：</span>
-          <span class="stats-value">
-            {{ totalCountDisplay }}{{ tr('件') }}
-          </span>
+        <el-col :xs="24" :sm="16" :md="14" :lg="12" class="stats-col">
+          <div class="stats-toolbar">
+            <div class="stats-summary">
+              <span class="stats-label">{{ tr('未入库总金额') }}：</span>
+              <span class="stats-value">
+                {{ totalAmountDisplay }}
+              </span>
+              <span class="stats-separator">|</span>
+              <span class="stats-label">{{ tr('未入库总件数') }}：</span>
+              <span class="stats-value">
+                {{ totalCountDisplay }}{{ tr('件') }}
+              </span>
+            </div>
+            <el-button
+              type="primary"
+              :loading="exportLoading"
+              :disabled="loading"
+              @click="handleExportExcel"
+            >
+              {{ tr('导出Excel') }}
+            </el-button>
+          </div>
         </el-col>
       </el-row>
       <el-table
@@ -362,12 +374,13 @@
 
 <script setup name="UnstockedSkus">
 import { QuestionFilled } from '@element-plus/icons-vue'
-import { getUnstockedSkusTotalAmount, getUnstockedSkusTotalCount, listUnstockedSkus } from '@/api/wms/inventory'
+import { exportUnstockedSkus, getUnstockedSkusTotalAmount, getUnstockedSkusTotalCount, listUnstockedSkus } from '@/api/wms/inventory'
 import { computed, getCurrentInstance, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useWmsStore } from '@/store/modules/wms'
 import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
+import { blobValidate } from '@/utils/ruoyi'
 
 const ITEM_CONDITION_OPTIONS = ['S', 'A', 'B', 'C', 'D']
 const AUTH_AGENCY_OPTIONS = ['Entrupy', 'Real Authentication', 'Legitmark', 'CheckCheck', 'N/A']
@@ -387,6 +400,7 @@ const itemCategoryTreeSelectList = computed(() => wmsStore.itemCategoryTreeList)
 
 const list = ref([])
 const loading = ref(true)
+const exportLoading = ref(false)
 const total = ref(0)
 const totalAmount = ref(null)
 const totalCount = ref(0)
@@ -500,6 +514,34 @@ function buildAmountRequestQuery() {
   delete q.pageNum
   delete q.pageSize
   return q
+}
+
+async function handleExportExcel() {
+  try {
+    exportLoading.value = true
+    const blobData = await exportUnstockedSkus(buildAmountRequestQuery())
+    const isBlob = blobValidate(blobData)
+    if (!isBlob) {
+      const resText = await blobData.text()
+      const rspObj = JSON.parse(resText)
+      const errMsg = rspObj?.msg || tr('导出失败')
+      throw new Error(errMsg)
+    }
+    const blob = new Blob([blobData], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    })
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'MichaelStudioWMS-未入库商品.xlsx'
+    a.click()
+    window.URL.revokeObjectURL(url)
+    proxy.$modal.msgSuccess(tr('导出成功'))
+  } catch (e) {
+    proxy.$modal.msgError(e?.message || tr('导出失败'))
+  } finally {
+    exportLoading.value = false
+  }
 }
 
 const totalAmountDisplay = computed(() => {
@@ -681,7 +723,25 @@ onMounted(() => {
 }
 
 .stats-col {
-  text-align: right;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.stats-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  min-height: 32px;
+}
+
+.stats-summary {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  line-height: 32px;
 }
 
 .stats-label {
@@ -697,6 +757,14 @@ onMounted(() => {
 .stats-separator {
   margin: 0 12px;
   color: var(--el-border-color-darker, #d4d7de);
+}
+
+@media (max-width: 768px) {
+  .stats-col,
+  .stats-toolbar,
+  .stats-summary {
+    justify-content: flex-start;
+  }
 }
 
 .item-main-image {

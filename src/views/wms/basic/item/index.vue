@@ -151,7 +151,10 @@
         <div style="width: 100%;position: relative">
           <div style="display: flex;align-items: start;justify-content: space-between">
             <span class="mr10" style="font-size: 18px;">商品列表</span>
-            <el-button type="primary" plain icon="Plus" @click="handleAdd" class="mb10" v-hasPermi="['wms:item:edit']">新增商品</el-button>
+            <div class="item-toolbar-actions">
+              <el-button type="primary" plain icon="Download" @click="handleExport" class="mb10" v-hasPermi="['wms:item:list']">{{ tr('导出Excel') }}</el-button>
+              <el-button type="primary" plain icon="Plus" @click="handleAdd" class="mb10" v-hasPermi="['wms:item:edit']">新增商品</el-button>
+            </div>
           </div>
           <el-table :data="itemList" @selection-change="handleSelectionChange" :span-method="spanMethod" border empty-text="暂无商品" v-loading="loading" cell-class-name="my-cell">
             <el-table-column label="商品信息" prop="itemId">
@@ -1547,9 +1550,17 @@ const handleDelete = async (row) => {
 const treeRef = ref(null)
 /** 导出按钮操作 */
 const handleExport = () => {
-  proxy?.download('wms/item/export', {
-    ...queryParams.value
-  }, `item_${new Date().getTime()}.xlsx`)
+  const query = { ...queryParams.value }
+  if (!canViewSellingPrice.value) {
+    delete query.sellingPriceMin
+    delete query.sellingPriceMax
+  }
+  if (query.createTimeRange && query.createTimeRange.length === 2) {
+    query.startTime = formatDateTimeForQuery(query.createTimeRange[0])
+    query.endTime = formatDateTimeForQuery(query.createTimeRange[1])
+  }
+  delete query.createTimeRange
+  proxy?.download('wms/itemSku/export', query, 'MichaelStudioWMS-商品管理.xlsx', { timeout: 0 })
 }
 /** 下载条形码 */
 const downloadBarcode = (row) => {
@@ -1797,6 +1808,12 @@ onMounted(async () => {
 
 .item-page.is-en .el-form-item__label {
   white-space: nowrap;
+}
+
+.item-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .item-page .action-btn {

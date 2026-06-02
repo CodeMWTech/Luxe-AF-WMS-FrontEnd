@@ -13,8 +13,8 @@
           <el-col :span="24">
             <el-form-item :label="tr('维度')" prop="itemId">
               <el-radio-group v-model="queryType" size="default" @change="handleSortTypeChange">
-                <el-radio-button label="warehouse">{{ tr('仓库') }}</el-radio-button>
                 <el-radio-button label="item">{{ tr('商品') }}</el-radio-button>
+                <el-radio-button label="warehouse">{{ tr('仓库') }}</el-radio-button>
               </el-radio-group>
             </el-form-item>
           </el-col>
@@ -237,11 +237,11 @@ const loading = ref(true)
 const exportLoading = ref(false)
 const total = ref(0)
 const tableRef = ref(null)
-const rowSpanArray = ref(['warehouseGroupKey', 'warehouseItemGroupKey'])
+const rowSpanArray = ref(['itemGroupKey', 'skuGroupKey', 'skuWarehouseGroupKey'])
 const warehouseSummaryMap = ref(new Map())
 
 const filterable = ref(false)
-const queryType = ref('warehouse')
+const queryType = ref('item')
 const queryParams = ref({
   pageNum: 1,
   pageSize: 10,
