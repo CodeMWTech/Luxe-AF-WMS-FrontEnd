@@ -172,6 +172,12 @@
                 <div v-if="row.item.year || row.item.year === 0">
                   年份：{{ row.item.year }}
                 </div>
+                <div v-if="row.item.materialName || row.item.material">
+                  材质：{{ row.item.materialName || row.item.material }}
+                </div>
+                <div v-if="row.item.modelName">
+                  包型：{{ row.item.modelName }}
+                </div>
                 <div v-if="row.item.cared !== null && row.item.cared !== undefined">
                   护理：{{ row.item.cared ? '已护理' : '未护理' }}
                 </div>
@@ -320,14 +326,48 @@
                 </el-form-item>
               </el-col>
             </el-row>
-            <!-- 11.材质 12.瑕疵 -->
+            <!-- 11.包型 12.材质 -->
             <el-row :gutter="24">
               <el-col :span="12">
-                <el-form-item label="材质" prop="material">
-                  <el-input v-model="form.material" placeholder="请输入材质" />
+                <el-form-item label="包型" prop="modelId">
+                  <el-select v-model="form.modelId" placeholder="请选择包型" clearable filterable style="width: 100%">
+                    <el-option
+                      v-for="item in filteredItemModelList"
+                      :key="item.id"
+                      :label="item.modelName"
+                      :value="item.id"
+                    >
+                      <div class="image-option">
+                        <img v-if="item.imageUrl" :src="item.imageUrl" alt="" />
+                        <span v-else class="image-option-empty"></span>
+                        <span>{{ item.modelName }}</span>
+                      </div>
+                    </el-option>
+                  </el-select>
                 </el-form-item>
               </el-col>
               <el-col :span="12">
+                <el-form-item label="材质" prop="materialId">
+                  <el-select v-model="form.materialId" placeholder="请选择材质" clearable filterable style="width: 100%" @change="handleMaterialChange">
+                    <el-option
+                      v-for="item in filteredItemMaterialList"
+                      :key="item.id"
+                      :label="item.materialName"
+                      :value="item.id"
+                    >
+                      <div class="image-option">
+                        <img v-if="item.imageUrl" :src="item.imageUrl" alt="" />
+                        <span v-else class="image-option-empty"></span>
+                        <span>{{ item.materialName }}</span>
+                      </div>
+                    </el-option>
+                  </el-select>
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <!-- 13.瑕疵 -->
+            <el-row :gutter="24">
+              <el-col :span="24">
                 <el-form-item label="瑕疵" prop="defect">
                   <el-input v-model="form.defect" placeholder="请输入瑕疵描述" />
                 </el-form-item>
@@ -575,6 +615,7 @@ import {useWmsStore} from '@/store/modules/wms'
 import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
 import { formatDateTimeForQuery } from '@/utils/laTime'
+import { listItemModelMaterialOptions } from '@/api/wms/itemModel'
 
 const barcode = ref(null)
 const route = useRoute()
@@ -604,6 +645,11 @@ function handleCostPriceChange(val) {
     return
   }
   form.value.sellingPrice = Math.round(n * SELLING_PRICE_FROM_COST_MULTIPLIER * 100) / 100
+}
+
+function handleMaterialChange(id) {
+  const material = useWmsStore().itemMaterialMap.get(id)
+  form.value.material = material?.materialName || undefined
 }
 const itemList = ref([]);
 const itemCategoryTreeSelectList = computed(() => useWmsStore().itemCategoryTreeList);
@@ -781,6 +827,8 @@ const initFormData = {
   consignInfo: undefined,
   defaultQty: 1,
   material: undefined,
+  materialId: undefined,
+  modelId: undefined,
   defect: undefined,
   accessories: undefined,
   remark: undefined,
@@ -863,7 +911,66 @@ const categoryData = reactive({
   }
 });
 const {queryParams, form, rules} = toRefs(data);
+const modelMaterialIds = ref([]);
 
+
+const filteredItemMaterialList = computed(() => {
+  if (!form.value.modelId || modelMaterialIds.value.length === 0) return useWmsStore().itemMaterialList
+  const materialIdSet = new Set(modelMaterialIds.value.map(id => String(id)))
+  return useWmsStore().itemMaterialList.filter(item => materialIdSet.has(String(item.id)))
+})
+
+async function loadModelMaterialOptions(modelId) {
+  if (!modelId) {
+    modelMaterialIds.value = []
+    return
+  }
+  const res = await listItemModelMaterialOptions(modelId)
+  modelMaterialIds.value = res.data || []
+  if (form.value.materialId && modelMaterialIds.value.length > 0 && !modelMaterialIds.value.some(id => String(id) === String(form.value.materialId))) {
+    form.value.materialId = undefined
+    form.value.material = undefined
+  }
+}
+const filteredItemModelList = computed(() => {
+  const brand = form.value.itemBrand
+  const category = form.value.itemCategory
+  return useWmsStore().itemModelList.filter(item => {
+    const brandMatched = !item.itemBrand || !brand || String(item.itemBrand) === String(brand)
+    const categoryMatched = !item.itemCategory || !category || String(item.itemCategory) === String(category)
+    return brandMatched && categoryMatched
+  })
+})
+
+watch(
+  () => [form.value.itemBrand, form.value.itemCategory],
+  () => {
+    if (!form.value.modelId) return
+    const exists = filteredItemModelList.value.some(item => item.id === form.value.modelId)
+    if (!exists) form.value.modelId = undefined
+  }
+)
+
+
+watch(
+  () => form.value.modelId,
+  async (modelId, oldModelId) => {
+    if (modelId === oldModelId) return
+    await loadModelMaterialOptions(modelId)
+  }
+)
+
+watch(
+  () => filteredItemMaterialList.value,
+  () => {
+    if (!form.value.materialId) return
+    const exists = filteredItemMaterialList.value.some(item => String(item.id) === String(form.value.materialId))
+    if (!exists) {
+      form.value.materialId = undefined
+      form.value.material = undefined
+    }
+  }
+)
 const {queryParams: typeQueryParams, form: categoryForm, rules: typeRules} = toRefs(categoryData);
 const currentType = ref()
 /** 查询物料列表 */
@@ -1229,6 +1336,7 @@ const reset = () => {
   stopImagePolling()
   itemImageUploadRef.value?.clearFiles?.()
   form.value = {...initFormData};
+  modelMaterialIds.value = [];
   itemFormRef.value?.resetFields();
 }
 
@@ -1272,21 +1380,27 @@ const handleUpdate = (row) => {
   dialog.visible = true;
   dialog.title = isEn.value ? 'Edit Item' : "修改商品";
   nextTick(async () => {
-    reset();
-    const _id = row?.itemId || ids.value[0]
-    const [skuRes, itemRes] = await Promise.all([
-      listItemSku({ itemId: _id }),
-      getItem(_id)
-    ])
-    Object.assign(skuForm.itemSkuList, skuRes.data)
-    const itemData = itemRes.data || {}
-    const imageList = (itemData.imageList || itemData.images || []).map((img, idx) => normalizeServerImage(img, idx))
-    form.value = { ...form.value, ...row.item, ...itemData, imageList }
-    normalizeUploadedImageMeta()
-    form.value.skuCode = skuForm.itemSkuList[0]?.skuCode ?? ''
-    form.value.costPrice = canViewCostPrice.value ? (skuForm.itemSkuList[0]?.costPrice ?? null) : null
-    form.value.sellingPrice = canViewSellingPrice.value ? (skuForm.itemSkuList[0]?.sellingPrice ?? null) : null
-    skuLoading.value = false
+    try {
+      reset();
+      const _id = row?.itemId || ids.value[0]
+      const [skuRes, itemRes] = await Promise.all([
+        listItemSku({ itemId: _id }),
+        getItem(_id)
+      ])
+      Object.assign(skuForm.itemSkuList, skuRes.data)
+      const itemData = itemRes.data || {}
+      const imageList = (itemData.imageList || itemData.images || []).map((img, idx) => normalizeServerImage(img, idx))
+      form.value = { ...form.value, ...row.item, ...itemData, imageList }
+      normalizeUploadedImageMeta()
+      form.value.skuCode = skuForm.itemSkuList[0]?.skuCode ?? ''
+      form.value.costPrice = canViewCostPrice.value ? (skuForm.itemSkuList[0]?.costPrice ?? null) : null
+      form.value.sellingPrice = canViewSellingPrice.value ? (skuForm.itemSkuList[0]?.sellingPrice ?? null) : null
+    } catch (error) {
+      dialog.visible = false
+      proxy?.$modal.msgError(error?.msg || error?.message || '加载商品详情失败')
+    } finally {
+      skuLoading.value = false
+    }
   });
 }
 const handleQueryType = (node, data) => {
@@ -1538,6 +1652,19 @@ const initItemBrandDataIfNeeded = async () => {
     await wmsStore.getItemBrandList()
   }
 }
+const initMaterialModelDataIfNeeded = async () => {
+  const wmsStore = useWmsStore()
+  const tasks = []
+  if (!Array.isArray(wmsStore.itemMaterialList) || wmsStore.itemMaterialList.length === 0) {
+    tasks.push(wmsStore.getItemMaterialList())
+  }
+  if (!Array.isArray(wmsStore.itemModelList) || wmsStore.itemModelList.length === 0) {
+    tasks.push(wmsStore.getItemModelList())
+  }
+  if (tasks.length > 0) {
+    await Promise.all(tasks)
+  }
+}
 /** 删除按钮操作 */
 const handleDelete = async (row) => {
   const _ids = row?.itemId || ids.value;
@@ -1594,7 +1721,8 @@ onMounted(async () => {
   try {
     await Promise.all([
       initItemCategoryDataIfNeeded(),
-      initItemBrandDataIfNeeded()
+      initItemBrandDataIfNeeded(),
+      initMaterialModelDataIfNeeded()
     ])
   } catch (_) {
     // 分类数据加载失败不阻断列表渲染
