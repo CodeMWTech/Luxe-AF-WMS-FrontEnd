@@ -31,15 +31,112 @@
           </el-col>
           <el-col :xs="24" :sm="12" :md="6" :lg="6">
             <el-form-item :label="tr('商品名称')" prop="itemName">
-              <el-input v-model="queryParams.itemName" clearable :placeholder="tr('商品名称')"></el-input>
+              <el-input v-model="queryParams.itemName" clearable :placeholder="tr('商品名称')" @keyup.enter="handleQuery"></el-input>
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="12" :md="6" :lg="6">
             <el-form-item :label="tr('SKU编号')" prop="skuCode">
-              <el-input v-model="queryParams.skuCode" clearable :placeholder="tr('SKU编号')"></el-input>
+              <el-input v-model="queryParams.skuCode" clearable :placeholder="tr('SKU编号')" @keyup.enter="handleQuery"></el-input>
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="12" :md="6" :lg="6">
+            <el-form-item :label="tr('商品分类')" prop="itemCategory">
+              <el-tree-select
+                v-model="queryParams.itemCategory"
+                :data="itemCategoryTreeSelectList"
+                :props="{ value: 'id', label: 'label', children: 'children' }"
+                value-key="id"
+                :placeholder="tr('请选择')"
+                check-strictly
+                clearable
+                filterable
+                style="width: 100%"
+              />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="16">
+          <el-col :xs="24" :sm="12" :md="6" :lg="6">
+            <el-form-item :label="tr('商品品牌')" prop="itemBrand">
+              <el-select v-model="queryParams.itemBrand" clearable filterable style="width: 100%">
+                <el-option
+                  v-for="item in useWmsStore().itemBrandList"
+                  :key="item.id"
+                  :label="item.brandName"
+                  :value="item.id"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :xs="24" :sm="12" :md="6" :lg="6">
+            <el-form-item :label="tr('成色')" prop="itemCondition">
+              <el-select v-model="queryParams.itemCondition" clearable style="width: 100%" :placeholder="tr('请选择')">
+                <el-option v-for="opt in ITEM_CONDITION_OPTIONS" :key="opt" :label="opt" :value="opt" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :xs="24" :sm="12" :md="6" :lg="6">
+            <el-form-item :label="tr('年份')" prop="year">
+              <el-input-number v-model="queryParams.year" :min="0" :max="9999" :controls="false" style="width: 100%" @keyup.enter="handleQuery" />
+            </el-form-item>
+          </el-col>
+          <el-col :xs="24" :sm="12" :md="6" :lg="6">
+            <el-form-item :label="tr('鉴定机构')" prop="authAgency">
+              <el-select v-model="queryParams.authAgency" clearable style="width: 100%" :placeholder="tr('请选择')">
+                <el-option v-for="opt in AUTH_AGENCY_OPTIONS" :key="opt" :label="opt" :value="opt" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="16">
+          <el-col :xs="24" :sm="12" :md="6" :lg="6">
+            <el-form-item :label="tr('数量')" prop="defaultQty">
+              <el-input-number v-model="queryParams.defaultQty" :min="0" :controls="false" style="width: 100%" @keyup.enter="handleQuery" />
+            </el-form-item>
+          </el-col>
+          <el-col :xs="24" :sm="12" :md="6" :lg="6">
+            <el-form-item :label="tr('已护理')" prop="cared">
+              <el-switch v-model="queryParams.cared" active-text="Yes" inactive-text="No" :active-value="true" :inactive-value="false" />
+            </el-form-item>
+          </el-col>
+          <el-col :xs="24" :sm="24" :md="12" :lg="12">
+            <el-form-item :label="tr('寄售信息')" prop="consignInfo">
+              <el-input v-model="queryParams.consignInfo" clearable :placeholder="tr('请输入')" @keyup.enter="handleQuery" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="16">
+          <el-col :xs="24" :sm="24" :md="12" :lg="12">
+            <el-form-item :label="tr('创建时间')" prop="createTimeRange">
+              <el-date-picker
+                v-model="queryParams.createTimeRange"
+                type="datetimerange"
+                :range-separator="tr('至')"
+                format="MM/DD/YYYY HH:mm:ss"
+                value-format="YYYY-MM-DD HH:mm:ss"
+                :default-time="defaultTime"
+                :start-placeholder="tr('开始时间')"
+                :end-placeholder="tr('结束时间')"
+                style="width: 100%"
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :xs="24" :sm="24" :md="12" :lg="12" v-if="canViewSellingPrice">
+            <el-form-item :label="tr('销售价')">
+              <div class="query-price-range">
+                <el-form-item prop="sellingPriceMin" class="query-price-range-item">
+                  <el-input-number v-model="queryParams.sellingPriceMin" :min="0" :precision="2" :controls="false" :placeholder="tr('最低')" style="width: 100%" @keyup.enter="handleQuery" />
+                </el-form-item>
+                <span class="query-price-range-separator">{{ tr('至') }}</span>
+                <el-form-item prop="sellingPriceMax" class="query-price-range-item">
+                  <el-input-number v-model="queryParams.sellingPriceMax" :min="0" :precision="2" :controls="false" :placeholder="tr('最高')" style="width: 100%" @keyup.enter="handleQuery" />
+                </el-form-item>
+              </div>
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="16">
+          <el-col :span="24">
             <el-form-item label=" ">
               <el-button type="primary" icon="Search" class="action-btn" native-type="submit">{{ tr('搜索') }}</el-button>
               <el-button icon="Refresh" class="action-btn" native-type="button" @click="resetQuery">{{ tr('重置') }}</el-button>
@@ -227,10 +324,16 @@ import { useWmsStore } from '@/store/modules/wms'
 import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
 import { blobValidate } from '@/utils/ruoyi'
+import { formatDateTimeForQuery } from '@/utils/laTime'
 
 const { proxy } = getCurrentInstance()
 const settingsStore = useSettingsStore()
 const spanMethod = computed(() => getRowspanMethod(inventoryList.value, rowSpanArray.value))
+const canViewSellingPrice = computed(() => proxy?.$auth?.hasPermi('wms:itemSellingPrice:view'))
+const itemCategoryTreeSelectList = computed(() => useWmsStore().itemCategoryTreeList)
+const AUTH_AGENCY_OPTIONS = ['Entrupy', 'Real Authentication', 'Legitmark', 'CheckCheck', 'N/A']
+const ITEM_CONDITION_OPTIONS = ['S', 'A', 'B', 'C', 'D']
+const defaultTime = [new Date(2000, 0, 1, 0, 0, 0), new Date(2000, 0, 1, 23, 59, 59)]
 
 const inventoryList = ref([])
 const loading = ref(true)
@@ -249,6 +352,17 @@ const queryParams = ref({
   warehouseId: undefined,
   itemName: undefined,
   skuCode: undefined,
+  itemCategory: undefined,
+  itemBrand: undefined,
+  itemCondition: undefined,
+  year: undefined,
+  cared: undefined,
+  defaultQty: undefined,
+  authAgency: undefined,
+  consignInfo: undefined,
+  createTimeRange: [],
+  sellingPriceMin: undefined,
+  sellingPriceMax: undefined,
   minQuantity: undefined,
   orderByColumn: undefined,
   isAsc: undefined
@@ -360,6 +474,15 @@ function formatTime(t) {
 
 const getCurrentQuery = () => {
   const query = { ...queryParams.value }
+  if (!canViewSellingPrice.value) {
+    delete query.sellingPriceMin
+    delete query.sellingPriceMax
+  }
+  if (query.createTimeRange && query.createTimeRange.length === 2) {
+    query.startTime = formatDateTimeForQuery(query.createTimeRange[0])
+    query.endTime = formatDateTimeForQuery(query.createTimeRange[1])
+  }
+  delete query.createTimeRange
   if (filterable.value) {
     query.minQuantity = 1
   } else {
@@ -485,6 +608,8 @@ const tr = (text) => translateByMap(text, settingsStore.language || 'zh-cn')
 
 onMounted(() => {
   useWmsStore().getWarehouseList()
+  useWmsStore().getItemBrandList()
+  useWmsStore().getItemCategoryTreeList()
   getList()
 })
 </script>
@@ -504,6 +629,23 @@ onMounted(() => {
 
 .inventory-statistic-page .action-btn {
   min-width: 88px;
+}
+
+.query-price-range {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.query-price-range-item {
+  flex: 1;
+  margin-bottom: 0 !important;
+}
+
+.query-price-range-separator {
+  flex: 0 0 auto;
+  color: var(--el-text-color-secondary, #909399);
 }
 
 .toolbar-right {
