@@ -162,13 +162,13 @@ export const dynamicRoutes = [
     path: '/wms/platform/tiktok/orders',
     component: Layout,
     hidden: true,
-    permissions: ['wms:platform:tiktok:list'],
+    permissions: ['wms:platform:list'],
     children: [
       {
         path: '',
-        component: () => import('@/views/wms/platform/tiktok/orders/index'),
-        name: 'TiktokOrders',
-        meta: { title: 'TikTok订单同步', activeMenu: '/wms/platform/tiktok/orders' }
+        component: () => import('@/views/wms/platform/orders/index'),
+        name: 'PlatformOrders',
+        meta: { title: '平台订单', activeMenu: '/wms/platform/tiktok/orders' }
       }
     ]
   }
