@@ -60,6 +60,18 @@
             @keyup.enter.prevent="handleQuery"
           />
         </el-form-item>
+        <el-form-item class="filter-item" :label="t('platformOrders.filterSkuMatched')" prop="skuMatched">
+          <el-select
+            v-model="queryParams.skuMatched"
+            :placeholder="t('platformOrders.skuMatchAll')"
+            clearable
+            style="width: 100%"
+          >
+            <el-option :label="t('platformOrders.skuMatchAll')" value="" />
+            <el-option :label="t('platformOrders.skuMatchMatched')" value="MATCHED" />
+            <el-option :label="t('platformOrders.skuMatchUnmatched')" value="UNMATCHED" />
+          </el-select>
+        </el-form-item>
         <el-form-item class="filter-item" :label="t('platformOrders.filterStatus')" prop="orderStatus">
           <el-select
             v-model="queryParams.orderStatus"
@@ -461,14 +473,28 @@
           <el-input :model-value="skuEditForm.oldSku" disabled />
         </el-form-item>
         <el-form-item label="新SKU">
-          <el-input v-model="skuEditForm.newSku" placeholder="请输入新SKU" @keyup.enter="saveSkuEdit" />
+          <div style="display: flex; gap: 8px; width: 100%">
+            <el-input :model-value="skuEditForm.newSku" placeholder="请从库中选择新SKU" readonly style="flex: 1" />
+            <el-button @click="openSkuSelect" :disabled="!skuEditForm.oldSku">选择</el-button>
+          </div>
         </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="cancelSkuEdit">取消</el-button>
-        <el-button type="primary" :loading="skuSaving" @click="saveSkuEdit">保存</el-button>
+        <el-button type="primary" :loading="skuSaving" :disabled="!skuEditForm.newSku" @click="saveSkuEdit">保存</el-button>
       </template>
     </el-dialog>
+
+    <!-- SKU 选择抽屉 -->
+    <SkuSelect
+      ref="skuSelectRef"
+      :model-value="skuSelectShow"
+      :single-select="true"
+      :selected-sku="selectedSkuForEdit"
+      @handleSingleOkClick="handleSkuSelected"
+      @handleCancelClick="skuSelectShow = false"
+      :size="'40%'"
+    />
   </div>
 </template>
 
@@ -477,6 +503,7 @@ import { computed, defineComponent, getCurrentInstance, h, onMounted, ref } from
 import { ArrowDown, ArrowRight, CopyDocument, Edit } from '@element-plus/icons-vue'
 import { getPlatformOrder, listPlatformOrders, getOrderStatusMap, updateOrderSku } from '@/api/wms/platformOrder'
 import { listAllPlatformShops, batchSyncOrders } from '@/api/wms/platformShop'
+import SkuSelect from '@/views/components/SkuSelect.vue'
 
 const InfoLine = defineComponent({
   name: 'InfoLine',
@@ -527,6 +554,7 @@ const queryParams = ref({
   platformOrderId: undefined,
   orderStatus: undefined,
   sellerSku: undefined,
+  skuMatched: '',
   orderUpdateTimeRange: []
 })
 
@@ -544,6 +572,11 @@ const skuEditOrder = ref(null)
 const skuEditIndex = ref(-1)
 const skuEditForm = ref({ oldSku: '', newSku: '' })
 const skuSaving = ref(false)
+
+// SKU 库选择状态
+const skuSelectShow = ref(false)
+const skuSelectRef = ref(null)
+const selectedSkuForEdit = ref([])
 
 const syncRules = {
   pageSize: [{ required: true, message: '请输入 pageSize', trigger: 'blur' }],
@@ -563,6 +596,7 @@ function normalizeQuery() {
   const query = { ...queryParams.value }
   query.platformOrderId = query.platformOrderId?.trim() || undefined
   query.sellerSku = query.sellerSku?.trim() || undefined
+  query.skuMatched = query.skuMatched || undefined
   if (!query.platform) delete query.platform
 
   if (query.orderUpdateTimeRange?.length === 2) {
@@ -970,6 +1004,7 @@ function startSkuEdit(order, index, item) {
   skuEditOrder.value = order
   skuEditIndex.value = index
   skuEditForm.value = { oldSku: getSkuText(item) || '-', newSku: '' }
+  selectedSkuForEdit.value = []
   skuEditOpen.value = true
 }
 
@@ -993,11 +1028,23 @@ function saveSkuEdit() {
   })
 }
 
+function openSkuSelect() {
+  skuSelectShow.value = true
+}
+
+function handleSkuSelected(row) {
+  skuSelectShow.value = false
+  const skuCode = row?.itemSku?.skuCode || row?.skuCode || ''
+  skuEditForm.value.newSku = skuCode
+  selectedSkuForEdit.value = [row]
+}
+
 function cancelSkuEdit() {
   skuEditOpen.value = false
   skuEditOrder.value = null
   skuEditIndex.value = -1
   skuEditForm.value = { oldSku: '', newSku: '' }
+  selectedSkuForEdit.value = []
 }
 
 function handleApiError(error) {
