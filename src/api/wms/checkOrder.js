@@ -51,3 +51,21 @@ export function check(data) {
     data: data
   })
 }
+
+// 库存智能核查预览
+export function smartCheckPreview(data) {
+  return request({
+    url: '/wms/checkOrder/smart-check/preview',
+    method: 'post',
+    data: data
+  })
+}
+
+// 确认库存智能核查并生成核查盘库单
+export function smartCheckConfirm(data) {
+  return request({
+    url: '/wms/checkOrder/smart-check/confirm',
+    method: 'post',
+    data: data
+  })
+}
