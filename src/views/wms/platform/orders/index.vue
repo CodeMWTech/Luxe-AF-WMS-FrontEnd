@@ -176,6 +176,16 @@
               </div>
             </div>
 
+            <div class="summary-cell shipment-cell">
+              <span class="cell-label">出库单</span>
+              <template v-if="order.shipmentOrderId">
+                <span class="primary-value shipment-order-no">{{ order.shipmentOrderNo || order.shipmentOrderId }}</span>
+              </template>
+              <template v-else>
+                <el-tag type="info" size="small" effect="plain" class="no-shipment-tag">未创建</el-tag>
+              </template>
+            </div>
+
             <div class="summary-cell money-cell">
               <span class="cell-label">售价</span>
               <span class="primary-value">{{ formatMoney(getSaleAmount(order), getCurrency(order)) }}</span>
@@ -394,11 +404,9 @@
                 :indeterminate="isIndeterminate"
                 @change="toggleAllShops"
               >
-                全选
-              </el-checkbox>
+                全选              </el-checkbox>
               <span class="shop-count-text">
-                已选 <b>{{ syncSelectedCount }}</b> 个，共 <b>{{ syncEligibleCount }}</b> 个可同步（总计 {{ syncShopList.length }}）
-              </span>
+                已选 <b>{{ syncSelectedCount }}</b> 个，共 <b>{{ syncEligibleCount }}</b> 个可同步（总计 {{ syncShopList.length }}）              </span>
             </div>
             <div class="shop-check-list">
               <div
@@ -461,8 +469,7 @@
       <template #footer>
         <el-button @click="syncOpen = false">取消</el-button>
         <el-button type="primary" :loading="syncLoading" :disabled="!selectedShopIds.length" @click="submitSync">
-          同步所选店铺
-        </el-button>
+          同步所选店铺        </el-button>
       </template>
     </el-dialog>
 
@@ -566,15 +573,13 @@ const syncForm = ref({
 
 const selectedShopIds = ref([])
 
-// SKU 编辑状态
-const skuEditOpen = ref(false)
+// SKU 编辑状态const skuEditOpen = ref(false)
 const skuEditOrder = ref(null)
 const skuEditIndex = ref(-1)
 const skuEditForm = ref({ oldSku: '', newSku: '' })
 const skuSaving = ref(false)
 
-// SKU 库选择状态
-const skuSelectShow = ref(false)
+// SKU 库选择状态const skuSelectShow = ref(false)
 const skuSelectRef = ref(null)
 const selectedSkuForEdit = ref([])
 
@@ -712,8 +717,7 @@ function submitSync() {
       syncOpen.value = false
       syncLoading.value = false
       proxy.$modal.msgSuccess(`后台同步已启动（${shopCount} 个店铺），数据将在几秒后刷新`)
-      // 延迟刷新列表，给后台同步一些时间
-      setTimeout(() => { getList(); loadShops() }, 5000)
+      // 延迟刷新列表，给后台同步一些时间      setTimeout(() => { getList(); loadShops() }, 5000)
     }).catch(() => {
       syncLoading.value = false
       proxy.$modal.msgError('同步请求失败')
@@ -1207,7 +1211,7 @@ onMounted(() => {
 // ==================== Summary Row ====================
 .summary-row {
   display: grid;
-  grid-template-columns: minmax(150px, 1.15fr) minmax(150px, 1.1fr) 116px minmax(130px, 1fr) minmax(180px, 1.5fr) minmax(120px, 1fr) 92px 82px 82px 104px 36px;
+  grid-template-columns: minmax(150px, 1.15fr) minmax(150px, 1.1fr) 116px minmax(130px, 1fr) minmax(180px, 1.5fr) minmax(120px, 1fr) 120px 92px 82px 82px 104px 36px;
   align-items: center;
   gap: 12px;
   width: 100%;
@@ -1290,6 +1294,26 @@ onMounted(() => {
   &:hover {
     color: #175cd3;
   }
+}
+
+// ==================== Shipment Order Cell ====================
+.shipment-cell {
+  min-width: 0;
+}
+
+.shipment-order-no {
+  color: #175cd3;
+  font-weight: 600;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: block;
+}
+
+.no-shipment-tag {
+  font-size: 11px;
+  border-radius: 4px;
 }
 
 // ==================== Status Tags ====================
@@ -1597,7 +1621,7 @@ onMounted(() => {
   }
 
   .summary-row {
-    grid-template-columns: minmax(150px, 1.1fr) minmax(150px, 1fr) minmax(130px, 1fr) minmax(170px, 1.4fr) minmax(120px, 1fr) 92px 82px 82px 104px 36px;
+    grid-template-columns: minmax(150px, 1.1fr) minmax(150px, 1fr) minmax(130px, 1fr) minmax(170px, 1.4fr) minmax(120px, 1fr) 120px 92px 82px 82px 104px 36px;
   }
 
   .platform-cell {
