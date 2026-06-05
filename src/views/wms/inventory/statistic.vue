@@ -185,7 +185,21 @@
             </template>
           </el-table-column>
           <el-table-column :label="tr('商品名称')" prop="warehouseItemGroupKey" min-width="120" align="center" show-overflow-tooltip>
-            <template #default="{ row }">{{ getItemName(row) }}</template>
+            <template #default="{ row }">
+              <span class="copyable-cell">
+                <span class="copyable-text">{{ getItemName(row) }}</span>
+                <el-button
+                  v-if="canCopyText(getItemName(row))"
+                  v-copyText="getItemName(row)"
+                  v-copyText:callback="copyTextSuccess"
+                  class="copy-btn"
+                  link
+                  type="primary"
+                  icon="DocumentCopy"
+                  :title="tr('复制')"
+                />
+              </span>
+            </template>
           </el-table-column>
           <el-table-column :label="tr('商品图片')" width="110" align="center">
             <template #default="{ row }">
@@ -206,7 +220,19 @@
           </el-table-column>
           <el-table-column :label="tr('SKU编号')" prop="skuCode" min-width="120" align="center" show-overflow-tooltip>
             <template #default="{ row }">
-              {{ getSkuCode(row) }}
+              <span class="copyable-cell">
+                <span class="copyable-text">{{ getSkuCode(row) }}</span>
+                <el-button
+                  v-if="canCopyText(getSkuCode(row))"
+                  v-copyText="getSkuCode(row)"
+                  v-copyText:callback="copyTextSuccess"
+                  class="copy-btn"
+                  link
+                  type="primary"
+                  icon="DocumentCopy"
+                  :title="tr('复制')"
+                />
+              </span>
             </template>
           </el-table-column>
         </template>
@@ -214,7 +240,21 @@
         <!-- ========== 商品维度列 ========== -->
         <template v-else>
           <el-table-column :label="tr('商品名称')" prop="itemGroupKey" min-width="120" align="center" show-overflow-tooltip>
-            <template #default="{ row }">{{ getItemName(row) }}</template>
+            <template #default="{ row }">
+              <span class="copyable-cell">
+                <span class="copyable-text">{{ getItemName(row) }}</span>
+                <el-button
+                  v-if="canCopyText(getItemName(row))"
+                  v-copyText="getItemName(row)"
+                  v-copyText:callback="copyTextSuccess"
+                  class="copy-btn"
+                  link
+                  type="primary"
+                  icon="DocumentCopy"
+                  :title="tr('复制')"
+                />
+              </span>
+            </template>
           </el-table-column>
           <el-table-column :label="tr('商品图片')" width="110" align="center">
             <template #default="{ row }">
@@ -235,7 +275,19 @@
           </el-table-column>
           <el-table-column :label="tr('SKU编号')" prop="skuGroupKey" min-width="120" align="center" show-overflow-tooltip>
             <template #default="{ row }">
-              {{ getSkuCode(row) }}
+              <span class="copyable-cell">
+                <span class="copyable-text">{{ getSkuCode(row) }}</span>
+                <el-button
+                  v-if="canCopyText(getSkuCode(row))"
+                  v-copyText="getSkuCode(row)"
+                  v-copyText:callback="copyTextSuccess"
+                  class="copy-btn"
+                  link
+                  type="primary"
+                  icon="DocumentCopy"
+                  :title="tr('复制')"
+                />
+              </span>
             </template>
           </el-table-column>
           <el-table-column :label="tr('仓库')" prop="skuWarehouseGroupKey" min-width="80" align="center" show-overflow-tooltip>
@@ -460,6 +512,14 @@ function getSkuCode(row) {
   return row?.skuCode || '-'
 }
 
+function canCopyText(value) {
+  return value !== undefined && value !== null && value !== ''
+}
+
+function copyTextSuccess() {
+  proxy.$modal.msgSuccess(tr('复制成功'))
+}
+
 /**
  * 时间格式化：null/undefined → '--'，否则格式化为 yyyy-MM-dd HH:mm:ss
  * shipmentTime 为 null 可能是"有出库历史但库存未清零"的业务规则，统一显示 '--'
@@ -662,6 +722,25 @@ onMounted(() => {
 
 :deep(.vertical-top-cell) {
   vertical-align: top;
+}
+
+.copyable-cell {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.copyable-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.copy-btn {
+  flex: 0 0 auto;
+  padding: 0;
 }
 
 .item-main-image {

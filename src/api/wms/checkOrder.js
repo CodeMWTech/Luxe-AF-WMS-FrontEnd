@@ -1,5 +1,7 @@
 import request from '@/utils/request'
 
+const CHECK_ORDER_LONG_TIMEOUT = 120000
+
 // 查询库存盘点单据列表
 export function listCheckOrder(query) {
   return request({
@@ -22,7 +24,8 @@ export function addCheckOrder(data) {
   return request({
     url: '/wms/checkOrder',
     method: 'post',
-    data: data
+    data: data,
+    timeout: CHECK_ORDER_LONG_TIMEOUT
   })
 }
 
@@ -31,7 +34,8 @@ export function updateCheckOrder(data) {
   return request({
     url: '/wms/checkOrder',
     method: 'put',
-    data: data
+    data: data,
+    timeout: CHECK_ORDER_LONG_TIMEOUT
   })
 }
 
@@ -48,6 +52,27 @@ export function check(data) {
   return request({
     url: '/wms/checkOrder/check',
     method: 'post',
-    data: data
+    data: data,
+    timeout: CHECK_ORDER_LONG_TIMEOUT
+  })
+}
+
+// 库存智能核查预览
+export function smartCheckPreview(data) {
+  return request({
+    url: '/wms/checkOrder/smart-check/preview',
+    method: 'post',
+    data: data,
+    timeout: CHECK_ORDER_LONG_TIMEOUT
+  })
+}
+
+// 确认库存智能核查并生成核查盘库单
+export function smartCheckConfirm(data) {
+  return request({
+    url: '/wms/checkOrder/smart-check/confirm',
+    method: 'post',
+    data: data,
+    timeout: CHECK_ORDER_LONG_TIMEOUT
   })
 }
