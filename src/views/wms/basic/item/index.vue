@@ -330,17 +330,35 @@
             <el-row :gutter="24">
               <el-col :span="12">
                 <el-form-item label="包型" prop="modelId">
-                  <el-select v-model="form.modelId" placeholder="请选择包型" clearable filterable style="width: 100%">
+                  <el-select
+                    v-model="form.modelId"
+                    placeholder="请选择包型"
+                    clearable
+                    filterable
+                    class="image-select"
+                    popper-class="image-select-popper"
+                    :disabled="!hasItemModelContext"
+                    style="width: 100%"
+                  >
+                    <template v-if="selectedItemModel" #prefix>
+                      <span class="image-select-prefix">
+                        <img v-if="selectedItemModel.imageUrl" :src="selectedItemModel.imageUrl" alt="" />
+                        <span v-else class="image-select-empty"></span>
+                      </span>
+                    </template>
                     <el-option
                       v-for="item in filteredItemModelList"
                       :key="item.id"
                       :label="item.modelName"
                       :value="item.id"
                     >
-                      <div class="image-option">
-                        <img v-if="item.imageUrl" :src="item.imageUrl" alt="" />
-                        <span v-else class="image-option-empty"></span>
-                        <span>{{ item.modelName }}</span>
+                      <div class="image-option" :class="{ 'is-selected': String(form.modelId) === String(item.id) }">
+                        <span class="image-option-thumb">
+                          <img v-if="item.imageUrl" :src="item.imageUrl" alt="" />
+                          <span v-else class="image-option-empty"></span>
+                        </span>
+                        <span class="image-option-name">{{ item.modelName }}</span>
+                        <el-icon v-if="String(form.modelId) === String(item.id)" class="image-option-check"><Check /></el-icon>
                       </div>
                     </el-option>
                   </el-select>
@@ -348,17 +366,36 @@
               </el-col>
               <el-col :span="12">
                 <el-form-item label="材质" prop="materialId">
-                  <el-select v-model="form.materialId" placeholder="请选择材质" clearable filterable style="width: 100%" @change="handleMaterialChange">
+                  <el-select
+                    v-model="form.materialId"
+                    placeholder="请选择材质"
+                    clearable
+                    filterable
+                    class="image-select"
+                    popper-class="image-select-popper"
+                    :disabled="!hasItemMaterialContext"
+                    style="width: 100%"
+                    @change="handleMaterialChange"
+                  >
+                    <template v-if="selectedItemMaterial" #prefix>
+                      <span class="image-select-prefix">
+                        <img v-if="selectedItemMaterial.imageUrl" :src="selectedItemMaterial.imageUrl" alt="" />
+                        <span v-else class="image-select-empty"></span>
+                      </span>
+                    </template>
                     <el-option
                       v-for="item in filteredItemMaterialList"
                       :key="item.id"
                       :label="item.materialName"
                       :value="item.id"
                     >
-                      <div class="image-option">
-                        <img v-if="item.imageUrl" :src="item.imageUrl" alt="" />
-                        <span v-else class="image-option-empty"></span>
-                        <span>{{ item.materialName }}</span>
+                      <div class="image-option" :class="{ 'is-selected': String(form.materialId) === String(item.id) }">
+                        <span class="image-option-thumb">
+                          <img v-if="item.imageUrl" :src="item.imageUrl" alt="" />
+                          <span v-else class="image-option-empty"></span>
+                        </span>
+                        <span class="image-option-name">{{ item.materialName }}</span>
+                        <el-icon v-if="String(form.materialId) === String(item.id)" class="image-option-check"><Check /></el-icon>
                       </div>
                     </el-option>
                   </el-select>
@@ -599,7 +636,7 @@
 import { getItem, delItem, addItem, updateItem, uploadItemImage, deleteItemImage, getItemImages } from '@/api/wms/item';
 import { computed, getCurrentInstance, nextTick, onBeforeUnmount, onMounted, reactive, ref, toRefs, watch } from 'vue';
 import { ElForm, ElTree, ElTreeSelect, ElMessage } from 'element-plus';
-import { Plus, Delete, Ticket } from '@element-plus/icons-vue';
+import { Plus, Delete, Ticket, Check } from '@element-plus/icons-vue';
 import {
   updateItemCategory,
   addItemCategory,
@@ -914,15 +951,39 @@ const {queryParams, form, rules} = toRefs(data);
 const modelMaterialIds = ref([]);
 
 
+const hasItemModelContext = computed(() => !!form.value.itemBrand && !!form.value.itemCategory)
+const hasItemMaterialContext = computed(() => hasItemModelContext.value && !!form.value.modelId)
+
+const filteredItemModelList = computed(() => {
+  const brand = form.value.itemBrand
+  const category = form.value.itemCategory
+  if (!brand || !category) return []
+  return useWmsStore().itemModelList.filter(item => {
+    return String(item.itemBrand) === String(brand) && String(item.itemCategory) === String(category)
+  })
+})
+
 const filteredItemMaterialList = computed(() => {
-  if (!form.value.modelId || modelMaterialIds.value.length === 0) return useWmsStore().itemMaterialList
+  const brand = form.value.itemBrand
+  const category = form.value.itemCategory
+  const model = form.value.modelId
+  if (!brand || !category || !model) return []
   const materialIdSet = new Set(modelMaterialIds.value.map(id => String(id)))
-  return useWmsStore().itemMaterialList.filter(item => materialIdSet.has(String(item.id)))
+  return useWmsStore().itemMaterialList.filter(item => {
+    const materialModelId = item.modelId
+    const brandMatched = String(item.itemBrand) === String(brand)
+    const categoryMatched = String(item.itemCategory) === String(category)
+    const modelMatched = String(materialModelId) === String(model)
+    const relationMatched = modelMaterialIds.value.length === 0 || materialIdSet.has(String(item.id))
+    return categoryMatched && brandMatched && modelMatched && relationMatched
+  })
 })
 
 async function loadModelMaterialOptions(modelId) {
   if (!modelId) {
     modelMaterialIds.value = []
+    form.value.materialId = undefined
+    form.value.material = undefined
     return
   }
   const res = await listItemModelMaterialOptions(modelId)
@@ -932,22 +993,31 @@ async function loadModelMaterialOptions(modelId) {
     form.value.material = undefined
   }
 }
-const filteredItemModelList = computed(() => {
-  const brand = form.value.itemBrand
-  const category = form.value.itemCategory
-  return useWmsStore().itemModelList.filter(item => {
-    const brandMatched = !item.itemBrand || !brand || String(item.itemBrand) === String(brand)
-    const categoryMatched = !item.itemCategory || !category || String(item.itemCategory) === String(category)
-    return brandMatched && categoryMatched
-  })
-})
+function findSelectOptionById(list, id) {
+  if (id === undefined || id === null || id === '') return null
+  return list.find(item => String(item.id) === String(id)) || null
+}
+
+const selectedItemModel = computed(() => findSelectOptionById(useWmsStore().itemModelList, form.value.modelId))
+const selectedItemMaterial = computed(() => findSelectOptionById(useWmsStore().itemMaterialList, form.value.materialId))
 
 watch(
   () => [form.value.itemBrand, form.value.itemCategory],
   () => {
-    if (!form.value.modelId) return
-    const exists = filteredItemModelList.value.some(item => item.id === form.value.modelId)
-    if (!exists) form.value.modelId = undefined
+    if (!hasItemModelContext.value) {
+      form.value.modelId = undefined
+      form.value.materialId = undefined
+      form.value.material = undefined
+      return
+    }
+    if (form.value.modelId) {
+      const exists = filteredItemModelList.value.some(item => String(item.id) === String(form.value.modelId))
+      if (!exists) {
+        form.value.modelId = undefined
+        form.value.materialId = undefined
+        form.value.material = undefined
+      }
+    }
   }
 )
 
@@ -1910,6 +1980,125 @@ onMounted(async () => {
 .query-price-range-separator {
   color: #606266;
   flex-shrink: 0;
+}
+
+.image-select :deep(.el-input__wrapper) {
+  min-height: 42px;
+  border-radius: 8px;
+}
+.image-select :deep(.el-input__inner) {
+  height: 42px;
+  line-height: 42px;
+  font-weight: 600;
+  color: #1f2937;
+}
+.image-select :deep(.el-input__prefix) {
+  display: flex;
+  align-items: center;
+  left: 8px;
+}
+.image-select-prefix {
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #f2f5f8;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.image-select-prefix img,
+.image-select-empty {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.image-select-prefix img {
+  object-fit: cover;
+}
+.image-select-empty {
+  border: 1px dashed #dcdfe6;
+  background: linear-gradient(135deg, #f8fafc, #eef2f7);
+}
+.image-select-popper.el-popper {
+  border-radius: 10px;
+  overflow: hidden;
+}
+.image-select-popper .el-select-dropdown {
+  border-radius: 10px;
+}
+.image-select-popper .el-select-dropdown__wrap {
+  max-height: 360px;
+}
+.image-select-popper .el-select-dropdown__item {
+  height: auto;
+  min-height: 0;
+  padding: 0;
+  line-height: normal;
+  color: #1f2937;
+}
+.image-select-popper .el-select-dropdown__item.hover,
+.image-select-popper .el-select-dropdown__item:hover {
+  background: transparent;
+}
+.image-select-popper .el-select-dropdown__item.selected {
+  color: #1f2937;
+  font-weight: 400;
+}
+.image-option {
+  min-height: 68px;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  transition: background-color 0.16s ease;
+}
+.image-select-popper .el-select-dropdown__item.hover .image-option,
+.image-option:hover {
+  background: #f3f6fb;
+}
+.image-option.is-selected {
+  background: #f6f8fb;
+}
+.image-option-thumb {
+  width: 46px;
+  height: 46px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #f2f5f8;
+  flex: 0 0 46px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.image-option-thumb img,
+.image-option-empty {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.image-option-thumb img {
+  object-fit: cover;
+}
+.image-option-empty {
+  border: 1px dashed #dcdfe6;
+  background: linear-gradient(135deg, #f8fafc, #eef2f7);
+}
+.image-option-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2937;
+}
+.image-option-check {
+  flex: 0 0 auto;
+  margin-left: 8px;
+  font-size: 18px;
+  color: #111827;
 }
 
 .name-tag-drawer .name-tag-add {

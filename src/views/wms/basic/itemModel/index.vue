@@ -70,8 +70,8 @@
           />
         </el-form-item>
         <el-form-item label="品牌" prop="itemBrand">
-          <el-select v-model="form.itemBrand" placeholder="请先选择分类" clearable filterable style="width: 100%" :disabled="!form.itemCategory">
-            <el-option v-for="item in availableBrandList" :key="item.id" :label="item.brandName" :value="item.id" />
+          <el-select v-model="form.itemBrand" placeholder="请选择品牌" clearable filterable style="width: 100%">
+            <el-option v-for="item in useWmsStore().itemBrandList" :key="item.id" :label="item.brandName" :value="item.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="包型名称" prop="modelName">
@@ -101,7 +101,7 @@
 </template>
 
 <script setup name="ItemModel">
-import { listItemModelPage, getItemModel, delItemModel, addItemModel, updateItemModel, listItemModelBrandOptions } from '@/api/wms/itemModel'
+import { listItemModelPage, getItemModel, delItemModel, addItemModel, updateItemModel } from '@/api/wms/itemModel'
 import { useWmsStore } from '@/store/modules/wms'
 
 const { proxy } = getCurrentInstance()
@@ -111,8 +111,6 @@ const open = ref(false)
 const buttonLoading = ref(false)
 const loading = ref(true)
 const title = ref('')
-const categoryBrandIds = ref([])
-const isHydratingForm = ref(false)
 
 const data = reactive({
   form: {},
@@ -123,17 +121,13 @@ const data = reactive({
     itemBrand: undefined
   },
   rules: {
+    itemCategory: [{ required: true, message: '分类不能为空', trigger: 'change' }],
+    itemBrand: [{ required: true, message: '品牌不能为空', trigger: 'change' }],
     modelName: [{ required: true, message: '包型名称不能为空', trigger: 'blur' }]
   }
 })
 
 const { queryParams, form, rules } = toRefs(data)
-
-const availableBrandList = computed(() => {
-  if (!form.value.itemCategory || categoryBrandIds.value.length === 0) return useWmsStore().itemBrandList
-  const brandIdSet = new Set(categoryBrandIds.value.map(id => String(id)))
-  return useWmsStore().itemBrandList.filter(item => brandIdSet.has(String(item.id)))
-})
 
 function normalizeImageOssId(value) {
   if (Array.isArray(value)) return value[0]?.ossId || value[0] || undefined
@@ -169,28 +163,6 @@ async function getList() {
     loading.value = false
   }
 }
-
-async function loadCategoryBrandOptions(categoryId) {
-  if (!categoryId) {
-    categoryBrandIds.value = []
-    return
-  }
-  try {
-    const res = await listItemModelBrandOptions(categoryId)
-    categoryBrandIds.value = res.data || []
-    if (form.value.itemBrand && categoryBrandIds.value.length > 0 && !categoryBrandIds.value.some(id => String(id) === String(form.value.itemBrand))) {
-      form.value.itemBrand = null
-    }
-  } catch (_) {
-    categoryBrandIds.value = []
-  }
-}
-
-watch(() => form.value.itemCategory, async (categoryId, oldCategoryId) => {
-  if (isHydratingForm.value || categoryId === oldCategoryId) return
-  if (oldCategoryId !== undefined) form.value.itemBrand = null
-  await loadCategoryBrandOptions(categoryId)
-})
 
 function reset() {
   form.value = {
@@ -230,15 +202,8 @@ function handleAdd() {
 
 async function handleUpdate(row) {
   reset()
-  isHydratingForm.value = true
-  try {
-    const res = await getItemModel(row.id)
-    form.value = { ...res.data, imageOssId: res.data?.imageOssId ? String(res.data.imageOssId) : null }
-    categoryBrandIds.value = []
-    await nextTick()
-  } finally {
-    isHydratingForm.value = false
-  }
+  const res = await getItemModel(row.id)
+  form.value = { ...res.data, imageOssId: res.data?.imageOssId ? String(res.data.imageOssId) : null }
   open.value = true
   title.value = '修改包型'
 }
