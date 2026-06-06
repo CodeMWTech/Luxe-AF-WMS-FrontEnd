@@ -421,6 +421,10 @@
                   <InfoLine v-if="getPlatform(getDisplayOrder(order, index)) === 'EBAY'" :label="t('platformOrders.paymentMarketplaceFee')" :value="formatMoney(getDisplayOrder(order, index).totalMarketplaceFee, getCurrency(getDisplayOrder(order, index)))" />
                   <InfoLine v-if="getPlatform(getDisplayOrder(order, index)) === 'EBAY'" :label="t('platformOrders.paymentDueSeller')" :value="formatMoney(getDisplayOrder(order, index).totalDueSeller, getCurrency(getDisplayOrder(order, index)))" strong />
                   <InfoLine :label="t('platformOrders.paymentGrossProfit')" :value="formatGrossProfit(getDisplayOrder(order, index))" />
+                  <template v-for="(item, itemIndex) in getLineItems(getDisplayOrder(order, index))" :key="'pay-item-' + (item.lineItemId || item.skuId || itemIndex)">
+                    <InfoLine :label="t('platformOrders.itemSubtotal')" :value="formatOptionalMoney(item.subtotal, item.currency || getCurrency(getDisplayOrder(order, index)))" />
+                  </template>
+                  <InfoLine v-if="getPlatform(getDisplayOrder(order, index)) === 'EBAY'" :label="t('platformOrders.paymentEbayNetProfit')" :value="formatEbayNetProfit(getDisplayOrder(order, index))" strong />
                 </section>
               </div>
 
@@ -1028,6 +1032,21 @@ function formatGrossProfit(order) {
   const num = Number(order.grossProfit)
   if (!Number.isFinite(num) || num === 0) return '-'
   return formatMoney(order.grossProfit, getCurrency(order))
+}
+
+/** eBay 净毛利 = 售价(totalAmount) - 平台交易费(totalMarketplaceFee) - 成本(costPrice) */
+function formatEbayNetProfit(order) {
+  const totalAmount = order.totalAmount
+  const fee = order.totalMarketplaceFee
+  const cost = order.costPrice
+  // 成本未匹配（null 或 0）时显示 -
+  if (totalAmount == null || cost == null) return '-'
+  const ta = Number(totalAmount)
+  const f = Number(fee) || 0
+  const c = Number(cost)
+  if (!Number.isFinite(ta) || !Number.isFinite(c) || c <= 0) return '-'
+  const netProfit = ta - f - c
+  return formatMoney(netProfit, getCurrency(order))
 }
 
 const COUNTRY_MAP = {

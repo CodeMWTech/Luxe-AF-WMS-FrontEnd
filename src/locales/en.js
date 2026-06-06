@@ -187,6 +187,7 @@ export default {
     itemShippingProviderName: 'Carrier Name',
     itemStatus: 'Status',
     itemTaxes: 'Taxes',
+    itemSubtotal: 'Item Subtotal (Est.) Price-Cost-Price×5%-Price×1%',
     // Customer
     buyerUserId: 'User ID',
     buyerNickname: 'Nickname',
@@ -222,6 +223,7 @@ export default {
     paymentMarketplaceFee: 'Marketplace Fee',
     paymentDueSeller: 'Due Seller',
     paymentGrossProfit: 'Gross Profit',
+    paymentEbayNetProfit: 'Net Profit (Price-Fee-Cost)',
     // Skip reasons
     skipReasonCancelled: 'Order cancelled',
     skipReasonBlankSku: 'Seller SKU is empty',

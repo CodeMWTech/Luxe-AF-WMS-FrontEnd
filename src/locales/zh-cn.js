@@ -187,6 +187,7 @@ export default {
     itemShippingProviderName: '物流商名称',
     itemStatus: '状态',
     itemTaxes: '税费',
+    itemSubtotal: '单品小计(预估) 售价-成本-售价×5%提成-售价×1%运费',
     // 客户信息
     buyerUserId: '用户ID',
     buyerNickname: '买家昵称',
@@ -222,6 +223,7 @@ export default {
     paymentMarketplaceFee: '平台交易费',
     paymentDueSeller: '卖家实收',
     paymentGrossProfit: '毛利',
+    paymentEbayNetProfit: '毛利(售价-平台交易费-成本)',
     // 跳过原因
     skipReasonCancelled: '订单已取消',
     skipReasonBlankSku: '商家SKU为空',
