@@ -35,3 +35,11 @@ export function updateOrderSku(orderId, platform, newSku) {
     data: { newSku }
   })
 }
+
+// 手动触发自动创建出库暂存单
+export function createShipments() {
+  return request({
+    url: '/wms/platform/orders/create-shipments',
+    method: 'post'
+  })
+}

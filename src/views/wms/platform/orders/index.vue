@@ -104,6 +104,7 @@
           <el-button type="primary" icon="Search" class="action-btn" native-type="submit" v-hasPermi="['wms:platform:list']">{{ t('platformOrders.btnQuery') }}</el-button>
           <el-button icon="Refresh" class="action-btn" @click="resetQuery">{{ t('platformOrders.btnReset') }}</el-button>
           <el-button type="success" icon="RefreshRight" class="action-btn" @click="openSyncDialog" v-hasPermi="['wms:platform:tiktok:test']">{{ t('platformOrders.btnSync') }}</el-button>
+          <el-button type="warning" icon="Box" class="action-btn" :loading="shipmentCreating" @click="handleCreateShipments" v-hasPermi="['wms:platform:edit']">{{ t('platformOrders.btnCreateShipment') }}</el-button>
         </el-form-item>
       </el-form>
     </el-card>
@@ -172,17 +173,18 @@
               <span class="cell-label">品牌/SKU</span>
               <div class="sku-row">
                 <span class="secondary-value ellipsis">{{ displayValue(getSkuText(getFirstItem(order))) }}</span>
-                <el-button v-if="canEditSku(order, index)" link size="small" class="sku-edit-btn" :icon="Edit" @click.stop="startSkuEdit(order, index, getFirstItem(order))" v-hasPermi="['wms:platform:edit']">编辑</el-button>
+                <el-button v-if="canEditSku(order, index)" link size="small" class="sku-edit-btn" :icon="Edit" @click.stop="startSkuEdit(order, index, getFirstItem(order))" v-hasPermi="['wms:platform:edit']">{{ t('platformOrders.labelEditSku') }}</el-button>
               </div>
             </div>
 
             <div class="summary-cell shipment-cell">
-              <span class="cell-label">出库单</span>
+              <span class="cell-label">{{ t('platformOrders.labelShipment') }}</span>
               <template v-if="order.shipmentOrderId">
                 <span class="primary-value shipment-order-no">{{ order.shipmentOrderNo || order.shipmentOrderId }}</span>
               </template>
               <template v-else>
-                <el-tag type="info" size="small" effect="plain" class="no-shipment-tag">未创建</el-tag>
+                <span v-if="order.skipReason" class="skip-reason-text">{{ order.skipReason }}</span>
+                <span v-else class="no-shipment-text">-</span>
               </template>
             </div>
 
@@ -214,15 +216,47 @@
 
           <transition name="order-expand">
             <div v-show="isExpanded(order, index)" class="detail-area" v-loading="isDetailLoading(order, index)">
+              <div class="order-info-bar">
+                <div class="order-info-item">
+                  <span class="order-info-label">{{ t('platformOrders.orderInfoId') }}</span>
+                  <span class="order-info-value">{{ displayValue(getOrderId(getDisplayOrder(order, index))) }}</span>
+                </div>
+                <div class="order-info-item">
+                  <span class="order-info-label">{{ t('platformOrders.orderInfoCreateTime') }}</span>
+                  <span class="order-info-value">{{ displayValue(getCreateTime(getDisplayOrder(order, index))) }}</span>
+                </div>
+                <div class="order-info-item">
+                  <span class="order-info-label">{{ t('platformOrders.orderInfoPaidTime') }}</span>
+                  <span class="order-info-value">{{ displayValue(getDisplayOrder(order, index).paidTime || formatUnixTime(rawField(getDisplayOrder(order, index), 'paid_time')) || formatIsoTime(rawField(getDisplayOrder(order, index), null, 'creationDate'))) }}</span>
+                </div>
+                <div class="order-info-item">
+                  <span class="order-info-label">{{ t('platformOrders.orderInfoUpdateTime') }}</span>
+                  <span class="order-info-value">{{ displayValue(getDisplayOrder(order, index).updateTime) }}</span>
+                </div>
+              </div>
               <div class="detail-grid">
                 <section class="detail-panel">
                   <h3><el-icon><Goods /></el-icon>商品</h3>
                   <div v-for="(item, itemIndex) in getLineItems(getDisplayOrder(order, index))" :key="item.lineItemId || item.skuId || itemIndex" class="item-block">
-                    <InfoLine label="商品名" :value="item.productName" strong />
-                    <InfoLine label="SKU" :value="getSkuText(item) || item.skuId" />
-                    <InfoLine label="数量" :value="formatQuantity(item.quantity)" />
-                    <InfoLine label="状态" :value="item.displayStatus || item.lineItemStatus || item.packageStatus" />
-                    <InfoLine label="税费" :value="formatTaxes(item.taxes || item.itemTaxes, getCurrency(getDisplayOrder(order, index)))" />
+                    <InfoLine :label="t('platformOrders.itemLineItemId')" :value="item.lineItemId" />
+                    <InfoLine :label="t('platformOrders.itemProductId')" :value="item.productId" />
+                    <InfoLine :label="t('platformOrders.itemProductName')" :value="item.productName" strong />
+                    <InfoLine :label="t('platformOrders.itemSkuId')" :value="item.skuId" />
+                    <InfoLine :label="t('platformOrders.itemSkuName')" :value="item.skuName" />
+                    <InfoLine :label="t('platformOrders.itemSellerSku')" :value="item.sellerSku" />
+                    <InfoLine :label="t('platformOrders.itemQuantity')" :value="formatQuantity(item.quantity)" />
+                    <InfoLine :label="t('platformOrders.itemOriginalPrice')" :value="formatMoney(item.originalPrice, item.currency || getCurrency(getDisplayOrder(order, index)))" />
+                    <InfoLine :label="t('platformOrders.itemSalePrice')" :value="formatMoney(item.salePrice, item.currency || getCurrency(getDisplayOrder(order, index)))" strong />
+                    <InfoLine :label="t('platformOrders.itemCurrency')" :value="item.currency || getCurrency(getDisplayOrder(order, index))" />
+                    <InfoLine :label="t('platformOrders.itemTrackingNumber')" :value="item.trackingNumber" />
+                    <InfoLine :label="t('platformOrders.itemPackageId')" :value="item.packageId" />
+                    <InfoLine :label="t('platformOrders.itemPackageStatus')" :value="item.packageStatus" />
+                    <InfoLine :label="t('platformOrders.itemPlatformDiscount')" :value="formatMoney(item.platformDiscount, item.currency || getCurrency(getDisplayOrder(order, index)))" />
+                    <InfoLine :label="t('platformOrders.itemSellerDiscount')" :value="formatMoney(item.sellerDiscount, item.currency || getCurrency(getDisplayOrder(order, index)))" />
+                    <InfoLine :label="t('platformOrders.itemShippingProviderId')" :value="item.shippingProvider" />
+                    <InfoLine :label="t('platformOrders.itemShippingProviderName')" :value="item.shippingProviderName" />
+                    <InfoLine :label="t('platformOrders.itemStatus')" :value="item.displayStatus || item.lineItemStatus || item.packageStatus" />
+                    <InfoLine :label="t('platformOrders.itemTaxes')" :value="formatTaxes(item.taxes || item.itemTaxes, item.currency || getCurrency(getDisplayOrder(order, index)))" />
                   </div>
                 </section>
 
@@ -231,8 +265,20 @@
                   <template v-if="getPlatform(getDisplayOrder(order, index)) === 'EBAY'">
                     <div class="ebay-customer-block">
                       <div class="ebay-customer-line">
+                        <span class="ebay-customer-label">{{ t('platformOrders.buyerUserId') }}</span>
+                        <span class="ebay-customer-value">{{ displayValue(rawField(getDisplayOrder(order, index), null, 'buyer.username')) }}</span>
+                      </div>
+                      <div class="ebay-customer-line">
                         <span class="ebay-customer-label">{{ t('platformOrders.labelName') }}</span>
                         <span class="ebay-customer-value ebay-customer-name">{{ displayValue(getRecipient(getDisplayOrder(order, index)).name) }}</span>
+                      </div>
+                      <div class="ebay-customer-line">
+                        <span class="ebay-customer-label">{{ t('platformOrders.buyerFirstName') }}</span>
+                        <span class="ebay-customer-value">{{ displayValue(rawField(getDisplayOrder(order, index), null, 'buyer.firstName')) }}</span>
+                      </div>
+                      <div class="ebay-customer-line">
+                        <span class="ebay-customer-label">{{ t('platformOrders.buyerLastName') }}</span>
+                        <span class="ebay-customer-value">{{ displayValue(rawField(getDisplayOrder(order, index), null, 'buyer.lastName')) }}</span>
                       </div>
                       <div class="ebay-customer-line" v-if="getRecipient(getDisplayOrder(order, index)).addressLine1">
                         <span class="ebay-customer-label">{{ t('platformOrders.labelAddress') }}</span>
@@ -269,11 +315,19 @@
                           />
                         </span>
                       </div>
+                      <div class="ebay-customer-line">
+                        <span class="ebay-customer-label">{{ t('platformOrders.buyerMessage') }}</span>
+                        <span class="ebay-customer-value">{{ displayValue(rawField(getDisplayOrder(order, index), null, 'buyerCheckoutNotes')) }}</span>
+                      </div>
                     </div>
                   </template>
                   <template v-else>
-                    <InfoLine label="姓名" :value="getRecipient(getDisplayOrder(order, index)).name" strong />
-                    <InfoLine label="电话">
+                    <InfoLine :label="t('platformOrders.buyerUserId')" :value="rawField(getDisplayOrder(order, index), 'user_id')" />
+                    <InfoLine :label="t('platformOrders.buyerNickname')" :value="rawField(getDisplayOrder(order, index), 'buyer_nickname')" />
+                    <InfoLine :label="t('platformOrders.labelName')" :value="getRecipient(getDisplayOrder(order, index)).name" strong />
+                    <InfoLine :label="t('platformOrders.buyerFirstName')" :value="rawField(getDisplayOrder(order, index), 'recipient_address.first_name')" />
+                    <InfoLine :label="t('platformOrders.buyerLastName')" :value="rawField(getDisplayOrder(order, index), 'recipient_address.last_name')" />
+                    <InfoLine :label="t('platformOrders.labelPhone')">
                       <span class="inline-copy">
                         {{ displayValue(getRecipient(getDisplayOrder(order, index)).phoneNumber) }}
                         <el-button
@@ -286,9 +340,10 @@
                         />
                       </span>
                     </InfoLine>
-                    <InfoLine label="地址" :value="getRecipient(getDisplayOrder(order, index)).addressLine1 || getRecipient(getDisplayOrder(order, index)).fullAddress" />
-                    <InfoLine label="邮编" :value="getRecipient(getDisplayOrder(order, index)).postalCode" />
-                    <InfoLine label="地区" :value="getRecipient(getDisplayOrder(order, index)).regionCode" />
+                    <InfoLine :label="t('platformOrders.labelAddress')" :value="getRecipient(getDisplayOrder(order, index)).addressLine1 || getRecipient(getDisplayOrder(order, index)).fullAddress" />
+                    <InfoLine :label="t('platformOrders.labelPostalCode')" :value="getRecipient(getDisplayOrder(order, index)).postalCode" />
+                    <InfoLine :label="t('platformOrders.labelRegion')" :value="getRecipient(getDisplayOrder(order, index)).regionCode" />
+                    <InfoLine :label="t('platformOrders.buyerMessage')" :value="rawField(getDisplayOrder(order, index), 'buyer_message')" />
                   </template>
                 </section>
 
@@ -296,6 +351,21 @@
                   <h3><el-icon><Van /></el-icon>物流</h3>
                   <template v-if="getPlatform(getDisplayOrder(order, index)) === 'EBAY'">
                     <div class="ebay-customer-block">
+                      <div class="ebay-customer-line">
+                        <span class="ebay-customer-label">{{ t('platformOrders.labelCarrier') }}</span>
+                        <span class="ebay-customer-value">{{ formatShippingService(getDisplayOrder(order, index)) }}</span>
+                      </div>
+                      <div class="ebay-customer-line">
+                        <span class="ebay-customer-label">{{ t('platformOrders.logisticsServiceName') }}</span>
+                        <span class="ebay-customer-value">{{ displayValue(rawField(getDisplayOrder(order, index), null, 'fulfillmentStartInstructions[0].shippingServiceCode')) }}</span>
+                      </div>
+                      <div class="ebay-customer-line" v-if="getDisplayOrder(order, index).trackingNumber">
+                        <span class="ebay-customer-label">{{ t('platformOrders.labelTracking') }}</span>
+                        <span class="ebay-customer-value">
+                          {{ getDisplayOrder(order, index).trackingNumber }}
+                          <el-button link class="copy-btn" :icon="CopyDocument" v-copyText="getDisplayOrder(order, index).trackingNumber" v-copyText:callback="copyTextSuccess" />
+                        </span>
+                      </div>
                       <div class="ebay-customer-line" v-if="getRecipient(getDisplayOrder(order, index)).addressLine1">
                         <span class="ebay-customer-label">{{ t('platformOrders.labelAddress') }}</span>
                         <span class="ebay-customer-value">{{ getRecipient(getDisplayOrder(order, index)).addressLine1 }}</span>
@@ -310,59 +380,59 @@
                         <span class="ebay-customer-label">{{ t('platformOrders.labelCountry') }}</span>
                         <span class="ebay-customer-value">{{ formatCountry(getRecipient(getDisplayOrder(order, index)).countryCode) || 'United States' }}</span>
                       </div>
-                      <div class="ebay-customer-line">
-                        <span class="ebay-customer-label">{{ t('platformOrders.labelCarrier') }}</span>
-                        <span class="ebay-customer-value">{{ formatShippingService(getDisplayOrder(order, index)) }}</span>
-                      </div>
-                      <div class="ebay-customer-line" v-if="getDisplayOrder(order, index).trackingNumber">
-                        <span class="ebay-customer-label">{{ t('platformOrders.labelTracking') }}</span>
-                        <span class="ebay-customer-value">
-                          {{ getDisplayOrder(order, index).trackingNumber }}
-                          <el-button link class="copy-btn" :icon="CopyDocument" v-copyText="getDisplayOrder(order, index).trackingNumber" v-copyText:callback="copyTextSuccess" />
-                        </span>
-                      </div>
                     </div>
                   </template>
                   <template v-else>
-                    <InfoLine label="收货地址" :value="getRecipient(getDisplayOrder(order, index)).addressDetail" />
-                    <InfoLine label="物流商" :value="getDisplayOrder(order, index).shippingProvider || getDisplayOrder(order, index).shippingProviderName" />
-                    <InfoLine label="配送方式" :value="formatJoin([getDisplayOrder(order, index).shippingType || getDisplayOrder(order, index).shippingService, getDisplayOrder(order, index).fulfillmentType])" />
-                    <InfoLine label="追踪号">
+                    <InfoLine :label="t('platformOrders.logisticsProvider')" :value="getDisplayOrder(order, index).shippingProvider || getDisplayOrder(order, index).shippingProviderName" />
+                    <InfoLine :label="t('platformOrders.logisticsProviderId')" :value="rawField(getDisplayOrder(order, index), 'shipping_provider_id')" />
+                    <InfoLine :label="t('platformOrders.logisticsServiceName')" :value="rawField(getDisplayOrder(order, index), 'delivery_option_name')" />
+                    <InfoLine :label="t('platformOrders.logisticsServiceOptionId')" :value="rawField(getDisplayOrder(order, index), 'delivery_option_id')" />
+                    <InfoLine :label="t('platformOrders.logisticsMethod')" :value="formatJoin([getDisplayOrder(order, index).shippingType || getDisplayOrder(order, index).shippingService, getDisplayOrder(order, index).fulfillmentType])" />
+                    <InfoLine :label="t('platformOrders.labelTracking')">
                       <span class="inline-copy">
                         {{ displayValue(getDisplayOrder(order, index).trackingNumber) }}
                         <el-button v-if="getDisplayOrder(order, index).trackingNumber" link class="copy-btn" :icon="CopyDocument" v-copyText="getDisplayOrder(order, index).trackingNumber" v-copyText:callback="copyTextSuccess" />
                       </span>
                     </InfoLine>
-                    <InfoLine v-if="getPlatform(getDisplayOrder(order, index)) === 'TIKTOK'" label="仓库" :value="getDisplayOrder(order, index).warehouseId" />
-                    <InfoLine v-if="getPlatform(getDisplayOrder(order, index)) === 'TIKTOK'" label="节点" :value="formatJoin([getDisplayOrder(order, index).rtsTime, getDisplayOrder(order, index).shippingDueTime, getDisplayOrder(order, index).deliveryTime])" />
+                    <InfoLine :label="t('platformOrders.logisticsWarehouseId')" :value="getDisplayOrder(order, index).warehouseId" />
+                    <InfoLine :label="t('platformOrders.logisticsPackageId')" :value="rawField(getDisplayOrder(order, index), 'packages[0].id')" />
+                    <InfoLine :label="t('platformOrders.logisticsDeliverySlaTime')" :value="formatUnixTime(rawField(getDisplayOrder(order, index), 'delivery_sla_time'))" />
+                    <InfoLine :label="t('platformOrders.logisticsDeliveryTime')" :value="formatUnixTime(rawField(getDisplayOrder(order, index), 'delivery_time'))" />
+                    <InfoLine :label="t('platformOrders.logisticsCollectionTime')" :value="formatUnixTime(rawField(getDisplayOrder(order, index), 'collection_time'))" />
+                    <InfoLine :label="t('platformOrders.logisticsShippingDueTime')" :value="formatUnixTime(rawField(getDisplayOrder(order, index), 'shipping_due_time'))" />
+                    <InfoLine :label="t('platformOrders.logisticsRtsSlaTime')" :value="formatUnixTime(rawField(getDisplayOrder(order, index), 'rts_sla_time'))" />
+                    <InfoLine :label="t('platformOrders.logisticsRtsTime')" :value="formatUnixTime(rawField(getDisplayOrder(order, index), 'rts_time'))" />
+                    <InfoLine :label="t('platformOrders.logisticsAddress')" :value="getRecipient(getDisplayOrder(order, index)).addressDetail" />
                   </template>
                 </section>
 
                 <section class="detail-panel">
-                  <h3><el-icon><Money /></el-icon>支付与费用</h3>
-                  <InfoLine label="币种" :value="getCurrency(getDisplayOrder(order, index))" />
-                  <InfoLine label="小计" :value="formatMoney(getPayment(getDisplayOrder(order, index)).subTotal, getCurrency(getDisplayOrder(order, index)))" strong />
-                  <InfoLine label="税费" :value="formatMoney(getPayment(getDisplayOrder(order, index)).tax, getCurrency(getDisplayOrder(order, index)))" />
-                  <InfoLine label="运费" :value="formatMoney(getPayment(getDisplayOrder(order, index)).shippingFee, getCurrency(getDisplayOrder(order, index)))" />
-                  <InfoLine label="总额" :value="formatMoney(getPayment(getDisplayOrder(order, index)).totalAmount, getCurrency(getDisplayOrder(order, index)))" strong />
-                  <InfoLine label="平台折扣" :value="formatMoney(getPayment(getDisplayOrder(order, index)).platformDiscount, getCurrency(getDisplayOrder(order, index)))" />
-                  <InfoLine v-if="getPlatform(getDisplayOrder(order, index)) === 'TIKTOK'" label="卖家折扣" :value="formatMoney(getPayment(getDisplayOrder(order, index)).sellerDiscount, getCurrency(getDisplayOrder(order, index)))" />
-                  <InfoLine v-if="getPlatform(getDisplayOrder(order, index)) === 'TIKTOK'" label="商品税" :value="formatMoney(getPayment(getDisplayOrder(order, index)).productTax, getCurrency(getDisplayOrder(order, index)))" />
-                  <InfoLine v-if="getPlatform(getDisplayOrder(order, index)) === 'EBAY'" label="平台交易费" :value="formatMoney(getDisplayOrder(order, index).totalMarketplaceFee, getCurrency(getDisplayOrder(order, index)))" />
-                  <InfoLine v-if="getPlatform(getDisplayOrder(order, index)) === 'EBAY'" label="卖家实收" :value="formatMoney(getDisplayOrder(order, index).totalDueSeller, getCurrency(getDisplayOrder(order, index)))" strong />
-                  <InfoLine label="毛利" :value="formatGrossProfit(getDisplayOrder(order, index))" />
+                  <h3><el-icon><Money /></el-icon>{{ t('platformOrders.detailPayment') }}</h3>
+                  <InfoLine :label="t('platformOrders.paymentCurrency')" :value="getCurrency(getDisplayOrder(order, index))" />
+                  <InfoLine :label="t('platformOrders.paymentSubtotal')" :value="formatMoney(getPayment(getDisplayOrder(order, index)).subTotal, getCurrency(getDisplayOrder(order, index)))" strong />
+                  <InfoLine :label="t('platformOrders.paymentTax')" :value="formatMoney(getPayment(getDisplayOrder(order, index)).tax, getCurrency(getDisplayOrder(order, index)))" />
+                  <InfoLine :label="t('platformOrders.paymentShippingFee')" :value="formatMoney(getPayment(getDisplayOrder(order, index)).shippingFee, getCurrency(getDisplayOrder(order, index)))" />
+                  <InfoLine :label="t('platformOrders.paymentTotal')" :value="formatMoney(getPayment(getDisplayOrder(order, index)).totalAmount, getCurrency(getDisplayOrder(order, index)))" strong />
+                  <InfoLine :label="t('platformOrders.paymentPlatformDiscount')" :value="formatMoney(getPayment(getDisplayOrder(order, index)).platformDiscount, getCurrency(getDisplayOrder(order, index)))" />
+                  <InfoLine v-if="getPlatform(getDisplayOrder(order, index)) === 'TIKTOK'" :label="t('platformOrders.paymentSellerDiscount')" :value="formatMoney(getPayment(getDisplayOrder(order, index)).sellerDiscount, getCurrency(getDisplayOrder(order, index)))" />
+                  <InfoLine v-if="getPlatform(getDisplayOrder(order, index)) === 'TIKTOK'" :label="t('platformOrders.paymentProductTax')" :value="formatMoney(getPayment(getDisplayOrder(order, index)).productTax, getCurrency(getDisplayOrder(order, index)))" />
+                  <InfoLine v-if="getPlatform(getDisplayOrder(order, index)) === 'TIKTOK'" :label="t('platformOrders.paymentOriginalShippingFee')" :value="formatMoney(rawField(getDisplayOrder(order, index), 'payment.original_shipping_fee'), getCurrency(getDisplayOrder(order, index)))" />
+                  <InfoLine v-if="getPlatform(getDisplayOrder(order, index)) === 'TIKTOK'" :label="t('platformOrders.paymentOriginalTotalPrice')" :value="formatMoney(rawField(getDisplayOrder(order, index), 'payment.original_total_product_price'), getCurrency(getDisplayOrder(order, index)))" />
+                  <InfoLine v-if="getPlatform(getDisplayOrder(order, index)) === 'EBAY'" :label="t('platformOrders.paymentMarketplaceFee')" :value="formatMoney(getDisplayOrder(order, index).totalMarketplaceFee, getCurrency(getDisplayOrder(order, index)))" />
+                  <InfoLine v-if="getPlatform(getDisplayOrder(order, index)) === 'EBAY'" :label="t('platformOrders.paymentDueSeller')" :value="formatMoney(getDisplayOrder(order, index).totalDueSeller, getCurrency(getDisplayOrder(order, index)))" strong />
+                  <InfoLine :label="t('platformOrders.paymentGrossProfit')" :value="formatGrossProfit(getDisplayOrder(order, index))" />
                 </section>
               </div>
 
               <section class="notes-panel">
-                <h3><el-icon><Memo /></el-icon>备注</h3>
+                <h3><el-icon><Memo /></el-icon>{{ t('platformOrders.detailNotes') }}</h3>
                 <div class="notes-grid">
                   <div>
-                    <span class="note-label">买家备注</span>
-                    <p>{{ displayValue(getDisplayOrder(order, index).buyerMessage || getDisplayOrder(order, index).buyer_message) }}</p>
+                    <span class="note-label">{{ t('platformOrders.buyerMessage') }}</span>
+                    <p>{{ displayValue(rawField(getDisplayOrder(order, index), 'buyer_message', 'buyerCheckoutNotes') || getDisplayOrder(order, index).buyerMessage) }}</p>
                   </div>
                   <div>
-                    <span class="note-label">内部备注</span>
+                    <span class="note-label">{{ t('platformOrders.internalNote') }}</span>
                     <el-input
                       :model-value="getDisplayOrder(order, index).internalRemark || ''"
                       type="textarea"
@@ -508,7 +578,7 @@
 <script setup name="PlatformOrders">
 import { computed, defineComponent, getCurrentInstance, h, onMounted, ref } from 'vue'
 import { ArrowDown, ArrowRight, CopyDocument, Edit } from '@element-plus/icons-vue'
-import { getPlatformOrder, listPlatformOrders, getOrderStatusMap, updateOrderSku } from '@/api/wms/platformOrder'
+import { getPlatformOrder, listPlatformOrders, getOrderStatusMap, updateOrderSku, createShipments } from '@/api/wms/platformOrder'
 import { listAllPlatformShops, batchSyncOrders } from '@/api/wms/platformShop'
 import SkuSelect from '@/views/components/SkuSelect.vue'
 
@@ -541,6 +611,7 @@ const platformOptions = [
 const defaultTime = reactive([new Date(2000, 0, 1, 0, 0, 0), new Date(2000, 0, 1, 23, 59, 59)])
 const loading = ref(false)
 const syncLoading = ref(false)
+const shipmentCreating = ref(false)
 const shopLoading = ref(false)
 const total = ref(0)
 const orderList = ref([])
@@ -548,6 +619,64 @@ const shopList = ref([])
 const expandedKeys = ref([])
 const detailCache = reactive({})
 const detailLoading = reactive({})
+const rawJsonCache = new Map()
+
+// ==================== Raw JSON 字段提取 ====================
+// 直接从 rawOrderJson 中提取文档要求的字段，没有则返回 null → 前端显示 "-"
+
+function parseOrderJson(order) {
+  const raw = order?.rawOrderJson
+  if (!raw) return null
+  if (typeof raw === 'object') return raw
+  try {
+    const key = (order?.orderId || order?.platformOrderId || '') + '_' + (order?.platform || '')
+    if (rawJsonCache.has(key)) return rawJsonCache.get(key)
+    const parsed = JSON.parse(raw)
+    if (rawJsonCache.size > 200) { const first = rawJsonCache.keys().next().value; rawJsonCache.delete(first) }
+    rawJsonCache.set(key, parsed)
+    return parsed
+  } catch { return null }
+}
+
+/** 按点号路径从对象中取值，支持数组索引如 packages[0] */
+function getByPath(obj, path) {
+  if (!obj || !path) return null
+  const keys = path.split('.')
+  let cur = obj
+  for (const k of keys) {
+    if (cur == null || typeof cur !== 'object') return null
+    const m = k.match(/^(\w+)\[(\d+)\]$/)
+    if (m) { cur = cur[m[1]]?.[parseInt(m[2])] } else { cur = cur[k] }
+  }
+  return cur ?? null
+}
+
+/** 从订单 raw JSON 获取字段（TikTok 和 eBay 字段路径不同） */
+function rawField(order, tiktokPath, ebayPath) {
+  const json = parseOrderJson(order)
+  if (!json) return null
+  const platform = order?.platform || ''
+  if (platform === 'TIKTOK' && tiktokPath) return getByPath(json, tiktokPath)
+  if (platform === 'EBAY' && ebayPath) return getByPath(json, ebayPath)
+  return null
+}
+
+/** 格式化 Unix 时间戳（秒） */
+function formatUnixTime(seconds) {
+  if (seconds == null) return null
+  const ms = Number(seconds) * 1000
+  if (!Number.isFinite(ms)) return null
+  return new Date(ms).toLocaleString('zh-CN', { hour12: false })
+}
+
+/** 格式化 ISO 时间字符串 */
+function formatIsoTime(str) {
+  if (!str) return null
+  try {
+    return new Date(str).toLocaleString('zh-CN', { hour12: false })
+  } catch { return str }
+}
+
 const syncOpen = ref(false)
 const syncShopList = ref([])
 const queryRef = ref(null)
@@ -573,13 +702,15 @@ const syncForm = ref({
 
 const selectedShopIds = ref([])
 
-// SKU 编辑状态const skuEditOpen = ref(false)
+// SKU 编辑状态
+const skuEditOpen = ref(false)
 const skuEditOrder = ref(null)
 const skuEditIndex = ref(-1)
 const skuEditForm = ref({ oldSku: '', newSku: '' })
 const skuSaving = ref(false)
 
-// SKU 库选择状态const skuSelectShow = ref(false)
+// SKU 库选择状态
+const skuSelectShow = ref(false)
 const skuSelectRef = ref(null)
 const selectedSkuForEdit = ref([])
 
@@ -617,6 +748,9 @@ function normalizeQuery() {
 
 function getList() {
   loading.value = true
+  // 清空详情缓存，确保 canEditSku 等判断基于最新数据
+  Object.keys(detailCache).forEach(k => delete detailCache[k])
+  rawJsonCache.clear()
   listPlatformOrders(normalizeQuery()).then(response => {
     const data = response.data || {}
     orderList.value = response.rows || data.rows || data.records || (Array.isArray(data) ? data : [])
@@ -670,6 +804,18 @@ function resetQuery() {
   proxy.resetForm('queryRef')
   queryParams.value.orderUpdateTimeRange = []
   handleQuery()
+}
+
+function handleCreateShipments() {
+  shipmentCreating.value = true
+  createShipments().then(() => {
+    proxy.$modal.msgSuccess('出库暂存单创建完成')
+    getList()
+  }).catch(() => {
+    proxy.$modal.msgError('创建出库暂存单失败')
+  }).finally(() => {
+    shipmentCreating.value = false
+  })
 }
 
 function openSyncDialog() {
@@ -998,10 +1144,23 @@ function copyTextSuccess() {
 
 function canEditSku(order, index) {
   const ord = getDisplayOrder(order, index)
-  // 有成本数据（已关联库存 SKU）则不可编辑
-  const cost = ord.costPrice || ord.cost
-  if (cost !== null && cost !== undefined && Number(cost) > 0) return false
+  // 已创建出库单则不可编辑
+  if (ord.shipmentOrderId) return false
+  // 已取消的订单不可编辑
+  const status = getStatus(ord)
+  const platform = getPlatform(ord)
+  if (status === 'CANCELLED') return false
+  if (platform === 'EBAY' && isEbayCancelled(ord)) return false
   return true
+}
+
+function isEbayCancelled(order) {
+  const raw = parseOrderJson(order)
+  if (!raw) return false
+  try {
+    const cs = raw.cancelStatus
+    return cs && cs.cancelState && cs.cancelState !== 'NONE_REQUESTED'
+  } catch { return false }
 }
 
 function startSkuEdit(order, index, item) {
@@ -1311,9 +1470,19 @@ onMounted(() => {
   display: block;
 }
 
-.no-shipment-tag {
-  font-size: 11px;
-  border-radius: 4px;
+.skip-reason-text {
+  color: #b54708;
+  font-size: 12px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: block;
+}
+
+.no-shipment-text {
+  color: #98a2b3;
+  font-size: 13px;
 }
 
 // ==================== Status Tags ====================
@@ -1366,6 +1535,37 @@ onMounted(() => {
     background: #e4e7ec;
     color: #344054;
   }
+}
+
+// ==================== Order Info Bar ====================
+.order-info-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  background: #fff;
+  border: 1px solid #eaecf0;
+  border-radius: 8px;
+}
+
+.order-info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.order-info-label {
+  color: #98a2b3;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+
+.order-info-value {
+  color: #344054;
+  font-size: 13px;
+  font-weight: 500;
 }
 
 // ==================== Detail Area ====================
