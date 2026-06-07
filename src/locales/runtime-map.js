@@ -1,6 +1,6 @@
 const zhToEnMap = {
   首页: 'Home',
-  项目介绍: 'Project Overview',
+  系统概述: 'System Overview',
   个人中心: 'Profile',
   退出登录: 'Log out',
   登录: 'Login',
