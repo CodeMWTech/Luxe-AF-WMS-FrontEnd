@@ -2,6 +2,8 @@ import { listWarehouseNoPage } from '@/api/wms/warehouse';
 import { listMerchantNoPage } from "@/api/wms/merchant";
 import { listItemCategory, treeSelectItemCategory } from "@/api/wms/itemCategory";
 import { listItemBrand } from "@/api/wms/itemBrand";
+import { listItemMaterial } from "@/api/wms/itemMaterial";
+import { listItemModel } from "@/api/wms/itemModel";
 import {defineStore} from "pinia";
 import {ref} from "vue";
 
@@ -83,6 +85,40 @@ export const useWmsStore = defineStore('wms', () => {
     })
   }
 
+  const itemMaterialList = ref([])
+  const itemMaterialMap = ref(new Map())
+
+  const getItemMaterialList = () => {
+    return new Promise((resolve, reject) => {
+      listItemMaterial({ status: '1' }).then(res => {
+        itemMaterialList.value = res.data || []
+        const map = new Map()
+        itemMaterialList.value.forEach(item => {
+          map.set(item.id, { ...item })
+        })
+        itemMaterialMap.value = map
+        resolve()
+      }).catch(() => reject())
+    })
+  }
+
+  const itemModelList = ref([])
+  const itemModelMap = ref(new Map())
+
+  const getItemModelList = () => {
+    return new Promise((resolve, reject) => {
+      listItemModel({ status: '1' }).then(res => {
+        itemModelList.value = res.data || []
+        const map = new Map()
+        itemModelList.value.forEach(item => {
+          map.set(item.id, { ...item })
+        })
+        itemModelMap.value = map
+        resolve()
+      }).catch(() => reject())
+    })
+  }
+
   return {
     // 仓库管理
     warehouseList,
@@ -101,6 +137,12 @@ export const useWmsStore = defineStore('wms', () => {
     // 商品品牌管理
     itemBrandList,
     itemBrandMap,
-    getItemBrandList
+    getItemBrandList,
+    itemMaterialList,
+    itemMaterialMap,
+    getItemMaterialList,
+    itemModelList,
+    itemModelMap,
+    getItemModelList
   };
 });

@@ -172,6 +172,12 @@
                 <div v-if="row.item.year || row.item.year === 0">
                   年份：{{ row.item.year }}
                 </div>
+                <div v-if="row.item.materialName || row.item.material">
+                  材质：{{ row.item.materialName || row.item.material }}
+                </div>
+                <div v-if="row.item.modelName">
+                  包型：{{ row.item.modelName }}
+                </div>
                 <div v-if="row.item.cared !== null && row.item.cared !== undefined">
                   护理：{{ row.item.cared ? '已护理' : '未护理' }}
                 </div>
@@ -320,14 +326,85 @@
                 </el-form-item>
               </el-col>
             </el-row>
-            <!-- 11.材质 12.瑕疵 -->
+            <!-- 11.包型 12.材质 -->
             <el-row :gutter="24">
               <el-col :span="12">
-                <el-form-item label="材质" prop="material">
-                  <el-input v-model="form.material" placeholder="请输入材质" />
+                <el-form-item label="包型" prop="modelId">
+                  <el-select
+                    v-model="form.modelId"
+                    placeholder="请选择包型"
+                    clearable
+                    filterable
+                    class="image-select"
+                    popper-class="image-select-popper"
+                    :disabled="!hasItemModelContext"
+                    style="width: 100%"
+                  >
+                    <template v-if="selectedItemModel" #prefix>
+                      <span class="image-select-prefix">
+                        <img v-if="selectedItemModel.imageUrl" :src="selectedItemModel.imageUrl" alt="" />
+                        <span v-else class="image-select-empty"></span>
+                      </span>
+                    </template>
+                    <el-option
+                      v-for="item in filteredItemModelList"
+                      :key="item.id"
+                      :label="item.modelName"
+                      :value="item.id"
+                    >
+                      <div class="image-option" :class="{ 'is-selected': String(form.modelId) === String(item.id) }">
+                        <span class="image-option-thumb">
+                          <img v-if="item.imageUrl" :src="item.imageUrl" alt="" />
+                          <span v-else class="image-option-empty"></span>
+                        </span>
+                        <span class="image-option-name">{{ item.modelName }}</span>
+                        <el-icon v-if="String(form.modelId) === String(item.id)" class="image-option-check"><Check /></el-icon>
+                      </div>
+                    </el-option>
+                  </el-select>
                 </el-form-item>
               </el-col>
               <el-col :span="12">
+                <el-form-item label="材质" prop="materialId">
+                  <el-select
+                    v-model="form.materialId"
+                    placeholder="请选择材质"
+                    clearable
+                    filterable
+                    class="image-select"
+                    popper-class="image-select-popper"
+                    :disabled="!hasItemMaterialContext"
+                    style="width: 100%"
+                    @change="handleMaterialChange"
+                  >
+                    <template v-if="selectedItemMaterial" #prefix>
+                      <span class="image-select-prefix">
+                        <img v-if="selectedItemMaterial.imageUrl" :src="selectedItemMaterial.imageUrl" alt="" />
+                        <span v-else class="image-select-empty"></span>
+                      </span>
+                    </template>
+                    <el-option
+                      v-for="item in filteredItemMaterialList"
+                      :key="item.id"
+                      :label="item.materialName"
+                      :value="item.id"
+                    >
+                      <div class="image-option" :class="{ 'is-selected': String(form.materialId) === String(item.id) }">
+                        <span class="image-option-thumb">
+                          <img v-if="item.imageUrl" :src="item.imageUrl" alt="" />
+                          <span v-else class="image-option-empty"></span>
+                        </span>
+                        <span class="image-option-name">{{ item.materialName }}</span>
+                        <el-icon v-if="String(form.materialId) === String(item.id)" class="image-option-check"><Check /></el-icon>
+                      </div>
+                    </el-option>
+                  </el-select>
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <!-- 13.瑕疵 -->
+            <el-row :gutter="24">
+              <el-col :span="24">
                 <el-form-item label="瑕疵" prop="defect">
                   <el-input v-model="form.defect" placeholder="请输入瑕疵描述" />
                 </el-form-item>
@@ -559,7 +636,7 @@
 import { getItem, delItem, addItem, updateItem, uploadItemImage, deleteItemImage, getItemImages } from '@/api/wms/item';
 import { computed, getCurrentInstance, nextTick, onBeforeUnmount, onMounted, reactive, ref, toRefs, watch } from 'vue';
 import { ElForm, ElTree, ElTreeSelect, ElMessage } from 'element-plus';
-import { Plus, Delete, Ticket } from '@element-plus/icons-vue';
+import { Plus, Delete, Ticket, Check } from '@element-plus/icons-vue';
 import {
   updateItemCategory,
   addItemCategory,
@@ -575,6 +652,7 @@ import {useWmsStore} from '@/store/modules/wms'
 import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
 import { formatDateTimeForQuery } from '@/utils/laTime'
+import { listItemModelMaterialOptions } from '@/api/wms/itemModel'
 
 const barcode = ref(null)
 const route = useRoute()
@@ -604,6 +682,11 @@ function handleCostPriceChange(val) {
     return
   }
   form.value.sellingPrice = Math.round(n * SELLING_PRICE_FROM_COST_MULTIPLIER * 100) / 100
+}
+
+function handleMaterialChange(id) {
+  const material = useWmsStore().itemMaterialMap.get(id)
+  form.value.material = material?.materialName || undefined
 }
 const itemList = ref([]);
 const itemCategoryTreeSelectList = computed(() => useWmsStore().itemCategoryTreeList);
@@ -781,6 +864,8 @@ const initFormData = {
   consignInfo: undefined,
   defaultQty: 1,
   material: undefined,
+  materialId: undefined,
+  modelId: undefined,
   defect: undefined,
   accessories: undefined,
   remark: undefined,
@@ -863,7 +948,99 @@ const categoryData = reactive({
   }
 });
 const {queryParams, form, rules} = toRefs(data);
+const modelMaterialIds = ref([]);
 
+
+const hasItemModelContext = computed(() => !!form.value.itemBrand && !!form.value.itemCategory)
+const hasItemMaterialContext = computed(() => hasItemModelContext.value && !!form.value.modelId)
+
+const filteredItemModelList = computed(() => {
+  const brand = form.value.itemBrand
+  const category = form.value.itemCategory
+  if (!brand || !category) return []
+  return useWmsStore().itemModelList.filter(item => {
+    return String(item.itemBrand) === String(brand) && String(item.itemCategory) === String(category)
+  })
+})
+
+const filteredItemMaterialList = computed(() => {
+  const brand = form.value.itemBrand
+  const category = form.value.itemCategory
+  const model = form.value.modelId
+  if (!brand || !category || !model) return []
+  const materialIdSet = new Set(modelMaterialIds.value.map(id => String(id)))
+  return useWmsStore().itemMaterialList.filter(item => {
+    const materialModelId = item.modelId
+    const brandMatched = String(item.itemBrand) === String(brand)
+    const categoryMatched = String(item.itemCategory) === String(category)
+    const modelMatched = String(materialModelId) === String(model)
+    const relationMatched = modelMaterialIds.value.length === 0 || materialIdSet.has(String(item.id))
+    return categoryMatched && brandMatched && modelMatched && relationMatched
+  })
+})
+
+async function loadModelMaterialOptions(modelId) {
+  if (!modelId) {
+    modelMaterialIds.value = []
+    form.value.materialId = undefined
+    form.value.material = undefined
+    return
+  }
+  const res = await listItemModelMaterialOptions(modelId)
+  modelMaterialIds.value = res.data || []
+  if (form.value.materialId && modelMaterialIds.value.length > 0 && !modelMaterialIds.value.some(id => String(id) === String(form.value.materialId))) {
+    form.value.materialId = undefined
+    form.value.material = undefined
+  }
+}
+function findSelectOptionById(list, id) {
+  if (id === undefined || id === null || id === '') return null
+  return list.find(item => String(item.id) === String(id)) || null
+}
+
+const selectedItemModel = computed(() => findSelectOptionById(useWmsStore().itemModelList, form.value.modelId))
+const selectedItemMaterial = computed(() => findSelectOptionById(useWmsStore().itemMaterialList, form.value.materialId))
+
+watch(
+  () => [form.value.itemBrand, form.value.itemCategory],
+  () => {
+    if (!hasItemModelContext.value) {
+      form.value.modelId = undefined
+      form.value.materialId = undefined
+      form.value.material = undefined
+      return
+    }
+    if (form.value.modelId) {
+      const exists = filteredItemModelList.value.some(item => String(item.id) === String(form.value.modelId))
+      if (!exists) {
+        form.value.modelId = undefined
+        form.value.materialId = undefined
+        form.value.material = undefined
+      }
+    }
+  }
+)
+
+
+watch(
+  () => form.value.modelId,
+  async (modelId, oldModelId) => {
+    if (modelId === oldModelId) return
+    await loadModelMaterialOptions(modelId)
+  }
+)
+
+watch(
+  () => filteredItemMaterialList.value,
+  () => {
+    if (!form.value.materialId) return
+    const exists = filteredItemMaterialList.value.some(item => String(item.id) === String(form.value.materialId))
+    if (!exists) {
+      form.value.materialId = undefined
+      form.value.material = undefined
+    }
+  }
+)
 const {queryParams: typeQueryParams, form: categoryForm, rules: typeRules} = toRefs(categoryData);
 const currentType = ref()
 /** 查询物料列表 */
@@ -1229,6 +1406,7 @@ const reset = () => {
   stopImagePolling()
   itemImageUploadRef.value?.clearFiles?.()
   form.value = {...initFormData};
+  modelMaterialIds.value = [];
   itemFormRef.value?.resetFields();
 }
 
@@ -1272,21 +1450,27 @@ const handleUpdate = (row) => {
   dialog.visible = true;
   dialog.title = isEn.value ? 'Edit Item' : "修改商品";
   nextTick(async () => {
-    reset();
-    const _id = row?.itemId || ids.value[0]
-    const [skuRes, itemRes] = await Promise.all([
-      listItemSku({ itemId: _id }),
-      getItem(_id)
-    ])
-    Object.assign(skuForm.itemSkuList, skuRes.data)
-    const itemData = itemRes.data || {}
-    const imageList = (itemData.imageList || itemData.images || []).map((img, idx) => normalizeServerImage(img, idx))
-    form.value = { ...form.value, ...row.item, ...itemData, imageList }
-    normalizeUploadedImageMeta()
-    form.value.skuCode = skuForm.itemSkuList[0]?.skuCode ?? ''
-    form.value.costPrice = canViewCostPrice.value ? (skuForm.itemSkuList[0]?.costPrice ?? null) : null
-    form.value.sellingPrice = canViewSellingPrice.value ? (skuForm.itemSkuList[0]?.sellingPrice ?? null) : null
-    skuLoading.value = false
+    try {
+      reset();
+      const _id = row?.itemId || ids.value[0]
+      const [skuRes, itemRes] = await Promise.all([
+        listItemSku({ itemId: _id }),
+        getItem(_id)
+      ])
+      Object.assign(skuForm.itemSkuList, skuRes.data)
+      const itemData = itemRes.data || {}
+      const imageList = (itemData.imageList || itemData.images || []).map((img, idx) => normalizeServerImage(img, idx))
+      form.value = { ...form.value, ...row.item, ...itemData, imageList }
+      normalizeUploadedImageMeta()
+      form.value.skuCode = skuForm.itemSkuList[0]?.skuCode ?? ''
+      form.value.costPrice = canViewCostPrice.value ? (skuForm.itemSkuList[0]?.costPrice ?? null) : null
+      form.value.sellingPrice = canViewSellingPrice.value ? (skuForm.itemSkuList[0]?.sellingPrice ?? null) : null
+    } catch (error) {
+      dialog.visible = false
+      proxy?.$modal.msgError(error?.msg || error?.message || '加载商品详情失败')
+    } finally {
+      skuLoading.value = false
+    }
   });
 }
 const handleQueryType = (node, data) => {
@@ -1538,6 +1722,19 @@ const initItemBrandDataIfNeeded = async () => {
     await wmsStore.getItemBrandList()
   }
 }
+const initMaterialModelDataIfNeeded = async () => {
+  const wmsStore = useWmsStore()
+  const tasks = []
+  if (!Array.isArray(wmsStore.itemMaterialList) || wmsStore.itemMaterialList.length === 0) {
+    tasks.push(wmsStore.getItemMaterialList())
+  }
+  if (!Array.isArray(wmsStore.itemModelList) || wmsStore.itemModelList.length === 0) {
+    tasks.push(wmsStore.getItemModelList())
+  }
+  if (tasks.length > 0) {
+    await Promise.all(tasks)
+  }
+}
 /** 删除按钮操作 */
 const handleDelete = async (row) => {
   const _ids = row?.itemId || ids.value;
@@ -1594,7 +1791,8 @@ onMounted(async () => {
   try {
     await Promise.all([
       initItemCategoryDataIfNeeded(),
-      initItemBrandDataIfNeeded()
+      initItemBrandDataIfNeeded(),
+      initMaterialModelDataIfNeeded()
     ])
   } catch (_) {
     // 分类数据加载失败不阻断列表渲染
@@ -1782,6 +1980,125 @@ onMounted(async () => {
 .query-price-range-separator {
   color: #606266;
   flex-shrink: 0;
+}
+
+.image-select :deep(.el-input__wrapper) {
+  min-height: 42px;
+  border-radius: 8px;
+}
+.image-select :deep(.el-input__inner) {
+  height: 42px;
+  line-height: 42px;
+  font-weight: 600;
+  color: #1f2937;
+}
+.image-select :deep(.el-input__prefix) {
+  display: flex;
+  align-items: center;
+  left: 8px;
+}
+.image-select-prefix {
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #f2f5f8;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.image-select-prefix img,
+.image-select-empty {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.image-select-prefix img {
+  object-fit: cover;
+}
+.image-select-empty {
+  border: 1px dashed #dcdfe6;
+  background: linear-gradient(135deg, #f8fafc, #eef2f7);
+}
+.image-select-popper.el-popper {
+  border-radius: 10px;
+  overflow: hidden;
+}
+.image-select-popper .el-select-dropdown {
+  border-radius: 10px;
+}
+.image-select-popper .el-select-dropdown__wrap {
+  max-height: 360px;
+}
+.image-select-popper .el-select-dropdown__item {
+  height: auto;
+  min-height: 0;
+  padding: 0;
+  line-height: normal;
+  color: #1f2937;
+}
+.image-select-popper .el-select-dropdown__item.hover,
+.image-select-popper .el-select-dropdown__item:hover {
+  background: transparent;
+}
+.image-select-popper .el-select-dropdown__item.selected {
+  color: #1f2937;
+  font-weight: 400;
+}
+.image-option {
+  min-height: 68px;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  transition: background-color 0.16s ease;
+}
+.image-select-popper .el-select-dropdown__item.hover .image-option,
+.image-option:hover {
+  background: #f3f6fb;
+}
+.image-option.is-selected {
+  background: #f6f8fb;
+}
+.image-option-thumb {
+  width: 46px;
+  height: 46px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #f2f5f8;
+  flex: 0 0 46px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.image-option-thumb img,
+.image-option-empty {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.image-option-thumb img {
+  object-fit: cover;
+}
+.image-option-empty {
+  border: 1px dashed #dcdfe6;
+  background: linear-gradient(135deg, #f8fafc, #eef2f7);
+}
+.image-option-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2937;
+}
+.image-option-check {
+  flex: 0 0 auto;
+  margin-left: 8px;
+  font-size: 18px;
+  color: #111827;
 }
 
 .name-tag-drawer .name-tag-add {
