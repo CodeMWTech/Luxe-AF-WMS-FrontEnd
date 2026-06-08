@@ -179,15 +179,8 @@ const data = reactive({
 
 const { queryParams, form, rules } = toRefs(data)
 const filteredItemBrandOptions = computed(() => {
-  const category = form.value.itemCategory
-  if (!category) return []
-  const brandIdSet = new Set(
-    (wmsStore.itemModelList || [])
-      .filter(item => String(item.itemCategory) === String(category))
-      .map(item => String(item.itemBrand))
-      .filter(Boolean)
-  )
-  return (wmsStore.itemBrandList || []).filter(item => brandIdSet.has(String(item.id)))
+  if (!form.value.itemCategory) return []
+  return wmsStore.itemBrandList || []
 })
 const filteredItemModelOptions = computed(() => {
   const category = form.value.itemCategory
