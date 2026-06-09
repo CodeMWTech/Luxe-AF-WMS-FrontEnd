@@ -157,7 +157,7 @@
           </template>
         </el-table-column>
         <el-table-column :label="tr('备注')" prop="remark" />
-        <el-table-column :label="tr('操作')" align="right" class-name="small-padding fixed-width" width="120">
+        <el-table-column :label="tr('操作')" align="right" class-name="small-padding fixed-width" width="140">
           <template #default="scope">
             <div>
               <el-popover
@@ -188,6 +188,9 @@
                 </template>
               </el-popover>
               <el-button link type="primary" @click="handlePrint(scope.row)" v-hasPermi="['wms:receipt:all']">{{ tr('打印') }}</el-button>
+            </div>
+            <div class="mt10">
+              <el-button link type="primary" @click="handleExport(scope.row)" v-hasPermi="['wms:receipt:all']">{{ tr('导出') }}</el-button>
             </div>
           </template>
         </el-table-column>
@@ -327,6 +330,10 @@ function handleDelete(row) {
 
 function handleUpdate(row) {
   proxy.$router.push({ path: "/receiptOrderEdit",  query: { id: row.id } });
+}
+
+function handleExport(row) {
+  proxy.download(`wms/receiptOrder/export/${row.id}`, {}, `入库单明细-${row.orderNo || row.id}.xlsx`)
 }
 
 function handleGoDetail(row) {

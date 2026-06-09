@@ -43,6 +43,14 @@ export function delMovementOrder(id) {
   })
 }
 
+export function exportMovementOrder(id) {
+  return request({
+    url: '/wms/movementOrder/export/' + id,
+    method: 'post',
+    responseType: 'blob'
+  })
+}
+
 // 移库
 export function movement(data) {
   return request({

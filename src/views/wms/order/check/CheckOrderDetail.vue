@@ -73,7 +73,7 @@ const props = defineProps({
 })
 const queryParams = ref({
   pageNum: 1,
-  pageSize: 10,
+  pageSize: 20,
   orderId: null,
   haveProfitAndLoss: false,
 });
@@ -86,6 +86,7 @@ const emit = defineEmits(["handleCancelClick"]);
 
 function setCheckOrderId(orderId) {
   queryParams.value.orderId = orderId
+  queryParams.value.pageNum = 1
 }
 
 defineExpose({

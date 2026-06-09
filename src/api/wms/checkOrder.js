@@ -1,6 +1,6 @@
 import request from '@/utils/request'
 
-const CHECK_ORDER_LONG_TIMEOUT = 120000
+const CHECK_ORDER_LONG_TIMEOUT = 300000
 
 // 查询库存盘点单据列表
 export function listCheckOrder(query) {
@@ -15,7 +15,8 @@ export function listCheckOrder(query) {
 export function getCheckOrder(id) {
   return request({
     url: '/wms/checkOrder/' + id,
-    method: 'get'
+    method: 'get',
+    timeout: CHECK_ORDER_LONG_TIMEOUT
   })
 }
 
@@ -44,6 +45,15 @@ export function delCheckOrder(id) {
   return request({
     url: '/wms/checkOrder/' + id,
     method: 'delete'
+  })
+}
+
+export function exportCheckOrder(id) {
+  return request({
+    url: '/wms/checkOrder/export/' + id,
+    method: 'post',
+    responseType: 'blob',
+    timeout: CHECK_ORDER_LONG_TIMEOUT
   })
 }
 

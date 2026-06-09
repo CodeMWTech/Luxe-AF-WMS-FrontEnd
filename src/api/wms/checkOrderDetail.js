@@ -1,5 +1,7 @@
 import request from '@/utils/request'
 
+const CHECK_ORDER_DETAIL_TIMEOUT = 300000
+
 // 查询库存盘点单据详情列表
 export function listCheckOrderDetail(query) {
   return request({
@@ -48,6 +50,7 @@ export function listByCheckOrderId(checkOrderId, query) {
   return request({
     url: '/wms/checkOrderDetail/list/' + checkOrderId,
     method: 'get',
-    params: query
+    params: query,
+    timeout: CHECK_ORDER_DETAIL_TIMEOUT
   })
 }

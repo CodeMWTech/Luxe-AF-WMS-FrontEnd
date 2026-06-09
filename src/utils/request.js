@@ -125,15 +125,63 @@ service.interceptors.response.use(res => {
 
 // 通用下载方法
 export function download(url, params, filename, config) {
-  downloadLoadingInstance = ElLoading.service({ text: "正在下载数据，请稍候", background: "rgba(0, 0, 0, 0.7)", })
+  let downloadProgress = 0
+  let downloadProgressTimer
+  const userOnDownloadProgress = config?.onDownloadProgress
+  const setDownloadProgress = (progress) => {
+    downloadProgress = Math.max(downloadProgress, Math.min(100, Math.floor(progress)))
+    const text = `正在导出文件 ${downloadProgress}%`
+    if (downloadLoadingInstance?.setText) {
+      downloadLoadingInstance.setText(text)
+    } else if (downloadLoadingInstance) {
+      downloadLoadingInstance.text = text
+    }
+  }
+  const startSimulatedProgress = () => {
+    downloadProgressTimer = window.setInterval(() => {
+      if (downloadProgress < 90) {
+        setDownloadProgress(downloadProgress + 1)
+      }
+    }, 120)
+  }
+  const clearDownloadProgressTimer = () => {
+    if (downloadProgressTimer) {
+      window.clearInterval(downloadProgressTimer)
+      downloadProgressTimer = null
+    }
+  }
+  const finishDownloadProgress = () => {
+    clearDownloadProgressTimer()
+    return new Promise(resolve => {
+      const finishTimer = window.setInterval(() => {
+        if (downloadProgress >= 100) {
+          window.clearInterval(finishTimer)
+          window.setTimeout(resolve, 500)
+          return
+        }
+        setDownloadProgress(downloadProgress + (downloadProgress < 90 ? 2 : 1))
+      }, 60)
+    })
+  }
+
+  downloadLoadingInstance = ElLoading.service({ text: "正在导出文件 0%", background: "rgba(0, 0, 0, 0.7)", })
+  startSimulatedProgress()
   return service.post(url, params, {
     transformRequest: [(params) => { return tansParams(params) }],
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     responseType: 'blob',
-    ...config
+    ...config,
+    onDownloadProgress: (event) => {
+      if (event.total) {
+        setDownloadProgress(Math.min((event.loaded / event.total) * 100, 99))
+      }
+      userOnDownloadProgress?.(event)
+    }
   }).then(async (data) => {
     const isBlob = blobValidate(data);
+    clearDownloadProgressTimer()
     if (isBlob) {
+      await finishDownloadProgress()
       const blob = new Blob([data])
       saveAs(blob, filename)
     } else {
@@ -144,6 +192,7 @@ export function download(url, params, filename, config) {
     }
     downloadLoadingInstance.close();
   }).catch((r) => {
+    clearDownloadProgressTimer()
     console.error(r)
     ElMessage.error('下载文件出现错误，请联系管理员！')
     downloadLoadingInstance.close();
