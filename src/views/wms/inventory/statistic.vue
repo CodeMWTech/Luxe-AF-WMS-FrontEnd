@@ -175,6 +175,20 @@
         class="statistic-table"
         @sort-change="handleColumnSortChange"
       >
+        <el-table-column :label="tr('操作')" width="110" align="center" fixed="left">
+          <template #default="{ row }">
+            <el-button
+              link
+              type="primary"
+              icon="View"
+              :disabled="!row.skuId"
+              @click="openDetailDrawer(row)"
+            >
+              {{ tr('详细信息') }}
+            </el-button>
+          </template>
+        </el-table-column>
+
         <!-- ========== 仓库维度列 ========== -->
         <template v-if="queryType === 'warehouse'">
           <el-table-column :label="tr('仓库')" prop="warehouseGroupKey" min-width="240" align="center" show-overflow-tooltip>
@@ -361,6 +375,89 @@
                     v-model:limit="queryParams.pageSize" @pagination="getList"/>
       </el-row>
     </el-card>
+
+    <el-drawer
+      v-model="detailDrawer.visible"
+      size="60%"
+      append-to-body
+      class="inventory-detail-drawer"
+    >
+      <template #header>
+        <div class="detail-drawer-header">
+          <span>{{ tr('商品详细信息') }}</span>
+          <el-button
+            type="primary"
+            plain
+            icon="Download"
+            :disabled="!detailItem && !detailSku"
+            @click="exportDetailPdf"
+          >
+            {{ tr('导出为PDF') }}
+          </el-button>
+        </div>
+      </template>
+      <div v-loading="detailDrawer.loading" class="detail-drawer-body">
+        <template v-if="detailItem || detailSku">
+          <div class="detail-header">
+            <div>
+              <h2 class="detail-title">{{ displayValue(detailItem?.itemName) }}</h2>
+              <div class="detail-subtitle">
+                <span>SKU {{ displayValue(detailSku?.skuCode) }}</span>
+                <span v-if="getBrandName(detailItem)">·</span>
+                <span v-if="getBrandName(detailItem)">{{ getBrandName(detailItem) }}</span>
+              </div>
+            </div>
+            <div class="condition-mark">
+              <span>{{ tr('成色') }}</span>
+              <strong>{{ displayValue(detailItem?.itemCondition) }}</strong>
+            </div>
+          </div>
+
+          <div class="detail-field-grid">
+            <div
+              v-for="field in detailFieldList"
+              :key="field.label"
+              class="detail-field"
+              :class="{ 'is-wide': field.wide }"
+            >
+              <div class="detail-field-label">{{ field.label }}</div>
+              <div class="detail-field-value">
+                <div v-if="field.type === 'accessories' && accessoryList.length" class="accessory-list">
+                  <el-tag v-for="tag in accessoryList" :key="tag" type="info" effect="plain">{{ tag }}</el-tag>
+                </div>
+                <span v-else>{{ field.value }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="detail-image-section">
+            <div class="detail-section-title">{{ tr('商品图片') }} ({{ detailImages.length }})</div>
+            <div v-if="detailImages.length" class="detail-image-list">
+              <div v-for="(img, idx) in detailImages" :key="img.id || idx" class="detail-image-card">
+                <el-image
+                  :src="img.thumbUrl || img.url"
+                  :preview-src-list="detailImagePreviewList"
+                  :initial-index="idx"
+                  preview-teleported
+                  fit="cover"
+                  class="detail-image"
+                />
+                <el-button
+                  class="detail-image-download"
+                  type="primary"
+                  icon="Download"
+                  circle
+                  :title="tr('下载')"
+                  @click.stop="downloadDetailImage(img, idx)"
+                />
+              </div>
+            </div>
+            <div v-else class="detail-empty">{{ tr('暂无图片') }}</div>
+          </div>
+        </template>
+        <el-empty v-else :description="tr('暂无数据')" />
+      </div>
+    </el-drawer>
   </div>
 </template>
 
@@ -370,6 +467,7 @@ import {
   listInventoryBoard,
   listInventoryBoardWarehouseSummary
 } from '@/api/wms/inventory'
+import { downloadItemImage, getItemImages } from '@/api/wms/item'
 import { computed, getCurrentInstance, onMounted, ref } from 'vue'
 import { getRowspanMethod } from '@/utils/getRowSpanMethod'
 import { useWmsStore } from '@/store/modules/wms'
@@ -382,6 +480,7 @@ const { proxy } = getCurrentInstance()
 const settingsStore = useSettingsStore()
 const spanMethod = computed(() => getRowspanMethod(inventoryList.value, rowSpanArray.value))
 const canViewSellingPrice = computed(() => proxy?.$auth?.hasPermi('wms:itemSellingPrice:view'))
+const canViewCostPrice = computed(() => proxy?.$auth?.hasPermi('wms:itemCostPrice:view'))
 const itemCategoryTreeSelectList = computed(() => useWmsStore().itemCategoryTreeList)
 const AUTH_AGENCY_OPTIONS = ['Entrupy', 'Real Authentication', 'Legitmark', 'CheckCheck', 'N/A']
 const ITEM_CONDITION_OPTIONS = ['S', 'A', 'B', 'C', 'D']
@@ -394,6 +493,44 @@ const total = ref(0)
 const tableRef = ref(null)
 const rowSpanArray = ref(['itemGroupKey', 'skuGroupKey', 'skuWarehouseGroupKey'])
 const warehouseSummaryMap = ref(new Map())
+const detailDrawer = ref({
+  visible: false,
+  loading: false,
+  data: null
+})
+const detailItem = computed(() => detailDrawer.value.data?.item || null)
+const detailSku = computed(() => detailDrawer.value.data?.itemSku || null)
+const detailImages = computed(() => detailItem.value?.images || detailItem.value?.imageList || [])
+const detailImagePreviewList = computed(() => detailImages.value.map(img => img.url || img.thumbUrl).filter(Boolean))
+const accessoryList = computed(() => splitTextList(detailItem.value?.accessories))
+const detailFieldList = computed(() => {
+  const item = detailItem.value || {}
+  const sku = detailSku.value || {}
+  const fields = [
+    { label: tr('商品分类'), value: displayValue(getCategoryName(item)) },
+    { label: tr('商品品牌'), value: displayValue(getBrandName(item)) },
+    { label: tr('年份'), value: displayValue(item.year) },
+    { label: tr('成色'), value: displayValue(item.itemCondition) },
+    { label: tr('包型'), value: displayValue(item.modelName) },
+    { label: tr('材质'), value: displayValue(item.materialName || item.material) }
+  ]
+  if (canViewCostPrice.value) {
+    fields.push({ label: tr('成本价'), value: formatMoney(sku.costPrice) })
+  }
+  if (canViewSellingPrice.value) {
+    fields.push({ label: tr('销售价'), value: formatMoney(sku.sellingPrice) })
+  }
+  fields.push(
+    { label: tr('数量'), value: displayValue(item.defaultQty) },
+    { label: tr('是否已护理'), value: formatCared(item.cared) },
+    { label: tr('鉴定机构'), value: displayValue(item.authAgency) },
+    { label: tr('寄售信息'), value: displayValue(item.consignInfo) },
+    { label: tr('瑕疵'), value: displayValue(item.defect), wide: true },
+    { label: tr('配件'), value: accessoryList.value.length ? '' : '--', type: 'accessories', wide: true },
+    { label: tr('备注'), value: displayValue(item.remark), wide: true }
+  )
+  return fields
+})
 
 const filterable = ref(false)
 const queryType = ref('item')
@@ -430,6 +567,167 @@ function formatMoney(v) {
   const n = Number(v)
   if (!Number.isFinite(n)) return '--'
   return n.toFixed(2)
+}
+
+function displayValue(value) {
+  return value === null || value === undefined || value === '' ? '--' : value
+}
+
+function splitTextList(value) {
+  if (!value) return []
+  return String(value)
+    .split(/[,，、\n]/)
+    .map(it => it.trim())
+    .filter(Boolean)
+}
+
+function formatCared(value) {
+  if (value === null || value === undefined) return '--'
+  return value ? 'Cared' : 'Not Cared'
+}
+
+function safeFileName(value, fallback = 'file') {
+  const name = String(value || fallback)
+    .replace(/[\\/:*?"<>|]/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return name || fallback
+}
+
+function getImageUrl(img) {
+  return img?.url || img?.thumbUrl || ''
+}
+
+async function downloadDetailImage(img, index) {
+  const baseName = safeFileName(`${detailSku.value?.skuCode || detailItem.value?.itemName || 'item'}-${index + 1}`, 'item-image')
+  const imageId = img?.imageId || img?.id
+  if (imageId) {
+    try {
+      const blobData = await downloadItemImage(imageId)
+      const isBlob = blobValidate(blobData)
+      if (!isBlob) {
+        const resText = await blobData.text()
+        const rspObj = JSON.parse(resText)
+        throw new Error(rspObj?.msg || tr('下载失败'))
+      }
+      const blob = new Blob([blobData], { type: blobData.type || 'application/octet-stream' })
+      const headerName = blobData?.headers?.['download-filename']
+      triggerDownload(window.URL.createObjectURL(blob), headerName ? decodeURIComponent(headerName) : `${baseName}.jpg`)
+      return
+    } catch (e) {
+      proxy.$modal.msgError(e?.message || tr('下载失败'))
+      return
+    }
+  }
+  const url = getImageUrl(img)
+  if (!url) return
+  try {
+    const response = await fetch(url)
+    if (!response.ok) throw new Error('download failed')
+    const blob = await response.blob()
+    const objectUrl = window.URL.createObjectURL(blob)
+    const suffix = blob.type?.includes('png') ? 'png' : blob.type?.includes('webp') ? 'webp' : 'jpg'
+    triggerDownload(objectUrl, `${baseName}.${suffix}`)
+    window.URL.revokeObjectURL(objectUrl)
+  } catch (e) {
+    triggerDownload(url, `${baseName}.jpg`)
+  }
+}
+
+function triggerDownload(url, filename) {
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.target = '_blank'
+  a.rel = 'noopener'
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+}
+
+function exportDetailPdf() {
+  const item = detailItem.value || {}
+  const sku = detailSku.value || {}
+  const title = displayValue(item.itemName)
+  const rows = detailFieldList.value.map(field => {
+    const value = field.type === 'accessories' && accessoryList.value.length
+      ? accessoryList.value.join(', ')
+      : field.value
+    return `<tr><th>${escapeHtml(field.label)}</th><td>${escapeHtml(value)}</td></tr>`
+  }).join('')
+  const images = detailImages.value
+    .map((img, idx) => {
+      const url = getImageUrl(img)
+      if (!url) return ''
+      return `<figure><img src="${escapeHtml(url)}" alt="image-${idx + 1}" /><figcaption>${escapeHtml(tr('商品图片'))} ${idx + 1}</figcaption></figure>`
+    })
+    .join('')
+  const printWindow = window.open('', '_blank')
+  if (!printWindow) {
+    proxy.$modal.msgError(tr('导出失败'))
+    return
+  }
+  printWindow.document.write(`
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>${escapeHtml(safeFileName(`${sku.skuCode || ''}-${item.itemName || '商品详情'}`, '商品详情'))}</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 28px; font-family: Arial, "Microsoft YaHei", sans-serif; color: #1f2329; }
+    h1 { margin: 0 0 8px; font-size: 26px; line-height: 1.3; }
+    .subtitle { margin-bottom: 22px; color: #667085; }
+    table { width: 100%; border-collapse: collapse; margin: 18px 0 24px; }
+    th, td { border: 1px solid #dfe3eb; padding: 10px 12px; text-align: left; vertical-align: top; }
+    th { width: 170px; background: #f5f7fa; color: #4b5563; }
+    .images { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    figure { margin: 0; break-inside: avoid; }
+    img { width: 100%; max-height: 360px; object-fit: contain; border: 1px solid #e5e7eb; border-radius: 6px; }
+    figcaption { margin-top: 6px; color: #667085; font-size: 12px; }
+    @media print { body { padding: 18mm; } .images { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  </style>
+</head>
+<body>
+  <h1>${escapeHtml(title)}</h1>
+  <div class="subtitle">SKU ${escapeHtml(displayValue(sku.skuCode))}${getBrandName(item) ? ' · ' + escapeHtml(getBrandName(item)) : ''}</div>
+  <table>${rows}</table>
+  <h2>${escapeHtml(tr('商品图片'))} (${detailImages.value.length})</h2>
+  <div class="images">${images || escapeHtml(tr('暂无图片'))}</div>
+  <script>
+    window.onload = function () {
+      setTimeout(function () {
+        window.print();
+      }, 300);
+    };
+  <\/script>
+</body>
+</html>
+  `)
+  printWindow.document.close()
+}
+
+function getBrandName(item) {
+  if (item?.brandName) return item.brandName
+  if (!item?.itemBrand) return ''
+  return useWmsStore().itemBrandMap.get(item.itemBrand)?.brandName || ''
+}
+
+function getCategoryName(item) {
+  if (item?.categoryName) return item.categoryName
+  if (item?.itemCategoryInfo?.categoryName) return item.itemCategoryInfo.categoryName
+  if (!item?.itemCategory) return ''
+  const key = Number(item.itemCategory)
+  return useWmsStore().itemCategoryMap.get(key)?.categoryName || ''
 }
 
 /**
@@ -558,6 +856,63 @@ const getWarehouseSummaryQuery = () => {
   return rest
 }
 
+const buildDetailDataFromRow = (row, images) => ({
+  item: {
+    id: row.itemId,
+    itemName: row.itemName,
+    itemCategory: row.itemCategory,
+    categoryName: row.categoryName,
+    itemBrand: row.itemBrand,
+    brandName: row.brandName,
+    itemCondition: row.itemCondition,
+    year: row.year,
+    material: row.material,
+    modelName: row.modelName,
+    defect: row.defect,
+    accessories: row.accessories,
+    cared: row.cared,
+    authAgency: row.authAgency,
+    consignInfo: row.consignInfo,
+    defaultQty: row.defaultQty,
+    remark: row.itemRemark,
+    mainThumbUrl: row.itemImage,
+    images: images || (row.itemImage ? [{ url: row.itemImage, thumbUrl: row.itemImage, isMain: true }] : [])
+  },
+  itemSku: {
+    id: row.skuId,
+    skuCode: row.skuCode,
+    costPrice: row.costPrice,
+    sellingPrice: row.sellingPrice
+  }
+})
+
+const queryDetailBySku = async (row) => {
+  let images
+  if (row.itemId) {
+    try {
+      const imageRes = await getItemImages(row.itemId)
+      images = imageRes.data || []
+    } catch (e) {
+      images = undefined
+    }
+  }
+  return buildDetailDataFromRow(row, images)
+}
+
+const openDetailDrawer = async (row) => {
+  if (!row?.skuId) return
+  detailDrawer.value.visible = true
+  detailDrawer.value.loading = true
+  detailDrawer.value.data = buildDetailDataFromRow(row)
+  try {
+    detailDrawer.value.data = await queryDetailBySku(row)
+  } catch (e) {
+    proxy.$modal.msgError(e?.message || tr('获取详情失败'))
+  } finally {
+    detailDrawer.value.loading = false
+  }
+}
+
 const getList = async () => {
   const query = getCurrentQuery()
   loading.value = true
@@ -669,6 +1024,7 @@ const tr = (text) => translateByMap(text, settingsStore.language || 'zh-cn')
 onMounted(() => {
   useWmsStore().getWarehouseList()
   useWmsStore().getItemBrandList()
+  useWmsStore().getItemCategoryList()
   useWmsStore().getItemCategoryTreeList()
   getList()
 })
@@ -760,6 +1116,142 @@ onMounted(() => {
   justify-content: center;
   color: var(--el-text-color-secondary, #909399);
   font-size: 12px;
+}
+
+.detail-drawer-body {
+  min-height: 320px;
+}
+
+.detail-drawer-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-right: 36px;
+}
+
+.detail-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  padding-bottom: 18px;
+  margin-bottom: 18px;
+  border-bottom: 1px solid var(--el-border-color-lighter, #ebeef5);
+}
+
+.detail-title {
+  margin: 0 0 8px;
+  font-size: 24px;
+  line-height: 1.3;
+  font-weight: 700;
+  color: var(--el-text-color-primary, #303133);
+}
+
+.detail-subtitle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--el-text-color-secondary, #909399);
+}
+
+.condition-mark {
+  min-width: 88px;
+  text-align: right;
+  color: var(--el-text-color-secondary, #909399);
+}
+
+.condition-mark strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 36px;
+  line-height: 1;
+  color: var(--el-text-color-primary, #303133);
+}
+
+.detail-field-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-top: 1px solid var(--el-border-color-lighter, #ebeef5);
+  border-left: 1px solid var(--el-border-color-lighter, #ebeef5);
+  margin-bottom: 24px;
+}
+
+.detail-field {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 132px minmax(0, 1fr);
+  border-right: 1px solid var(--el-border-color-lighter, #ebeef5);
+  border-bottom: 1px solid var(--el-border-color-lighter, #ebeef5);
+}
+
+.detail-field.is-wide {
+  grid-column: 1 / -1;
+}
+
+.detail-field-label {
+  padding: 12px 14px;
+  background: var(--el-fill-color-light, #f5f7fa);
+  color: var(--el-text-color-regular, #606266);
+  font-weight: 600;
+}
+
+.detail-field-value {
+  min-width: 0;
+  padding: 12px 14px;
+  color: var(--el-text-color-primary, #303133);
+  word-break: break-word;
+}
+
+.accessory-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.detail-image-section {
+  margin-top: 8px;
+}
+
+.detail-section-title {
+  margin-bottom: 12px;
+  color: var(--el-text-color-secondary, #909399);
+}
+
+.detail-image-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 14px;
+}
+
+.detail-image {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 6px;
+  background: var(--el-fill-color-light, #f5f7fa);
+}
+
+.detail-image-card {
+  position: relative;
+  min-width: 0;
+}
+
+.detail-image-download {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+}
+
+.detail-empty {
+  min-height: 96px;
+  border: 1px dashed var(--el-border-color, #dcdfe6);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--el-text-color-secondary, #909399);
 }
 
 </style>

@@ -81,6 +81,14 @@ export function exportInventoryBoardItem(data) {
   })
 }
 
+// 查询库存统计商品详情（只读，按 SKU）
+export function getInventoryItemBoardDetail(skuId) {
+  return request({
+    url: '/wms/inventory/boardList/item/' + skuId + '/detail',
+    method: 'get'
+  })
+}
+
 // 查询库存详细
 export function getInventory(id) {
   return request({
