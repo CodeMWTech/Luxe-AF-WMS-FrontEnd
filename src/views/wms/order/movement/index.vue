@@ -127,7 +127,7 @@
           </template>
         </el-table-column>
         <el-table-column :label="tr('备注')" prop="remark" />
-        <el-table-column :label="tr('操作')" align="right" class-name="small-padding fixed-width" width="120">
+        <el-table-column :label="tr('操作')" align="right" class-name="small-padding fixed-width" width="140">
           <template #default="scope">
             <div>
               <el-popover
@@ -136,7 +136,7 @@
                 :width="300"
                 trigger="hover"
                 :disabled="scope.row.orderStatus === 0"
-                :content="'移库单【' + scope.row.orderNo + '】已' + (scope.row.orderStatus === 1 ? '移库' : '作废') + '，无法修改！' "
+                :content="getEditDisabledTip(scope.row)"
               >
                 <template #reference>
                   <el-button link type="primary" @click="handleUpdate(scope.row)" v-hasPermi="['wms:movement:edit']" :disabled="[-1, 1].includes(scope.row.orderStatus)">{{ tr('修改') }}</el-button>
@@ -151,13 +151,16 @@
                 :width="300"
                 trigger="hover"
                 :disabled="[-1, 0].includes(scope.row.orderStatus)"
-                :content="'移库单【' + scope.row.orderNo + '】已移库，无法删除！' "
+                :content="getDeleteDisabledTip(scope.row)"
               >
                 <template #reference>
                   <el-button link type="danger" @click="handleDelete(scope.row)" v-hasPermi="['wms:movement:edit']" :disabled="scope.row.orderStatus === 1">{{ tr('删除') }}</el-button>
                 </template>
               </el-popover>
               <el-button link type="primary" @click="handlePrint(scope.row)" v-hasPermi="['wms:movement:all']">{{ tr('打印') }}</el-button>
+            </div>
+            <div class="mt10">
+              <el-button link type="primary" @click="handleExport(scope.row)" v-hasPermi="['wms:movement:all']">{{ tr('导出') }}</el-button>
             </div>
           </template>
         </el-table-column>
@@ -185,6 +188,7 @@ import {ElMessageBox} from "element-plus";
 import movementPanel from "@/components/PrintTemplate/movement-panel";
 import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
+import { createProgressLoading } from '@/utils/progressLoading'
 
 const { proxy } = getCurrentInstance();
 const { wms_movement_status } = proxy.useDict("wms_movement_status");
@@ -215,6 +219,27 @@ const isEn = computed(() => (settingsStore.language || 'zh-cn') === 'en')
 const formLabelWidth = computed(() => '98px')
 const translatedMovementStatusOptions = computed(() => (wms_movement_status.value || []).map(it => ({ ...it, label: tr(it.label) })))
 const wmsStore = useWmsStore()
+
+function getMovementOrderStateLabel(row) {
+  if (isEn.value) {
+    return row.orderStatus === 1 ? 'transferred' : 'voided'
+  }
+  return row.orderStatus === 1 ? '移库' : '作废'
+}
+
+function getEditDisabledTip(row) {
+  if (isEn.value) {
+    return `Transfer order [${row.orderNo}] has been ${getMovementOrderStateLabel(row)} and cannot be edited.`
+  }
+  return `移库单【${row.orderNo}】已${getMovementOrderStateLabel(row)}，无法修改！`
+}
+
+function getDeleteDisabledTip(row) {
+  if (isEn.value) {
+    return `Transfer order [${row.orderNo}] has been transferred and cannot be deleted.`
+  }
+  return `移库单【${row.orderNo}】已移库，无法删除！`
+}
 
 /** 查询入库单列表 */
 function getList() {
@@ -276,6 +301,12 @@ function handleUpdate(row) {
   proxy.$router.push({ path: "/movementOrderEdit",  query: { id: row.id } });
 }
 
+function handleExport(row) {
+  proxy.download(`wms/movementOrder/export/${row.id}`, {}, `移库单明细-${row.orderNo || row.id}.xlsx`, {
+    progressLabel: isEn.value ? 'Exporting file' : '正在导出文件'
+  })
+}
+
 function handleGoDetail(row) {
   const index = expandedRowKeys.value.indexOf(row.id)
   if (index !== -1) {
@@ -290,6 +321,8 @@ function handleGoDetail(row) {
 
 /** 导出按钮操作 */
 async function handlePrint(row) {
+  const printLoading = createProgressLoading(isEn.value ? 'Preparing print' : '正在准备打印')
+  try {
   const res = await getMovementOrder(row.id)
   const movementOrder = res.data
   let table = []
@@ -316,6 +349,7 @@ async function handlePrint(row) {
     table
   }
   let printTemplate = new proxy.$hiprint.PrintTemplate({template: movementPanel})
+  await printLoading.finish()
   printTemplate.print(printData, {}, {
     styleHandler: () => {
       return `
@@ -384,6 +418,10 @@ async function handlePrint(row) {
       `
     }
   })
+  } catch (error) {
+    printLoading.close()
+    throw error
+  }
 }
 
 

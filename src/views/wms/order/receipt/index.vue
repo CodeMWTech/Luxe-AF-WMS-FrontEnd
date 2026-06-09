@@ -157,7 +157,7 @@
           </template>
         </el-table-column>
         <el-table-column :label="tr('备注')" prop="remark" />
-        <el-table-column :label="tr('操作')" align="right" class-name="small-padding fixed-width" width="120">
+        <el-table-column :label="tr('操作')" align="right" class-name="small-padding fixed-width" width="140">
           <template #default="scope">
             <div>
               <el-popover
@@ -166,7 +166,7 @@
                 :width="300"
                 trigger="hover"
                 :disabled="scope.row.orderStatus === 0"
-                :content="'入库单【' + scope.row.orderNo + '】已' + (scope.row.orderStatus === 1 ? '入库' : '作废') + '，无法修改！' "
+                :content="getEditDisabledTip(scope.row)"
               >
                 <template #reference>
                   <el-button link type="primary" @click="handleUpdate(scope.row)" v-hasPermi="['wms:receipt:edit']" :disabled="[-1, 1].includes(scope.row.orderStatus)">{{ tr('修改') }}</el-button>
@@ -181,13 +181,16 @@
                 :width="300"
                 trigger="hover"
                 :disabled="[-1, 0].includes(scope.row.orderStatus)"
-                :content="'入库单【' + scope.row.orderNo + '】已入库，无法删除！' "
+                :content="getDeleteDisabledTip(scope.row)"
               >
                 <template #reference>
                   <el-button link type="danger" @click="handleDelete(scope.row)" v-hasPermi="['wms:receipt:edit']" :disabled="scope.row.orderStatus === 1">{{ tr('删除') }}</el-button>
                 </template>
               </el-popover>
               <el-button link type="primary" @click="handlePrint(scope.row)" v-hasPermi="['wms:receipt:all']">{{ tr('打印') }}</el-button>
+            </div>
+            <div class="mt10">
+              <el-button link type="primary" @click="handleExport(scope.row)" v-hasPermi="['wms:receipt:all']">{{ tr('导出') }}</el-button>
             </div>
           </template>
         </el-table-column>
@@ -215,6 +218,7 @@ import {ElMessageBox} from "element-plus";
 import receiptPanel from "@/components/PrintTemplate/receipt-panel";
 import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
+import { createProgressLoading } from '@/utils/progressLoading'
 
 const { proxy } = getCurrentInstance();
 const { wms_receipt_status, wms_receipt_type } = proxy.useDict("wms_receipt_status", "wms_receipt_type");
@@ -250,6 +254,27 @@ const formLabelWidth = computed(() => '80px')
 const translatedReceiptStatusOptions = computed(() => (wms_receipt_status.value || []).map(it => ({ ...it, label: tr(it.label) })))
 const translatedReceiptTypeOptions = computed(() => (wms_receipt_type.value || []).map(it => ({ ...it, label: tr(it.label) })))
 const wmsStore = useWmsStore()
+
+function getReceiptOrderStateLabel(row) {
+  if (isEn.value) {
+    return row.orderStatus === 1 ? 'stocked in' : 'voided'
+  }
+  return row.orderStatus === 1 ? '入库' : '作废'
+}
+
+function getEditDisabledTip(row) {
+  if (isEn.value) {
+    return `Inbound order [${row.orderNo}] has been ${getReceiptOrderStateLabel(row)} and cannot be edited.`
+  }
+  return `入库单【${row.orderNo}】已${getReceiptOrderStateLabel(row)}，无法修改！`
+}
+
+function getDeleteDisabledTip(row) {
+  if (isEn.value) {
+    return `Inbound order [${row.orderNo}] has been stocked in and cannot be deleted.`
+  }
+  return `入库单【${row.orderNo}】已入库，无法删除！`
+}
 
 /** 查询入库单列表 */
 function getList() {
@@ -308,6 +333,12 @@ function handleUpdate(row) {
   proxy.$router.push({ path: "/receiptOrderEdit",  query: { id: row.id } });
 }
 
+function handleExport(row) {
+  proxy.download(`wms/receiptOrder/export/${row.id}`, {}, `入库单明细-${row.orderNo || row.id}.xlsx`, {
+    progressLabel: isEn.value ? 'Exporting file' : '正在导出文件'
+  })
+}
+
 function handleGoDetail(row) {
   const index = expandedRowKeys.value.indexOf(row.id)
   if (index !== -1) {
@@ -322,6 +353,8 @@ function handleGoDetail(row) {
 
 /** 导出按钮操作 */
 async function handlePrint(row) {
+  const printLoading = createProgressLoading(isEn.value ? 'Preparing print' : '正在准备打印')
+  try {
   const res = await getReceiptOrder(row.id)
   const receiptOrder = res.data
   let table = []
@@ -352,6 +385,7 @@ async function handlePrint(row) {
     table
   }
   let printTemplate = new proxy.$hiprint.PrintTemplate({template: receiptPanel})
+  await printLoading.finish()
   printTemplate.print(printData, {}, {
     styleHandler: () => {
       return `
@@ -430,6 +464,10 @@ async function handlePrint(row) {
       `
     }
   })
+  } catch (error) {
+    printLoading.close()
+    throw error
+  }
 }
 
 

@@ -105,18 +105,19 @@ export function isHiddenMenuRecord(row) {
 }
 
 /**
- * 过滤菜单树；目录类型在子节点全部被隐藏后一并移除
+ * 过滤菜单树；可按场景决定是否移除过滤后无子节点的目录。
  */
-export function filterHiddenMenusFromTree(nodes) {
+export function filterHiddenMenusFromTree(nodes, options = {}) {
   if (!nodes?.length) return []
+  const { pruneEmptyDirectories = true } = options
   return nodes
     .filter(node => !isHiddenMenuRecord(node))
     .map(node => ({
       ...node,
-      children: filterHiddenMenusFromTree(node.children || [])
+      children: filterHiddenMenusFromTree(node.children || [], options)
     }))
     .filter(node => {
-      if (node.menuType === 'M' && (!node.children || node.children.length === 0)) {
+      if (pruneEmptyDirectories && node.menuType === 'M' && (!node.children || node.children.length === 0)) {
         return false
       }
       return true

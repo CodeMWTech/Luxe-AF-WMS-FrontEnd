@@ -66,7 +66,7 @@ export const constantRoutes = [
         path: '/description',
         component: () => import('@/views/index'),
         name: 'Description',
-        meta: { title: '项目介绍', titleEn: 'Project Overview', icon: 'button', affix: true }
+        meta: { title: '系统概述', titleEn: 'System Overview', icon: 'button', affix: true }
       }
     ]
   },
@@ -155,6 +155,20 @@ export const dynamicRoutes = [
         component: () => import('@/views/tool/gen/editTable'),
         name: 'GenEdit',
         meta: { title: '修改生成配置', activeMenu: '/tool/gen' }
+      }
+    ]
+  },
+  {
+    path: '/wms/platform/tiktok/orders',
+    component: Layout,
+    hidden: true,
+    permissions: ['wms:platform:list'],
+    children: [
+      {
+        path: '',
+        component: () => import('@/views/wms/platform/orders/index'),
+        name: 'PlatformOrders',
+        meta: { title: '平台订单', activeMenu: '/wms/platform/tiktok/orders' }
       }
     ]
   }

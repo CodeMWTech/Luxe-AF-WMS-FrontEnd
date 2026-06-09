@@ -51,3 +51,11 @@ export function delShipmentOrder(id) {
     method: 'delete'
   })
 }
+
+export function exportShipmentOrder(id) {
+  return request({
+    url: '/wms/shipmentOrder/export/' + id,
+    method: 'post',
+    responseType: 'blob'
+  })
+}
