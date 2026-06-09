@@ -91,9 +91,9 @@
           <el-date-picker
             v-model="queryParams.orderUpdateTimeRange"
             type="datetimerange"
-            range-separator="至"
-            start-placeholder="开始时间"
-            end-placeholder="结束时间"
+            :range-separator="t('platformOrders.to')"
+            :start-placeholder="t('platformOrders.startTime')"
+            :end-placeholder="t('platformOrders.endTime')"
             value-format="YYYY-MM-DD HH:mm:ss"
             format="YYYY-MM-DD HH:mm:ss"
             :default-time="defaultTime"
@@ -132,7 +132,7 @@
         >
           <button class="summary-row" type="button" @click="toggleOrder(order, index)">
             <div class="summary-cell order-id-cell">
-              <span class="cell-label">订单号</span>
+              <span class="cell-label">{{ t('platformOrders.orderId') }}</span>
               <span class="primary-value with-copy" @click.stop>
                 {{ displayValue(getOrderId(order)) }}
                 <el-button
@@ -159,18 +159,18 @@
             </div>
 
             <div class="summary-cell customer-cell">
-              <span class="cell-label">客户</span>
+              <span class="cell-label">{{ t('platformOrders.customer') }}</span>
               <span class="primary-value ellipsis">{{ displayValue(getRecipient(order).name) }}</span>
               <span class="secondary-value ellipsis">{{ displayValue(getAddressRegion(order)) }}</span>
             </div>
 
             <div class="summary-cell product-cell">
-              <span class="cell-label">商品</span>
+              <span class="cell-label">{{ t('platformOrders.product') }}</span>
               <span class="primary-value ellipsis">{{ displayValue(getFirstItem(order).productName) }}</span>
             </div>
 
             <div class="summary-cell sku-cell">
-              <span class="cell-label">品牌/SKU</span>
+              <span class="cell-label">{{ t('platformOrders.sku') }}</span>
               <div class="sku-row">
                 <span class="secondary-value ellipsis">{{ displayValue(getSkuText(getFirstItem(order))) }}</span>
                 <el-button v-if="canEditSku(order, index)" link size="small" class="sku-edit-btn" :icon="Edit" @click.stop="startSkuEdit(order, index, getFirstItem(order))" v-hasPermi="['wms:platform:edit']">{{ t('platformOrders.labelEditSku') }}</el-button>
@@ -189,17 +189,17 @@
             </div>
 
             <div class="summary-cell money-cell">
-              <span class="cell-label">售价</span>
+              <span class="cell-label">{{ t('platformOrders.salePrice') }}</span>
               <span class="primary-value">{{ formatMoney(getSaleAmount(order), getCurrency(order)) }}</span>
             </div>
 
             <div class="summary-cell money-cell">
-              <span class="cell-label">成本</span>
+              <span class="cell-label">{{ t('platformOrders.cost') }}</span>
               <span class="secondary-value">{{ formatOptionalMoney(order.costPrice || order.cost, getCurrency(order)) }}</span>
             </div>
 
             <div class="summary-cell money-cell">
-              <span class="cell-label">毛利</span>
+              <span class="cell-label">{{ t('platformOrders.grossProfit') }}</span>
               <span class="secondary-value">{{ formatOptionalMoney(order.grossProfit, getCurrency(order)) }}</span>
             </div>
 
@@ -236,7 +236,7 @@
               </div>
               <div class="detail-grid">
                 <section class="detail-panel">
-                  <h3><el-icon><Goods /></el-icon>商品</h3>
+                  <h3><el-icon><Goods /></el-icon>{{ t('platformOrders.detailProduct') }}</h3>
                   <div v-for="(item, itemIndex) in getLineItems(getDisplayOrder(order, index))" :key="item.lineItemId || item.skuId || itemIndex" class="item-block">
                     <InfoLine :label="t('platformOrders.itemLineItemId')" :value="item.lineItemId" />
                     <InfoLine :label="t('platformOrders.itemProductId')" :value="item.productId" />
@@ -261,7 +261,7 @@
                 </section>
 
                 <section class="detail-panel">
-                  <h3><el-icon><User /></el-icon>客户</h3>
+                  <h3><el-icon><User /></el-icon>{{ t('platformOrders.detailCustomer') }}</h3>
                   <template v-if="getPlatform(getDisplayOrder(order, index)) === 'EBAY'">
                     <div class="ebay-customer-block">
                       <div class="ebay-customer-line">
@@ -348,7 +348,7 @@
                 </section>
 
                 <section class="detail-panel">
-                  <h3><el-icon><Van /></el-icon>物流</h3>
+                  <h3><el-icon><Van /></el-icon>{{ t('platformOrders.detailLogistics') }}</h3>
                   <template v-if="getPlatform(getDisplayOrder(order, index)) === 'EBAY'">
                     <div class="ebay-customer-block">
                       <div class="ebay-customer-line">
@@ -441,7 +441,7 @@
                       :model-value="getDisplayOrder(order, index).internalRemark || ''"
                       type="textarea"
                       :rows="2"
-                      placeholder="内部备注预留，后续接入接口"
+                      :placeholder="t('platformOrders.internalNotePlaceholder')"
                       disabled
                     />
                   </div>
@@ -461,16 +461,16 @@
       />
     </section>
 
-    <el-dialog v-model="syncOpen" title="同步平台订单" width="680px" @opened="onSyncDialogOpened">
+    <el-dialog v-model="syncOpen" :title="t('platformOrders.syncTitle')" width="680px" @opened="onSyncDialogOpened">
       <el-alert
-        title="默认全选所有已授权店铺。不选择开始时间时，后端自动按各店铺 lastSyncTime 增量同步，首次同步默认最近 7 天。"
+        :title="t('platformOrders.syncHelp')"
         type="info"
         show-icon
         :closable="false"
         class="mb20"
       />
       <el-form ref="syncRef" :model="syncForm" :rules="syncRules" label-width="100px">
-        <el-form-item label="选择店铺">
+        <el-form-item :label="t('platformOrders.selectShops')">
           <div class="shop-check-group">
             <div class="shop-check-header">
               <el-checkbox
@@ -478,9 +478,14 @@
                 :indeterminate="isIndeterminate"
                 @change="toggleAllShops"
               >
-                全选              </el-checkbox>
+                {{ t('platformOrders.selectAll') }}              </el-checkbox>
               <span class="shop-count-text">
-                已选 <b>{{ syncSelectedCount }}</b> 个，共 <b>{{ syncEligibleCount }}</b> 个可同步（总计 {{ syncShopList.length }}）              </span>
+                <i18n-t keypath="platformOrders.selectedShopSummary" tag="span">
+                  <template #selected><b>{{ syncSelectedCount }}</b></template>
+                  <template #eligible><b>{{ syncEligibleCount }}</b></template>
+                  <template #total>{{ syncShopList.length }}</template>
+                </i18n-t>
+              </span>
             </div>
             <div class="shop-check-list">
               <div
@@ -508,7 +513,7 @@
                       size="small"
                       class="status-mini-tag"
                     >
-                      {{ shop.authStatus === 'AUTHORIZED' ? '已授权' : shop.authStatus }}
+                      {{ shop.authStatus === 'AUTHORIZED' ? t('platformOrders.authorized') : shop.authStatus }}
                     </el-tag>
                   </span>
                 </el-checkbox>
@@ -516,21 +521,21 @@
             </div>
           </div>
         </el-form-item>
-        <el-form-item label="开始时间" prop="startTime">
+        <el-form-item :label="t('platformOrders.startTime')" prop="startTime">
           <el-date-picker
             v-model="syncForm.startTime"
             type="datetime"
-            placeholder="请选择开始时间"
+            :placeholder="t('platformOrders.startTimePlaceholder')"
             value-format="YYYY-MM-DD HH:mm:ss"
             format="YYYY-MM-DD HH:mm:ss"
             style="width: 100%"
           />
         </el-form-item>
-        <el-form-item label="结束时间" prop="endTime">
+        <el-form-item :label="t('platformOrders.endTime')" prop="endTime">
           <el-date-picker
             v-model="syncForm.endTime"
             type="datetime"
-            placeholder="请选择结束时间"
+            :placeholder="t('platformOrders.endTimePlaceholder')"
             value-format="YYYY-MM-DD HH:mm:ss"
             format="YYYY-MM-DD HH:mm:ss"
             style="width: 100%"
@@ -541,28 +546,28 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="syncOpen = false">取消</el-button>
+        <el-button @click="syncOpen = false">{{ t('platformOrders.cancel') }}</el-button>
         <el-button type="primary" :loading="syncLoading" :disabled="!selectedShopIds.length" @click="submitSync">
-          同步所选店铺        </el-button>
+          {{ t('platformOrders.syncSelectedShops') }}        </el-button>
       </template>
     </el-dialog>
 
     <!-- SKU 编辑弹窗 -->
-    <el-dialog v-model="skuEditOpen" title="编辑SKU" width="420px" @close="cancelSkuEdit">
+    <el-dialog v-model="skuEditOpen" :title="t('platformOrders.editSkuTitle')" width="420px" @close="cancelSkuEdit">
       <el-form :model="skuEditForm" label-width="80px">
-        <el-form-item label="原SKU">
+        <el-form-item :label="t('platformOrders.oldSku')">
           <el-input :model-value="skuEditForm.oldSku" disabled />
         </el-form-item>
-        <el-form-item label="新SKU">
+        <el-form-item :label="t('platformOrders.newSku')">
           <div style="display: flex; gap: 8px; width: 100%">
-            <el-input :model-value="skuEditForm.newSku" placeholder="请从库中选择新SKU" readonly style="flex: 1" />
-            <el-button @click="openSkuSelect" :disabled="!skuEditForm.oldSku">选择</el-button>
+            <el-input :model-value="skuEditForm.newSku" :placeholder="t('platformOrders.newSkuPlaceholder')" readonly style="flex: 1" />
+            <el-button @click="openSkuSelect" :disabled="!skuEditForm.oldSku">{{ t('platformOrders.select') }}</el-button>
           </div>
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="cancelSkuEdit">取消</el-button>
-        <el-button type="primary" :loading="skuSaving" :disabled="!skuEditForm.newSku" @click="saveSkuEdit">保存</el-button>
+        <el-button @click="cancelSkuEdit">{{ t('platformOrders.cancel') }}</el-button>
+        <el-button type="primary" :loading="skuSaving" :disabled="!skuEditForm.newSku" @click="saveSkuEdit">{{ t('platformOrders.save') }}</el-button>
       </template>
     </el-dialog>
 
@@ -813,10 +818,10 @@ function resetQuery() {
 function handleCreateShipments() {
   shipmentCreating.value = true
   createShipments().then(() => {
-    proxy.$modal.msgSuccess('出库暂存单创建完成')
+    proxy.$modal.msgSuccess(t('platformOrders.shipmentCreateSuccess'))
     getList()
   }).catch(() => {
-    proxy.$modal.msgError('创建出库暂存单失败')
+    proxy.$modal.msgError(t('platformOrders.shipmentCreateFailed'))
   }).finally(() => {
     shipmentCreating.value = false
   })
@@ -850,7 +855,7 @@ function toggleAllShops(checked) {
 
 function submitSync() {
   if (!selectedShopIds.value.length) {
-    proxy.$modal.msgWarning('请至少选择一个店铺')
+    proxy.$modal.msgWarning(t('platformOrders.selectAtLeastOneShop'))
     return
   }
   syncRef.value.validate(valid => {
@@ -866,18 +871,18 @@ function submitSync() {
     batchSyncOrders(data).then(() => {
       syncOpen.value = false
       syncLoading.value = false
-      proxy.$modal.msgSuccess(`后台同步已启动（${shopCount} 个店铺），数据将在几秒后刷新`)
+      proxy.$modal.msgSuccess(t('platformOrders.syncStarted', { count: shopCount }))
       // 延迟刷新列表，给后台同步一些时间      setTimeout(() => { getList(); loadShops() }, 5000)
     }).catch(() => {
       syncLoading.value = false
-      proxy.$modal.msgError('同步请求失败')
+      proxy.$modal.msgError(t('platformOrders.syncRequestFailed'))
     })
   })
 }
 
 function validateEndTime(rule, value, callback) {
   if (syncForm.value.startTime && value && value < syncForm.value.startTime) {
-    callback(new Error('结束时间不能早于开始时间'))
+    callback(new Error(t('platformOrders.endBeforeStart')))
     return
   }
   callback()
@@ -1156,7 +1161,7 @@ function formatShopLabel(shop) {
 }
 
 function copyTextSuccess() {
-  proxy.$modal.msgSuccess('已复制')
+  proxy.$modal.msgSuccess(t('platformOrders.copied'))
 }
 
 // ==================== SKU 编辑 ====================
@@ -1192,7 +1197,7 @@ function startSkuEdit(order, index, item) {
 
 function saveSkuEdit() {
   if (!skuEditForm.value.newSku.trim()) {
-    proxy.$modal.msgWarning('SKU不能为空')
+    proxy.$modal.msgWarning(t('platformOrders.skuRequired'))
     return
   }
   const ord = getDisplayOrder(skuEditOrder.value, skuEditIndex.value)
@@ -1200,11 +1205,11 @@ function saveSkuEdit() {
   const platform = getPlatform(ord)
   skuSaving.value = true
   updateOrderSku(orderId, platform, skuEditForm.value.newSku.trim()).then(() => {
-    proxy.$modal.msgSuccess('SKU已更新')
+    proxy.$modal.msgSuccess(t('platformOrders.skuUpdateSuccess'))
     cancelSkuEdit()
     getList()
   }).catch(() => {
-    proxy.$modal.msgError('SKU更新失败')
+    proxy.$modal.msgError(t('platformOrders.skuUpdateFailed'))
   }).finally(() => {
     skuSaving.value = false
   })
@@ -1233,11 +1238,11 @@ function handleApiError(error) {
   const status = error?.response?.status
   const code = error?.response?.data?.code
   if (status === 401 || code === 401) {
-    proxy.$modal.msgError('登录已过期，请重新登录')
+    proxy.$modal.msgError(t('platformOrders.loginExpired'))
     return
   }
   if ([401, 403].includes(status) || [401, 403].includes(code)) {
-    proxy.$modal.msgError('当前账号缺少 TikTok 平台权限')
+    proxy.$modal.msgError(t('platformOrders.missingTikTokPermission'))
   }
 }
 

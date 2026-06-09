@@ -1,11 +1,11 @@
 <template>
-  <el-drawer :model-value="show" title="选择库存" @close="handleCancelClick" :size="size" :close-on-click-modal="false"
+  <el-drawer :model-value="show" :title="tr('选择库存')" @close="handleCancelClick" :size="size" :close-on-click-modal="false"
              append-to-body class="inventory-select-drawer">
     <el-form :inline="true" label-width="68px" @submit.prevent :model="query" ref="queryRef">
       <el-row :gutter="20">
         <el-col :span="8">
-          <el-form-item label="商品名称">
-            <el-input v-model="query.itemName" clearable placeholder="商品名称" @keyup.enter.prevent="loadAll"></el-input>
+          <el-form-item :label="tr('商品名称')">
+            <el-input v-model="query.itemName" clearable :placeholder="tr('商品名称')" @keyup.enter.prevent="loadAll"></el-input>
           </el-form-item>
         </el-col>
         <el-col :span="8">
@@ -14,33 +14,33 @@
               class="w200"
               v-model="query.skuCode"
               clearable
-              placeholder="SKU查询"
+              :placeholder="tr('SKU查询')"
               @keyup.enter.prevent="handleSkuEnter"
             ></el-input>
           </el-form-item>
         </el-col>
         <el-col :span="8">
-          <el-button type="primary" icon="Search" @click="loadAll">查询</el-button>
-          <el-button icon="Refresh" @click="resetQuery">重置</el-button>
+          <el-button type="primary" icon="Search" @click="loadAll">{{ tr('查询') }}</el-button>
+          <el-button icon="Refresh" @click="resetQuery">{{ tr('重置') }}</el-button>
         </el-col>
       </el-row>
     </el-form>
-    <el-table :data="list" @selection-change="handleSelectionChange" border :row-key="getRowKey" empty-text="暂无库存"
+    <el-table :data="list" @selection-change="handleSelectionChange" border :row-key="getRowKey" :empty-text="tr('暂无库存')"
               v-loading="loading" ref="inventorySelectFormRef" cell-class-name="my-cell inventory-select-cell" class="mt20">
       <el-table-column type="selection" width="55" :reserve-selection="true" :selectable="judgeSelectable"/>
-      <el-table-column label="商品信息" prop="itemId">
+      <el-table-column :label="tr('商品信息')" prop="itemId">
         <template #default="{ row }">
           <div>{{
             (getRowItemName(row) || '-')
           }}</div>
         </template>
       </el-table-column>
-      <el-table-column label="SKU编号">
+      <el-table-column :label="tr('SKU编号')">
         <template #default="{ row }">
           <div>{{ getRowSkuCode(row) || '-' }}</div>
         </template>
       </el-table-column>
-      <el-table-column label="剩余库存" prop="quantity" align="right">
+      <el-table-column :label="tr('剩余库存')" prop="quantity" align="right">
         <template #default="{ row }">
           <el-statistic :value="Number(row.quantity)" :precision="0"/>
         </template>
@@ -60,11 +60,11 @@
     <template v-slot:footer>
       <div style="width: 100%;display: flex;justify-content: space-between">
         <span>
-          <el-button @click="loadAll" icon="Refresh">刷新</el-button>
+          <el-button @click="loadAll" icon="Refresh">{{ tr('刷新') }}</el-button>
         </span>
         <span>
-          <el-button @click="handleCancelClick">取消</el-button>
-          <el-button type="primary" @click="handleOkClick">确认</el-button>
+          <el-button @click="handleCancelClick">{{ tr('取消') }}</el-button>
+          <el-button type="primary" @click="handleOkClick">{{ tr('确认') }}</el-button>
       </span>
       </div>
     </template>
@@ -76,10 +76,14 @@ import {useWmsStore} from '@/store/modules/wms'
 import {listInventory} from "@/api/wms/inventory";
 import {getWarehouseAndSkuKey} from "@/utils/wmsUtil";
 import { ElMessage } from "element-plus";
+import { translateByMap } from '@/locales/runtime-map'
+import useSettingsStore from '@/store/modules/settings'
 
 const {proxy} = getCurrentInstance()
 
 const loading = ref(false)
+const settingsStore = useSettingsStore()
+const tr = (text) => translateByMap(text, settingsStore.language || 'zh-cn')
 const wmsStore = useWmsStore()
 const getBrandName = (brandId) => {
   if (brandId === null || brandId === undefined) return ''
@@ -214,7 +218,7 @@ async function handleSkuEnter() {
     })
     const rows = res.rows || []
     if (!rows.length) {
-      ElMessage.warning('未找到该SKU')
+      ElMessage.warning(tr('未找到该SKU'))
       return
     }
     const pickedRow = rows[0]

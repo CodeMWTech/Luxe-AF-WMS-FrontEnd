@@ -1,51 +1,51 @@
 <template>
-  <el-drawer :model-value="show" title="商品选择" @close="handleCancelClick" :size="size" :close-on-click-modal="false" append-to-body class="sku-select-drawer">
+  <el-drawer :model-value="show" :title="tr('商品选择')" @close="handleCancelClick" :size="size" :close-on-click-modal="false" append-to-body class="sku-select-drawer">
         <el-form :inline="true" label-width="68px" @submit.prevent :model="query" ref="queryRef">
           <el-row :gutter="20">
             <el-col :span="8">
-              <el-form-item label="商品名称">
-                <el-input v-model="query.itemName" clearable placeholder="商品名称" @keyup.enter.prevent="loadAll"></el-input>
+              <el-form-item :label="tr('商品名称')">
+                <el-input v-model="query.itemName" clearable :placeholder="tr('商品名称')" @keyup.enter.prevent="loadAll"></el-input>
               </el-form-item>
             </el-col>
             <el-col :span="8">
               <el-form-item label="SKU">
-                <el-input class="w200" v-model="query.skuCode" clearable placeholder="SKU查询" @keyup.enter.prevent="handleSkuEnter"></el-input>
+                <el-input class="w200" v-model="query.skuCode" clearable :placeholder="tr('SKU查询')" @keyup.enter.prevent="handleSkuEnter"></el-input>
               </el-form-item>
             </el-col>
             <el-col :span="8">
-              <el-button type="primary" icon="Search" @click="loadAll">查询</el-button>
-              <el-button icon="Refresh" @click="resetQuery">重置</el-button>
+              <el-button type="primary" icon="Search" @click="loadAll">{{ tr('查询') }}</el-button>
+              <el-button icon="Refresh" @click="resetQuery">{{ tr('重置') }}</el-button>
             </el-col>
           </el-row>
         </el-form>
-            <el-table :data="list" @selection-change="handleSelectionChange" border :row-key="getRowKey" empty-text="暂无商品" v-loading="loading" ref="skuSelectFormRef" cell-class-name="my-cell sku-select-cell">
+            <el-table :data="list" @selection-change="handleSelectionChange" border :row-key="getRowKey" :empty-text="tr('暂无商品')" v-loading="loading" ref="skuSelectFormRef" cell-class-name="my-cell sku-select-cell">
               <el-table-column type="selection" width="55" :reserve-selection="true" v-if="!singleSelect" :selectable="judgeSelectable"/>
-              <el-table-column label="商品信息" prop="itemId" min-width="150" show-overflow-tooltip>
+              <el-table-column :label="tr('商品信息')" prop="itemId" min-width="150" show-overflow-tooltip>
                 <template #default="{ row }">
                   <div>{{ row.item?.itemName || '-' }}</div>
-                  <div v-if="row.item?.itemBrand && getBrandName(row.item.itemBrand)">品牌：{{ getBrandName(row.item.itemBrand) }}</div>
+                  <div v-if="row.item?.itemBrand && getBrandName(row.item.itemBrand)">{{ tr('品牌：') }}{{ getBrandName(row.item.itemBrand) }}</div>
                 </template>
               </el-table-column>
-              <el-table-column label="SKU编号" min-width="200" show-overflow-tooltip>
+              <el-table-column :label="tr('SKU编号')" min-width="200" show-overflow-tooltip>
                 <template #default="{ row }">
                   <div v-if="row.itemSku.skuCode">{{ row.itemSku.skuCode }}</div>
                 </template>
               </el-table-column>
-              <el-table-column label="价格(元)" min-width="100" align="left" class-name="price-col">
+              <el-table-column :label="tr('价格(元)')" min-width="100" align="left" class-name="price-col">
                 <template #default="{ row }">
                   <div v-if="row.itemSku.costPrice || row.itemSku.costPrice === 0" class="flex-space-between price-line">
-                    <span>成本价：</span>
+                    <span>{{ tr('成本价：') }}</span>
                     <div>{{ (row.itemSku.costPrice || row.itemSku.costPrice === 0) ? row.itemSku.costPrice : '' }}</div>
                   </div>
                   <div v-if="row.itemSku.sellingPrice || row.itemSku.sellingPrice === 0" class="flex-space-between price-line">
-                    <span>销售价：</span>
+                    <span>{{ tr('销售价：') }}</span>
                     <div>{{ (row.itemSku.sellingPrice || row.itemSku.sellingPrice === 0) ? row.itemSku.sellingPrice : '' }}</div>
                   </div>
                 </template>
               </el-table-column>
-              <el-table-column label="操作" width="100" v-if="singleSelect" align="right">
+              <el-table-column :label="tr('操作')" width="100" v-if="singleSelect" align="right">
                 <template #default="{ row }">
-                  <el-button link type="primary" @click="handleChooseSku(row)">选择</el-button>
+                  <el-button link type="primary" @click="handleChooseSku(row)">{{ tr('选择') }}</el-button>
                 </template>
               </el-table-column>
             </el-table>
@@ -56,12 +56,12 @@
     <template v-slot:footer>
       <div style="width: 100%;display: flex;justify-content: space-between">
         <span>
-          <el-button @click="goCreateItem" icon="Plus">创建商品</el-button>
-          <el-button @click="loadAll" icon="Refresh">刷新</el-button>
+          <el-button @click="goCreateItem" icon="Plus">{{ tr('创建商品') }}</el-button>
+          <el-button @click="loadAll" icon="Refresh">{{ tr('刷新') }}</el-button>
         </span>
         <span>
-          <el-button @click="handleCancelClick">取消</el-button>
-          <el-button type="primary" @click="handleOkClick" v-if="!singleSelect">确认</el-button>
+          <el-button @click="handleCancelClick">{{ tr('取消') }}</el-button>
+          <el-button type="primary" @click="handleOkClick" v-if="!singleSelect">{{ tr('确认') }}</el-button>
       </span>
       </div>
     </template>
@@ -75,11 +75,15 @@ import { ElMessage } from "element-plus";
 import {listItemSkuPage} from "@/api/wms/itemSku";
 import {useRouter} from "vue-router";
 import {useWmsStore} from '@/store/modules/wms'
+import { translateByMap } from '@/locales/runtime-map'
+import useSettingsStore from '@/store/modules/settings'
 
 const { proxy } = getCurrentInstance()
 
 const router = useRouter()
 const loading = ref(false)
+const settingsStore = useSettingsStore()
+const tr = (text: string) => translateByMap(text, settingsStore.language || 'zh-cn')
 const deptOptions = ref([]);
 const query = reactive({
   itemName: '',
@@ -173,7 +177,7 @@ async function handleSkuEnter() {
     })
     const rows = Array.isArray(res?.rows) ? res.rows : []
     if (!rows.length) {
-      ElMessage.warning('未找到该SKU')
+      ElMessage.warning(tr('未找到该SKU'))
       return
     }
 

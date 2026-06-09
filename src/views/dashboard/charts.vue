@@ -437,7 +437,7 @@ const brandRows = computed(() => {
   const list = brandRatioList.value || []
   const rows = list
     .map((row) => ({
-      name: row.brandName || 'Unknown',
+      name: row.brandName || tr('未知品牌'),
       value: parseNum(row.quantity),
       inventoryValue: parseNum(row.inventoryValue)
     }))

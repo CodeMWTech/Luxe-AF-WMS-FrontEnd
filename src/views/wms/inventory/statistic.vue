@@ -224,7 +224,19 @@
                 class="item-main-image"
                 :preview-src-list="[getItemImage(row)]"
                 preview-teleported
+                @show="setPreviewImageContext([{ url: getItemImage(row) }], 0, getPreviewImageTitle(row))"
+                @switch="setPreviewImageIndex"
               >
+                <template #viewer>
+                  <div class="inventory-preview-actions">
+                    <button class="inventory-preview-action" type="button" :title="tr('下载')" @click.stop="downloadCurrentPreviewImage">
+                      <el-icon><Download /></el-icon>
+                    </button>
+                    <button class="inventory-preview-action" type="button" :title="tr('打印')" @click.stop="printCurrentPreviewImage">
+                      <el-icon><Printer /></el-icon>
+                    </button>
+                  </div>
+                </template>
                 <template #error>
                   <div class="image-empty">{{ tr('暂无图片') }}</div>
                 </template>
@@ -279,7 +291,19 @@
                 class="item-main-image"
                 :preview-src-list="[getItemImage(row)]"
                 preview-teleported
+                @show="setPreviewImageContext([{ url: getItemImage(row) }], 0, getPreviewImageTitle(row))"
+                @switch="setPreviewImageIndex"
               >
+                <template #viewer>
+                  <div class="inventory-preview-actions">
+                    <button class="inventory-preview-action" type="button" :title="tr('下载')" @click.stop="downloadCurrentPreviewImage">
+                      <el-icon><Download /></el-icon>
+                    </button>
+                    <button class="inventory-preview-action" type="button" :title="tr('打印')" @click.stop="printCurrentPreviewImage">
+                      <el-icon><Printer /></el-icon>
+                    </button>
+                  </div>
+                </template>
                 <template #error>
                   <div class="image-empty">{{ tr('暂无图片') }}</div>
                 </template>
@@ -441,15 +465,20 @@
                   preview-teleported
                   fit="cover"
                   class="detail-image"
-                />
-                <el-button
-                  class="detail-image-download"
-                  type="primary"
-                  icon="Download"
-                  circle
-                  :title="tr('下载')"
-                  @click.stop="downloadDetailImage(img, idx)"
-                />
+                  @show="setPreviewImageContext(detailImages, idx, getDetailPreviewImageTitle())"
+                  @switch="setPreviewImageIndex"
+                >
+                  <template #viewer>
+                    <div class="inventory-preview-actions">
+                      <button class="inventory-preview-action" type="button" :title="tr('下载')" @click.stop="downloadCurrentPreviewImage">
+                        <el-icon><Download /></el-icon>
+                      </button>
+                      <button class="inventory-preview-action" type="button" :title="tr('打印')" @click.stop="printCurrentPreviewImage">
+                        <el-icon><Printer /></el-icon>
+                      </button>
+                    </div>
+                  </template>
+                </el-image>
               </div>
             </div>
             <div v-else class="detail-empty">{{ tr('暂无图片') }}</div>
@@ -502,6 +531,11 @@ const detailItem = computed(() => detailDrawer.value.data?.item || null)
 const detailSku = computed(() => detailDrawer.value.data?.itemSku || null)
 const detailImages = computed(() => detailItem.value?.images || detailItem.value?.imageList || [])
 const detailImagePreviewList = computed(() => detailImages.value.map(img => img.url || img.thumbUrl).filter(Boolean))
+const previewImageContext = ref({
+  images: [],
+  index: 0,
+  title: ''
+})
 const accessoryList = computed(() => splitTextList(detailItem.value?.accessories))
 const detailFieldList = computed(() => {
   const item = detailItem.value || {}
@@ -598,8 +632,105 @@ function getImageUrl(img) {
   return img?.url || img?.thumbUrl || ''
 }
 
+function normalizePreviewImage(img) {
+  return typeof img === 'string' ? { url: img } : (img || {})
+}
+
+function setPreviewImageContext(images = [], index = 0, title = '') {
+  const normalizedImages = Array.from(images || []).map(normalizePreviewImage)
+  previewImageContext.value = {
+    images: normalizedImages,
+    index,
+    title
+  }
+}
+
+function setPreviewImageIndex(index) {
+  previewImageContext.value.index = index
+}
+
+function getCurrentPreviewImage() {
+  return previewImageContext.value.images[previewImageContext.value.index] || null
+}
+
+function getPreviewImageBaseName() {
+  const title = previewImageContext.value.title || detailSku.value?.skuCode || detailItem.value?.itemName || 'item-image'
+  return safeFileName(`${title}-${previewImageContext.value.index + 1}`, 'item-image')
+}
+
+function getPreviewImageTitle(row) {
+  return [getSkuCode(row), getItemName(row)].filter(Boolean).join('-') || 'item-image'
+}
+
+function getDetailPreviewImageTitle() {
+  return [detailSku.value?.skuCode, detailItem.value?.itemName].filter(Boolean).join('-') || 'item-image'
+}
+
+async function downloadCurrentPreviewImage() {
+  const img = getCurrentPreviewImage()
+  if (!img) {
+    proxy.$modal.msgError(tr('下载失败'))
+    return
+  }
+  await downloadDetailImage(img, previewImageContext.value.index)
+}
+
+function printCurrentPreviewImage() {
+  const img = getCurrentPreviewImage()
+  const url = getImageUrl(img)
+  if (!url) {
+    proxy.$modal.msgError(tr('打印失败'))
+    return
+  }
+  const title = getPreviewImageBaseName()
+  const printWindow = window.open('', '_blank')
+  if (!printWindow) {
+    proxy.$modal.msgError(tr('打印失败'))
+    return
+  }
+  printWindow.document.write(`
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>${escapeHtml(title)}</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
+    body { display: flex; align-items: center; justify-content: center; padding: 18mm; font-family: Arial, "Microsoft YaHei", sans-serif; }
+    img { max-width: 100%; max-height: calc(100vh - 36mm); object-fit: contain; }
+    @media print {
+      body { min-height: 100vh; padding: 12mm; }
+      img { max-height: calc(100vh - 24mm); }
+    }
+  </style>
+</head>
+<body>
+  <img src="${escapeHtml(url)}" alt="${escapeHtml(title)}" />
+  <script>
+    var image = document.querySelector('img');
+    function startPrint() {
+      setTimeout(function () {
+        window.print();
+      }, 150);
+    }
+    if (image.complete) {
+      startPrint();
+    } else {
+      image.onload = startPrint;
+      image.onerror = startPrint;
+    }
+  <\/script>
+</body>
+</html>
+  `)
+  printWindow.document.close()
+}
+
 async function downloadDetailImage(img, index) {
-  const baseName = safeFileName(`${detailSku.value?.skuCode || detailItem.value?.itemName || 'item'}-${index + 1}`, 'item-image')
+  const baseName = previewImageContext.value.title
+    ? getPreviewImageBaseName()
+    : safeFileName(`${detailSku.value?.skuCode || detailItem.value?.itemName || 'item'}-${index + 1}`, 'item-image')
   const imageId = img?.imageId || img?.id
   if (imageId) {
     try {
@@ -1225,6 +1356,42 @@ onMounted(() => {
   gap: 14px;
 }
 
+:global(.el-image-viewer__actions) {
+  width: 374px;
+  padding-right: 112px;
+}
+
+.inventory-preview-actions {
+  position: absolute;
+  z-index: 2;
+  left: calc(50% + 92px);
+  bottom: 30px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0;
+}
+
+.inventory-preview-action {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  color: #fff;
+  background: transparent;
+  font-size: 22px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.inventory-preview-action:hover {
+  opacity: 0.72;
+}
+
 .detail-image {
   width: 100%;
   aspect-ratio: 1 / 1;
@@ -1235,13 +1402,6 @@ onMounted(() => {
 .detail-image-card {
   position: relative;
   min-width: 0;
-}
-
-.detail-image-download {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
 }
 
 .detail-empty {
