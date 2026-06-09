@@ -12,7 +12,7 @@
             </el-col>
             <el-col :span="6">
               <el-form-item :label="tr('仓库')" prop="warehouseId">
-                <el-select v-model="form.warehouseId" :placeholder="tr('请选择仓库')" @change="handleChangeWarehouse"
+                <el-select v-model="form.warehouseId" :placeholder="selectPlaceholder('仓库')" @change="handleChangeWarehouse"
                            filterable>
                   <el-option v-for="item in useWmsStore().warehouseList" :key="item.id" :label="item.warehouseName"
                              :value="item.id"/>
@@ -42,7 +42,7 @@
             </el-col>
             <el-col :span="6">
              <el-form-item :label="tr('平台')" prop="merchantId">
-                <el-select v-model="form.merchantId" :placeholder="tr('请选择') + tr('平台')" clearable filterable>
+                <el-select v-model="form.merchantId" :placeholder="selectPlaceholder('平台')" clearable filterable>
                   <el-option v-for="item in useWmsStore().merchantList" :key="item.id" :label="item.merchantName"
                              :value="item.id"/>
                 </el-select>
@@ -50,7 +50,7 @@
             </el-col>
             <el-col :span="6">
               <el-form-item :label="tr('业务单号')" prop="bizOrderNo">
-                <el-input v-model="form.bizOrderNo" :placeholder="tr('请输入') + tr('业务单号')"></el-input>
+                <el-input v-model="form.bizOrderNo" :placeholder="enterPlaceholder('业务单号')"></el-input>
               </el-form-item>
             </el-col>
           </el-row>
@@ -72,8 +72,7 @@
                 <el-form-item :label="tr('总金额')" prop="totalAmount">
                   <el-input-number style="width: 100%;" v-model="form.totalAmount" :precision="2" :min="0" :disabled="true"></el-input-number>
                 </el-form-item>
-                <el-button link type="primary" @click="handleAutoCalc" style="line-height: 32px">自动计算
-                </el-button>
+                <el-button link type="primary" @click="handleAutoCalc" style="line-height: 32px">{{ tr('自动计算') }}</el-button>
               </div>
             </el-col>
           </el-row>
@@ -84,11 +83,11 @@
           <div class="flex-space-between mb8">
             <el-popover
               placement="left"
-              title="提示"
+              :title="tr('提示')"
               :width="200"
               trigger="hover"
               :disabled="form.warehouseId"
-              content="请先选择仓库！"
+              :content="tr('请先选择仓库') + '！'"
             >
               <template #reference>
                 <div>
@@ -100,7 +99,7 @@
                     icon="Plus"
                     :disabled="!form.warehouseId"
                   >
-                    添加商品
+                    {{ tr('添加商品') }}
                   </el-button>
                   <el-button
                     type="primary"
@@ -110,45 +109,45 @@
                     @click="showScanAddItem"
                     :disabled="!form.warehouseId"
                   >
-                    扫码枪模式
+                    {{ isEn ? 'Scan Mode' : '扫码枪模式' }}
                   </el-button>
                 </div>
               </template>
             </el-popover>
           </div>
           <el-table :data="form.details" border :empty-text="tr('暂无商品明细')">
-            <el-table-column label="商品信息" prop="itemSku.itemName">
+            <el-table-column :label="tr('商品信息')" prop="itemSku.itemName">
               <template #default="{ row }">
                 <div>{{
                     (row.item?.itemName || '-') + (row.item?.itemCode ? ('(' + row.item.itemCode + ')') : '')
                   }}
                 </div>
                 <div v-if="row.item?.itemBrand && getBrandName(row.item.itemBrand)">
-                  品牌：{{ getBrandName(row.item.itemBrand) }}
+                  {{ tr('品牌：') }}{{ getBrandName(row.item.itemBrand) }}
                 </div>
               </template>
             </el-table-column>
-            <el-table-column label="规格信息">
+            <el-table-column :label="tr('规格信息')">
               <template #default="{ row }">
                 <div>{{ row.itemSku?.skuCode || '-' }}</div>
               </template>
             </el-table-column>
-            <el-table-column label="出库数量" prop="quantity" width="180">
+            <el-table-column :label="tr('出库数量')" prop="quantity" width="180">
               <template #default="scope">
                 <el-input-number
                   v-model="scope.row.quantity"
-                  placeholder="出库数量"
+                  :placeholder="tr('出库数量')"
                   :min="1"
                   :precision="0"
                   @change="handleChangeQuantity"
                 ></el-input-number>
               </template>
             </el-table-column>
-            <el-table-column label="金额" prop="amount" width="180">
+            <el-table-column :label="priceAmountLabel" prop="amount" width="180">
               <template #default="scope">
                 <el-input-number
                   v-model="scope.row.amount"
-                  placeholder="金额"
+                  :placeholder="priceAmountLabel"
                   :precision="2"
                   :min="0"
                   :max="2147483647"
@@ -156,10 +155,10 @@
                 ></el-input-number>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="100" align="right" fixed="right">
+            <el-table-column :label="tr('操作')" width="100" align="right" fixed="right">
               <template #default="scope">
                 <el-button icon="Delete" type="danger" plain size="small"
-                           @click="handleDeleteDetail(scope.row, scope.$index)" link>删除
+                           @click="handleDeleteDetail(scope.row, scope.$index)" link>{{ tr('删除') }}
                 </el-button>
               </template>
             </el-table-column>
@@ -212,6 +211,9 @@ const wmsStore = useWmsStore()
 const settingsStore = useSettingsStore()
 const isEn = computed(() => (settingsStore.language || 'zh-cn') === 'en')
 const tr = (text) => translateByMap(text, settingsStore.language || 'zh-cn')
+const priceAmountLabel = computed(() => (isEn.value ? 'Price Amount' : tr('金额')))
+const selectPlaceholder = (field) => (isEn.value ? `Please select ${tr(field).toLowerCase()}` : tr('请选择') + tr(field))
+const enterPlaceholder = (field) => (isEn.value ? `Please enter ${tr(field)}` : tr('请输入') + tr(field))
 const formLabelWidth = computed(() => (isEn.value ? '138px' : '108px'))
 
 const loading = ref(false)

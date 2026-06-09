@@ -11,7 +11,7 @@
             </el-col>
             <el-col :span="6">
               <el-form-item :label="tr('仓库')" prop="warehouseId">
-                <el-select v-model="form.warehouseId" :placeholder="tr('请选择仓库')" filterable>
+                <el-select v-model="form.warehouseId" :placeholder="selectPlaceholder('仓库')" filterable>
                   <el-option v-for="item in useWmsStore().warehouseList" :key="item.id" :label="item.warehouseName" :value="item.id"/>
                 </el-select>
               </el-form-item>
@@ -37,14 +37,14 @@
             </el-col>
             <el-col :span="6">
               <el-form-item :label="tr('供应商')" prop="merchantId">
-                <el-select v-model="form.merchantId" :placeholder="tr('请选择') + tr('供应商')" clearable filterable>
+                <el-select v-model="form.merchantId" :placeholder="selectPlaceholder('供应商')" clearable filterable>
                   <el-option v-for="item in useWmsStore().merchantList" :key="item.id" :label="item.merchantName" :value="item.id"/>
                 </el-select>
               </el-form-item>
             </el-col>
             <el-col :span="6">
               <el-form-item :label="tr('业务单号')" prop="bizOrderNo">
-                <el-input v-model="form.bizOrderNo" :placeholder="tr('请输入') + tr('业务单号')"></el-input>
+                <el-input v-model="form.bizOrderNo" :placeholder="enterPlaceholder('业务单号')"></el-input>
               </el-form-item>
             </el-col>
           </el-row>
@@ -66,7 +66,7 @@
                 <el-form-item :label="tr('总金额')" prop="totalAmount">
                   <el-input-number style="width:100%" v-model="form.totalAmount" :precision="2" :min="0"></el-input-number>
                 </el-form-item>
-                <el-button link type="primary" @click="handleAutoCalc" style="line-height: 32px">{{ tr('自动计算') || 'Auto Calc' }}</el-button>
+                <el-button link type="primary" @click="handleAutoCalc" style="line-height: 32px">{{ tr('自动计算') }}</el-button>
               </div>
             </el-col>
           </el-row>
@@ -135,11 +135,11 @@
                 ></el-input-number>
               </template>
             </el-table-column>
-            <el-table-column :label="tr('金额')" prop="amount" width="180">
+            <el-table-column :label="priceAmountLabel" prop="amount" width="180">
               <template #default="scope">
                 <el-input-number
                   v-model="scope.row.amount"
-                  :placeholder="tr('金额')"
+                  :placeholder="priceAmountLabel"
                   :precision="2"
                   :min="0"
                   :max="2147483647"
@@ -201,6 +201,9 @@ const wmsStore = useWmsStore()
 const settingsStore = useSettingsStore()
 const isEn = computed(() => (settingsStore.language || 'zh-cn') === 'en')
 const tr = (text) => translateByMap(text, settingsStore.language || 'zh-cn')
+const priceAmountLabel = computed(() => (isEn.value ? 'Price Amount' : tr('金额')))
+const selectPlaceholder = (field) => (isEn.value ? `Please select ${tr(field).toLowerCase()}` : tr('请选择') + tr(field))
+const enterPlaceholder = (field) => (isEn.value ? `Please enter ${tr(field)}` : tr('请输入') + tr(field))
 const formLabelWidth = computed(() => (isEn.value ? '138px' : '108px'))
 const selectedSku = ref([])
 const mode = ref(false)

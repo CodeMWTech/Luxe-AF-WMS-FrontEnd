@@ -1,10 +1,10 @@
 <template>
-  <div class="app-container inventory-statistic-page">
+  <div class="app-container inventory-statistic-page" :class="{ 'is-en': isEn }">
     <el-card>
       <el-form
         :model="queryParams"
         ref="queryRef"
-        label-width="90px"
+        :label-width="isEn ? '142px' : '90px'"
         class="statistic-query-form mt12"
         @submit.prevent="handleQuery"
       >
@@ -175,7 +175,7 @@
         class="statistic-table"
         @sort-change="handleColumnSortChange"
       >
-        <el-table-column :label="tr('操作')" width="110" align="center" fixed="left">
+        <el-table-column :label="tr('操作')" :width="isEn ? 132 : 110" align="center" fixed="left">
           <template #default="{ row }">
             <el-button
               link
@@ -328,7 +328,7 @@
               </span>
             </template>
           </el-table-column>
-          <el-table-column :label="tr('仓库')" prop="skuWarehouseGroupKey" min-width="80" align="center" show-overflow-tooltip>
+          <el-table-column :label="tr('仓库')" prop="skuWarehouseGroupKey" :min-width="isEn ? 112 : 80" align="center" show-overflow-tooltip>
             <template #default="{ row }">
               {{ getWarehouseName(row) }}
             </template>
@@ -358,7 +358,7 @@
         </el-table-column>
 
         <!-- ========== 新增列：周转天数 ========== -->
-        <el-table-column :label="tr('周转天数')" prop="turnoverDays" width="125" align="center" sortable="custom">
+        <el-table-column :label="tr('周转天数')" prop="turnoverDays" :width="isEn ? 150 : 125" align="center" sortable="custom">
           <template #default="{ row }">
             <span v-if="row.turnoverDays != null">{{ row.turnoverDays }}</span>
             <span v-else>--</span>
@@ -366,14 +366,14 @@
         </el-table-column>
 
         <!-- ========== 新增列：平均成本价 ========== -->
-        <el-table-column :label="tr('平均成本价')" prop="avgReceiptCost" width="135" align="center" sortable="custom">
+        <el-table-column :label="tr('平均成本价')" prop="avgReceiptCost" :width="isEn ? 165 : 135" align="center" sortable="custom">
           <template #default="{ row }">
             {{ formatMoney(row.avgReceiptCost) }}
           </template>
         </el-table-column>
 
         <!-- ========== 新增列：平均销售价 ========== -->
-        <el-table-column :label="tr('平均销售价')" prop="avgShipmentPrice" width="135" align="center" sortable="custom">
+        <el-table-column :label="tr('平均销售价')" prop="avgShipmentPrice" :width="isEn ? 178 : 135" align="center" sortable="custom">
           <template #default="{ row }">
             <!-- 有出库历史但库存未清零时 avgShipmentPrice 正常显示；无出库时为 null，显示 -- -->
             {{ formatMoney(row.avgShipmentPrice) }}
@@ -507,6 +507,7 @@ import { formatDateTimeForQuery } from '@/utils/laTime'
 
 const { proxy } = getCurrentInstance()
 const settingsStore = useSettingsStore()
+const isEn = computed(() => (settingsStore.language || 'zh-cn') === 'en')
 const spanMethod = computed(() => getRowspanMethod(inventoryList.value, rowSpanArray.value))
 const canViewSellingPrice = computed(() => proxy?.$auth?.hasPermi('wms:itemSellingPrice:view'))
 const canViewCostPrice = computed(() => proxy?.$auth?.hasPermi('wms:itemCostPrice:view'))
@@ -1174,8 +1175,23 @@ onMounted(() => {
   margin-bottom: 18px;
 }
 
+.inventory-statistic-page.is-en .statistic-query-form :deep(.el-form-item__label) {
+  white-space: nowrap;
+  line-height: 18px;
+  justify-content: flex-end;
+  word-break: normal;
+}
+
+.inventory-statistic-page.is-en .statistic-query-form :deep(.el-form-item__content) {
+  min-width: 0;
+}
+
 .inventory-statistic-page .action-btn {
   min-width: 88px;
+}
+
+.inventory-statistic-page.is-en .action-btn {
+  min-width: 108px;
 }
 
 .query-price-range {
@@ -1205,6 +1221,10 @@ onMounted(() => {
 
 .statistic-table {
   width: 100%;
+}
+
+.inventory-statistic-page.is-en .statistic-table :deep(.cell) {
+  word-break: normal;
 }
 
 :deep(.vertical-top-cell) {

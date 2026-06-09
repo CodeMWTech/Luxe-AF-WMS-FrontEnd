@@ -166,7 +166,7 @@
                 :width="300"
                 trigger="hover"
                 :disabled="scope.row.orderStatus === 0"
-                :content="'入库单【' + scope.row.orderNo + '】已' + (scope.row.orderStatus === 1 ? '入库' : '作废') + '，无法修改！' "
+                :content="getEditDisabledTip(scope.row)"
               >
                 <template #reference>
                   <el-button link type="primary" @click="handleUpdate(scope.row)" v-hasPermi="['wms:receipt:edit']" :disabled="[-1, 1].includes(scope.row.orderStatus)">{{ tr('修改') }}</el-button>
@@ -181,7 +181,7 @@
                 :width="300"
                 trigger="hover"
                 :disabled="[-1, 0].includes(scope.row.orderStatus)"
-                :content="'入库单【' + scope.row.orderNo + '】已入库，无法删除！' "
+                :content="getDeleteDisabledTip(scope.row)"
               >
                 <template #reference>
                   <el-button link type="danger" @click="handleDelete(scope.row)" v-hasPermi="['wms:receipt:edit']" :disabled="scope.row.orderStatus === 1">{{ tr('删除') }}</el-button>
@@ -250,6 +250,27 @@ const formLabelWidth = computed(() => '80px')
 const translatedReceiptStatusOptions = computed(() => (wms_receipt_status.value || []).map(it => ({ ...it, label: tr(it.label) })))
 const translatedReceiptTypeOptions = computed(() => (wms_receipt_type.value || []).map(it => ({ ...it, label: tr(it.label) })))
 const wmsStore = useWmsStore()
+
+function getReceiptOrderStateLabel(row) {
+  if (isEn.value) {
+    return row.orderStatus === 1 ? 'stocked in' : 'voided'
+  }
+  return row.orderStatus === 1 ? '入库' : '作废'
+}
+
+function getEditDisabledTip(row) {
+  if (isEn.value) {
+    return `Inbound order [${row.orderNo}] has been ${getReceiptOrderStateLabel(row)} and cannot be edited.`
+  }
+  return `入库单【${row.orderNo}】已${getReceiptOrderStateLabel(row)}，无法修改！`
+}
+
+function getDeleteDisabledTip(row) {
+  if (isEn.value) {
+    return `Inbound order [${row.orderNo}] has been stocked in and cannot be deleted.`
+  }
+  return `入库单【${row.orderNo}】已入库，无法删除！`
+}
 
 /** 查询入库单列表 */
 function getList() {

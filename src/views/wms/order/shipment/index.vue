@@ -162,7 +162,7 @@
                 :width="300"
                 trigger="hover"
                 :disabled="scope.row.orderStatus === 0"
-                :content="'出库单【' + scope.row.orderNo + '】已' + (scope.row.orderStatus === 1 ? '出库' : '作废') + '，无法修改！' "
+                :content="getEditDisabledTip(scope.row)"
               >
                 <template #reference>
                   <el-button link type="primary" @click="handleUpdate(scope.row)" v-hasPermi="['wms:shipment:edit']" :disabled="[-1, 1].includes(scope.row.orderStatus)">{{ tr('修改') }}</el-button>
@@ -177,7 +177,7 @@
                 :width="300"
                 trigger="hover"
                 :disabled="[-1, 0].includes(scope.row.orderStatus)"
-                :content="'出库单【' + scope.row.orderNo + '】已出库，无法删除！' "
+                :content="getDeleteDisabledTip(scope.row)"
               >
                 <template #reference>
                   <el-button link type="danger" @click="handleDelete(scope.row)" v-hasPermi="['wms:shipment:edit']" :disabled="scope.row.orderStatus === 1">{{ tr('删除') }}</el-button>
@@ -245,6 +245,27 @@ const formLabelWidth = computed(() => '80px')
 const translatedShipmentStatusOptions = computed(() => (wms_shipment_status.value || []).map(it => ({ ...it, label: tr(it.label) })))
 const translatedShipmentTypeOptions = computed(() => (wms_shipment_type.value || []).map(it => ({ ...it, label: tr(it.label) })))
 const wmsStore = useWmsStore()
+
+function getShipmentOrderStateLabel(row) {
+  if (isEn.value) {
+    return row.orderStatus === 1 ? 'shipped out' : 'voided'
+  }
+  return row.orderStatus === 1 ? '出库' : '作废'
+}
+
+function getEditDisabledTip(row) {
+  if (isEn.value) {
+    return `Outbound order [${row.orderNo}] has been ${getShipmentOrderStateLabel(row)} and cannot be edited.`
+  }
+  return `出库单【${row.orderNo}】已${getShipmentOrderStateLabel(row)}，无法修改！`
+}
+
+function getDeleteDisabledTip(row) {
+  if (isEn.value) {
+    return `Outbound order [${row.orderNo}] has been shipped out and cannot be deleted.`
+  }
+  return `出库单【${row.orderNo}】已出库，无法删除！`
+}
 
 /** 查询入库单列表 */
 function getList() {

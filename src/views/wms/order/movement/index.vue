@@ -136,7 +136,7 @@
                 :width="300"
                 trigger="hover"
                 :disabled="scope.row.orderStatus === 0"
-                :content="'移库单【' + scope.row.orderNo + '】已' + (scope.row.orderStatus === 1 ? '移库' : '作废') + '，无法修改！' "
+                :content="getEditDisabledTip(scope.row)"
               >
                 <template #reference>
                   <el-button link type="primary" @click="handleUpdate(scope.row)" v-hasPermi="['wms:movement:edit']" :disabled="[-1, 1].includes(scope.row.orderStatus)">{{ tr('修改') }}</el-button>
@@ -151,7 +151,7 @@
                 :width="300"
                 trigger="hover"
                 :disabled="[-1, 0].includes(scope.row.orderStatus)"
-                :content="'移库单【' + scope.row.orderNo + '】已移库，无法删除！' "
+                :content="getDeleteDisabledTip(scope.row)"
               >
                 <template #reference>
                   <el-button link type="danger" @click="handleDelete(scope.row)" v-hasPermi="['wms:movement:edit']" :disabled="scope.row.orderStatus === 1">{{ tr('删除') }}</el-button>
@@ -215,6 +215,27 @@ const isEn = computed(() => (settingsStore.language || 'zh-cn') === 'en')
 const formLabelWidth = computed(() => '98px')
 const translatedMovementStatusOptions = computed(() => (wms_movement_status.value || []).map(it => ({ ...it, label: tr(it.label) })))
 const wmsStore = useWmsStore()
+
+function getMovementOrderStateLabel(row) {
+  if (isEn.value) {
+    return row.orderStatus === 1 ? 'transferred' : 'voided'
+  }
+  return row.orderStatus === 1 ? '移库' : '作废'
+}
+
+function getEditDisabledTip(row) {
+  if (isEn.value) {
+    return `Transfer order [${row.orderNo}] has been ${getMovementOrderStateLabel(row)} and cannot be edited.`
+  }
+  return `移库单【${row.orderNo}】已${getMovementOrderStateLabel(row)}，无法修改！`
+}
+
+function getDeleteDisabledTip(row) {
+  if (isEn.value) {
+    return `Transfer order [${row.orderNo}] has been transferred and cannot be deleted.`
+  }
+  return `移库单【${row.orderNo}】已移库，无法删除！`
+}
 
 /** 查询入库单列表 */
 function getList() {

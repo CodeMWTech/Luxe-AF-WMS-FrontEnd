@@ -1,59 +1,59 @@
 <template>
-  <div class="app-container item-material-page">
+  <div class="app-container item-material-page" :class="{ 'is-en': isEn }">
     <el-card>
       <el-form :model="queryParams" ref="queryRef" :inline="true" label-width="88px">
-        <el-form-item label="材质名称" prop="materialName">
-          <el-input v-model="queryParams.materialName" placeholder="请输入材质名称" clearable @keyup.enter="handleQuery" />
+        <el-form-item :label="tr('材质名称')" prop="materialName">
+          <el-input v-model="queryParams.materialName" :placeholder="tr('请输入材质名称')" clearable @keyup.enter="handleQuery" />
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" icon="Search" @click="handleQuery">搜索</el-button>
-          <el-button icon="Refresh" @click="resetQuery">重置</el-button>
+          <el-button type="primary" icon="Search" @click="handleQuery">{{ tr('搜索') }}</el-button>
+          <el-button icon="Refresh" @click="resetQuery">{{ tr('重置') }}</el-button>
         </el-form-item>
       </el-form>
     </el-card>
 
     <el-card class="mt20">
       <el-row :gutter="10" class="mb8" justify="space-between">
-        <el-col :span="6"><span class="table-title">材质列表</span></el-col>
+        <el-col :span="6"><span class="table-title">{{ tr('材质列表') }}</span></el-col>
         <el-col :span="1.5">
-          <el-button type="primary" plain icon="Plus" @click="handleAdd" v-hasPermi="['wms:itemMaterial:edit']">新增</el-button>
+          <el-button type="primary" plain icon="Plus" @click="handleAdd" v-hasPermi="['wms:itemMaterial:edit']">{{ tr('新增') }}</el-button>
         </el-col>
       </el-row>
 
-      <el-table v-loading="loading" :data="itemMaterialList" border class="mt20">
-        <el-table-column label="图片" width="90">
+      <el-table v-loading="loading" :data="itemMaterialList" border class="mt20" :empty-text="tr('暂无数据')">
+        <el-table-column :label="tr('图片')" width="90">
           <template #default="{ row }">
             <el-image v-if="row.imageUrl" class="thumb" :src="row.imageUrl" fit="cover" :preview-src-list="[row.imageUrl]" preview-teleported />
-            <div v-else class="thumb empty-thumb">无</div>
+            <div v-else class="thumb empty-thumb">{{ tr('无') }}</div>
           </template>
         </el-table-column>
-        <el-table-column label="分类" prop="itemCategory" min-width="160" show-overflow-tooltip>
+        <el-table-column :label="tr('分类')" prop="itemCategory" min-width="160" show-overflow-tooltip>
           <template #default="{ row }">
             <span>{{ getCategoryName(row.itemCategory) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="品牌" prop="itemBrand" min-width="160" show-overflow-tooltip>
+        <el-table-column :label="tr('品牌')" prop="itemBrand" min-width="160" show-overflow-tooltip>
           <template #default="{ row }">
             <span>{{ getBrandName(row.itemBrand) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="包型" prop="modelName" min-width="180" show-overflow-tooltip />
-        <el-table-column label="材质名称" prop="materialName" min-width="180" show-overflow-tooltip />
-        <el-table-column label="特殊材质" prop="specialFlag" width="100">
+        <el-table-column :label="tr('包型')" prop="modelName" min-width="180" show-overflow-tooltip />
+        <el-table-column :label="tr('材质名称')" prop="materialName" min-width="180" show-overflow-tooltip />
+        <el-table-column :label="tr('特殊材质')" prop="specialFlag" width="100">
           <template #default="{ row }">
-            <el-tag :type="row.specialFlag ? 'warning' : 'info'">{{ row.specialFlag ? '是' : '否' }}</el-tag>
+            <el-tag :type="row.specialFlag ? 'warning' : 'info'">{{ row.specialFlag ? tr('是') : tr('否') }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="状态" prop="status" width="90">
+        <el-table-column :label="tr('状态')" prop="status" width="90">
           <template #default="{ row }">
-            <el-tag :type="row.status === '1' ? 'success' : 'info'">{{ row.status === '1' ? '启用' : '停用' }}</el-tag>
+            <el-tag :type="row.status === '1' ? 'success' : 'info'">{{ row.status === '1' ? tr('启用') : tr('停用') }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="创建时间" prop="createTime" width="180" />
-        <el-table-column v-hasPermi="['wms:itemMaterial:edit']" label="操作" align="right" width="180">
+        <el-table-column :label="tr('创建时间')" prop="createTime" width="180" />
+        <el-table-column v-hasPermi="['wms:itemMaterial:edit']" :label="tr('操作')" align="right" width="180">
           <template #default="{ row }">
-            <el-button link type="primary" icon="Edit" @click="handleUpdate(row)">修改</el-button>
-            <el-button link type="primary" icon="Delete" @click="handleDelete(row)">删除</el-button>
+            <el-button link type="primary" icon="Edit" @click="handleUpdate(row)">{{ tr('修改') }}</el-button>
+            <el-button link type="primary" icon="Delete" @click="handleDelete(row)">{{ tr('删除') }}</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -62,23 +62,23 @@
 
     <el-drawer :title="title" v-model="open" size="50%" append-to-body>
       <el-form ref="itemMaterialRef" :model="form" :rules="rules" label-width="96px">
-        <el-form-item label="分类" prop="itemCategory">
+        <el-form-item :label="tr('分类')" prop="itemCategory">
           <el-tree-select
             v-model="form.itemCategory"
             :data="wmsStore.itemCategoryTreeList"
             :props="{ value: 'id', label: 'label', children: 'children' }"
             value-key="id"
-            placeholder="请选择分类"
+            :placeholder="tr('请选择分类')"
             clearable
             filterable
             style="width: 100%"
             @change="handleCategoryChange"
           />
         </el-form-item>
-        <el-form-item label="品牌" prop="itemBrand">
+        <el-form-item :label="tr('品牌')" prop="itemBrand">
           <el-select
             v-model="form.itemBrand"
-            placeholder="请选择品牌"
+            :placeholder="tr('请选择品牌')"
             clearable
             filterable
             :disabled="!form.itemCategory"
@@ -93,10 +93,10 @@
             />
           </el-select>
         </el-form-item>
-        <el-form-item label="包型" prop="modelId">
+        <el-form-item :label="tr('包型')" prop="modelId">
           <el-select
             v-model="form.modelId"
-            placeholder="请选择包型"
+            :placeholder="tr('请选择包型')"
             clearable
             filterable
             :disabled="!form.itemCategory || !form.itemBrand"
@@ -120,29 +120,29 @@
             </el-option>
           </el-select>
         </el-form-item>
-        <el-form-item label="材质名称" prop="materialName">
-          <el-input v-model="form.materialName" placeholder="请输入材质名称" />
+        <el-form-item :label="tr('材质名称')" prop="materialName">
+          <el-input v-model="form.materialName" :placeholder="tr('请输入材质名称')" />
         </el-form-item>
-        <el-form-item label="材质图片" prop="imageOssId">
+        <el-form-item :label="tr('材质图片')" prop="imageOssId">
           <ImageUpload v-model="form.imageOssId" :limit="1" :file-size="5" />
         </el-form-item>
-        <el-form-item label="特殊材质" prop="specialFlag">
+        <el-form-item :label="tr('特殊材质')" prop="specialFlag">
           <el-switch v-model="form.specialFlag" />
         </el-form-item>
-        <el-form-item label="状态" prop="status">
+        <el-form-item :label="tr('状态')" prop="status">
           <el-radio-group v-model="form.status">
-            <el-radio label="1">启用</el-radio>
-            <el-radio label="0">停用</el-radio>
+            <el-radio label="1">{{ tr('启用') }}</el-radio>
+            <el-radio label="0">{{ tr('停用') }}</el-radio>
           </el-radio-group>
         </el-form-item>
-        <el-form-item label="备注" prop="remark">
-          <el-input v-model="form.remark" type="textarea" placeholder="请输入备注" />
+        <el-form-item :label="tr('备注')" prop="remark">
+          <el-input v-model="form.remark" type="textarea" :placeholder="tr('请输入备注')" />
         </el-form-item>
       </el-form>
       <template #footer>
         <div class="dialog-footer">
-          <el-button :loading="buttonLoading" type="primary" @click="submitForm">确认</el-button>
-          <el-button @click="cancel">取消</el-button>
+          <el-button :loading="buttonLoading" type="primary" @click="submitForm">{{ tr('确认') }}</el-button>
+          <el-button @click="cancel">{{ tr('取消') }}</el-button>
         </div>
       </template>
     </el-drawer>
@@ -152,8 +152,11 @@
 <script setup name="ItemMaterial">
 import { listItemMaterialPage, getItemMaterial, delItemMaterial, addItemMaterial, updateItemMaterial } from '@/api/wms/itemMaterial'
 import { useWmsStore } from '@/store/modules/wms'
+import useSettingsStore from '@/store/modules/settings'
+import { translateByMap } from '@/locales/runtime-map'
 
 const { proxy } = getCurrentInstance()
+const settingsStore = useSettingsStore()
 const wmsStore = useWmsStore()
 const itemMaterialList = ref([])
 const total = ref(0)
@@ -169,15 +172,17 @@ const data = reactive({
     pageSize: 10,
     materialName: undefined
   },
-  rules: {
-    itemCategory: [{ required: true, message: '分类不能为空', trigger: 'change' }],
-    itemBrand: [{ required: true, message: '品牌不能为空', trigger: 'change' }],
-    modelId: [{ required: true, message: '包型不能为空', trigger: 'change' }],
-    materialName: [{ required: true, message: '材质名称不能为空', trigger: 'blur' }]
-  }
 })
 
-const { queryParams, form, rules } = toRefs(data)
+const { queryParams, form } = toRefs(data)
+const tr = (text) => translateByMap(text, settingsStore.language || 'zh-cn')
+const isEn = computed(() => (settingsStore.language || 'zh-cn') === 'en')
+const rules = computed(() => ({
+  itemCategory: [{ required: true, message: tr('分类不能为空'), trigger: 'change' }],
+  itemBrand: [{ required: true, message: tr('品牌不能为空'), trigger: 'change' }],
+  modelId: [{ required: true, message: tr('包型不能为空'), trigger: 'change' }],
+  materialName: [{ required: true, message: tr('材质名称不能为空'), trigger: 'blur' }]
+}))
 const filteredItemBrandOptions = computed(() => {
   if (!form.value.itemCategory) return []
   return wmsStore.itemBrandList || []
@@ -267,7 +272,7 @@ function resetQuery() {
 function handleAdd() {
   reset()
   open.value = true
-  title.value = '新增材质'
+  title.value = tr('新增材质')
 }
 
 async function handleUpdate(row) {
@@ -282,7 +287,7 @@ async function handleUpdate(row) {
     imageOssId: res.data?.imageOssId ? String(res.data.imageOssId) : null
   }
   open.value = true
-  title.value = '修改材质'
+  title.value = tr('修改材质')
 }
 
 function submitForm() {
@@ -293,7 +298,7 @@ function submitForm() {
     try {
       if (payload.id) await updateItemMaterial(payload)
       else await addItemMaterial(payload)
-      proxy.$modal.msgSuccess(payload.id ? '修改成功' : '新增成功')
+      proxy.$modal.msgSuccess(payload.id ? tr('修改成功') : tr('新增成功'))
       open.value = false
       await wmsStore.getItemMaterialList()
       await getList()
@@ -304,9 +309,9 @@ function submitForm() {
 }
 
 async function handleDelete(row) {
-  await proxy.$modal.confirm(`确认删除材质【${row.materialName}】吗？`)
+  await proxy.$modal.confirm(isEn.value ? `Confirm delete material [${row.materialName}]?` : `确认删除材质【${row.materialName}】吗？`)
   await delItemMaterial(row.id)
-  proxy.$modal.msgSuccess('删除成功')
+  proxy.$modal.msgSuccess(tr('删除成功'))
   await wmsStore.getItemMaterialList()
   await getList()
 }

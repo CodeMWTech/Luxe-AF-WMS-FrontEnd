@@ -123,7 +123,7 @@
                 :width="300"
                 trigger="hover"
                 :disabled="scope.row.orderStatus === 0"
-                :content="`盘库单【${scope.row.orderNo}】已${scope.row.orderStatus === 1 ? '完成盘点' : '作废'}，无法修改！`"
+                :content="getEditDisabledTip(scope.row)"
               >
                 <template #reference>
                   <el-button link type="primary" @click="handleUpdate(scope.row)" v-hasPermi="['wms:check:edit']" :disabled="[-1, 1].includes(scope.row.orderStatus)">{{ isEn ? 'Edit' : '修改' }}</el-button>
@@ -138,7 +138,7 @@
                 :width="300"
                 trigger="hover"
                 :disabled="[-1, 0].includes(scope.row.orderStatus)"
-                :content="`盘库单【${scope.row.orderNo}】已完成盘点，无法删除！`"
+                :content="getDeleteDisabledTip(scope.row)"
               >
                 <template #reference>
                   <el-button link type="danger" @click="handleDelete(scope.row)" v-hasPermi="['wms:check:edit']" :disabled="scope.row.orderStatus === 1">{{ isEn ? 'Delete' : '删除' }}</el-button>
@@ -281,6 +281,28 @@ const isEn = computed(() => (settingsStore.language || 'zh-cn') === 'en')
 const formLabelWidth = computed(() => '80px')
 const translatedCheckStatusOptions = computed(() => (wms_check_status.value || []).map(it => ({ ...it, label: tr(it.label) })))
 const wmsStore = useWmsStore()
+
+function getCheckOrderStateLabel(row) {
+  if (isEn.value) {
+    return row.orderStatus === 1 ? 'completed' : 'voided'
+  }
+  return row.orderStatus === 1 ? '完成盘点' : '作废'
+}
+
+function getEditDisabledTip(row) {
+  if (isEn.value) {
+    return `Stocktake order [${row.orderNo}] has been ${getCheckOrderStateLabel(row)} and cannot be edited.`
+  }
+  return `盘库单【${row.orderNo}】已${getCheckOrderStateLabel(row)}，无法修改！`
+}
+
+function getDeleteDisabledTip(row) {
+  if (isEn.value) {
+    return `Stocktake order [${row.orderNo}] has been completed and cannot be deleted.`
+  }
+  return `盘库单【${row.orderNo}】已完成盘点，无法删除！`
+}
+
 const smartReportSubtitle = computed(() => {
   const report = smartCheckReport.value || {}
   const orderCount = report.sourceOrderCount ?? '-'
