@@ -242,11 +242,12 @@ import {listCheckOrder, delCheckOrder, getCheckOrder, smartCheckPreview, smartCh
 import {listByCheckOrderId} from "@/api/wms/checkOrderDetail";
 import {computed, getCurrentInstance, nextTick, onMounted, reactive, ref, toRefs} from "vue";
 import {useWmsStore} from "../../../../store/modules/wms";
-import {ElLoading, ElMessageBox} from "element-plus";
+import {ElMessageBox} from "element-plus";
 import checkPanel from "@/components/PrintTemplate/check-panel";
 import CheckOrderDetail from "@/views/wms/order/check/CheckOrderDetail.vue";
 import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
+import { createProgressLoading } from '@/utils/progressLoading'
 const { proxy } = getCurrentInstance();
 const {wms_check_status} = proxy.useDict("wms_check_status");
 const settingsStore = useSettingsStore()
@@ -315,59 +316,6 @@ const smartReportSubtitle = computed(() => {
     : `已核查 ${orderCount} 个盘库单 · 系统库存基准 ${skuCount} 个 SKU`
 })
 const canConfirmSmartReport = computed(() => smartReportSource.value === 'preview' && smartCheckReport.value && !smartCheckReport.value.orderId)
-
-function createProgressLoading(label) {
-  let progress = 0
-  let timer = null
-  const loadingInstance = ElLoading.service({
-    text: `${label} 0%`,
-    background: 'rgba(0, 0, 0, 0.7)'
-  })
-  const setProgress = (value) => {
-    progress = Math.max(progress, Math.min(100, Math.floor(value)))
-    const text = `${label} ${progress}%`
-    if (loadingInstance?.setText) {
-      loadingInstance.setText(text)
-    } else if (loadingInstance) {
-      loadingInstance.text = text
-    }
-  }
-  const stop = () => {
-    if (timer) {
-      window.clearInterval(timer)
-      timer = null
-    }
-  }
-  const start = () => {
-    timer = window.setInterval(() => {
-      if (progress < 90) {
-        setProgress(progress + 1)
-      }
-    }, 120)
-  }
-  const finish = () => {
-    stop()
-    return new Promise(resolve => {
-      const finishTimer = window.setInterval(() => {
-        if (progress >= 100) {
-          window.clearInterval(finishTimer)
-          window.setTimeout(() => {
-            loadingInstance.close()
-            resolve()
-          }, 500)
-          return
-        }
-        setProgress(progress + (progress < 90 ? 2 : 1))
-      }, 60)
-    })
-  }
-  const close = () => {
-    stop()
-    loadingInstance.close()
-  }
-  start()
-  return { finish, close }
-}
 
 /** 鏌ヨ鐩樺簱鍗曞垪琛?*/
 function getList() {
@@ -459,7 +407,7 @@ function handleExport(row) {
     `wms/checkOrder/export/${row.id}`,
     {},
     `${isEn.value ? 'Stocktake Details' : '盘库单明细'}-${row.orderNo || row.id}.xlsx`,
-    { timeout: 300000 }
+    { timeout: 300000, progressLabel: isEn.value ? 'Exporting file' : '正在导出文件' }
   )
 }
 

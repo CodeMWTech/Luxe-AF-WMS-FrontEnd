@@ -188,6 +188,7 @@ import {ElMessageBox} from "element-plus";
 import movementPanel from "@/components/PrintTemplate/movement-panel";
 import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
+import { createProgressLoading } from '@/utils/progressLoading'
 
 const { proxy } = getCurrentInstance();
 const { wms_movement_status } = proxy.useDict("wms_movement_status");
@@ -301,7 +302,9 @@ function handleUpdate(row) {
 }
 
 function handleExport(row) {
-  proxy.download(`wms/movementOrder/export/${row.id}`, {}, `移库单明细-${row.orderNo || row.id}.xlsx`)
+  proxy.download(`wms/movementOrder/export/${row.id}`, {}, `移库单明细-${row.orderNo || row.id}.xlsx`, {
+    progressLabel: isEn.value ? 'Exporting file' : '正在导出文件'
+  })
 }
 
 function handleGoDetail(row) {
@@ -318,6 +321,8 @@ function handleGoDetail(row) {
 
 /** 导出按钮操作 */
 async function handlePrint(row) {
+  const printLoading = createProgressLoading(isEn.value ? 'Preparing print' : '正在准备打印')
+  try {
   const res = await getMovementOrder(row.id)
   const movementOrder = res.data
   let table = []
@@ -344,6 +349,7 @@ async function handlePrint(row) {
     table
   }
   let printTemplate = new proxy.$hiprint.PrintTemplate({template: movementPanel})
+  await printLoading.finish()
   printTemplate.print(printData, {}, {
     styleHandler: () => {
       return `
@@ -412,6 +418,10 @@ async function handlePrint(row) {
       `
     }
   })
+  } catch (error) {
+    printLoading.close()
+    throw error
+  }
 }
 
 
