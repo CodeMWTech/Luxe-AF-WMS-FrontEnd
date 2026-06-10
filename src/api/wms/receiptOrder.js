@@ -43,6 +43,15 @@ export function delReceiptOrder(id) {
   })
 }
 
+export function exportReceiptOrder(id, config = {}) {
+  return request({
+    url: '/wms/receiptOrder/export/' + id,
+    method: 'post',
+    responseType: 'blob',
+    ...config
+  })
+}
+
 // 执行入库
 export function warehousing(data) {
   return request({

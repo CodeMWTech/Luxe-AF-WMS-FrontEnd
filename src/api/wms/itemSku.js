@@ -1,4 +1,5 @@
 import request from '@/utils/request';
+import { tansParams } from '@/utils/ruoyi'
 
 /**
  * 查询sku信息列表
@@ -19,6 +20,18 @@ export function listItemSku(query) {
     url: '/wms/itemSku/listNoPage',
     method: 'get',
     params: query
+  });
+};
+
+export function exportItemSku(data, config = {}) {
+  return request({
+    url: '/wms/itemSku/export',
+    method: 'post',
+    data: data,
+    transformRequest: [(params) => tansParams(params)],
+    responseType: 'blob',
+    ...config,
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', ...(config.headers || {}) }
   });
 };
 

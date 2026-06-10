@@ -117,6 +117,18 @@ export function getItemImages(itemId) {
 }
 
 /**
+ * 下载商品原图
+ * @param imageId 商品图片记录ID
+ */
+export function downloadItemImage(imageId) {
+  return request({
+    url: `/wms/item/image/${imageId}/download`,
+    method: 'get',
+    responseType: 'blob'
+  });
+}
+
+/**
  * 删除商品图片
  * @param imageId 图片ID
  */

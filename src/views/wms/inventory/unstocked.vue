@@ -381,6 +381,7 @@ import { useWmsStore } from '@/store/modules/wms'
 import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
 import { blobValidate } from '@/utils/ruoyi'
+import { downloadXlsx, getExportLanguageHeaders, getExportLanguagePayload, prepareLanguageXlsx } from '@/utils/xlsxTranslate'
 
 const ITEM_CONDITION_OPTIONS = ['S', 'A', 'B', 'C', 'D']
 const AUTH_AGENCY_OPTIONS = ['Entrupy', 'Real Authentication', 'Legitmark', 'CheckCheck', 'N/A']
@@ -451,6 +452,12 @@ function formatMoney(v) {
   return n.toFixed(2)
 }
 
+function formatCurrency(v) {
+  const n = Number(v)
+  if (!Number.isFinite(n)) return '-'
+  return '$ ' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
 function formatCared(v) {
   if (v === true) return tr('已护理')
   if (v === false) return tr('未护理')
@@ -519,7 +526,16 @@ function buildAmountRequestQuery() {
 async function handleExportExcel() {
   try {
     exportLoading.value = true
-    const blobData = await exportUnstockedSkus(buildAmountRequestQuery())
+    const exportLanguage = getExportLanguagePayload(isEn.value)
+    const blobData = await exportUnstockedSkus(
+      {
+        ...buildAmountRequestQuery(),
+        ...exportLanguage
+      },
+      {
+        headers: getExportLanguageHeaders(isEn.value)
+      }
+    )
     const isBlob = blobValidate(blobData)
     if (!isBlob) {
       const resText = await blobData.text()
@@ -527,15 +543,8 @@ async function handleExportExcel() {
       const errMsg = rspObj?.msg || tr('导出失败')
       throw new Error(errMsg)
     }
-    const blob = new Blob([blobData], {
-      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    })
-    const url = window.URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = 'MichaelStudioWMS-未入库商品.xlsx'
-    a.click()
-    window.URL.revokeObjectURL(url)
+    const excelData = await prepareLanguageXlsx(blobData, isEn.value)
+    downloadXlsx(excelData, isEn.value ? 'MichaelStudioWMS-Unstocked SKUs.xlsx' : 'MichaelStudioWMS-未入库商品.xlsx')
     proxy.$modal.msgSuccess(tr('导出成功'))
   } catch (e) {
     proxy.$modal.msgError(e?.message || tr('导出失败'))
@@ -546,7 +555,7 @@ async function handleExportExcel() {
 
 const totalAmountDisplay = computed(() => {
   if (totalAmount.value === null || totalAmount.value === undefined || totalAmount.value === '') return '--'
-  return formatMoney(totalAmount.value)
+  return formatCurrency(totalAmount.value)
 })
 
 const totalCountDisplay = computed(() => {

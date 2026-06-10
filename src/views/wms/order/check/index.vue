@@ -114,7 +114,7 @@
         </el-table-column>
 
         <el-table-column :label="isEn ? 'Remark' : '备注'" prop="remark" />
-        <el-table-column :label="isEn ? 'Actions' : '操作'" align="right" class-name="small-padding fixed-width" width="120">
+        <el-table-column :label="isEn ? 'Actions' : '操作'" align="right" class-name="small-padding fixed-width" width="140">
           <template #default="scope">
             <div>
               <el-popover
@@ -123,7 +123,7 @@
                 :width="300"
                 trigger="hover"
                 :disabled="scope.row.orderStatus === 0"
-                :content="`盘库单【${scope.row.orderNo}】已${scope.row.orderStatus === 1 ? '完成盘点' : '作废'}，无法修改！`"
+                :content="getEditDisabledTip(scope.row)"
               >
                 <template #reference>
                   <el-button link type="primary" @click="handleUpdate(scope.row)" v-hasPermi="['wms:check:edit']" :disabled="[-1, 1].includes(scope.row.orderStatus)">{{ isEn ? 'Edit' : '修改' }}</el-button>
@@ -138,13 +138,16 @@
                 :width="300"
                 trigger="hover"
                 :disabled="[-1, 0].includes(scope.row.orderStatus)"
-                :content="`盘库单【${scope.row.orderNo}】已完成盘点，无法删除！`"
+                :content="getDeleteDisabledTip(scope.row)"
               >
                 <template #reference>
                   <el-button link type="danger" @click="handleDelete(scope.row)" v-hasPermi="['wms:check:edit']" :disabled="scope.row.orderStatus === 1">{{ isEn ? 'Delete' : '删除' }}</el-button>
                 </template>
               </el-popover>
               <el-button link type="primary" @click="handlePrint(scope.row)" v-hasPermi="['wms:check:all']">{{ isEn ? 'Print' : '打印' }}</el-button>
+            </div>
+            <div class="mt10">
+              <el-button link type="primary" @click="handleExport(scope.row)" v-hasPermi="['wms:check:all']">{{ isEn ? 'Export' : '导出' }}</el-button>
             </div>
           </template>
         </el-table-column>
@@ -235,7 +238,7 @@
 </template>
 
 <script setup name="CheckOrder">
-import {listCheckOrder, delCheckOrder, getCheckOrder, smartCheckPreview, smartCheckConfirm} from "@/api/wms/checkOrder";
+import {listCheckOrder, delCheckOrder, exportCheckOrder, getCheckOrder, smartCheckPreview, smartCheckConfirm} from "@/api/wms/checkOrder";
 import {listByCheckOrderId} from "@/api/wms/checkOrderDetail";
 import {computed, getCurrentInstance, nextTick, onMounted, reactive, ref, toRefs} from "vue";
 import {useWmsStore} from "../../../../store/modules/wms";
@@ -244,6 +247,9 @@ import checkPanel from "@/components/PrintTemplate/check-panel";
 import CheckOrderDetail from "@/views/wms/order/check/CheckOrderDetail.vue";
 import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
+import { createProgressLoading } from '@/utils/progressLoading'
+import { blobValidate } from '@/utils/ruoyi'
+import { downloadXlsx, getExportLanguageHeaders, prepareLanguageXlsx } from '@/utils/xlsxTranslate'
 const { proxy } = getCurrentInstance();
 const {wms_check_status} = proxy.useDict("wms_check_status");
 const settingsStore = useSettingsStore()
@@ -281,6 +287,28 @@ const isEn = computed(() => (settingsStore.language || 'zh-cn') === 'en')
 const formLabelWidth = computed(() => '80px')
 const translatedCheckStatusOptions = computed(() => (wms_check_status.value || []).map(it => ({ ...it, label: tr(it.label) })))
 const wmsStore = useWmsStore()
+
+function getCheckOrderStateLabel(row) {
+  if (isEn.value) {
+    return row.orderStatus === 1 ? 'completed' : 'voided'
+  }
+  return row.orderStatus === 1 ? '完成盘点' : '作废'
+}
+
+function getEditDisabledTip(row) {
+  if (isEn.value) {
+    return `Stocktake order [${row.orderNo}] has been ${getCheckOrderStateLabel(row)} and cannot be edited.`
+  }
+  return `盘库单【${row.orderNo}】已${getCheckOrderStateLabel(row)}，无法修改！`
+}
+
+function getDeleteDisabledTip(row) {
+  if (isEn.value) {
+    return `Stocktake order [${row.orderNo}] has been completed and cannot be deleted.`
+  }
+  return `盘库单【${row.orderNo}】已完成盘点，无法删除！`
+}
+
 const smartReportSubtitle = computed(() => {
   const report = smartCheckReport.value || {}
   const orderCount = report.sourceOrderCount ?? '-'
@@ -374,6 +402,25 @@ function handleSmartSelectionChange(selection) {
 
 function isSmartCheckSelectable(row) {
   return !isSmartCheckOrder(row)
+}
+
+async function handleExport(row) {
+  const progressLoading = createProgressLoading(isEn.value ? 'Exporting file' : '正在导出文件')
+  try {
+    const blobData = await exportCheckOrder(row.id, { headers: getExportLanguageHeaders(isEn.value) })
+    const isBlob = blobValidate(blobData)
+    if (!isBlob) {
+      const resText = await blobData.text()
+      const rspObj = JSON.parse(resText)
+      throw new Error(rspObj?.msg || tr('导出失败'))
+    }
+    const excelData = await prepareLanguageXlsx(blobData, isEn.value)
+    await progressLoading.finish()
+    downloadXlsx(excelData, `${isEn.value ? 'Stocktake Details' : '盘库单明细'}-${row.orderNo || row.id}.xlsx`)
+  } catch (e) {
+    progressLoading.close()
+    proxy.$modal.msgError(e?.message || tr('导出失败'))
+  }
 }
 
 function isSmartCheckOrder(row) {
@@ -484,6 +531,8 @@ function parseSourceOrderCount(remark) {
 
 /** 鎵撳嵃鎸夐挳鎿嶄綔 */
 async function handlePrint(row) {
+  const printLoading = createProgressLoading(isEn.value ? 'Preparing print' : '正在准备打印')
+  try {
   const res = await getCheckOrder(row.id)
   const checkOrder = res.data
   const detailRes = await listByCheckOrderId(row.id, {
@@ -517,6 +566,7 @@ async function handlePrint(row) {
     table
   }
   let printTemplate = new proxy.$hiprint.PrintTemplate({template: checkPanel})
+  await printLoading.finish()
   printTemplate.print(printData, {}, {
     styleHandler: () => {
       return `
@@ -589,6 +639,10 @@ async function handlePrint(row) {
       `
     }
   })
+  } catch (error) {
+    printLoading.close()
+    throw error
+  }
 }
 
 function getRowKey(row) {

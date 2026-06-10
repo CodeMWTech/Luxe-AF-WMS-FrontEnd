@@ -27,12 +27,13 @@ export function getUnstockedSkusTotalCount(query) {
   })
 }
 
-export function exportUnstockedSkus(data) {
+export function exportUnstockedSkus(data, config = {}) {
   return request({
     url: '/wms/inventory/unstocked-skus/export',
     method: 'post',
     data: data,
-    responseType: 'blob'
+    responseType: 'blob',
+    ...config
   })
 }
 
@@ -72,12 +73,21 @@ export function listInventoryBoardWarehouseSummary(query) {
 }
 
 // 导出库存看板商品维度数据
-export function exportInventoryBoardItem(data) {
+export function exportInventoryBoardItem(data, config = {}) {
   return request({
     url: '/wms/inventory/boardList/item/export',
     method: 'post',
     data: data,
-    responseType: 'blob'
+    responseType: 'blob',
+    ...config
+  })
+}
+
+// 查询库存统计商品详情（只读，按 SKU）
+export function getInventoryItemBoardDetail(skuId) {
+  return request({
+    url: '/wms/inventory/boardList/item/' + skuId + '/detail',
+    method: 'get'
   })
 }
 
