@@ -451,6 +451,12 @@ function formatMoney(v) {
   return n.toFixed(2)
 }
 
+function formatCurrency(v) {
+  const n = Number(v)
+  if (!Number.isFinite(n)) return '-'
+  return '$ ' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
 function formatCared(v) {
   if (v === true) return tr('已护理')
   if (v === false) return tr('未护理')
@@ -546,7 +552,7 @@ async function handleExportExcel() {
 
 const totalAmountDisplay = computed(() => {
   if (totalAmount.value === null || totalAmount.value === undefined || totalAmount.value === '') return '--'
-  return formatMoney(totalAmount.value)
+  return formatCurrency(totalAmount.value)
 })
 
 const totalCountDisplay = computed(() => {

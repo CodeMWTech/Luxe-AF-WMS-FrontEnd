@@ -106,8 +106,8 @@
           </el-col>
         </el-row>
         <el-row :gutter="16">
-          <el-col :xs="24" :sm="24" :md="12" :lg="12">
-            <el-form-item :label="tr('创建时间')" prop="createTimeRange">
+          <el-col :xs="24" :sm="24" :md="canViewSellingPrice ? 8 : 12" :lg="canViewSellingPrice ? 8 : 12">
+            <el-form-item :label="tr('\u521b\u5efa\u65f6\u95f4')" prop="createTimeRange">
               <el-date-picker
                 v-model="queryParams.createTimeRange"
                 type="datetimerange"
@@ -121,8 +121,23 @@
               />
             </el-form-item>
           </el-col>
-          <el-col :xs="24" :sm="24" :md="12" :lg="12" v-if="canViewSellingPrice">
-            <el-form-item :label="tr('销售价')">
+          <el-col :xs="24" :sm="24" :md="canViewSellingPrice ? 8 : 12" :lg="canViewSellingPrice ? 8 : 12">
+            <el-form-item :label="tr('\u5165\u5e93\u65f6\u95f4')" prop="receiptTimeRange">
+              <el-date-picker
+                v-model="queryParams.receiptTimeRange"
+                type="datetimerange"
+                :range-separator="tr('\u81f3')"
+                format="MM/DD/YYYY HH:mm:ss"
+                value-format="YYYY-MM-DD HH:mm:ss"
+                :default-time="defaultTime"
+                :start-placeholder="tr('\u5f00\u59cb\u65f6\u95f4')"
+                :end-placeholder="tr('\u7ed3\u675f\u65f6\u95f4')"
+                style="width: 100%"
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :xs="24" :sm="24" :md="8" :lg="8" v-if="canViewSellingPrice">
+            <el-form-item :label="tr('\u9500\u552e\u4ef7')">
               <div class="query-price-range">
                 <el-form-item prop="sellingPriceMin" class="query-price-range-item">
                   <el-input-number v-model="queryParams.sellingPriceMin" :min="0" :precision="2" :controls="false" :placeholder="tr('最低')" style="width: 100%" @keyup.enter="handleQuery" />
@@ -567,6 +582,14 @@ const detailFieldList = computed(() => {
   return fields
 })
 
+function getDetailExportLabels() {
+  const labels = ['\u5546\u54c1\u5206\u7c7b', '\u5546\u54c1\u54c1\u724c', '\u5e74\u4efd', '\u6210\u8272', '\u5305\u578b', '\u6750\u8d28']
+  if (canViewCostPrice.value) labels.push('\u6210\u672c\u4ef7')
+  if (canViewSellingPrice.value) labels.push('\u9500\u552e\u4ef7')
+  labels.push('\u6570\u91cf', '\u662f\u5426\u5df2\u62a4\u7406', '\u9274\u5b9a\u673a\u6784', '\u5bc4\u552e\u4fe1\u606f', '\u7455\u75b5', '\u914d\u4ef6', '\u5907\u6ce8')
+  return labels
+}
+
 const filterable = ref(false)
 const queryType = ref('item')
 const queryParams = ref({
@@ -585,6 +608,7 @@ const queryParams = ref({
   authAgency: undefined,
   consignInfo: undefined,
   createTimeRange: [],
+  receiptTimeRange: [],
   sellingPriceMin: undefined,
   sellingPriceMax: undefined,
   minQuantity: undefined,
@@ -790,17 +814,21 @@ function exportDetailPdf() {
   const item = detailItem.value || {}
   const sku = detailSku.value || {}
   const title = displayValue(item.itemName)
-  const rows = detailFieldList.value.map(field => {
+  const exportLabels = getDetailExportLabels()
+  const rows = detailFieldList.value.map((field, index) => {
+    const label = exportLabels[index] || field.label
     const value = field.type === 'accessories' && accessoryList.value.length
       ? accessoryList.value.join(', ')
-      : field.value
-    return `<tr><th>${escapeHtml(field.label)}</th><td>${escapeHtml(value)}</td></tr>`
+      : label === '\u662f\u5426\u5df2\u62a4\u7406' && detailItem.value?.cared !== null && detailItem.value?.cared !== undefined
+        ? (detailItem.value.cared ? '\u5df2\u62a4\u7406' : '\u672a\u62a4\u7406')
+        : field.value
+    return `<tr><th>${escapeHtml(label)}</th><td>${escapeHtml(value)}</td></tr>`
   }).join('')
   const images = detailImages.value
     .map((img, idx) => {
       const url = getImageUrl(img)
       if (!url) return ''
-      return `<figure><img src="${escapeHtml(url)}" alt="image-${idx + 1}" /><figcaption>${escapeHtml(tr('商品图片'))} ${idx + 1}</figcaption></figure>`
+      return `<figure><img src="${escapeHtml(url)}" alt="image-${idx + 1}" /><figcaption>${escapeHtml('\u5546\u54c1\u56fe\u7247')} ${idx + 1}</figcaption></figure>`
     })
     .join('')
   const printWindow = window.open('', '_blank')
@@ -833,8 +861,8 @@ function exportDetailPdf() {
   <h1>${escapeHtml(title)}</h1>
   <div class="subtitle">SKU ${escapeHtml(displayValue(sku.skuCode))}${getBrandName(item) ? ' · ' + escapeHtml(getBrandName(item)) : ''}</div>
   <table>${rows}</table>
-  <h2>${escapeHtml(tr('商品图片'))} (${detailImages.value.length})</h2>
-  <div class="images">${images || escapeHtml(tr('暂无图片'))}</div>
+  <h2>${escapeHtml('\u5546\u54c1\u56fe\u7247')} (${detailImages.value.length})</h2>
+  <div class="images">${images || escapeHtml('\u6682\u65e0\u56fe\u7247')}</div>
   <script>
     window.onload = function () {
       setTimeout(function () {
@@ -973,6 +1001,11 @@ const getCurrentQuery = () => {
     query.endTime = formatDateTimeForQuery(query.createTimeRange[1])
   }
   delete query.createTimeRange
+  if (query.receiptTimeRange && query.receiptTimeRange.length === 2) {
+    query.receiptStartTime = formatDateTimeForQuery(query.receiptTimeRange[0])
+    query.receiptEndTime = formatDateTimeForQuery(query.receiptTimeRange[1])
+  }
+  delete query.receiptTimeRange
   if (filterable.value) {
     query.minQuantity = 1
   } else {

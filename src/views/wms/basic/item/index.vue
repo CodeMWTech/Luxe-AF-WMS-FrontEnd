@@ -104,11 +104,11 @@
       <div style="display: flex;align-items: start">
         <div>
           <div style="display: flex;align-items: center;justify-content: space-between">
-            <span style="font-size: 18px;line-height: 18px">商品分类</span>
+            <span style="font-size: 18px;line-height: 18px">{{ tr('商品分类') }}</span>
             <el-button class="mr10" style="font-size:12px;line-height: 14px" plain
                      @click="handleAddType(false)"
                      v-hasPermi="['wms:item:edit']"
-                     type="primary" icon="Plus">新增分类
+                     type="primary" icon="Plus">{{ tr('新增分类') }}
             </el-button>
           </div>
           <el-tree
@@ -129,20 +129,20 @@
           >
             <template #default="{ node, data }">
             <span class="custom-tree-node">
-              <span>{{ node.label }}</span>
+              <span>{{ tr(node.label) }}</span>
               <span>
                 <el-button type="primary" @click.stop="append(data)" link
                          v-if="data.label !== '全部' && node.level < 2"
                          v-hasPermi="['wms:item:edit']"
-                         icon="Plus" style="font-size: 12px">新增子分类</el-button>
+                         icon="Plus" style="font-size: 12px">{{ tr('新增子分类') }}</el-button>
                 <el-button type="primary" @click.stop="remove(node, data)" link
                          v-if="data.label !== '全部'"
                          v-hasPermi="['wms:item:edit']"
-                         icon="Delete" style="font-size: 12px">删除</el-button>
+                         icon="Delete" style="font-size: 12px">{{ tr('删除') }}</el-button>
                 <el-button type="primary" icon="Edit" @click.stop="edit(node, data)" link
                          v-if="data.label !== '全部'"
                          v-hasPermi="['wms:item:edit']"
-                         style="font-size: 12px">修改</el-button>
+                         style="font-size: 12px">{{ tr('修改') }}</el-button>
               </span>
             </span>
             </template>
@@ -150,45 +150,45 @@
         </div>
         <div style="width: 100%;position: relative">
           <div style="display: flex;align-items: start;justify-content: space-between">
-            <span class="mr10" style="font-size: 18px;">商品列表</span>
+            <span class="mr10" style="font-size: 18px;">{{ tr('商品列表') }}</span>
             <div class="item-toolbar-actions">
               <el-button type="primary" plain icon="Download" @click="handleExport" class="mb10" v-hasPermi="['wms:item:list']">{{ tr('导出Excel') }}</el-button>
-              <el-button type="primary" plain icon="Plus" @click="handleAdd" class="mb10" v-hasPermi="['wms:item:edit']">新增商品</el-button>
+              <el-button type="primary" plain icon="Plus" @click="handleAdd" class="mb10" v-hasPermi="['wms:item:edit']">{{ tr('新增商品') }}</el-button>
             </div>
           </div>
-          <el-table :data="itemList" @selection-change="handleSelectionChange" :span-method="spanMethod" border empty-text="暂无商品" v-loading="loading" cell-class-name="my-cell">
-            <el-table-column label="商品信息" prop="itemId">
+          <el-table :data="itemList" @selection-change="handleSelectionChange" :span-method="spanMethod" border :empty-text="tr('暂无商品')" v-loading="loading" cell-class-name="my-cell">
+            <el-table-column :label="tr('商品信息')" prop="itemId">
               <template #default="{ row }">
                 <div>{{ row.item.itemName }}</div>
                 <div v-if="row.item.itemBrand">
-                  {{ row.item.itemBrand ? ('品牌：' + useWmsStore().itemBrandMap.get(row.item.itemBrand)?.brandName) : '' }}
+                  {{ row.item.itemBrand ? (fieldLabel('品牌') + useWmsStore().itemBrandMap.get(row.item.itemBrand)?.brandName) : '' }}
                 </div>
                 <div v-if="row.item.itemCategory">
-                  {{ row.item.itemCategory ? ('分类：' + useWmsStore().itemCategoryMap.get(row.item.itemCategory)?.categoryName) : '' }}
+                  {{ row.item.itemCategory ? (fieldLabel('分类') + useWmsStore().itemCategoryMap.get(row.item.itemCategory)?.categoryName) : '' }}
                 </div>
                 <div v-if="row.item.itemCondition">
-                  成色：{{ row.item.itemCondition }}
+                  {{ fieldLabel('成色') }}{{ row.item.itemCondition }}
                 </div>
                 <div v-if="row.item.year || row.item.year === 0">
-                  年份：{{ row.item.year }}
+                  {{ fieldLabel('年份') }}{{ row.item.year }}
                 </div>
                 <div v-if="row.item.materialName || row.item.material">
-                  材质：{{ row.item.materialName || row.item.material }}
+                  {{ fieldLabel('材质') }}{{ row.item.materialName || row.item.material }}
                 </div>
                 <div v-if="row.item.modelName">
-                  包型：{{ row.item.modelName }}
+                  {{ fieldLabel('包型') }}{{ row.item.modelName }}
                 </div>
                 <div v-if="row.item.cared !== null && row.item.cared !== undefined">
-                  护理：{{ row.item.cared ? '已护理' : '未护理' }}
+                  {{ fieldLabel('护理') }}{{ row.item.cared ? tr('已护理') : tr('未护理') }}
                 </div>
               </template>
             </el-table-column>
-            <el-table-column label="SKU编码" prop="skuName" align="left">
+            <el-table-column :label="tr('SKU编码')" prop="skuName" align="left">
               <template #default="{ row }">
-                <div v-if="row.itemSku.skuCode">SKU编码：{{ row.itemSku.skuCode }}</div>
+                <div v-if="row.itemSku.skuCode">{{ fieldLabel('SKU编码') }}{{ row.itemSku.skuCode }}</div>
               </template>
             </el-table-column>
-            <el-table-column label="商品图片" width="110" align="center">
+            <el-table-column :label="tr('商品图片')" width="110" align="center">
               <template #default="{ row }">
                 <el-image
                   v-if="getMainImageUrl(row)"
@@ -201,22 +201,22 @@
                 <span v-else>-</span>
               </template>
             </el-table-column>
-            <el-table-column v-if="canViewCostPrice || canViewSellingPrice" label="金额(元)" width="160" align="left">
+            <el-table-column v-if="canViewCostPrice || canViewSellingPrice" :label="amountColumnLabel" width="160" align="left">
               <template #default="{ row }">
                 <div v-if="canViewCostPrice && (row.itemSku.costPrice || row.itemSku.costPrice === 0)" class="flex-space-between">
-                  <span>成本价：</span>
+                  <span>{{ tr('成本价：') }}</span>
                   <div>{{ (row.itemSku.costPrice || row.itemSku.costPrice === 0) ? row.itemSku.costPrice : '' }}</div>
                 </div>
                 <div v-if="canViewSellingPrice && (row.itemSku.sellingPrice || row.itemSku.sellingPrice === 0)" class="flex-space-between">
-                  <span>销售价：</span>
+                  <span>{{ tr('销售价：') }}</span>
                   <div>{{ (row.itemSku.sellingPrice || row.itemSku.sellingPrice === 0) ? row.itemSku.sellingPrice : '' }}</div>
                 </div>
               </template>
             </el-table-column>
-            <el-table-column v-hasPermi="['wms:item:edit']" label="操作" align="right" prop="itemId" width="200">
+            <el-table-column v-hasPermi="['wms:item:edit']" :label="tr('操作')" align="right" prop="itemId" width="200">
               <template #default="scope">
-                <el-button link type="primary" @click="handleDelete(scope.row)" icon="Delete" v-hasPermi="['wms:item:edit']">删除</el-button>
-                <el-button link type="primary" @click="handleUpdate(scope.row)" icon="Edit" v-hasPermi="['wms:item:edit']">修改</el-button>
+                <el-button link type="primary" @click="handleDelete(scope.row)" icon="Delete" v-hasPermi="['wms:item:edit']">{{ tr('删除') }}</el-button>
+                <el-button link type="primary" @click="handleUpdate(scope.row)" icon="Edit" v-hasPermi="['wms:item:edit']">{{ tr('修改') }}</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -660,6 +660,8 @@ const {proxy} = getCurrentInstance();
 const settingsStore = useSettingsStore()
 const tr = (text) => translateByMap(text, settingsStore.language || 'zh-cn')
 const isEn = computed(() => (settingsStore.language || 'zh-cn') === 'en')
+const amountColumnLabel = computed(() => isEn.value ? 'Amount($)' : '金额($)')
+const fieldLabel = (text) => `${tr(text)}${isEn.value ? ': ' : '：'}`
 const canViewSellingPrice = computed(() => proxy?.$auth?.hasPermi('wms:itemSellingPrice:view'));
 const canEditSellingPrice = computed(() => proxy?.$auth?.hasPermi('wms:itemSellingPrice:edit'));
 const canViewCostPrice = computed(() => proxy?.$auth?.hasPermi('wms:itemCostPrice:view'));
