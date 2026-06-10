@@ -87,9 +87,9 @@
             />
           </el-select>
         </el-form-item>
-        <el-form-item class="filter-item filter-item-time" :label="t('platformOrders.filterTime')" prop="orderUpdateTimeRange">
+        <el-form-item class="filter-item filter-item-time" :label="t('platformOrders.filterTime')" prop="orderCreateTimeRange">
           <el-date-picker
-            v-model="queryParams.orderUpdateTimeRange"
+            v-model="queryParams.orderCreateTimeRange"
             type="datetimerange"
             :range-separator="t('platformOrders.to')"
             :start-placeholder="t('platformOrders.startTime')"
@@ -104,7 +104,13 @@
           <el-button type="primary" icon="Search" class="action-btn" native-type="submit" v-hasPermi="['wms:platform:list']">{{ t('platformOrders.btnQuery') }}</el-button>
           <el-button icon="Refresh" class="action-btn" @click="resetQuery">{{ t('platformOrders.btnReset') }}</el-button>
           <el-button type="success" icon="RefreshRight" class="action-btn" @click="openSyncDialog" v-hasPermi="['wms:platform:tiktok:test']">{{ t('platformOrders.btnSync') }}</el-button>
-          <el-button type="warning" icon="Box" class="action-btn" :loading="shipmentCreating" @click="handleCreateShipments" v-hasPermi="['wms:platform:edit']">{{ t('platformOrders.btnCreateShipment') }}</el-button>
+          <el-button type="info" icon="Download" class="action-btn" :loading="exporting" @click="handleExport" v-hasPermi="['wms:platform:list']">{{ t('platformOrders.btnExport') }}</el-button>
+          <!-- ========== 临时禁用：出库暂存单创建功能 ========== -->
+          <!-- 如需恢复：删除 disabled 和 el-tooltip，恢复 @click="handleCreateShipments" 和 :loading -->
+          <el-tooltip :content="t('platformOrders.shipmentDisabled')" placement="bottom">
+            <el-button type="warning" icon="Box" class="action-btn" disabled v-hasPermi="['wms:platform:edit']">{{ t('platformOrders.btnCreateShipment') }}</el-button>
+          </el-tooltip>
+          <!-- ========== 临时禁用结束 ========== -->
         </el-form-item>
       </el-form>
     </el-card>
@@ -122,7 +128,11 @@
       </div>
 
       <div v-loading="loading" class="orders-list">
-        <el-empty v-if="!loading && !orderList.length" :description="emptyText" />
+        <el-empty v-if="!loading && !orderList.length" :description="emptyText">
+          <template v-if="total > 0" #extra>
+            <el-button type="primary" @click="handleQuery">{{ t('platformOrders.goToFirstPage') }}</el-button>
+          </template>
+        </el-empty>
 
         <article
           v-for="(order, index) in orderList"
@@ -587,7 +597,7 @@
 <script setup name="PlatformOrders">
 import { computed, defineComponent, getCurrentInstance, h, onMounted, ref } from 'vue'
 import { ArrowDown, ArrowRight, CopyDocument, Edit } from '@element-plus/icons-vue'
-import { getPlatformOrder, listPlatformOrders, getOrderStatusMap, updateOrderSku, createShipments } from '@/api/wms/platformOrder'
+import { getPlatformOrder, listPlatformOrders, getOrderStatusMap, updateOrderSku, createShipments, exportPlatformOrders } from '@/api/wms/platformOrder'
 import { listAllPlatformShops, batchSyncOrders } from '@/api/wms/platformShop'
 import SkuSelect from '@/views/components/SkuSelect.vue'
 
@@ -607,7 +617,7 @@ const InfoLine = defineComponent({
 })
 
 const { proxy } = getCurrentInstance()
-const t = (key) => proxy?.$t?.(key) || key
+const t = (key, values) => proxy?.$t?.(key, values) || key
 
 const orderStatusOptions = ref([])
 const orderStatusMap = ref({})
@@ -621,6 +631,7 @@ const defaultTime = reactive([new Date(2000, 0, 1, 0, 0, 0), new Date(2000, 0, 1
 const loading = ref(false)
 const syncLoading = ref(false)
 const shipmentCreating = ref(false)
+const exporting = ref(false)
 const shopLoading = ref(false)
 const total = ref(0)
 const orderList = ref([])
@@ -700,7 +711,7 @@ const queryParams = ref({
   orderStatus: undefined,
   sellerSku: undefined,
   skuMatched: '',
-  orderUpdateTimeRange: []
+  orderCreateTimeRange: []
 })
 
 const syncForm = ref({
@@ -730,7 +741,12 @@ const syncRules = {
 
 const selectedShop = computed(() => shopList.value.find(item => item.id === queryParams.value.shopAuthId))
 const selectedShopName = computed(() => selectedShop.value ? formatShopLabel(selectedShop.value) : '')
-const emptyText = computed(() => shopLoading.value ? t('platformOrders.noData') : t('platformOrders.noData'))
+const emptyText = computed(() => {
+  if (total.value > 0) {
+    return t('platformOrders.deepPageHint')
+  }
+  return shopLoading.value ? t('platformOrders.noData') : t('platformOrders.noData')
+})
 const syncEligibleShops = computed(() => syncShopList.value.filter(s => s.authStatus === 'AUTHORIZED' && s.enabled === 1).map(s => s.id))
 const syncSelectedCount = computed(() => selectedShopIds.value.length)
 const syncEligibleCount = computed(() => syncEligibleShops.value.length)
@@ -744,11 +760,11 @@ function normalizeQuery() {
   query.skuMatched = query.skuMatched || undefined
   if (!query.platform) delete query.platform
 
-  if (query.orderUpdateTimeRange?.length === 2) {
-    query.beginOrderUpdateTime = query.orderUpdateTimeRange[0]
-    query.endOrderUpdateTime = query.orderUpdateTimeRange[1]
+  if (query.orderCreateTimeRange?.length === 2) {
+    query.beginOrderCreateTime = query.orderCreateTimeRange[0]
+    query.endOrderCreateTime = query.orderCreateTimeRange[1]
   }
-  delete query.orderUpdateTimeRange
+  delete query.orderCreateTimeRange
 
   query.orderByColumn = 'createTime'
   query.isAsc = 'desc'
@@ -811,7 +827,7 @@ function handleQuery() {
 
 function resetQuery() {
   proxy.resetForm('queryRef')
-  queryParams.value.orderUpdateTimeRange = []
+  queryParams.value.orderCreateTimeRange = []
   handleQuery()
 }
 
@@ -825,6 +841,27 @@ function handleCreateShipments() {
   }).finally(() => {
     shipmentCreating.value = false
   })
+}
+
+function handleExport() {
+  proxy.$modal.confirm(t('platformOrders.exportConfirm')).then(() => {
+    exporting.value = true
+    const params = normalizeQuery()
+    delete params.pageNum
+    delete params.pageSize
+    exportPlatformOrders(params).then((blob) => {
+      const link = document.createElement('a')
+      link.href = URL.createObjectURL(blob)
+      link.download = `平台订单_${new Date().toISOString().slice(0, 10)}.xlsx`
+      link.click()
+      URL.revokeObjectURL(link.href)
+      proxy.$modal.msgSuccess(t('platformOrders.exportSuccess'))
+    }).catch(() => {
+      proxy.$modal.msgError(t('platformOrders.exportFailed'))
+    }).finally(() => {
+      exporting.value = false
+    })
+  }).catch(() => {})
 }
 
 function openSyncDialog() {
@@ -1147,10 +1184,17 @@ function formatStatusText(status, platform) {
 function getStatusClass(status, platform) {
   // eBay: NOT_STARTED = 已取消，使用 muted 样式
   if (platform === 'EBAY' && status === 'NOT_STARTED') return 'muted'
+  // 成功/完成
   if (['DELIVERED', 'COMPLETED', 'FULFILLED'].includes(status)) return 'success'
-  if (['CANCELLED', 'REFUNDED'].includes(status)) return 'muted'
+  // 取消/退款/配送失败
+  if (['CANCELLED', 'REFUNDED', 'FAILED_DELIVERY'].includes(status)) return 'muted'
+  // 冻结
   if (status === 'ON_HOLD') return 'warning'
-  if (['AWAITING_SHIPMENT', 'IN_PROGRESS'].includes(status)) return 'primary'
+  // 待支付
+  if (status === 'UNPAID') return 'warning'
+  // 进行中：待发货/待取件/部分发货/运输中/处理中
+  if (['AWAITING_SHIPMENT', 'AWAITING_COLLECTION', 'PARTIALLY_SHIPPING', 'IN_TRANSIT', 'IN_PROGRESS'].includes(status)) return 'primary'
+  // 未开始
   if (status === 'NOT_STARTED') return 'info'
   return 'info'
 }
