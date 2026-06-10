@@ -48,12 +48,13 @@ export function delCheckOrder(id) {
   })
 }
 
-export function exportCheckOrder(id) {
+export function exportCheckOrder(id, config = {}) {
   return request({
     url: '/wms/checkOrder/export/' + id,
     method: 'post',
     responseType: 'blob',
-    timeout: CHECK_ORDER_LONG_TIMEOUT
+    timeout: CHECK_ORDER_LONG_TIMEOUT,
+    ...config
   })
 }
 

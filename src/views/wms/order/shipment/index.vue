@@ -206,7 +206,7 @@
 </template>
 
 <script setup name="ShipmentOrder">
-import {listShipmentOrder, delShipmentOrder, getShipmentOrder} from "@/api/wms/shipmentOrder";
+import {listShipmentOrder, delShipmentOrder, exportShipmentOrder, getShipmentOrder} from "@/api/wms/shipmentOrder";
 import {listByShipmentOrderId} from "@/api/wms/shipmentOrderDetail";
 import {computed, getCurrentInstance, onMounted, reactive, ref, toRefs} from "vue";
 import {useWmsStore} from "../../../../store/modules/wms";
@@ -214,6 +214,8 @@ import shipmentPanel from "@/components/PrintTemplate/shipment-panel";
 import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
 import { createProgressLoading } from '@/utils/progressLoading'
+import { blobValidate } from '@/utils/ruoyi'
+import { downloadXlsx, getExportLanguageHeaders, prepareLanguageXlsx } from '@/utils/xlsxTranslate'
 
 const { proxy } = getCurrentInstance();
 const { wms_shipment_status, wms_shipment_type} = proxy.useDict("wms_shipment_status", "wms_shipment_type");
@@ -328,10 +330,23 @@ function handleUpdate(row) {
   proxy.$router.push({ path: "/shipmentOrderEdit",  query: { id: row.id } });
 }
 
-function handleExport(row) {
-  proxy.download(`wms/shipmentOrder/export/${row.id}`, {}, `出库单明细-${row.orderNo || row.id}.xlsx`, {
-    progressLabel: isEn.value ? 'Exporting file' : '正在导出文件'
-  })
+async function handleExport(row) {
+  const progressLoading = createProgressLoading(isEn.value ? 'Exporting file' : '正在导出文件')
+  try {
+    const blobData = await exportShipmentOrder(row.id, { headers: getExportLanguageHeaders(isEn.value) })
+    const isBlob = blobValidate(blobData)
+    if (!isBlob) {
+      const resText = await blobData.text()
+      const rspObj = JSON.parse(resText)
+      throw new Error(rspObj?.msg || tr('导出失败'))
+    }
+    const excelData = await prepareLanguageXlsx(blobData, isEn.value)
+    await progressLoading.finish()
+    downloadXlsx(excelData, `${isEn.value ? 'Outbound Details' : '出库单明细'}-${row.orderNo || row.id}.xlsx`)
+  } catch (e) {
+    progressLoading.close()
+    proxy.$modal.msgError(e?.message || tr('导出失败'))
+  }
 }
 
 function handleGoDetail(row) {

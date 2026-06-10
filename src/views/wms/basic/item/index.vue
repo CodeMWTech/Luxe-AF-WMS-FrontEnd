@@ -644,7 +644,7 @@ import {
   updateOrderNum
 } from "@/api/wms/itemCategory";
 import {getRowspanMethod} from "@/utils/getRowSpanMethod";
-import {listItemSkuPage, delItemSku, listItemSku} from "@/api/wms/itemSku";
+import {listItemSkuPage, delItemSku, listItemSku, exportItemSku} from "@/api/wms/itemSku";
 import {useRoute} from "vue-router";
 import Qrcode from 'qrcode'
 import JSBarcode from 'jsbarcode'
@@ -653,6 +653,8 @@ import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
 import { formatDateTimeForQuery } from '@/utils/laTime'
 import { listItemModelMaterialOptions } from '@/api/wms/itemModel'
+import { blobValidate } from '@/utils/ruoyi'
+import { downloadXlsx, getExportLanguageHeaders, getExportLanguagePayload, prepareLanguageXlsx } from '@/utils/xlsxTranslate'
 
 const barcode = ref(null)
 const route = useRoute()
@@ -1748,7 +1750,7 @@ const handleDelete = async (row) => {
 }
 const treeRef = ref(null)
 /** 导出按钮操作 */
-const handleExport = () => {
+const handleExport = async () => {
   const query = { ...queryParams.value }
   if (!canViewSellingPrice.value) {
     delete query.sellingPriceMin
@@ -1759,7 +1761,26 @@ const handleExport = () => {
     query.endTime = formatDateTimeForQuery(query.createTimeRange[1])
   }
   delete query.createTimeRange
-  proxy?.download('wms/itemSku/export', query, 'MichaelStudioWMS-商品管理.xlsx', { timeout: 0 })
+  const exportLanguage = getExportLanguagePayload(isEn.value)
+  const blobData = await exportItemSku(
+    {
+      ...query,
+      ...exportLanguage
+    },
+    {
+      timeout: 0,
+      headers: getExportLanguageHeaders(isEn.value)
+    }
+  )
+  const isBlob = blobValidate(blobData)
+  if (!isBlob) {
+    const resText = await blobData.text()
+    const rspObj = JSON.parse(resText)
+    proxy?.$modal.msgError(rspObj?.msg || tr('导出失败'))
+    return
+  }
+  const excelData = await prepareLanguageXlsx(blobData, isEn.value)
+  downloadXlsx(excelData, isEn.value ? 'MichaelStudioWMS-Item Management.xlsx' : 'MichaelStudioWMS-商品管理.xlsx')
 }
 /** 下载条形码 */
 const downloadBarcode = (row) => {
