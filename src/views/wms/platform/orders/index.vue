@@ -105,6 +105,7 @@
           <el-button icon="Refresh" class="action-btn" @click="resetQuery">{{ t('platformOrders.btnReset') }}</el-button>
           <el-button type="success" icon="RefreshRight" class="action-btn" @click="openSyncDialog" v-hasPermi="['wms:platform:tiktok:test']">{{ t('platformOrders.btnSync') }}</el-button>
           <el-button type="info" icon="Download" class="action-btn" :loading="exporting" @click="handleExport" v-hasPermi="['wms:platform:list']">{{ t('platformOrders.btnExport') }}</el-button>
+          <el-button type="primary" icon="Upload" class="action-btn" @click="openImportNotesDialog" v-hasPermi="['wms:platform:edit']">{{ t('platformOrders.btnImportNotes') }}</el-button>
           <!-- ========== 临时禁用：出库暂存单创建功能 ========== -->
           <!-- 如需恢复：删除 disabled 和 el-tooltip，恢复 @click="handleCreateShipments" 和 :loading -->
           <el-tooltip :content="t('platformOrders.shipmentDisabled')" placement="bottom">
@@ -442,18 +443,8 @@
                 <h3><el-icon><Memo /></el-icon>{{ t('platformOrders.detailNotes') }}</h3>
                 <div class="notes-grid">
                   <div>
-                    <span class="note-label">{{ t('platformOrders.buyerMessage') }}</span>
-                    <p>{{ displayValue(rawField(getDisplayOrder(order, index), 'buyer_message', 'buyerCheckoutNotes') || getDisplayOrder(order, index).buyerMessage) }}</p>
-                  </div>
-                  <div>
-                    <span class="note-label">{{ t('platformOrders.internalNote') }}</span>
-                    <el-input
-                      :model-value="getDisplayOrder(order, index).internalRemark || ''"
-                      type="textarea"
-                      :rows="2"
-                      :placeholder="t('platformOrders.internalNotePlaceholder')"
-                      disabled
-                    />
+                    <span class="note-label">{{ t('platformOrders.remark') }}</span>
+                    <p>{{ displayValue(getDisplayOrder(order, index).internalRemark || rawField(getDisplayOrder(order, index), 'buyer_message', 'buyerCheckoutNotes') || getDisplayOrder(order, index).buyerMessage) }}</p>
                   </div>
                 </div>
               </section>
@@ -591,13 +582,48 @@
       @handleCancelClick="skuSelectShow = false"
       :size="'40%'"
     />
+
+    <!-- 导入 Note 弹窗 -->
+    <el-dialog v-model="notesImportOpen" :title="t('platformOrders.importNotesTitle')" width="520px" @close="cancelImportNotes">
+      <el-alert
+        :title="t('platformOrders.importNotesHelp')"
+        type="info"
+        show-icon
+        :closable="false"
+        class="mb20"
+      />
+      <el-form label-width="100px">
+        <el-form-item :label="t('platformOrders.importNotesSelectFile')">
+          <el-upload
+            ref="importUploadRef"
+            :auto-upload="false"
+            :limit="1"
+            accept=".csv"
+            :on-change="handleImportFileChange"
+            :on-remove="handleImportFileRemove"
+            :file-list="importFileList"
+          >
+            <el-button type="primary" icon="FolderOpened">{{ t('platformOrders.importNotesSelectFile') }}</el-button>
+            <template #tip>
+              <div class="el-upload__tip">CSV 文件（.csv），支持 TikTok 和 eBay 格式</div>
+            </template>
+          </el-upload>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="cancelImportNotes">{{ t('platformOrders.cancel') }}</el-button>
+        <el-button type="primary" :loading="notesImportLoading" :disabled="!notesImportFile" @click="submitImportNotes">
+          {{ t('platformOrders.importNotesStart') }}
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup name="PlatformOrders">
 import { computed, defineComponent, getCurrentInstance, h, onMounted, ref } from 'vue'
 import { ArrowDown, ArrowRight, CopyDocument, Edit } from '@element-plus/icons-vue'
-import { getPlatformOrder, listPlatformOrders, getOrderStatusMap, updateOrderSku, createShipments, exportPlatformOrders } from '@/api/wms/platformOrder'
+import { getPlatformOrder, listPlatformOrders, getOrderStatusMap, updateOrderSku, createShipments, exportPlatformOrders, importNotes } from '@/api/wms/platformOrder'
 import { listAllPlatformShops, batchSyncOrders } from '@/api/wms/platformShop'
 import SkuSelect from '@/views/components/SkuSelect.vue'
 
@@ -699,6 +725,9 @@ function formatIsoTime(str) {
 
 const syncOpen = ref(false)
 const syncShopList = ref([])
+const notesImportOpen = ref(false)
+const notesImportFile = ref(null)
+const notesImportLoading = ref(false)
 const queryRef = ref(null)
 const syncRef = ref(null)
 
@@ -1065,14 +1094,14 @@ function formatMoney(value, currency = 'USD') {
 function formatOptionalMoney(value, currency) {
   if (value === null || value === undefined || value === '') return '-'
   const num = Number(value)
-  if (!Number.isFinite(num) || num === 0) return '-'
+  if (!Number.isFinite(num)) return '-'
   return formatMoney(value, currency)
 }
 
 function formatGrossProfit(order) {
   if (order.grossProfit === null || order.grossProfit === undefined || order.grossProfit === '') return '-'
   const num = Number(order.grossProfit)
-  if (!Number.isFinite(num) || num === 0) return '-'
+  if (!Number.isFinite(num)) return '-'
   return formatMoney(order.grossProfit, getCurrency(order))
 }
 
@@ -1276,6 +1305,59 @@ function cancelSkuEdit() {
   skuEditIndex.value = -1
   skuEditForm.value = { oldSku: '', newSku: '' }
   selectedSkuForEdit.value = []
+}
+
+// ==================== 导入 Note ====================
+const importUploadRef = ref(null)
+const importFileList = ref([])
+
+function openImportNotesDialog() {
+  notesImportOpen.value = true
+  notesImportFile.value = null
+  importFileList.value = []
+}
+
+function handleImportFileChange(uploadFile) {
+  notesImportFile.value = uploadFile.raw
+}
+
+function handleImportFileRemove() {
+  notesImportFile.value = null
+}
+
+function cancelImportNotes() {
+  notesImportOpen.value = false
+  notesImportFile.value = null
+  importFileList.value = []
+}
+
+function submitImportNotes() {
+  if (!notesImportFile.value) {
+    proxy.$modal.msgWarning(t('platformOrders.importNotesSelectFile'))
+    return
+  }
+  notesImportLoading.value = true
+  importNotes(notesImportFile.value).then(response => {
+    const data = response.data || response
+    proxy.$modal.msgSuccess(t('platformOrders.importNoteResult', {
+      platform: data.platform || '-',
+      total: data.totalRows ?? 0,
+      updated: data.updated ?? 0,
+      skipped: data.skipped ?? 0,
+      notFound: data.notFound ?? 0
+    }))
+    if (data.errors && data.errors.length > 0) {
+      setTimeout(() => {
+        proxy.$modal.msgWarning(data.errors.slice(0, 3).join('; '))
+      }, 500)
+    }
+    cancelImportNotes()
+    getList()
+  }).catch(() => {
+    proxy.$modal.msgError(t('platformOrders.importNotesFailed'))
+  }).finally(() => {
+    notesImportLoading.value = false
+  })
 }
 
 function handleApiError(error) {

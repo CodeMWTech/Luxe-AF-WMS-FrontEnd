@@ -44,6 +44,18 @@ export function createShipments() {
   })
 }
 
+// 从 CSV 导入 Note 到平台订单
+export function importNotes(file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request({
+    url: '/wms/platform/orders/import-notes',
+    method: 'post',
+    data: formData,
+    headers: { 'Content-Type': 'multipart/form-data' }
+  })
+}
+
 // 导出平台订单 Excel
 export function exportPlatformOrders(query) {
   return request({
