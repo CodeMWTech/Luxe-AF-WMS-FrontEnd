@@ -43,11 +43,12 @@ export function delReceiptOrder(id) {
   })
 }
 
-export function exportReceiptOrder(id) {
+export function exportReceiptOrder(id, config = {}) {
   return request({
     url: '/wms/receiptOrder/export/' + id,
     method: 'post',
-    responseType: 'blob'
+    responseType: 'blob',
+    ...config
   })
 }
 

@@ -238,7 +238,7 @@
 </template>
 
 <script setup name="CheckOrder">
-import {listCheckOrder, delCheckOrder, getCheckOrder, smartCheckPreview, smartCheckConfirm} from "@/api/wms/checkOrder";
+import {listCheckOrder, delCheckOrder, exportCheckOrder, getCheckOrder, smartCheckPreview, smartCheckConfirm} from "@/api/wms/checkOrder";
 import {listByCheckOrderId} from "@/api/wms/checkOrderDetail";
 import {computed, getCurrentInstance, nextTick, onMounted, reactive, ref, toRefs} from "vue";
 import {useWmsStore} from "../../../../store/modules/wms";
@@ -248,6 +248,8 @@ import CheckOrderDetail from "@/views/wms/order/check/CheckOrderDetail.vue";
 import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
 import { createProgressLoading } from '@/utils/progressLoading'
+import { blobValidate } from '@/utils/ruoyi'
+import { downloadXlsx, getExportLanguageHeaders, prepareLanguageXlsx } from '@/utils/xlsxTranslate'
 const { proxy } = getCurrentInstance();
 const {wms_check_status} = proxy.useDict("wms_check_status");
 const settingsStore = useSettingsStore()
@@ -402,13 +404,23 @@ function isSmartCheckSelectable(row) {
   return !isSmartCheckOrder(row)
 }
 
-function handleExport(row) {
-  proxy.download(
-    `wms/checkOrder/export/${row.id}`,
-    {},
-    `${isEn.value ? 'Stocktake Details' : '盘库单明细'}-${row.orderNo || row.id}.xlsx`,
-    { timeout: 300000, progressLabel: isEn.value ? 'Exporting file' : '正在导出文件' }
-  )
+async function handleExport(row) {
+  const progressLoading = createProgressLoading(isEn.value ? 'Exporting file' : '正在导出文件')
+  try {
+    const blobData = await exportCheckOrder(row.id, { headers: getExportLanguageHeaders(isEn.value) })
+    const isBlob = blobValidate(blobData)
+    if (!isBlob) {
+      const resText = await blobData.text()
+      const rspObj = JSON.parse(resText)
+      throw new Error(rspObj?.msg || tr('导出失败'))
+    }
+    const excelData = await prepareLanguageXlsx(blobData, isEn.value)
+    await progressLoading.finish()
+    downloadXlsx(excelData, `${isEn.value ? 'Stocktake Details' : '盘库单明细'}-${row.orderNo || row.id}.xlsx`)
+  } catch (e) {
+    progressLoading.close()
+    proxy.$modal.msgError(e?.message || tr('导出失败'))
+  }
 }
 
 function isSmartCheckOrder(row) {

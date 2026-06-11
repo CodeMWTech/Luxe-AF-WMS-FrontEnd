@@ -43,3 +43,13 @@ export function createShipments() {
     method: 'post'
   })
 }
+
+// 导出平台订单 Excel
+export function exportPlatformOrders(query) {
+  return request({
+    url: '/wms/platform/orders/export',
+    method: 'post',
+    params: query,
+    responseType: 'blob'
+  })
+}

@@ -62,9 +62,10 @@
     </el-card>
 
     <el-card class="mt20">
-      <el-row :gutter="10" class="mb8" type="flex" justify="space-between">
-        <el-col :span="6"><span style="font-size: large">{{ tr('库存记录') }}</span></el-col>
-      </el-row>
+      <div class="table-toolbar">
+        <span class="table-title">{{ tr('\u5e93\u5b58\u8bb0\u5f55') }}</span>
+        <el-button type="primary" icon="Download" :loading="exportLoading" :disabled="loading" @click="handleExportExcel">{{ tr('\u5bfc\u51faExcel') }}</el-button>
+      </div>
       <el-table v-loading="loading" :data="inventoryHistoryList" border class="mt20" :empty-text="tr('暂无库存记录')" cell-class-name="vertical-top-cell">
         <el-table-column :label="tr('操作单号')" prop="orderNo" width="220" show-overflow-tooltip header-class-name="nowrap-header" class-name="nowrap-cell"/>
         <el-table-column :label="tr('商品名称')" min-width="180" show-overflow-tooltip>
@@ -136,12 +137,13 @@
 </template>
 
 <script setup name="InventoryHistory">
-import {listInventoryHistory} from "@/api/wms/inventoryHistory";
+import { exportInventoryHistory, listInventoryHistory } from "@/api/wms/inventoryHistory";
 import {computed, getCurrentInstance, onMounted, reactive, ref} from "vue";
 import {useWmsStore} from '@/store/modules/wms'
 import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
 import { formatDateTimeForQuery, formatLosAngelesTime } from '@/utils/laTime'
+import { blobValidate } from '@/utils/ruoyi'
 const defaultTime = reactive([new Date(2000,0,1,0,0,0), new Date(2000,0,1,23,59,59)])
 const {proxy} = getCurrentInstance();
 const {wms_inventory_history_type} = proxy.useDict('wms_inventory_history_type');
@@ -149,6 +151,7 @@ const settingsStore = useSettingsStore()
 
 const inventoryHistoryList = ref([]);
 const loading = ref(true);
+const exportLoading = ref(false);
 const total = ref(0);
 const queryRef = ref(null)
 const queryParams = ref({
@@ -168,14 +171,15 @@ const isEn = computed(() => (settingsStore.language || 'zh-cn') === 'en')
 const formLabelWidth = computed(() => (isEn.value ? '120px' : '80px'))
 
 const translatedHistoryTypeOptions = computed(() => {
-  return (wms_inventory_history_type.value || []).map(item => ({
-    ...item,
-    label: tr(item.label)
-  }))
+  return (wms_inventory_history_type.value || [])
+    .filter(item => String(item.value) !== '4')
+    .map(item => ({
+      ...item,
+      label: tr(item.label)
+    }))
 })
 
-/** 查询往来单位列表 */
-function getList() {
+function buildRequestQuery() {
   const query = {...queryParams.value}
   if (query.orderType === -1) {
     query.orderType = null
@@ -184,6 +188,12 @@ function getList() {
     query.startTime = formatDateTimeForQuery(query.createTimeRange[0])
     query.endTime = formatDateTimeForQuery(query.createTimeRange[1])
   }
+  delete query.createTimeRange
+  return query
+}
+
+function getList() {
+  const query = buildRequestQuery()
   loading.value = true;
   listInventoryHistory(query).then(response => {
     inventoryHistoryList.value = response.rows;
@@ -192,7 +202,36 @@ function getList() {
   });
 }
 
-/** 搜索按钮操作 */
+async function handleExportExcel() {
+  try {
+    exportLoading.value = true
+    const query = buildRequestQuery()
+    delete query.pageNum
+    delete query.pageSize
+    const blobData = await exportInventoryHistory(query)
+    const isBlob = blobValidate(blobData)
+    if (!isBlob) {
+      const resText = await blobData.text()
+      const rspObj = JSON.parse(resText)
+      throw new Error(rspObj?.msg || tr('\u5bfc\u51fa\u5931\u8d25'))
+    }
+    const blob = new Blob([blobData], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    })
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'MichaelStudioWMS-\u5e93\u5b58\u8bb0\u5f55.xlsx'
+    a.click()
+    window.URL.revokeObjectURL(url)
+    proxy.$modal.msgSuccess(tr('\u5bfc\u51fa\u6210\u529f'))
+  } catch (e) {
+    proxy.$modal.msgError(e?.message || tr('\u5bfc\u51fa\u5931\u8d25'))
+  } finally {
+    exportLoading.value = false
+  }
+}
+
 function handleQuery() {
   queryParams.value.pageNum = 1;
   getList();
@@ -290,4 +329,22 @@ onMounted(() => {
 .inventory-history-page .el-table .nowrap-cell .cell {
   white-space: nowrap;
 }
+.inventory-history-page .table-toolbar {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  width: 100%;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.inventory-history-page .table-title {
+  font-size: 18px;
+  line-height: 32px;
+}
+
+.inventory-history-page .table-toolbar .el-button {
+  margin-left: auto;
+}
+
 </style>

@@ -9,7 +9,16 @@ export function listInventoryHistory(query) {
   })
 }
 
-// 查询库存记录详细
+export function exportInventoryHistory(data) {
+  return request({
+    url: '/wms/inventoryHistory/export',
+    method: 'post',
+    data: data,
+    responseType: 'blob'
+  })
+}
+
+// query inventory history detail
 export function getInventoryHistory(id) {
   return request({
     url: '/wms/inventoryHistory/' + id,

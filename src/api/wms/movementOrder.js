@@ -43,11 +43,12 @@ export function delMovementOrder(id) {
   })
 }
 
-export function exportMovementOrder(id) {
+export function exportMovementOrder(id, config = {}) {
   return request({
     url: '/wms/movementOrder/export/' + id,
     method: 'post',
-    responseType: 'blob'
+    responseType: 'blob',
+    ...config
   })
 }
 
