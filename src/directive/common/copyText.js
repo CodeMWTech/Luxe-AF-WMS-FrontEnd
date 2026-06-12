@@ -18,6 +18,21 @@ export default {
       el.addEventListener("click", handler);
       el.$destroyCopy = () => el.removeEventListener("click", handler);
     }
+  },
+  updated(el, { value, arg }) {
+    if (arg === "callback") {
+      el.$copyCallback = value;
+    } else {
+      el.$copyValue = value;
+    }
+  },
+  unmounted(el, { arg }) {
+    if (arg !== "callback" && el.$destroyCopy) {
+      el.$destroyCopy();
+      delete el.$destroyCopy;
+      delete el.$copyValue;
+      delete el.$copyCallback;
+    }
   }
 }
 
