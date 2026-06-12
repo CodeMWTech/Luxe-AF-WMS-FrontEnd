@@ -113,7 +113,9 @@
           </template>
         </el-table-column>
 
-        <el-table-column :label="isEn ? 'Remark' : '备注'" prop="remark" />
+        <el-table-column :label="isEn ? 'Remark' : '备注'" prop="remark">
+          <template #default="{ row }">{{ formatStocktakeRemark(row.remark) }}</template>
+        </el-table-column>
         <el-table-column :label="isEn ? 'Actions' : '操作'" align="right" class-name="small-padding fixed-width" width="140">
           <template #default="scope">
             <div>
@@ -217,7 +219,7 @@
             <template #default="{ row }">{{ row.differenceDisplay || formatDifference(row.difference) }}</template>
           </el-table-column>
           <el-table-column :label="isEn ? 'Status' : '状态'" min-width="120">
-            <template #default="{ row }">{{ row.statusText || row.remark || '-' }}</template>
+            <template #default="{ row }">{{ getSmartReportStatusText(row) }}</template>
           </el-table-column>
         </el-table>
       </div>
@@ -314,7 +316,7 @@ const smartReportSubtitle = computed(() => {
   const orderCount = report.sourceOrderCount ?? '-'
   const skuCount = report.systemSkuCount ?? (report.details?.length || 0)
   return isEn.value
-    ? `Checked ${orderCount} stocktake orders · System inventory baseline ${skuCount} SKUs`
+    ? `Checked ${orderCount} stocktake orders - System inventory baseline ${skuCount} SKUs`
     : `已核查 ${orderCount} 个盘库单 · 系统库存基准 ${skuCount} 个 SKU`
 })
 const canConfirmSmartReport = computed(() => smartReportSource.value === 'preview' && smartCheckReport.value && !smartCheckReport.value.orderId)
@@ -427,6 +429,31 @@ function isSmartCheckOrder(row) {
   return row?.orderNo?.startsWith('AUDIT-')
 }
 
+function formatStocktakeRemark(remark) {
+  if (!isEn.value || !remark) {
+    return remark || ''
+  }
+  const text = String(remark)
+  const summaryMatch = text.match(/含\s*(\d+)\s*单\s*[·-]?\s*缺\s*(\d+)\s*多\s*(\d+)\s*一致\s*(\d+)/)
+  if (summaryMatch) {
+    const [, orderCount, shortageCount, surplusCount, matchedCount] = summaryMatch
+    return `${orderCount} orders - Shortage ${shortageCount}, Surplus ${surplusCount}, Matched ${matchedCount}`
+  }
+  return tr(text)
+}
+
+function getSmartReportStatusText(row) {
+  if (isEn.value) {
+    if (row.status === 'SHORTAGE') return 'Shortage'
+    if (row.status === 'SURPLUS') return 'Surplus'
+    if (row.status === 'MATCHED') return 'Matched'
+  }
+  if (row.status === 'SHORTAGE') return '盘亏'
+  if (row.status === 'SURPLUS') return '盘盈'
+  if (row.status === 'MATCHED') return '数量一致'
+  return row.statusText || row.remark || '-'
+}
+
 function getRowClassName({ row }) {
   return isSmartCheckOrder(row) ? 'smart-audit-row' : ''
 }
@@ -502,7 +529,7 @@ function buildSmartReportFromOrder(order, details) {
       difference,
       differenceDisplay: getDifferenceDisplay({ difference }),
       status,
-      statusText: status === 'SHORTAGE' ? '盘亏' : status === 'SURPLUS' ? '盘盈' : '数量一致',
+      statusText: getSmartReportStatusText({ status }),
       remark: detail.memo || detail.remark
     }
   })
