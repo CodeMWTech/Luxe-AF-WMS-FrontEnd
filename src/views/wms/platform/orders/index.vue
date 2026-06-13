@@ -422,14 +422,15 @@
                   <InfoLine :label="t('platformOrders.paymentCurrency')" :value="getCurrency(getDisplayOrder(order, index))" />
                   <InfoLine :label="t('platformOrders.paymentSubtotal')" :value="formatMoney(getPayment(getDisplayOrder(order, index)).subTotal, getCurrency(getDisplayOrder(order, index)))" strong />
                   <InfoLine :label="t('platformOrders.paymentTax')" :value="formatMoney(getPayment(getDisplayOrder(order, index)).tax, getCurrency(getDisplayOrder(order, index)))" />
-                  <InfoLine :label="t('platformOrders.paymentShippingFee')" :value="formatMoney(getPayment(getDisplayOrder(order, index)).shippingFee, getCurrency(getDisplayOrder(order, index)))" />
+                  <InfoLine v-if="getPlatform(getDisplayOrder(order, index)) !== 'TIKTOK'" :label="t('platformOrders.paymentShippingFee')" :value="formatMoney(getPayment(getDisplayOrder(order, index)).shippingFee, getCurrency(getDisplayOrder(order, index)))" />
                   <InfoLine :label="t('platformOrders.paymentTotal')" :value="formatMoney(getPayment(getDisplayOrder(order, index)).totalAmount, getCurrency(getDisplayOrder(order, index)))" strong />
                   <InfoLine :label="t('platformOrders.paymentPlatformDiscount')" :value="formatMoney(getPayment(getDisplayOrder(order, index)).platformDiscount, getCurrency(getDisplayOrder(order, index)))" />
                   <InfoLine v-if="getPlatform(getDisplayOrder(order, index)) === 'TIKTOK'" :label="t('platformOrders.paymentSellerDiscount')" :value="formatMoney(getPayment(getDisplayOrder(order, index)).sellerDiscount, getCurrency(getDisplayOrder(order, index)))" />
                   <InfoLine v-if="getPlatform(getDisplayOrder(order, index)) === 'TIKTOK'" :label="t('platformOrders.paymentProductTax')" :value="formatMoney(getPayment(getDisplayOrder(order, index)).productTax, getCurrency(getDisplayOrder(order, index)))" />
-                  <InfoLine v-if="getPlatform(getDisplayOrder(order, index)) === 'TIKTOK'" :label="t('platformOrders.paymentOriginalShippingFee')" :value="formatMoney(rawField(getDisplayOrder(order, index), 'payment.original_shipping_fee'), getCurrency(getDisplayOrder(order, index)))" />
+                  <InfoLine v-if="getPlatform(getDisplayOrder(order, index)) === 'TIKTOK'" :label="t('platformOrders.paymentShippingFee')" :value="formatMoney(rawField(getDisplayOrder(order, index), 'payment.original_shipping_fee'), getCurrency(getDisplayOrder(order, index)))" />
                   <InfoLine v-if="getPlatform(getDisplayOrder(order, index)) === 'TIKTOK'" :label="t('platformOrders.paymentOriginalTotalPrice')" :value="formatMoney(rawField(getDisplayOrder(order, index), 'payment.original_total_product_price'), getCurrency(getDisplayOrder(order, index)))" />
                   <InfoLine v-if="getPlatform(getDisplayOrder(order, index)) === 'EBAY'" :label="t('platformOrders.paymentMarketplaceFee')" :value="formatMoney(getDisplayOrder(order, index).totalMarketplaceFee, getCurrency(getDisplayOrder(order, index)))" />
+                  <InfoLine v-if="getPlatform(getDisplayOrder(order, index)) === 'EBAY'" :label="t('platformOrders.paymentMarketplaceFeeRate')" :value="formatMarketplaceFeeRate(getDisplayOrder(order, index))" />
                   <InfoLine v-if="getPlatform(getDisplayOrder(order, index)) === 'EBAY'" :label="t('platformOrders.paymentDueSeller')" :value="formatMoney(getDisplayOrder(order, index).totalDueSeller, getCurrency(getDisplayOrder(order, index)))" strong />
                   <InfoLine :label="t('platformOrders.paymentGrossProfit')" :value="formatGrossProfit(getDisplayOrder(order, index))" />
                   <template v-for="(item, itemIndex) in getLineItems(getDisplayOrder(order, index))" :key="'pay-item-' + (item.lineItemId || item.skuId || itemIndex)">
@@ -1118,6 +1119,17 @@ function formatEbayNetProfit(order) {
   if (!Number.isFinite(ta) || !Number.isFinite(c) || c <= 0) return '-'
   const netProfit = ta - f - c
   return formatMoney(netProfit, getCurrency(order))
+}
+
+/** eBay 平台收费率 = 平台交易费(totalMarketplaceFee) / 售价(totalAmount) * 100% */
+function formatMarketplaceFeeRate(order) {
+  const fee = order.totalMarketplaceFee
+  const totalAmount = order.totalAmount
+  if (fee == null || totalAmount == null) return '-'
+  const f = Number(fee)
+  const t = Number(totalAmount)
+  if (!Number.isFinite(f) || !Number.isFinite(t) || t === 0) return '-'
+  return (f / t * 100).toFixed(2) + '%'
 }
 
 const COUNTRY_MAP = {

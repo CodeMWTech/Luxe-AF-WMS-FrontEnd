@@ -221,6 +221,7 @@ export default {
     paymentOriginalShippingFee: 'Original Shipping',
     paymentOriginalTotalPrice: 'Original Total',
     paymentMarketplaceFee: 'Marketplace Fee',
+    paymentMarketplaceFeeRate: 'Platform Fee Rate',
     paymentDueSeller: 'Due Seller',
     paymentGrossProfit: 'Gross Profit',
     paymentEbayNetProfit: 'Net Profit (Price-Fee-Cost)',

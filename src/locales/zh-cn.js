@@ -221,6 +221,7 @@ export default {
     paymentOriginalShippingFee: '原始运费',
     paymentOriginalTotalPrice: '商品原价总额',
     paymentMarketplaceFee: '平台交易费',
+    paymentMarketplaceFeeRate: '平台收费率',
     paymentDueSeller: '卖家实收',
     paymentGrossProfit: '毛利',
     paymentEbayNetProfit: '毛利(售价-平台交易费-成本)',
