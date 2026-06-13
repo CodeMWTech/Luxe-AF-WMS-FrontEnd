@@ -78,7 +78,26 @@
           <el-input v-model="form.modelName" :placeholder="tr('请输入包型名称')" />
         </el-form-item>
         <el-form-item :label="tr('包型图片')" prop="imageOssId">
-          <ImageUpload v-model="form.imageOssId" :limit="1" :file-size="5" />
+          <div class="business-image-upload">
+            <div v-if="currentImageUrl" class="business-image-preview">
+              <el-image :src="currentImageUrl" :preview-src-list="[currentImageUrl]" preview-teleported fit="cover" class="business-image-thumb" />
+              <el-button type="danger" link icon="Delete" class="business-image-remove" @click="removeBusinessImage" />
+            </div>
+            <el-upload
+              ref="imageUploadRef"
+              class="business-image-picker"
+              :auto-upload="false"
+              :show-file-list="false"
+              :on-change="handleImageChange"
+              accept="image/png,image/jpg,image/jpeg"
+            >
+              <div class="business-image-trigger">
+                <el-icon><Plus /></el-icon>
+                <span>{{ currentImageUrl ? tr('重新上传') : tr('点击上传') }}</span>
+              </div>
+            </el-upload>
+            <div class="business-image-tip">{{ tr('请上传大小不超过 5MB 格式为 png/jpg/jpeg 的文件') }}</div>
+          </div>
         </el-form-item>
         <el-form-item :label="tr('状态')" prop="status">
           <el-radio-group v-model="form.status">
@@ -101,10 +120,11 @@
 </template>
 
 <script setup name="ItemModel">
-import { listItemModelPage, getItemModel, delItemModel, addItemModel, updateItemModel } from '@/api/wms/itemModel'
+import { listItemModelPage, getItemModel, delItemModel, addItemModel, updateItemModel, uploadItemModelImage, deleteItemModelImage } from '@/api/wms/itemModel'
 import { useWmsStore } from '@/store/modules/wms'
 import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
+import { Plus } from '@element-plus/icons-vue'
 
 const { proxy } = getCurrentInstance()
 const settingsStore = useSettingsStore()
@@ -114,6 +134,10 @@ const open = ref(false)
 const buttonLoading = ref(false)
 const loading = ref(true)
 const title = ref('')
+const imageUploadRef = ref(null)
+const pendingImageFile = ref(null)
+const pendingImageUrl = ref('')
+const imageMarkedForRemoval = ref(false)
 
 const data = reactive({
   form: {},
@@ -128,6 +152,7 @@ const data = reactive({
 const { queryParams, form } = toRefs(data)
 const tr = (text) => translateByMap(text, settingsStore.language || 'zh-cn')
 const isEn = computed(() => (settingsStore.language || 'zh-cn') === 'en')
+const currentImageUrl = computed(() => pendingImageUrl.value || (!imageMarkedForRemoval.value ? form.value.imageUrl : ''))
 const rules = computed(() => ({
   itemCategory: [{ required: true, message: tr('分类不能为空'), trigger: 'change' }],
   itemBrand: [{ required: true, message: tr('品牌不能为空'), trigger: 'change' }],
@@ -138,6 +163,63 @@ function normalizeImageOssId(value) {
   if (Array.isArray(value)) return value[0]?.ossId || value[0] || undefined
   if (typeof value === 'string') return value.split(',').filter(Boolean)[0]
   return value || undefined
+}
+
+function clearPendingImage() {
+  if (pendingImageUrl.value) URL.revokeObjectURL(pendingImageUrl.value)
+  pendingImageFile.value = null
+  pendingImageUrl.value = ''
+  nextTick(() => imageUploadRef.value?.clearFiles?.())
+}
+
+function resetImageState() {
+  clearPendingImage()
+  imageMarkedForRemoval.value = false
+}
+
+function beforeBusinessImageUpload(file) {
+  const isImage = /^image\/(png|jpe?g)$/i.test(file.type)
+  if (!isImage) {
+    proxy?.$modal.msgError(tr('只能上传 png/jpg/jpeg 格式的图片'))
+    return false
+  }
+  if (file.size / 1024 / 1024 > 5) {
+    proxy?.$modal.msgError(tr('图片大小不能超过 5MB'))
+    return false
+  }
+  return true
+}
+
+function handleImageChange(uploadFile) {
+  const file = uploadFile?.raw
+  if (!file || !beforeBusinessImageUpload(file)) return
+  clearPendingImage()
+  pendingImageFile.value = file
+  pendingImageUrl.value = URL.createObjectURL(file)
+  imageMarkedForRemoval.value = false
+}
+
+function removeBusinessImage() {
+  if (pendingImageFile.value) {
+    clearPendingImage()
+    return
+  }
+  if (form.value.imageOssId || form.value.imageUrl) {
+    imageMarkedForRemoval.value = true
+    form.value.imageOssId = null
+    form.value.imageUrl = ''
+  }
+}
+
+async function syncModelImage(modelId) {
+  if (!modelId) return
+  if (pendingImageFile.value) {
+    await uploadItemModelImage(modelId, pendingImageFile.value)
+    return
+  }
+  if (imageMarkedForRemoval.value) {
+    await deleteItemModelImage(modelId)
+  }
 }
 
 function brandName(id) {
@@ -170,6 +252,7 @@ async function getList() {
 }
 
 function reset() {
+  resetImageState()
   form.value = {
     id: null,
     modelName: null,
@@ -177,6 +260,7 @@ function reset() {
     itemBrand: null,
     itemCategory: null,
     imageOssId: null,
+    imageUrl: '',
     orderNum: null,
     status: '1',
     remark: null
@@ -208,7 +292,7 @@ function handleAdd() {
 async function handleUpdate(row) {
   reset()
   const res = await getItemModel(row.id)
-  form.value = { ...res.data, imageOssId: res.data?.imageOssId ? String(res.data.imageOssId) : null }
+  form.value = { ...res.data, imageOssId: res.data?.imageOssId ? String(res.data.imageOssId) : null, imageUrl: res.data?.imageUrl || '' }
   open.value = true
   title.value = tr('修改包型')
 }
@@ -219,10 +303,21 @@ function submitForm() {
     buttonLoading.value = true
     const payload = { ...form.value, imageOssId: normalizeImageOssId(form.value.imageOssId) }
     try {
-      if (payload.id) await updateItemModel(payload)
-      else await addItemModel(payload)
+      let modelId = payload.id
+      if (payload.id) {
+        await updateItemModel(payload)
+      } else {
+        const res = await addItemModel(payload)
+        modelId = res?.data?.id ?? res?.data
+      }
+      try {
+        await syncModelImage(modelId)
+      } catch (error) {
+        proxy.$modal.msgWarning(tr('图片上传失败，请稍后重试'))
+      }
       proxy.$modal.msgSuccess(payload.id ? tr('修改成功') : tr('新增成功'))
       open.value = false
+      resetImageState()
       await useWmsStore().getItemModelList()
       await getList()
     } finally {
@@ -257,5 +352,57 @@ getList()
   color: #909399;
   background: #f5f7fa;
   border: 1px dashed #dcdfe6;
+}
+.business-image-upload {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.business-image-preview {
+  position: relative;
+  width: 112px;
+  height: 112px;
+}
+.business-image-thumb {
+  width: 112px;
+  height: 112px;
+  border-radius: 6px;
+  border: 1px solid #dcdfe6;
+}
+.business-image-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  padding: 4px;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 4px;
+}
+.business-image-picker {
+  width: 112px;
+}
+.business-image-trigger {
+  width: 112px;
+  height: 112px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #606266;
+  border: 1px dashed #c0c4cc;
+  border-radius: 6px;
+  background: #fafafa;
+  cursor: pointer;
+}
+.business-image-trigger:hover {
+  color: #409eff;
+  border-color: #409eff;
+}
+.business-image-tip {
+  flex-basis: 100%;
+  color: #909399;
+  font-size: 12px;
+  line-height: 1.4;
 }
 </style>
