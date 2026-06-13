@@ -171,6 +171,34 @@ export const dynamicRoutes = [
         meta: { title: '平台订单', activeMenu: '/wms/platform/tiktok/orders' }
       }
     ]
+  },
+  {
+    path: '/wms/platform/listings',
+    component: Layout,
+    hidden: true,
+    permissions: ['wms:platform:listing'],
+    children: [
+      {
+        path: '',
+        component: () => import('@/views/wms/platform/listings/index'),
+        name: 'PlatformListings',
+        meta: { title: '商品上架', activeMenu: '/wms/platform/listings' }
+      }
+    ]
+  },
+  {
+    path: '/wms/platform/listings/template',
+    component: Layout,
+    hidden: true,
+    permissions: ['wms:platform:listing'],
+    children: [
+      {
+        path: '',
+        component: () => import('@/views/wms/platform/listings/template'),
+        name: 'PlatformListingTemplate',
+        meta: { title: '上架模板', activeMenu: '/wms/platform/listings' }
+      }
+    ]
   }
 ]
 
