@@ -801,18 +801,28 @@ function normalizeQuery() {
   return query
 }
 
-function getList() {
+async function getList() {
   loading.value = true
   // 清空详情缓存，确保 canEditSku 等判断基于最新数据
   Object.keys(detailCache).forEach(k => delete detailCache[k])
   rawJsonCache.clear()
-  listPlatformOrders(normalizeQuery()).then(response => {
+  try {
+    const response = await listPlatformOrders(normalizeQuery())
     const data = response.data || {}
     orderList.value = response.rows || data.rows || data.records || (Array.isArray(data) ? data : [])
     total.value = response.total || data.total || orderList.value.length
-  }).catch(handleApiError).finally(() => {
+    // 深分页保护：返回空结果但 total > 0 说明当前页码超出可展示范围，自动重置到第1页
+    if (!orderList.value.length && total.value > 0 && queryParams.value.pageNum > 1) {
+      proxy.$modal.msgWarning(t('platformOrders.deepPageHint'))
+      queryParams.value.pageNum = 1
+      await getList()
+      return
+    }
+  } catch (e) {
+    handleApiError(e)
+  } finally {
     loading.value = false
-  })
+  }
 }
 
 function loadShops() {
