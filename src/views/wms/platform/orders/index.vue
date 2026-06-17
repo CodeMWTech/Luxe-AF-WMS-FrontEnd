@@ -1225,27 +1225,19 @@ function formatTaxes(taxes, currency) {
 
 function formatStatusText(status, platform) {
   if (!status) return '-'
-  // eBay 取消订单的 fulfillmentStatus 为 NOT_STARTED，卡片上映射为"已取消"
-  if (status === 'NOT_STARTED' && platform === 'EBAY') {
-    return orderStatusMap.value['CANCELLED'] || 'Cancelled'
-  }
-  return orderStatusMap.value[status] || status
+  return t(`platformOrders.orderStatus.${status}`, status)
 }
 
 function getStatusClass(status, platform) {
-  // eBay: NOT_STARTED = 已取消，使用 muted 样式
-  if (platform === 'EBAY' && status === 'NOT_STARTED') return 'muted'
   // 成功/完成
   if (['DELIVERED', 'COMPLETED', 'FULFILLED'].includes(status)) return 'success'
-  // 取消/退款/配送失败
-  if (['CANCELLED', 'REFUNDED', 'FAILED_DELIVERY'].includes(status)) return 'muted'
-  // 冻结
-  if (status === 'ON_HOLD') return 'warning'
-  // 待支付
-  if (status === 'UNPAID') return 'warning'
-  // 进行中：待发货/待取件/部分发货/运输中/处理中
-  if (['AWAITING_SHIPMENT', 'AWAITING_COLLECTION', 'PARTIALLY_SHIPPING', 'IN_TRANSIT', 'IN_PROGRESS'].includes(status)) return 'primary'
-  // 未开始
+  // 取消/退款/配送失败/支付失败
+  if (['CANCELLED', 'REFUNDED', 'FAILED_DELIVERY', 'PAYMENT_FAILED'].includes(status)) return 'muted'
+  // 冻结/待支付
+  if (['ON_HOLD', 'UNPAID'].includes(status)) return 'warning'
+  // 进行中：待发货/待取件/部分发货/运输中/处理中/已付款
+  if (['AWAITING_SHIPMENT', 'AWAITING_COLLECTION', 'PARTIALLY_SHIPPING', 'IN_TRANSIT', 'IN_PROGRESS', 'PAID'].includes(status)) return 'primary'
+  // 未开始/其他
   if (status === 'NOT_STARTED') return 'info'
   return 'info'
 }
@@ -1398,8 +1390,10 @@ function loadStatusMap() {
   getOrderStatusMap().then(response => {
     const data = response.data || response
     orderStatusMap.value = data || {}
-    // NOT_STARTED 合并到 CANCELLED，下拉框只保留 CANCELLED 代表"已取消"
-    orderStatusOptions.value = Object.keys(orderStatusMap.value).filter(k => k !== 'NOT_STARTED')
+    // 过滤下拉选项：NOT_STARTED 合并到 CANCELLED；PAID/PAYMENT_FAILED 为 eBay 计算值不可直接筛选
+    orderStatusOptions.value = Object.keys(orderStatusMap.value).filter(k =>
+      k !== 'NOT_STARTED' && k !== 'PAID' && k !== 'PAYMENT_FAILED'
+    )
   }).catch(() => {})
 }
 
