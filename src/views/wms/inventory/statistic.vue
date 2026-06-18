@@ -213,7 +213,7 @@
               <div>{{ tr('仓库商品总价') }}：{{ formatMoney(getWarehouseSummaryAmount(row)) }}</div>
             </template>
           </el-table-column>
-          <el-table-column :label="tr('商品名称')" prop="warehouseItemGroupKey" min-width="120" align="center" show-overflow-tooltip>
+          <el-table-column :label="tr('商品名称')" prop="warehouseItemGroupKey" min-width="480" align="center" show-overflow-tooltip>
             <template #default="{ row }">
               <span class="copyable-cell">
                 <span class="copyable-text">{{ getItemName(row) }}</span>
@@ -280,7 +280,7 @@
 
         <!-- ========== 商品维度列 ========== -->
         <template v-else>
-          <el-table-column :label="tr('商品名称')" prop="itemGroupKey" min-width="120" align="center" show-overflow-tooltip>
+          <el-table-column :label="tr('商品名称')" prop="itemGroupKey" min-width="480" align="center" show-overflow-tooltip>
             <template #default="{ row }">
               <span class="copyable-cell">
                 <span class="copyable-text">{{ getItemName(row) }}</span>
@@ -369,6 +369,12 @@
           <template #default="{ row }">
             <!-- 有出库历史但库存未清零时 shipmentTime 为 null，属于业务规则，显示 -- -->
             {{ formatTime(row.shipmentTime) }}
+          </template>
+        </el-table-column>
+
+        <el-table-column :label="tr('出库平台')" prop="outboundPlatform" :width="isEn ? 165 : 120" align="center" show-overflow-tooltip>
+          <template #default="{ row }">
+            {{ row.outboundPlatform || '--' }}
           </template>
         </el-table-column>
 
@@ -1032,6 +1038,7 @@ const INVENTORY_EXPORT_HEADER_MAP = {
   库存数量: 'Stock Qty',
   入库时间: 'Inbound Time',
   出库时间: 'Outbound Time',
+  出库平台: 'Outbound Platform',
   周转天数: 'Turnover Days',
   平均成本价: 'Avg Cost Price',
   平均销售价: 'Avg Selling Price',

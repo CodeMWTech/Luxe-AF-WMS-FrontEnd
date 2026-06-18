@@ -249,6 +249,7 @@ const zhToEnMap = {
   创建人精准匹配: 'Exact match on creator',
   入库时间: 'Inbound Time',
   出库时间: 'Outbound Time',
+  出库平台: 'Outbound Platform',
   周转天数: 'Turnover Days',
   库存数量: 'Stock Qty',
   利润: 'Profit',

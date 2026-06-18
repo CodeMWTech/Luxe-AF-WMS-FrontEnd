@@ -105,6 +105,7 @@
           <el-button icon="Refresh" class="action-btn" @click="resetQuery">{{ t('platformOrders.btnReset') }}</el-button>
           <el-button type="success" icon="RefreshRight" class="action-btn" @click="openSyncDialog" v-hasPermi="['wms:platform:tiktok:test']">{{ t('platformOrders.btnSync') }}</el-button>
           <el-button type="info" icon="Download" class="action-btn" :loading="exporting" @click="handleExport" v-hasPermi="['wms:platform:list']">{{ t('platformOrders.btnExport') }}</el-button>
+          <el-button type="primary" icon="Upload" class="action-btn" @click="openImportNotesDialog" v-hasPermi="['wms:platform:edit']">{{ t('platformOrders.btnImportNotes') }}</el-button>
           <!-- ========== 临时禁用：出库暂存单创建功能 ========== -->
           <!-- 如需恢复：删除 disabled 和 el-tooltip，恢复 @click="handleCreateShipments" 和 :loading -->
           <el-tooltip :content="t('platformOrders.shipmentDisabled')" placement="bottom">
@@ -421,14 +422,15 @@
                   <InfoLine :label="t('platformOrders.paymentCurrency')" :value="getCurrency(getDisplayOrder(order, index))" />
                   <InfoLine :label="t('platformOrders.paymentSubtotal')" :value="formatMoney(getPayment(getDisplayOrder(order, index)).subTotal, getCurrency(getDisplayOrder(order, index)))" strong />
                   <InfoLine :label="t('platformOrders.paymentTax')" :value="formatMoney(getPayment(getDisplayOrder(order, index)).tax, getCurrency(getDisplayOrder(order, index)))" />
-                  <InfoLine :label="t('platformOrders.paymentShippingFee')" :value="formatMoney(getPayment(getDisplayOrder(order, index)).shippingFee, getCurrency(getDisplayOrder(order, index)))" />
+                  <InfoLine v-if="getPlatform(getDisplayOrder(order, index)) !== 'TIKTOK'" :label="t('platformOrders.paymentShippingFee')" :value="formatMoney(getPayment(getDisplayOrder(order, index)).shippingFee, getCurrency(getDisplayOrder(order, index)))" />
                   <InfoLine :label="t('platformOrders.paymentTotal')" :value="formatMoney(getPayment(getDisplayOrder(order, index)).totalAmount, getCurrency(getDisplayOrder(order, index)))" strong />
                   <InfoLine :label="t('platformOrders.paymentPlatformDiscount')" :value="formatMoney(getPayment(getDisplayOrder(order, index)).platformDiscount, getCurrency(getDisplayOrder(order, index)))" />
                   <InfoLine v-if="getPlatform(getDisplayOrder(order, index)) === 'TIKTOK'" :label="t('platformOrders.paymentSellerDiscount')" :value="formatMoney(getPayment(getDisplayOrder(order, index)).sellerDiscount, getCurrency(getDisplayOrder(order, index)))" />
                   <InfoLine v-if="getPlatform(getDisplayOrder(order, index)) === 'TIKTOK'" :label="t('platformOrders.paymentProductTax')" :value="formatMoney(getPayment(getDisplayOrder(order, index)).productTax, getCurrency(getDisplayOrder(order, index)))" />
-                  <InfoLine v-if="getPlatform(getDisplayOrder(order, index)) === 'TIKTOK'" :label="t('platformOrders.paymentOriginalShippingFee')" :value="formatMoney(rawField(getDisplayOrder(order, index), 'payment.original_shipping_fee'), getCurrency(getDisplayOrder(order, index)))" />
+                  <InfoLine v-if="getPlatform(getDisplayOrder(order, index)) === 'TIKTOK'" :label="t('platformOrders.paymentShippingFee')" :value="formatMoney(rawField(getDisplayOrder(order, index), 'payment.original_shipping_fee'), getCurrency(getDisplayOrder(order, index)))" />
                   <InfoLine v-if="getPlatform(getDisplayOrder(order, index)) === 'TIKTOK'" :label="t('platformOrders.paymentOriginalTotalPrice')" :value="formatMoney(rawField(getDisplayOrder(order, index), 'payment.original_total_product_price'), getCurrency(getDisplayOrder(order, index)))" />
                   <InfoLine v-if="getPlatform(getDisplayOrder(order, index)) === 'EBAY'" :label="t('platformOrders.paymentMarketplaceFee')" :value="formatMoney(getDisplayOrder(order, index).totalMarketplaceFee, getCurrency(getDisplayOrder(order, index)))" />
+                  <InfoLine v-if="getPlatform(getDisplayOrder(order, index)) === 'EBAY'" :label="t('platformOrders.paymentMarketplaceFeeRate')" :value="formatMarketplaceFeeRate(getDisplayOrder(order, index))" />
                   <InfoLine v-if="getPlatform(getDisplayOrder(order, index)) === 'EBAY'" :label="t('platformOrders.paymentDueSeller')" :value="formatMoney(getDisplayOrder(order, index).totalDueSeller, getCurrency(getDisplayOrder(order, index)))" strong />
                   <InfoLine :label="t('platformOrders.paymentGrossProfit')" :value="formatGrossProfit(getDisplayOrder(order, index))" />
                   <template v-for="(item, itemIndex) in getLineItems(getDisplayOrder(order, index))" :key="'pay-item-' + (item.lineItemId || item.skuId || itemIndex)">
@@ -442,18 +444,8 @@
                 <h3><el-icon><Memo /></el-icon>{{ t('platformOrders.detailNotes') }}</h3>
                 <div class="notes-grid">
                   <div>
-                    <span class="note-label">{{ t('platformOrders.buyerMessage') }}</span>
-                    <p>{{ displayValue(rawField(getDisplayOrder(order, index), 'buyer_message', 'buyerCheckoutNotes') || getDisplayOrder(order, index).buyerMessage) }}</p>
-                  </div>
-                  <div>
-                    <span class="note-label">{{ t('platformOrders.internalNote') }}</span>
-                    <el-input
-                      :model-value="getDisplayOrder(order, index).internalRemark || ''"
-                      type="textarea"
-                      :rows="2"
-                      :placeholder="t('platformOrders.internalNotePlaceholder')"
-                      disabled
-                    />
+                    <span class="note-label">{{ t('platformOrders.remark') }}</span>
+                    <p>{{ displayValue(getDisplayOrder(order, index).internalRemark || rawField(getDisplayOrder(order, index), 'buyer_message', 'buyerCheckoutNotes') || getDisplayOrder(order, index).buyerMessage) }}</p>
                   </div>
                 </div>
               </section>
@@ -591,13 +583,48 @@
       @handleCancelClick="skuSelectShow = false"
       :size="'40%'"
     />
+
+    <!-- 导入 Note 弹窗 -->
+    <el-dialog v-model="notesImportOpen" :title="t('platformOrders.importNotesTitle')" width="520px" @close="cancelImportNotes">
+      <el-alert
+        :title="t('platformOrders.importNotesHelp')"
+        type="info"
+        show-icon
+        :closable="false"
+        class="mb20"
+      />
+      <el-form label-width="100px">
+        <el-form-item :label="t('platformOrders.importNotesSelectFile')">
+          <el-upload
+            ref="importUploadRef"
+            :auto-upload="false"
+            :limit="1"
+            accept=".csv"
+            :on-change="handleImportFileChange"
+            :on-remove="handleImportFileRemove"
+            :file-list="importFileList"
+          >
+            <el-button type="primary" icon="FolderOpened">{{ t('platformOrders.importNotesSelectFile') }}</el-button>
+            <template #tip>
+              <div class="el-upload__tip">CSV 文件（.csv），支持 TikTok 和 eBay 格式</div>
+            </template>
+          </el-upload>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="cancelImportNotes">{{ t('platformOrders.cancel') }}</el-button>
+        <el-button type="primary" :loading="notesImportLoading" :disabled="!notesImportFile" @click="submitImportNotes">
+          {{ t('platformOrders.importNotesStart') }}
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup name="PlatformOrders">
 import { computed, defineComponent, getCurrentInstance, h, onMounted, ref } from 'vue'
 import { ArrowDown, ArrowRight, CopyDocument, Edit } from '@element-plus/icons-vue'
-import { getPlatformOrder, listPlatformOrders, getOrderStatusMap, updateOrderSku, createShipments, exportPlatformOrders } from '@/api/wms/platformOrder'
+import { getPlatformOrder, listPlatformOrders, getOrderStatusMap, updateOrderSku, createShipments, exportPlatformOrders, importNotes } from '@/api/wms/platformOrder'
 import { listAllPlatformShops, batchSyncOrders } from '@/api/wms/platformShop'
 import SkuSelect from '@/views/components/SkuSelect.vue'
 
@@ -699,6 +726,9 @@ function formatIsoTime(str) {
 
 const syncOpen = ref(false)
 const syncShopList = ref([])
+const notesImportOpen = ref(false)
+const notesImportFile = ref(null)
+const notesImportLoading = ref(false)
 const queryRef = ref(null)
 const syncRef = ref(null)
 
@@ -771,18 +801,28 @@ function normalizeQuery() {
   return query
 }
 
-function getList() {
+async function getList() {
   loading.value = true
   // 清空详情缓存，确保 canEditSku 等判断基于最新数据
   Object.keys(detailCache).forEach(k => delete detailCache[k])
   rawJsonCache.clear()
-  listPlatformOrders(normalizeQuery()).then(response => {
+  try {
+    const response = await listPlatformOrders(normalizeQuery())
     const data = response.data || {}
     orderList.value = response.rows || data.rows || data.records || (Array.isArray(data) ? data : [])
     total.value = response.total || data.total || orderList.value.length
-  }).catch(handleApiError).finally(() => {
+    // 深分页保护：返回空结果但 total > 0 说明当前页码超出可展示范围，自动重置到第1页
+    if (!orderList.value.length && total.value > 0 && queryParams.value.pageNum > 1) {
+      proxy.$modal.msgWarning(t('platformOrders.deepPageHint'))
+      queryParams.value.pageNum = 1
+      await getList()
+      return
+    }
+  } catch (e) {
+    handleApiError(e)
+  } finally {
     loading.value = false
-  })
+  }
 }
 
 function loadShops() {
@@ -1065,14 +1105,14 @@ function formatMoney(value, currency = 'USD') {
 function formatOptionalMoney(value, currency) {
   if (value === null || value === undefined || value === '') return '-'
   const num = Number(value)
-  if (!Number.isFinite(num) || num === 0) return '-'
+  if (!Number.isFinite(num)) return '-'
   return formatMoney(value, currency)
 }
 
 function formatGrossProfit(order) {
   if (order.grossProfit === null || order.grossProfit === undefined || order.grossProfit === '') return '-'
   const num = Number(order.grossProfit)
-  if (!Number.isFinite(num) || num === 0) return '-'
+  if (!Number.isFinite(num)) return '-'
   return formatMoney(order.grossProfit, getCurrency(order))
 }
 
@@ -1089,6 +1129,17 @@ function formatEbayNetProfit(order) {
   if (!Number.isFinite(ta) || !Number.isFinite(c) || c <= 0) return '-'
   const netProfit = ta - f - c
   return formatMoney(netProfit, getCurrency(order))
+}
+
+/** eBay 平台收费率 = 平台交易费(totalMarketplaceFee) / 售价(totalAmount) * 100% */
+function formatMarketplaceFeeRate(order) {
+  const fee = order.totalMarketplaceFee
+  const totalAmount = order.totalAmount
+  if (fee == null || totalAmount == null) return '-'
+  const f = Number(fee)
+  const t = Number(totalAmount)
+  if (!Number.isFinite(f) || !Number.isFinite(t) || t === 0) return '-'
+  return (f / t * 100).toFixed(2) + '%'
 }
 
 const COUNTRY_MAP = {
@@ -1174,27 +1225,19 @@ function formatTaxes(taxes, currency) {
 
 function formatStatusText(status, platform) {
   if (!status) return '-'
-  // eBay 取消订单的 fulfillmentStatus 为 NOT_STARTED，卡片上映射为"已取消"
-  if (status === 'NOT_STARTED' && platform === 'EBAY') {
-    return orderStatusMap.value['CANCELLED'] || 'Cancelled'
-  }
-  return orderStatusMap.value[status] || status
+  return t(`platformOrders.orderStatus.${status}`, status)
 }
 
 function getStatusClass(status, platform) {
-  // eBay: NOT_STARTED = 已取消，使用 muted 样式
-  if (platform === 'EBAY' && status === 'NOT_STARTED') return 'muted'
   // 成功/完成
   if (['DELIVERED', 'COMPLETED', 'FULFILLED'].includes(status)) return 'success'
-  // 取消/退款/配送失败
-  if (['CANCELLED', 'REFUNDED', 'FAILED_DELIVERY'].includes(status)) return 'muted'
-  // 冻结
-  if (status === 'ON_HOLD') return 'warning'
-  // 待支付
-  if (status === 'UNPAID') return 'warning'
-  // 进行中：待发货/待取件/部分发货/运输中/处理中
-  if (['AWAITING_SHIPMENT', 'AWAITING_COLLECTION', 'PARTIALLY_SHIPPING', 'IN_TRANSIT', 'IN_PROGRESS'].includes(status)) return 'primary'
-  // 未开始
+  // 取消/退款/配送失败/支付失败
+  if (['CANCELLED', 'REFUNDED', 'FAILED_DELIVERY', 'PAYMENT_FAILED'].includes(status)) return 'muted'
+  // 冻结/待支付
+  if (['ON_HOLD', 'UNPAID'].includes(status)) return 'warning'
+  // 进行中：待发货/待取件/部分发货/运输中/处理中/已付款
+  if (['AWAITING_SHIPMENT', 'AWAITING_COLLECTION', 'PARTIALLY_SHIPPING', 'IN_TRANSIT', 'IN_PROGRESS', 'PAID'].includes(status)) return 'primary'
+  // 未开始/其他
   if (status === 'NOT_STARTED') return 'info'
   return 'info'
 }
@@ -1278,6 +1321,59 @@ function cancelSkuEdit() {
   selectedSkuForEdit.value = []
 }
 
+// ==================== 导入 Note ====================
+const importUploadRef = ref(null)
+const importFileList = ref([])
+
+function openImportNotesDialog() {
+  notesImportOpen.value = true
+  notesImportFile.value = null
+  importFileList.value = []
+}
+
+function handleImportFileChange(uploadFile) {
+  notesImportFile.value = uploadFile.raw
+}
+
+function handleImportFileRemove() {
+  notesImportFile.value = null
+}
+
+function cancelImportNotes() {
+  notesImportOpen.value = false
+  notesImportFile.value = null
+  importFileList.value = []
+}
+
+function submitImportNotes() {
+  if (!notesImportFile.value) {
+    proxy.$modal.msgWarning(t('platformOrders.importNotesSelectFile'))
+    return
+  }
+  notesImportLoading.value = true
+  importNotes(notesImportFile.value).then(response => {
+    const data = response.data || response
+    proxy.$modal.msgSuccess(t('platformOrders.importNoteResult', {
+      platform: data.platform || '-',
+      total: data.totalRows ?? 0,
+      updated: data.updated ?? 0,
+      skipped: data.skipped ?? 0,
+      notFound: data.notFound ?? 0
+    }))
+    if (data.errors && data.errors.length > 0) {
+      setTimeout(() => {
+        proxy.$modal.msgWarning(data.errors.slice(0, 3).join('; '))
+      }, 500)
+    }
+    cancelImportNotes()
+    getList()
+  }).catch(() => {
+    proxy.$modal.msgError(t('platformOrders.importNotesFailed'))
+  }).finally(() => {
+    notesImportLoading.value = false
+  })
+}
+
 function handleApiError(error) {
   const status = error?.response?.status
   const code = error?.response?.data?.code
@@ -1294,8 +1390,10 @@ function loadStatusMap() {
   getOrderStatusMap().then(response => {
     const data = response.data || response
     orderStatusMap.value = data || {}
-    // NOT_STARTED 合并到 CANCELLED，下拉框只保留 CANCELLED 代表"已取消"
-    orderStatusOptions.value = Object.keys(orderStatusMap.value).filter(k => k !== 'NOT_STARTED')
+    // 过滤下拉选项：NOT_STARTED 合并到 CANCELLED；PAID/PAYMENT_FAILED 为 eBay 计算值不可直接筛选
+    orderStatusOptions.value = Object.keys(orderStatusMap.value).filter(k =>
+      k !== 'NOT_STARTED' && k !== 'PAID' && k !== 'PAYMENT_FAILED'
+    )
   }).catch(() => {})
 }
 

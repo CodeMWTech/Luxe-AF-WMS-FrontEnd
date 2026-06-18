@@ -45,3 +45,22 @@ export function delItemMaterial(id) {
     method: 'delete'
   })
 }
+
+export function uploadItemMaterialImage(id, file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request({
+    url: `/wms/itemMaterial/${id}/image/upload`,
+    method: 'post',
+    data: formData,
+    headers: { 'Content-Type': 'multipart/form-data', repeatSubmit: false },
+    timeout: 0
+  })
+}
+
+export function deleteItemMaterialImage(id) {
+  return request({
+    url: `/wms/itemMaterial/${id}/image`,
+    method: 'delete'
+  })
+}

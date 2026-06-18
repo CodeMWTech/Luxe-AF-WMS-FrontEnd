@@ -46,6 +46,25 @@ export function delItemModel(id) {
   })
 }
 
+export function uploadItemModelImage(id, file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request({
+    url: `/wms/itemModel/${id}/image/upload`,
+    method: 'post',
+    data: formData,
+    headers: { 'Content-Type': 'multipart/form-data', repeatSubmit: false },
+    timeout: 0
+  })
+}
+
+export function deleteItemModelImage(id) {
+  return request({
+    url: `/wms/itemModel/${id}/image`,
+    method: 'delete'
+  })
+}
+
 export function listItemModelBrandOptions(categoryId) {
   return request({
     url: '/wms/itemModel/brandOptions/' + categoryId,
