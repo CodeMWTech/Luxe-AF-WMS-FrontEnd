@@ -109,7 +109,7 @@ function filterChildren(childrenMap, lastRouter = false) {
     if (el.children && el.children.length) {
       if (el.component === 'ParentView' && !lastRouter) {
         el.children.forEach(c => {
-          c.path = el.path + '/' + c.path
+          c.path = resolveRoutePath(el.path, c.path)
           if (c.children && c.children.length) {
             children = children.concat(filterChildren(c.children, c))
             return
@@ -120,7 +120,7 @@ function filterChildren(childrenMap, lastRouter = false) {
       }
     }
     if (lastRouter) {
-      el.path = lastRouter.path + '/' + el.path
+      el.path = resolveRoutePath(lastRouter.path, el.path)
       if (el.children && el.children.length) {
         children = children.concat(filterChildren(el.children, el))
         return
