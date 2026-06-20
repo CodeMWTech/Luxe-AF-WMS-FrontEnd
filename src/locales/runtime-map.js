@@ -1,4 +1,4 @@
-const zhToEnMap = {
+﻿const zhToEnMap = {
   首页: 'Home',
   系统概述: 'System Overview',
   个人中心: 'Profile',
@@ -596,6 +596,18 @@ const zhToEnMap = {
 
   // Platform Orders
   '平台订单': 'Platform Orders',
+  '上架管理': 'Listing Management',
+  '商品上架': 'Product Listings',
+  '上架模板': 'Listing Templates',
+  '上架状态': 'Listing Status',
+  '上架标题': 'Listing Title',
+  '上架时间': 'Listing Time',
+  '管理模板': 'Templates',
+  'Listings标题': 'Listing Title',
+  'Listings时间': 'Listing Time',
+  'ListingsStatus': 'Listing Status',
+  'Management模板': 'Templates',
+  '上架Management': 'Listing Management',
   'TikTok + eBay 订单卡片列表': 'TikTok + eBay Order List',
   '店铺': 'Shop',
   '平台': 'Platform',
@@ -698,3 +710,5 @@ export function translateByMap(text, language = 'zh-cn') {
 }
 
 export default zhToEnMap
+
+

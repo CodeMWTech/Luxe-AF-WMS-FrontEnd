@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <el-dialog v-model="visible" :title="t('platformListings.publishTitle')" width="900px" :close-on-click-modal="false" destroy-on-close @open="onOpen">
     <el-steps :active="step" align-center finish-status="success" style="margin-bottom:24px">
       <el-step :title="t('platformListings.stepSelectProducts')" />
@@ -9,23 +9,23 @@
     <!-- Step 1: 选择库存商品 -->
     <div v-if="step === 0">
       <el-form :inline="true">
-        <el-form-item label="SKU">
-          <el-input v-model="invQuery.skuCode" clearable placeholder="搜索SKU编码" @keyup.enter="loadInventory" />
+        <el-form-item :label="t('platformListings.sku')">
+          <el-input v-model="invQuery.skuCode" clearable :placeholder="t('platformListings.searchSkuPlaceholder')" @keyup.enter="loadInventory" />
         </el-form-item>
-        <el-form-item label="商品名">
-          <el-input v-model="invQuery.itemName" clearable placeholder="搜索商品名" @keyup.enter="loadInventory" />
+        <el-form-item :label="t('platformListings.productName')">
+          <el-input v-model="invQuery.itemName" clearable :placeholder="t('platformListings.searchProductPlaceholder')" @keyup.enter="loadInventory" />
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" icon="Search" @click="loadInventory">查询</el-button>
+          <el-button type="primary" icon="Search" @click="loadInventory">{{ t('platformListings.btnQuery') }}</el-button>
         </el-form-item>
       </el-form>
       <el-table ref="invTableRef" :data="invList" v-loading="invLoading" border stripe max-height="400" @selection-change="onSelectionChange">
         <el-table-column type="selection" width="50" />
-        <el-table-column label="SKU" prop="skuCode" min-width="120" />
-        <el-table-column label="商品名称" prop="itemName" min-width="150" show-overflow-tooltip />
-        <el-table-column label="仓库" prop="warehouseName" width="100" />
-        <el-table-column label="库存量" prop="quantity" width="80" align="center" />
-        <el-table-column label="销售价" width="100" align="right">
+        <el-table-column :label="t('platformListings.sku')" prop="skuCode" min-width="120" />
+        <el-table-column :label="t('platformListings.productName')" prop="itemName" min-width="150" show-overflow-tooltip />
+        <el-table-column :label="t('platformListings.warehouse')" prop="warehouseName" width="100" />
+        <el-table-column :label="t('platformListings.inventoryQuantity')" prop="quantity" width="80" align="center" />
+        <el-table-column :label="t('platformListings.sellingPrice')" width="100" align="right">
           <template #default="{ row }">${{ row.sellingPrice ? Number(row.sellingPrice).toFixed(2) : '-' }}</template>
         </el-table-column>
       </el-table>
@@ -50,10 +50,10 @@
         </el-form-item>
         <el-form-item v-if="chosenTemplate">
           <el-descriptions :column="2" border size="small">
-            <el-descriptions-item label="平台">{{ chosenPlatform === 'EBAY' ? 'eBay' : 'TikTok Shop' }}</el-descriptions-item>
-            <el-descriptions-item label="价格来源">{{ chosenTemplate.priceSource === 'CUSTOM' ? '自定义' : 'SKU销售价' }}</el-descriptions-item>
-            <el-descriptions-item label="加价">{{ (chosenTemplate.priceMarkupValue || 0) + (chosenTemplate.priceMarkupType === 'PERCENT' ? '%' : '') }}</el-descriptions-item>
-            <el-descriptions-item label="标题格式" :span="2">{{ chosenTemplate.titleFormat || '{brand} {material} {year} {itemName}' }}</el-descriptions-item>
+            <el-descriptions-item :label="t('platformListings.templatePlatformLabel')">{{ chosenPlatform === 'EBAY' ? 'eBay' : 'TikTok Shop' }}</el-descriptions-item>
+            <el-descriptions-item :label="t('platformListings.templatePriceSourceLabel')">{{ chosenTemplate.priceSource === 'CUSTOM' ? t('platformListings.priceSourceCustom') : t('platformListings.priceSourceSelling') }}</el-descriptions-item>
+            <el-descriptions-item :label="t('platformListings.templateMarkupLabel')">{{ (chosenTemplate.priceMarkupValue || 0) + (chosenTemplate.priceMarkupType === 'PERCENT' ? '%' : '') }}</el-descriptions-item>
+            <el-descriptions-item :label="t('platformListings.templateTitleFormatLabel')" :span="2">{{ chosenTemplate.titleFormat || '{brand} {material} {year} {itemName}' }}</el-descriptions-item>
           </el-descriptions>
         </el-form-item>
       </el-form>
@@ -61,9 +61,27 @@
 
     <!-- Step 3: 预览确认 -->
     <div v-if="step === 2">
-      <el-alert :title="`已选择 ${selectedSkus.length} 个SKU，模板：${chosenTemplate?.templateName || '-'}`" type="info" :closable="false" style="margin-bottom:12px" />
-      <el-table :data="previewList" v-loading="previewLoading" border stripe max-height="400">
-        <el-table-column label="SKU" prop="skuCode" width="120" />
+      <el-alert :title="t('platformListings.previewSelectedSummary', { count: selectedSkus.length, template: chosenTemplate?.templateName || '-' })" type="info" :closable="false" style="margin-bottom:12px" />
+      <div v-if="previewList.length" class="channel-preview" :class="chosenPlatform === 'EBAY' ? 'ebay-preview' : 'tiktok-preview'">
+        <div class="preview-media">
+          <el-image v-if="previewList[0].images && previewList[0].images.length" :src="previewList[0].images[0]" fit="cover" />
+          <div v-else class="empty-media">{{ t('platformListings.noImage') }}</div>
+        </div>
+        <div class="preview-content">
+          <div class="preview-platform">{{ chosenPlatform === 'EBAY' ? t('platformListings.ebayPreviewLabel') : t('platformListings.tiktokPreviewLabel') }}</div>
+          <div class="preview-title">{{ previewList[0].overrideTitle || '-' }}</div>
+          <div class="preview-price">{{ previewList[0].currency || 'USD' }} {{ Number(previewList[0].overridePrice || 0).toFixed(2) }}</div>
+          <div class="preview-meta">
+            <span>{{ t('platformListings.sku') }} {{ previewList[0].skuCode }}</span>
+            <span>{{ t('platformListings.quantityShort') }} {{ previewList[0].quantity || 1 }}</span>
+            <span>{{ previewList[0].condition || '-' }}</span>
+            <span>{{ previewList[0].packageSummary || '-' }}</span>
+          </div>
+          <div class="preview-desc" v-html="previewList[0].description"></div>
+        </div>
+      </div>
+      <el-table :data="previewList" v-loading="previewLoading" border stripe max-height="320">
+        <el-table-column :label="t('platformListings.sku')" prop="skuCode" width="120" />
         <el-table-column :label="t('platformListings.resolvedTitle')" min-width="200">
           <template #default="{ row, $index }">
             <el-input v-model="row.overrideTitle" size="small" />
@@ -74,7 +92,7 @@
             <el-input-number v-model="row.overridePrice" :precision="2" :min="0.01" size="small" controls-position="right" style="width:100%" />
           </template>
         </el-table-column>
-        <el-table-column label="图片" width="70" align="center">
+        <el-table-column :label="t('platformListings.image')" width="70" align="center">
           <template #default="{ row }">
             <span v-if="!row.images || !row.images.length">{{ t('platformListings.noImage') }}</span>
             <el-image v-else :src="row.images[0]" style="width:40px;height:40px" fit="cover" :preview-src-list="row.images" />
@@ -84,12 +102,12 @@
     </div>
 
     <template #footer>
-      <el-button @click="visible = false">取消</el-button>
-      <el-button v-if="step > 0" @click="step--">上一步</el-button>
+      <el-button @click="visible = false">{{ t('platformListings.cancel') }}</el-button>
+      <el-button v-if="step > 0" @click="step--">{{ t('platformListings.previousStep') }}</el-button>
       <el-button v-if="step === 0" type="primary" @click="goStep2" :disabled="selectedSkus.length === 0">
-        下一步 ({{ selectedSkus.length }})
+        {{ t('platformListings.nextStep') }} ({{ selectedSkus.length }})
       </el-button>
-      <el-button v-if="step === 1" type="primary" @click="goStep3" :disabled="!chosenTemplateId">下一步</el-button>
+      <el-button v-if="step === 1" type="primary" @click="goStep3" :disabled="!chosenTemplateId">{{ t('platformListings.nextStep') }}</el-button>
       <el-button v-if="step === 2" type="primary" @click="doPublish" :loading="publishing">
         {{ t('platformListings.startPublish') }} ({{ previewList.length }})
       </el-button>
@@ -104,7 +122,7 @@ import { listAllTemplates, previewTemplate, batchPublish } from '@/api/wms/platf
 import { listAllPlatformShops } from '@/api/wms/platformShop'
 
 const { proxy } = getCurrentInstance()
-const t = (key) => proxy?.$t?.(key) || key
+const t = (key, values) => proxy?.$t?.(key, values) || key
 
 const emit = defineEmits(['success'])
 
@@ -175,6 +193,7 @@ async function loadPreviews() {
         const res = await previewTemplate(chosenTemplateId.value, sku.skuId || sku.id)
         const data = res.data || {}
         previewList.value.push({
+          ...data,
           skuId: sku.skuId || sku.id,
           skuCode: data.skuCode || sku.skuCode,
           overrideTitle: data.title || '',
@@ -207,7 +226,7 @@ function onOpen() {
 
 function goStep2() {
   if (selectedSkus.value.length === 0) {
-    proxy.$modal.msgWarning('请至少选择一个SKU')
+    proxy.$modal.msgWarning(t('platformListings.selectSkuRequired'))
     return
   }
   chosenShopId.value = null
@@ -218,7 +237,7 @@ function goStep2() {
 
 async function goStep3() {
   if (!chosenTemplateId.value) {
-    proxy.$modal.msgWarning('请选择模板')
+    proxy.$modal.msgWarning(t('platformListings.selectTemplateRequired'))
     return
   }
   step.value = 2
@@ -227,9 +246,15 @@ async function goStep3() {
 
 async function doPublish() {
   const skuIds = previewList.value.map(p => p.skuId)
+  const customTitles = {}
+  const customPrices = {}
+  previewList.value.forEach(p => {
+    if (p.overrideTitle) customTitles[p.skuId] = p.overrideTitle
+    if (p.overridePrice != null) customPrices[p.skuId] = p.overridePrice
+  })
   publishing.value = true
   try {
-    await batchPublish({ templateId: chosenTemplateId.value, shopId: chosenShopId.value, skuIds })
+    await batchPublish({ templateId: chosenTemplateId.value, publishShopId: chosenShopId.value, skuIds, customTitles, customPrices })
     proxy.$modal.msgSuccess(t('platformListings.publishSuccess'))
     visible.value = false
     emit('success')
@@ -243,3 +268,27 @@ async function doPublish() {
 function open() { visible.value = true }
 defineExpose({ open })
 </script>
+<style scoped>
+.channel-preview {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 18px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 16px;
+  margin-bottom: 14px;
+  background: #fff;
+}
+.channel-preview .preview-media { width: 180px; height: 180px; background: #f5f7fa; }
+.channel-preview .preview-media :deep(.el-image) { width: 100%; height: 100%; }
+.empty-media { height: 100%; display: flex; align-items: center; justify-content: center; color: #909399; }
+.preview-platform { font-size: 12px; font-weight: 700; text-transform: uppercase; color: #606266; margin-bottom: 6px; }
+.preview-title { font-size: 18px; font-weight: 700; line-height: 1.35; color: #111827; }
+.preview-price { margin-top: 8px; font-size: 20px; font-weight: 700; color: #111827; }
+.preview-meta { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+.preview-meta span { border: 1px solid #e5e7eb; border-radius: 4px; padding: 3px 8px; font-size: 12px; color: #606266; }
+.preview-desc { max-height: 110px; overflow: auto; font-size: 12px; color: #606266; border-top: 1px solid #ebeef5; padding-top: 8px; }
+.ebay-preview { border-top: 4px solid #3665f3; }
+.tiktok-preview { border-top: 4px solid #111827; }
+</style>
+

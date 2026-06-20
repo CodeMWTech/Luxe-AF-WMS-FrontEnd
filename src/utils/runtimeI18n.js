@@ -1,4 +1,4 @@
-import { translateByMap } from '@/locales/runtime-map'
+﻿import { translateByMap } from '@/locales/runtime-map'
 
 const textNodeOrigin = new WeakMap()
 const elementAttrOrigin = new WeakMap()
@@ -33,11 +33,16 @@ function isInDataArea(node) {
 
 function translateTextNode(node, language) {
   if (!node || isSkippableNode(node) || isInDataArea(node)) return
-  if (!textNodeOrigin.has(node)) {
-    textNodeOrigin.set(node, node.nodeValue || '')
+
+  const current = node.nodeValue || ''
+  let state = textNodeOrigin.get(node)
+  if (!state || current !== state.translated) {
+    state = { original: current, translated: current }
+    textNodeOrigin.set(node, state)
   }
-  const original = textNodeOrigin.get(node) || ''
-  const nextValue = language === 'en' ? translateByMap(original, language) : original
+
+  const nextValue = language === 'en' ? translateByMap(state.original, language) : state.original
+  state.translated = nextValue
   if (node.nodeValue !== nextValue) {
     node.nodeValue = nextValue
   }
@@ -61,10 +66,12 @@ function translateElementAttrs(el, language) {
   ATTR_KEYS.forEach((attr) => {
     const current = el.getAttribute(attr)
     if (current == null) return
-    if (originMap[attr] == null) {
-      originMap[attr] = current
+    const state = originMap[attr]
+    if (!state || current !== state.translated) {
+      originMap[attr] = { original: current, translated: current }
     }
-    const nextValue = language === 'en' ? translateByMap(originMap[attr], language) : originMap[attr]
+    const nextValue = language === 'en' ? translateByMap(originMap[attr].original, language) : originMap[attr].original
+    originMap[attr].translated = nextValue
     if (current !== nextValue) {
       el.setAttribute(attr, nextValue)
     }
@@ -127,3 +134,4 @@ export function setupRuntimeI18nWatcher(languageGetter) {
 
   return { apply, start, stop }
 }
+

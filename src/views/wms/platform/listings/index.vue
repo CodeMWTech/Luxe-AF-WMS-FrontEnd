@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="app-container platform-listings">
     <!-- 筛选栏 -->
     <el-card class="filter-card">
@@ -60,11 +60,12 @@
         </el-table-column>
         <el-table-column :label="t('platformListings.listingError')" prop="listingError" min-width="140" show-overflow-tooltip />
         <el-table-column :label="t('platformListings.listingTime')" prop="createTime" width="160" align="center" />
-        <el-table-column label="操作" width="180" align="center" fixed="right">
+        <el-table-column :label="t('platformListings.operation')" width="260" align="center" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" size="small" icon="Refresh" @click="handleSync(row)" v-if="row.listingStatus === 'LISTED'">{{ t('platformListings.btnSyncStatus') }}</el-button>
             <el-button link type="danger" size="small" icon="Close" @click="handleDelist(row)" v-if="row.listingStatus === 'LISTED'">{{ t('platformListings.btnDelist') }}</el-button>
-            <el-button link type="warning" size="small" icon="Refresh" @click="handleRetry(row)" v-if="row.listingStatus === 'FAILED'">重试</el-button>
+            <el-button link type="warning" size="small" icon="Refresh" @click="handleRetry(row)" v-if="row.listingStatus === 'FAILED' || row.listingStatus === 'DELISTED'">{{ row.listingStatus === 'DELISTED' ? t('platformListings.btnRelist') : t('platformListings.btnRetry') }}</el-button>
+            <el-button link type="danger" size="small" icon="Delete" @click="handleDelete(row)" v-if="row.listingStatus === 'DELISTED'">{{ t('platformListings.btnDeleteRecord') }}</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -80,7 +81,7 @@
 <script setup>
 import { ref, reactive, onMounted, nextTick, getCurrentInstance } from 'vue'
 import { useRouter } from 'vue-router'
-import { listListings, delistListing, syncListingStatus, retryListing } from '@/api/wms/platformListing'
+import { listListings, delistListing, syncListingStatus, retryListing, deleteListing } from '@/api/wms/platformListing'
 import { listAllPlatformShops } from '@/api/wms/platformShop'
 import PublishDialog from './components/PublishDialog.vue'
 
@@ -152,7 +153,7 @@ function goTemplates() {
 }
 
 function handleDelist(row) {
-  proxy.$modal.confirm(t('platformListings.confirmDelist'), '提示', { type: 'warning' }).then(() => {
+  proxy.$modal.confirm(t('platformListings.confirmDelist'), t('platformListings.promptTitle'), { type: 'warning' }).then(() => {
     delistListing(row.id).then(() => {
       proxy.$modal.msgSuccess(t('platformListings.delistSuccess'))
       getList()
@@ -172,12 +173,23 @@ function handleSync(row) {
 }
 
 function handleRetry(row) {
-  proxy.$modal.confirm('确认重新上架该商品？', '提示', { type: 'info' }).then(() => {
+  proxy.$modal.confirm(t('platformListings.confirmRetry'), t('platformListings.promptTitle'), { type: 'info' }).then(() => {
     retryListing(row.id).then(() => {
-      proxy.$modal.msgSuccess('已重新提交上架')
+      proxy.$modal.msgSuccess(t('platformListings.retrySubmitted'))
       getList()
     }).catch(() => {
-      proxy.$modal.msgError('重试失败')
+      proxy.$modal.msgError(t('platformListings.retryFailed'))
+    })
+  }).catch(() => {})
+}
+
+function handleDelete(row) {
+  proxy.$modal.confirm(t('platformListings.confirmDeleteListing'), t('platformListings.warningTitle'), { type: 'error' }).then(() => {
+    deleteListing(row.id).then(() => {
+      proxy.$modal.msgSuccess(t('platformListings.listingDeleteSuccess'))
+      getList()
+    }).catch(() => {
+      proxy.$modal.msgError(t('platformListings.listingDeleteFailed'))
     })
   }).catch(() => {})
 }
@@ -193,3 +205,4 @@ onMounted(() => {
 .table-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
 .table-title { font-size: 16px; font-weight: 600; }
 </style>
+

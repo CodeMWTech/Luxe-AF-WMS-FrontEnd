@@ -1,4 +1,4 @@
-import { createWebHistory, createRouter } from 'vue-router'
+﻿import { createWebHistory, createRouter } from 'vue-router'
 /* Layout */
 import Layout from '@/layout'
 
@@ -182,7 +182,7 @@ export const dynamicRoutes = [
         path: '',
         component: () => import('@/views/wms/platform/listings/index'),
         name: 'PlatformListings',
-        meta: { title: '商品上架', activeMenu: '/wms/platform/listings' }
+        meta: { title: '商品上架', titleEn: 'Product Listings', activeMenu: '/wms/platform/listings' }
       }
     ]
   },
@@ -196,7 +196,7 @@ export const dynamicRoutes = [
         path: '',
         component: () => import('@/views/wms/platform/listings/template'),
         name: 'PlatformListingTemplate',
-        meta: { title: '上架模板', activeMenu: '/wms/platform/listings' }
+        meta: { title: '上架模板', titleEn: 'Listing Templates', activeMenu: '/wms/platform/listings' }
       }
     ]
   }
@@ -215,3 +215,4 @@ const router = createRouter({
 });
 
 export default router;
+
