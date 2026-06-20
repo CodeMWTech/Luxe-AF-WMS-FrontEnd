@@ -1,6 +1,6 @@
 ## 后端项目地址
 #### github地址
-https://github.com/Jiangwei-shi/Luxe-AF-WMS-BackEnd
+https://github.com/CodeMWTech/Luxe-AF-WMS-BackEnd
 
 
 ## 前端技术栈
