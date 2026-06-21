@@ -106,7 +106,7 @@
           </el-col>
         </el-row>
         <el-row :gutter="16">
-          <el-col :xs="24" :sm="24" :md="canViewSellingPrice ? 8 : 12" :lg="canViewSellingPrice ? 8 : 12">
+          <el-col :xs="24" :sm="24" :md="priceFilterColSpan" :lg="priceFilterColSpan">
             <el-form-item :label="tr('\u521b\u5efa\u65f6\u95f4')" prop="createTimeRange">
               <el-date-picker
                 v-model="queryParams.createTimeRange"
@@ -121,7 +121,7 @@
               />
             </el-form-item>
           </el-col>
-          <el-col :xs="24" :sm="24" :md="canViewSellingPrice ? 8 : 12" :lg="canViewSellingPrice ? 8 : 12">
+          <el-col :xs="24" :sm="24" :md="priceFilterColSpan" :lg="priceFilterColSpan">
             <el-form-item :label="tr('\u5165\u5e93\u65f6\u95f4')" prop="receiptTimeRange">
               <el-date-picker
                 v-model="queryParams.receiptTimeRange"
@@ -136,7 +136,20 @@
               />
             </el-form-item>
           </el-col>
-          <el-col :xs="24" :sm="24" :md="8" :lg="8" v-if="canViewSellingPrice">
+          <el-col :xs="24" :sm="24" :md="priceFilterColSpan" :lg="priceFilterColSpan" v-if="canViewCostPrice">
+            <el-form-item :label="tr('成本价')">
+              <div class="query-price-range">
+                <el-form-item prop="costPriceMin" class="query-price-range-item">
+                  <el-input-number v-model="queryParams.costPriceMin" :min="0" :precision="2" :controls="false" :placeholder="tr('最低')" style="width: 100%" @keyup.enter="handleQuery" />
+                </el-form-item>
+                <span class="query-price-range-separator">{{ tr('至') }}</span>
+                <el-form-item prop="costPriceMax" class="query-price-range-item">
+                  <el-input-number v-model="queryParams.costPriceMax" :min="0" :precision="2" :controls="false" :placeholder="tr('最高')" style="width: 100%" @keyup.enter="handleQuery" />
+                </el-form-item>
+              </div>
+            </el-form-item>
+          </el-col>
+          <el-col :xs="24" :sm="24" :md="priceFilterColSpan" :lg="priceFilterColSpan" v-if="canViewSellingPrice">
             <el-form-item :label="tr('\u9500\u552e\u4ef7')">
               <div class="query-price-range">
                 <el-form-item prop="sellingPriceMin" class="query-price-range-item">
@@ -210,7 +223,7 @@
             <template #default="{ row }">
               <div>{{ getWarehouseName(row) }}</div>
               <div>{{ tr('仓库商品总数') }}：{{ getWarehouseSummaryQuantity(row) }}</div>
-              <div>{{ tr('仓库商品总价') }}：{{ formatMoney(getWarehouseSummaryAmount(row)) }}</div>
+              <div v-if="canViewCostPrice">{{ tr('仓库商品总价') }}：{{ formatMoney(getWarehouseSummaryAmount(row)) }}</div>
             </template>
           </el-table-column>
           <el-table-column :label="tr('商品名称')" prop="warehouseItemGroupKey" min-width="480" align="center" show-overflow-tooltip>
@@ -387,14 +400,14 @@
         </el-table-column>
 
         <!-- ========== 新增列：平均成本价 ========== -->
-        <el-table-column :label="tr('平均成本价')" prop="avgReceiptCost" :width="isEn ? 165 : 135" align="center" sortable="custom">
+        <el-table-column v-if="canViewCostPrice" :label="tr('平均成本价')" prop="avgReceiptCost" :width="isEn ? 165 : 135" align="center" sortable="custom">
           <template #default="{ row }">
             {{ formatMoney(row.avgReceiptCost) }}
           </template>
         </el-table-column>
 
         <!-- ========== 新增列：平均销售价 ========== -->
-        <el-table-column :label="tr('平均销售价')" prop="avgShipmentPrice" :width="isEn ? 178 : 135" align="center" sortable="custom">
+        <el-table-column v-if="canViewSellingPrice" :label="tr('平均销售价')" prop="avgShipmentPrice" :width="isEn ? 178 : 135" align="center" sortable="custom">
           <template #default="{ row }">
             <!-- 有出库历史但库存未清零时 avgShipmentPrice 正常显示；无出库时为 null，显示 -- -->
             {{ formatMoney(row.avgShipmentPrice) }}
@@ -402,7 +415,7 @@
         </el-table-column>
 
         <!-- ========== 新增列：利润 ========== -->
-        <el-table-column :label="tr('利润')" prop="totalProfit" width="110" align="center" sortable="custom">
+        <el-table-column v-if="canViewCostPrice && canViewSellingPrice" :label="tr('利润')" prop="totalProfit" width="110" align="center" sortable="custom">
           <template #default="{ row }">
             <!--
               totalProfit 语义：
@@ -532,6 +545,8 @@ const isEn = computed(() => (settingsStore.language || 'zh-cn') === 'en')
 const spanMethod = computed(() => getRowspanMethod(inventoryList.value, rowSpanArray.value))
 const canViewSellingPrice = computed(() => proxy?.$auth?.hasPermi('wms:itemSellingPrice:view'))
 const canViewCostPrice = computed(() => proxy?.$auth?.hasPermi('wms:itemCostPrice:view'))
+const visiblePriceFilterCount = computed(() => Number(canViewCostPrice.value) + Number(canViewSellingPrice.value))
+const priceFilterColSpan = computed(() => visiblePriceFilterCount.value === 0 ? 12 : visiblePriceFilterCount.value === 1 ? 8 : 6)
 const itemCategoryTreeSelectList = computed(() => useWmsStore().itemCategoryTreeList)
 const AUTH_AGENCY_OPTIONS = ['Entrupy', 'Real Authentication', 'Legitmark', 'CheckCheck', 'N/A']
 const ITEM_CONDITION_OPTIONS = ['S', 'A', 'B', 'C', 'D']
@@ -615,6 +630,8 @@ const queryParams = ref({
   consignInfo: undefined,
   createTimeRange: [],
   receiptTimeRange: [],
+  costPriceMin: undefined,
+  costPriceMax: undefined,
   sellingPriceMin: undefined,
   sellingPriceMax: undefined,
   minQuantity: undefined,
@@ -915,7 +932,7 @@ function buildWarehouseSummaryMap(items = []) {
   for (const it of items) {
     const quantity = Number(it.totalQuantity) || 0
     const amt = Number(it.totalAmount)
-    const amount = Number.isFinite(amt) ? amt : 0
+    const amount = Number.isFinite(amt) ? amt : null
     const entry = { quantity, amount }
     if (it.warehouseId != null && it.warehouseId !== '') {
       map.set(String(it.warehouseId), entry)
@@ -950,7 +967,7 @@ function getWarehouseSummaryQuantity(row) {
  * 获取仓库聚合后的总价（后端汇总接口）
  */
 function getWarehouseSummaryAmount(row) {
-  return getWarehouseSummaryEntry(row)?.amount ?? 0
+  return getWarehouseSummaryEntry(row)?.amount ?? null
 }
 
 function getWarehouseGroupKey(row) {
@@ -998,6 +1015,10 @@ function formatTime(t) {
 
 const getCurrentQuery = () => {
   const query = { ...queryParams.value }
+  if (!canViewCostPrice.value) {
+    delete query.costPriceMin
+    delete query.costPriceMax
+  }
   if (!canViewSellingPrice.value) {
     delete query.sellingPriceMin
     delete query.sellingPriceMax
