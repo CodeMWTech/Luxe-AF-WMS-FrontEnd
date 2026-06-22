@@ -1,4 +1,4 @@
-import { createWebHistory, createRouter } from 'vue-router'
+﻿import { createWebHistory, createRouter } from 'vue-router'
 /* Layout */
 import Layout from '@/layout'
 
@@ -171,6 +171,34 @@ export const dynamicRoutes = [
         meta: { title: '平台订单', activeMenu: '/wms/platform/tiktok/orders' }
       }
     ]
+  },
+  {
+    path: '/wms/platform/listings',
+    component: Layout,
+    hidden: true,
+    permissions: ['wms:platform:listing'],
+    children: [
+      {
+        path: '',
+        component: () => import('@/views/wms/platform/listings/index'),
+        name: 'PlatformListings',
+        meta: { title: '商品上架', titleEn: 'Product Listings', activeMenu: '/wms/platform/listings' }
+      }
+    ]
+  },
+  {
+    path: '/wms/platform/listings/template',
+    component: Layout,
+    hidden: true,
+    permissions: ['wms:platform:listing'],
+    children: [
+      {
+        path: '',
+        component: () => import('@/views/wms/platform/listings/template'),
+        name: 'PlatformListingTemplate',
+        meta: { title: '上架模板', titleEn: 'Listing Templates', activeMenu: '/wms/platform/listings' }
+      }
+    ]
   }
 ]
 
@@ -187,3 +215,4 @@ const router = createRouter({
 });
 
 export default router;
+
