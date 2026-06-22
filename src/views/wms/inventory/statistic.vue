@@ -201,6 +201,7 @@
         v-loading="loading"
         :empty-text="tr('暂无库存')"
         class="statistic-table"
+        :default-sort="{ prop: 'receiptTime', order: 'descending' }"
         @sort-change="handleColumnSortChange"
       >
         <el-table-column :label="tr('操作')" :width="isEn ? 132 : 110" align="center" fixed="left">
@@ -531,7 +532,7 @@ import {
   listInventoryBoardWarehouseSummary
 } from '@/api/wms/inventory'
 import { downloadItemImage, getItemImages } from '@/api/wms/item'
-import { computed, getCurrentInstance, onMounted, ref } from 'vue'
+import { computed, getCurrentInstance, nextTick, onMounted, ref } from 'vue'
 import { getRowspanMethod } from '@/utils/getRowSpanMethod'
 import { useWmsStore } from '@/store/modules/wms'
 import useSettingsStore from '@/store/modules/settings'
@@ -611,7 +612,12 @@ function getDetailExportLabels() {
   return labels
 }
 
-const filterable = ref(false)
+const DEFAULT_INVENTORY_SORT = {
+  prop: 'receiptTime',
+  order: 'descending'
+}
+
+const filterable = ref(true)
 const queryType = ref('item')
 const queryParams = ref({
   pageNum: 1,
@@ -635,8 +641,8 @@ const queryParams = ref({
   sellingPriceMin: undefined,
   sellingPriceMax: undefined,
   minQuantity: undefined,
-  orderByColumn: undefined,
-  isAsc: undefined
+  orderByColumn: DEFAULT_INVENTORY_SORT.prop,
+  isAsc: DEFAULT_INVENTORY_SORT.order
 })
 
 // ───────────── 格式化工具函数 ─────────────
@@ -1434,17 +1440,30 @@ const handleQuery = () => {
   getList()
 }
 
+let suppressSortChangeQuery = false
+
+const applyDefaultInventorySort = () => {
+  queryParams.value.orderByColumn = DEFAULT_INVENTORY_SORT.prop
+  queryParams.value.isAsc = DEFAULT_INVENTORY_SORT.order
+}
+
 const resetQuery = () => {
-  queryParams.value.orderByColumn = undefined
-  queryParams.value.isAsc = undefined
+  filterable.value = true
   proxy.resetForm('queryRef')
-  tableRef.value?.clearSort?.()
-  handleQuery()
+  applyDefaultInventorySort()
+  queryParams.value.pageNum = 1
+  nextTick(() => {
+    suppressSortChangeQuery = true
+    tableRef.value?.sort?.(DEFAULT_INVENTORY_SORT.prop, DEFAULT_INVENTORY_SORT.order)
+    suppressSortChangeQuery = false
+    getList()
+  })
 }
 
 const handleColumnSortChange = ({ prop, order }) => {
   queryParams.value.orderByColumn = prop || undefined
   queryParams.value.isAsc = order === 'ascending' ? 'ascending' : order === 'descending' ? 'descending' : undefined
+  if (suppressSortChangeQuery) return
   queryParams.value.pageNum = 1
   getList()
 }
