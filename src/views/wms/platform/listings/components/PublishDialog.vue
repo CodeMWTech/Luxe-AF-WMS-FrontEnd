@@ -142,8 +142,8 @@ const selectedSkus = ref([])
 
 function loadInventory() {
   invLoading.value = true
-  listInventoryBoard({ ...invParams, ...invQuery, minQuantity: 0 }, 'item').then(res => {
-    invList.value = (res.rows || []).filter(r => r.quantity > 0)
+  listInventoryBoard({ ...invParams, ...invQuery, minQuantity: 1 }, 'item').then(res => {
+    invList.value = res.rows || []
     invTotal.value = res.total || 0
   }).finally(() => { invLoading.value = false })
 }
@@ -174,7 +174,7 @@ function onShopChange() {
   chosenTemplateId.value = null
   templateList.value = []
   if (chosenPlatform.value) {
-    listAllTemplates(chosenPlatform.value).then(res => {
+    listAllTemplates(chosenPlatform.value, chosenShopId.value).then(res => {
       templateList.value = res.data || res.rows || []
     })
   }
