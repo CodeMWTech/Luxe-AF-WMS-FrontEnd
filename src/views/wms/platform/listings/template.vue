@@ -150,7 +150,7 @@
               <h3>{{ t('platformListings.condition') }}</h3>
               <div class="ebay-field-row two-col compact-row">
                 <div><label class="ebay-field-label">{{ t('platformListings.condition') }}</label><el-select v-model="form.ebayConditionId" style="width:100%"><el-option label="1000 - New with tags" value="1000" /><el-option label="1500 - New without tags" value="1500" /><el-option label="1750 - New with defects" value="1750" /><el-option label="3000 - Pre-owned" value="3000" /></el-select></div>
-                <div><label class="ebay-field-label">{{ t('platformListings.conditionDescription') }}</label><el-input v-model="form.ebayConditionDescription" placeholder="{condition} - {defect} | Included: {accessories}" /></div>
+                <div><label class="ebay-field-label">{{ t('platformListings.conditionDescription') }}</label><el-input v-model="form.ebayConditionDescription" /></div>
               </div>
             </section>
 
@@ -398,7 +398,7 @@ const initForm = {
   id: null, templateName: '', platform: 'EBAY', shopId: null, listingType: 'FIXED_PRICE', listingDuration: 'Days_7',
   enabled: true, defaultTitle: '', defaultPrice: null, buyItNowPrice: null,
   descriptionFormat: '',
-  ebayCategoryId: '', ebayCondition: 'USED_GOOD', ebayConditionId: '3000', ebayConditionDescription: '{condition} - {defect} | Included: {accessories}',
+  ebayCategoryId: '', ebayCondition: 'USED_GOOD', ebayConditionId: '3000', ebayConditionDescription: '',
   ebaySubtitle: '', ebayQuantity: 1, ebayMarketplaceId: 'EBAY_US', ebayCurrency: 'USD',
   ebayDepartment: 'Women', ebayExteriorColor: 'N/A', ebaySize: 'N/A', ebayProductLine: 'N/A', ebayCountry: 'US',
   ebayLocation: 'Los Angeles, California', ebayPostalCode: '90048', ebayDispatchTimeMax: 3,
@@ -514,7 +514,7 @@ function handleEdit(row) {
       defaultTitle: d.titleFormat || '', defaultPrice: d.priceMarkupValue || null,
       descriptionFormat: d.descriptionFormat || '',
       ebayCategoryId: d.ebayCategoryId || '', ebayCondition: d.ebayCondition || 'USED_GOOD',
-      ebayConditionId: d.ebayConditionId || '3000', ebayConditionDescription: d.ebayConditionDescription || '{condition} - {defect} | Included: {accessories}',
+      ebayConditionId: d.ebayConditionId || '3000', ebayConditionDescription: d.ebayConditionDescription || '',
       ebaySubtitle: d.ebaySubtitle || '', ebayQuantity: d.ebayQuantity || 1, ebayMarketplaceId: d.ebayMarketplaceId || 'EBAY_US',
       ebayCurrency: d.ebayCurrency || 'USD', ebayDepartment: d.ebayDepartment || 'Women', ebayExteriorColor: d.ebayExteriorColor || 'N/A',
       ebaySize: d.ebaySize || 'N/A', ebayProductLine: d.ebayProductLine || 'N/A', ebayCountry: d.ebayCountry || 'US',
