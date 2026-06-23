@@ -194,11 +194,13 @@ import { delReceiptOrderDetail } from '@/api/wms/receiptOrderDetail'
 import {getWarehouseAndSkuKey} from "@/utils/wmsUtil";
 import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
+import useTagsViewStore from '@/store/modules/tagsView'
 
 const {proxy} = getCurrentInstance();
 const route = useRoute();
 const { wms_receipt_type } = proxy.useDict("wms_receipt_type");
 const wmsStore = useWmsStore()
+const tagsViewStore = useTagsViewStore()
 const settingsStore = useSettingsStore()
 const isEn = computed(() => (settingsStore.language || 'zh-cn') === 'en')
 const tr = (text) => translateByMap(text, settingsStore.language || 'zh-cn')
@@ -257,8 +259,14 @@ const cancel = async () => {
   await proxy?.$modal.confirm('确认取消编辑入库单吗？');
   close()
 }
+const getClosePath = (fallbackPath) => {
+  const activeMenu = route.meta?.activeMenu
+  if (activeMenu && activeMenu !== route.path) return activeMenu
+  const latestView = [...tagsViewStore.visitedViews].reverse().find(view => view.path !== route.path)
+  return latestView?.fullPath || fallbackPath
+}
 const close = () => {
-  const obj = {path: route.meta?.activeMenu};
+  const obj = {path: getClosePath("/wms/order/receiptOrder")};
   proxy?.$tab.closeOpenPage(obj);
 }
 const skuSelectShow = ref(false)
