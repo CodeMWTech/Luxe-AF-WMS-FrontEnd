@@ -443,17 +443,32 @@ const weightPrecision = computed(() => ['GRAM', 'OUNCE'].includes(form.packageWe
 const weightStep = computed(() => form.packageWeightUnit === 'GRAM' ? 100 : (form.packageWeightUnit === 'OUNCE' ? 1 : 0.5))
 function applyPlatformUnitDefaults() {
   if (form.platform === 'TIKTOK') {
-    form.packageWeightUnit = 'GRAM'
+    convertWeightUnit('KILOGRAM')  // TikTok API 只接受 KG，默认转为 KG
     form.packageDimensionUnit = 'CENTIMETER'
   } else {
-    form.packageWeightUnit = 'POUND'
+    convertWeightUnit('POUND')
     form.packageDimensionUnit = 'INCH'
   }
 }
-watch(() => form.packageWeightUnit, (unit) => {
-  if (['GRAM', 'OUNCE'].includes(unit) && form.packageWeightValue != null) {
-    form.packageWeightValue = Math.round(Number(form.packageWeightValue))
+// 重量单位转换系数（统一转为克作为中间单位）
+const WEIGHT_TO_GRAM = { GRAM: 1, KILOGRAM: 1000, POUND: 453.59237, OUNCE: 28.349523125 }
+function convertWeightUnit(targetUnit) {
+  const oldUnit = form.packageWeightUnit
+  if (form.packageWeightValue == null || form.packageWeightValue === '' || !oldUnit || oldUnit === targetUnit) {
+    form.packageWeightUnit = targetUnit
+    return
   }
+  const gramValue = Number(form.packageWeightValue) * (WEIGHT_TO_GRAM[oldUnit] || 1)
+  const converted = gramValue / (WEIGHT_TO_GRAM[targetUnit] || 1)
+  form.packageWeightValue = ['GRAM', 'OUNCE'].includes(targetUnit) ? Math.round(converted) : Math.round(converted * 100) / 100
+  form.packageWeightUnit = targetUnit
+}
+watch(() => form.packageWeightUnit, (newUnit, oldUnit) => {
+  if (!oldUnit || oldUnit === newUnit) return
+  if (form.packageWeightValue == null || form.packageWeightValue === '') return
+  const gramValue = Number(form.packageWeightValue) * (WEIGHT_TO_GRAM[oldUnit] || 1)
+  const converted = gramValue / (WEIGHT_TO_GRAM[newUnit] || 1)
+  form.packageWeightValue = ['GRAM', 'OUNCE'].includes(newUnit) ? Math.round(converted) : Math.round(converted * 100) / 100
 })
 const ebayPaymentPolicyName = computed(() => {
   const selected = paymentPolicies.value.find(p => p.id === form.ebayPaymentPolicyId)
