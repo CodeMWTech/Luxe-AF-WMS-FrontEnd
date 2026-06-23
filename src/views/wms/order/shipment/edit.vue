@@ -206,6 +206,7 @@ import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
 
 const {proxy} = getCurrentInstance();
+const route = useRoute();
 const {wms_shipment_type} = proxy.useDict("wms_shipment_type");
 const wmsStore = useWmsStore()
 const settingsStore = useSettingsStore()
@@ -254,7 +255,7 @@ const cancel = async () => {
   close()
 }
 const close = () => {
-  const obj = {path: "/shipmentOrder"};
+  const obj = {path: route.meta?.activeMenu};
   proxy?.$tab.closeOpenPage(obj);
 }
 const inventorySelectShow = ref(false)
@@ -467,7 +468,6 @@ const updateToInvalid = async () => {
   doSave(-1)
 }
 
-const route = useRoute();
 onMounted(() => {
   if (!wmsStore.warehouseList.length) {
     wmsStore.getWarehouseList()
