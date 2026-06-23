@@ -7,9 +7,9 @@ export function listTemplates(query) {
   return request({ url: '/wms/platform/listings/templates', method: 'get', params: query })
 }
 
-/** 模板下拉列表（仅启用） */
-export function listAllTemplates(platform) {
-  return request({ url: '/wms/platform/listings/templates/listAll', method: 'get', params: { platform } })
+/** 模板下拉列表（仅启用，支持按店铺过滤） */
+export function listAllTemplates(platform, shopId) {
+  return request({ url: '/wms/platform/listings/templates/listAll', method: 'get', params: { platform, shopId } })
 }
 
 /** 模板详情 */

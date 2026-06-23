@@ -255,6 +255,7 @@
     cancel: 'Cancel',
     save: 'Save',
     shipmentCreateSuccess: 'Shipment draft orders created',
+    shipmentCreateSubmitted: 'Shipment creation task submitted. Please refresh later.',
     shipmentCreateFailed: 'Failed to create shipment draft orders',
     shipmentDisabled: 'Shipment order creation is temporarily disabled. Please contact administrator if needed.',
     selectAtLeastOneShop: 'Please select at least one shop',

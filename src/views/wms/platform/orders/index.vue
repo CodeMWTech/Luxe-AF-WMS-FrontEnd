@@ -106,12 +106,7 @@
           <el-button type="success" icon="RefreshRight" class="action-btn" @click="openSyncDialog" v-hasPermi="['wms:platform:tiktok:test']">{{ t('platformOrders.btnSync') }}</el-button>
           <el-button type="info" icon="Download" class="action-btn" :loading="exporting" @click="handleExport" v-hasPermi="['wms:platform:list']">{{ t('platformOrders.btnExport') }}</el-button>
           <el-button type="primary" icon="Upload" class="action-btn" @click="openImportNotesDialog" v-hasPermi="['wms:platform:edit']">{{ t('platformOrders.btnImportNotes') }}</el-button>
-          <!-- ========== 临时禁用：出库暂存单创建功能 ========== -->
-          <!-- 如需恢复：删除 disabled 和 el-tooltip，恢复 @click="handleCreateShipments" 和 :loading -->
-          <el-tooltip :content="t('platformOrders.shipmentDisabled')" placement="bottom">
-            <el-button type="warning" icon="Box" class="action-btn" disabled v-hasPermi="['wms:platform:edit']">{{ t('platformOrders.btnCreateShipment') }}</el-button>
-          </el-tooltip>
-          <!-- ========== 临时禁用结束 ========== -->
+          <el-button type="warning" icon="Box" class="action-btn" :loading="shipmentCreating" @click="handleCreateShipments" v-hasPermi="['wms:platform:edit']">{{ t('platformOrders.btnCreateShipment') }}</el-button>
         </el-form-item>
       </el-form>
     </el-card>
@@ -874,8 +869,9 @@ function resetQuery() {
 function handleCreateShipments() {
   shipmentCreating.value = true
   createShipments().then(() => {
-    proxy.$modal.msgSuccess(t('platformOrders.shipmentCreateSuccess'))
-    getList()
+    proxy.$modal.msgSuccess(t('platformOrders.shipmentCreateSubmitted'))
+    // 异步后台执行，延迟刷新列表
+    setTimeout(() => { getList() }, 3000)
   }).catch(() => {
     proxy.$modal.msgError(t('platformOrders.shipmentCreateFailed'))
   }).finally(() => {

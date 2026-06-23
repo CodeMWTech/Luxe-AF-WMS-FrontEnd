@@ -255,6 +255,7 @@
     cancel: '取消',
     save: '保存',
     shipmentCreateSuccess: '出库暂存单创建完成',
+    shipmentCreateSubmitted: '出库暂存单创建任务已提交，请稍后刷新查看',
     shipmentCreateFailed: '创建出库暂存单失败',
     shipmentDisabled: '出库暂存单功能已临时禁用，如有需要请联系管理员',
     selectAtLeastOneShop: '请至少选择一个店铺',
