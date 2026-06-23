@@ -160,6 +160,7 @@ import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
 
 const {proxy} = getCurrentInstance();
+const route = useRoute();
 const wmsStore = useWmsStore()
 const settingsStore = useSettingsStore()
 const isEn = computed(() => (settingsStore.language || 'zh-cn') === 'en')
@@ -193,7 +194,7 @@ const cancel = async () => {
   close()
 }
 const close = () => {
-  const obj = {path: "/checkOrder"};
+  const obj = {path: route.meta?.activeMenu};
   proxy?.$tab.closeOpenPage(obj);
 }
 const skuSelectShow = ref(false)
@@ -389,7 +390,6 @@ const doCheck = async () => {
   })
 }
 
-const route = useRoute();
 onMounted(() => {
   if (!wmsStore.warehouseList.length) {
     wmsStore.getWarehouseList()
