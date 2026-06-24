@@ -182,6 +182,12 @@
         <el-col :span="12" class="toolbar-right">
           <el-checkbox v-model="filterable" :label="tr('过滤掉库存为0的商品')" size="large" @change="handleChangeFilterZero"/>
           <el-button
+            :type="batchMode ? 'warning' : 'default'"
+            @click="toggleBatchMode"
+          >
+            {{ batchMode ? tr('取消批量操作') : tr('批量操作') }}
+          </el-button>
+          <el-button
             type="primary"
             :loading="exportLoading"
             :disabled="loading"
@@ -191,6 +197,19 @@
           </el-button>
         </el-col>
       </el-row>
+
+      <!-- 批量操作栏 -->
+      <div v-if="batchMode" class="batch-action-bar">
+        <span class="batch-action-info">{{ tr('已选择 {count} 个商品').replace('{count}', selectedRows.length) }}</span>
+        <el-button
+          type="success"
+          icon="Upload"
+          :disabled="selectedRows.length === 0"
+          @click="handleBatchPublish"
+        >
+          {{ tr('批量上架') }}
+        </el-button>
+      </div>
 
       <el-table
         ref="tableRef"
@@ -203,7 +222,9 @@
         class="statistic-table"
         :default-sort="{ prop: 'receiptTime', order: 'descending' }"
         @sort-change="handleColumnSortChange"
+        @selection-change="val => selectedRows = val"
       >
+        <el-table-column v-if="batchMode" type="selection" width="50" align="center" />
         <el-table-column :label="tr('操作')" :width="isEn ? 132 : 110" align="center" fixed="left">
           <template #default="{ row }">
             <el-button
@@ -522,6 +543,9 @@
         <el-empty v-else :description="tr('暂无数据')" />
       </div>
     </el-drawer>
+
+    <!-- 批量上架对话框 -->
+    <PublishDialog ref="publishDialogRef" @success="getList" />
   </div>
 </template>
 
@@ -539,6 +563,7 @@ import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
 import { blobValidate } from '@/utils/ruoyi'
 import { formatDateTimeForQuery } from '@/utils/laTime'
+import PublishDialog from '@/views/wms/platform/listings/components/PublishDialog.vue'
 
 const { proxy } = getCurrentInstance()
 const settingsStore = useSettingsStore()
@@ -618,6 +643,9 @@ const DEFAULT_INVENTORY_SORT = {
 }
 
 const filterable = ref(true)
+const batchMode = ref(false)
+const selectedRows = ref([])
+const publishDialogRef = ref(null)
 const queryType = ref('item')
 const queryParams = ref({
   pageNum: 1,
@@ -1483,6 +1511,23 @@ const handleChangeFilterZero = () => {
   getList()
 }
 
+const toggleBatchMode = () => {
+  batchMode.value = !batchMode.value
+  if (!batchMode.value) {
+    selectedRows.value = []
+    tableRef.value?.clearSelection()
+  }
+}
+
+const handleBatchPublish = () => {
+  if (selectedRows.value.length === 0) {
+    proxy.$modal.msgWarning(tr('请先勾选商品'))
+    return
+  }
+  const skuIds = [...new Set(selectedRows.value.map(r => r.skuId).filter(Boolean))]
+  publishDialogRef.value?.openWithSkus(skuIds)
+}
+
 const tr = (text) => translateByMap(text, settingsStore.language || 'zh-cn')
 
 onMounted(() => {
@@ -1549,6 +1594,23 @@ onMounted(() => {
   justify-content: flex-end;
   align-items: center;
   gap: 12px;
+}
+
+.batch-action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  margin-bottom: 8px;
+  background: var(--el-color-warning-light-9, #fdf6ec);
+  border: 1px solid var(--el-color-warning-light-5, #f5dab1);
+  border-radius: 6px;
+}
+
+.batch-action-info {
+  color: var(--el-color-warning-dark-2, #b88230);
+  font-size: 14px;
+  font-weight: 500;
 }
 
 .statistic-table {

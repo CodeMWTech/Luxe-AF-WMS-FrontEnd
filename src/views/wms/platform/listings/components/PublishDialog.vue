@@ -116,7 +116,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, getCurrentInstance } from 'vue'
+import { ref, reactive, computed, nextTick, getCurrentInstance } from 'vue'
 import { listInventoryBoard } from '@/api/wms/inventory'
 import { listAllTemplates, previewTemplate, batchPublish } from '@/api/wms/platformListing'
 import { listAllPlatformShops } from '@/api/wms/platformShop'
@@ -250,7 +250,8 @@ async function doPublish() {
   const customPrices = {}
   previewList.value.forEach(p => {
     if (p.overrideTitle) customTitles[p.skuId] = p.overrideTitle
-    if (p.overridePrice != null) customPrices[p.skuId] = p.overridePrice
+    const price = Number(p.overridePrice)
+    if (p.overridePrice != null && price > 0) customPrices[p.skuId] = price
   })
   publishing.value = true
   try {
@@ -265,8 +266,48 @@ async function doPublish() {
   }
 }
 
-function open() { visible.value = true }
-defineExpose({ open })
+const preSelectedSkuIds = ref(null)
+
+function open() {
+  preSelectedSkuIds.value = null
+  visible.value = true
+}
+
+async function openWithSkus(skuIds) {
+  if (!skuIds || skuIds.length === 0) {
+    proxy.$modal.msgWarning(t('platformListings.selectSkuRequired'))
+    return
+  }
+  preSelectedSkuIds.value = [...new Set(skuIds)]
+  visible.value = true
+  // 加载店铺列表
+  listAllPlatformShops().then(res => {
+    shopList.value = res.rows || res.data || []
+  })
+  // 加载库存列表，完成后自动勾选预选SKU并跳转到Step2
+  invLoading.value = true
+  try {
+    const res = await listInventoryBoard({ ...invParams, ...invQuery, minQuantity: 1 }, 'item')
+    invList.value = res.rows || []
+    invTotal.value = res.total || 0
+    // 自动勾选匹配的SKU
+    const targetIds = new Set(preSelectedSkuIds.value)
+    await nextTick()
+    invList.value.forEach(row => {
+      if (targetIds.has(row.skuId)) {
+        invTableRef.value?.toggleRowSelection(row, true)
+      }
+    })
+    // 跳到 Step 2
+    if (selectedSkus.value.length > 0) {
+      step.value = 1
+    }
+  } finally {
+    invLoading.value = false
+  }
+}
+
+defineExpose({ open, openWithSkus })
 </script>
 <style scoped>
 .channel-preview {

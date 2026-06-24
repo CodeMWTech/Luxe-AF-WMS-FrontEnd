@@ -82,6 +82,21 @@
           </el-col>
         </el-row>
 
+        <!-- 模板参数替换面板 -->
+        <div class="template-params-panel">
+          <span class="template-params-label">{{ t('platformListings.availableParams') }}:</span>
+          <el-tag
+            v-for="param in templateParams"
+            :key="param.placeholder"
+            type="info"
+            effect="plain"
+            class="template-param-tag"
+            @click="insertParam(param.placeholder)"
+          >
+            {{ param.label }}
+          </el-tag>
+        </div>
+
         <!-- ============================================================ -->
         <!--                      eBay 原生表单                           -->
         <!-- ============================================================ -->
@@ -100,7 +115,7 @@
                 <h3>{{ t('platformListings.ebaySectionTitle') }}</h3>
               </div>
               <label class="ebay-field-label">{{ t('platformListings.ebayItemTitle') }}</label>
-              <el-input v-model="form.defaultTitle" maxlength="80" show-word-limit placeholder="{brandEn} {itemName} {material} {year} {skuCode}" />
+              <el-input ref="titleInputRef" v-model="form.defaultTitle" maxlength="80" show-word-limit placeholder="{brandEn} {itemName} {material} {year} {skuCode}" @focus="lastFocusedField = 'title'" />
               <div class="ebay-field-row two-col compact-row">
                 <div>
                   <label class="ebay-field-label">{{ t('platformListings.ebaySubtitle') }}</label>
@@ -157,7 +172,7 @@
             <section class="ebay-section description-section">
               <div class="ebay-section-title-row"><h3>{{ t('platformListings.ebayDescription') }}</h3></div>
               <div class="description-toolbar-label">{{ t('platformListings.ebayDescriptionToolbar') }}</div>
-              <div class="ebay-rich-editor"><Editor v-model="form.descriptionFormat" :height="260" :min-height="220" /></div>
+              <div class="ebay-rich-editor" @focusin="lastFocusedField = 'description'"><Editor v-model="form.descriptionFormat" :height="260" :min-height="220" /></div>
               <div class="ebay-note">{{ t('platformListings.ebayDescriptionNote') }}</div>
             </section>
 
@@ -165,7 +180,7 @@
               <div class="ebay-section-title-row"><h3>{{ t('platformListings.pricing') }}</h3></div>
               <div class="ebay-field-row three-col compact-row">
                 <div><label class="ebay-field-label">{{ t('platformListings.format') }}</label><el-select v-model="form.listingType" style="width:100%"><el-option label="Buy It Now" value="FIXED_PRICE" /><el-option label="Auction" value="AUCTION" /></el-select></div>
-                <div><label class="ebay-field-label">{{ form.listingType === 'AUCTION' ? t('platformListings.startPrice') : t('platformListings.buyItNowPrice') }}</label><el-input-number v-model="form.defaultPrice" :min="0" :precision="2" :step="10" style="width:100%" /></div>
+                <div><label class="ebay-field-label">{{ form.listingType === 'AUCTION' ? t('platformListings.startPrice') : t('platformListings.buyItNowPrice') }}</label><div style="display:flex;align-items:center;gap:6px"><el-input-number v-model="form.defaultPrice" :min="0" :precision="2" :step="10" :placeholder="t('platformListings.priceDefaultHint')" style="flex:1" /><el-button v-if="form.defaultPrice != null" link type="warning" size="small" @click="form.defaultPrice = null">{{ t('platformListings.priceResetDefault') }}</el-button></div><div class="field-hint">{{ t('platformListings.priceDefaultHint') }}</div></div>
                 <div><label class="ebay-field-label">{{ t('platformListings.quantity') }}</label><el-input-number v-model="form.ebayQuantity" :min="1" :max="100" style="width:100%" /></div>
               </div>
               <div class="ebay-field-row three-col compact-row" v-if="form.listingType === 'AUCTION'">
@@ -194,6 +209,7 @@
                 <el-select v-model="form.packageWeightUnit" style="width:190px"><el-option v-for="u in weightUnitOptions" :key="u.value" :label="u.label" :value="u.value" /></el-select>
                 <el-select v-model="form.packageDimensionUnit" style="width:190px"><el-option v-for="u in dimensionUnitOptions" :key="u.value" :label="u.label" :value="u.value" /></el-select>
               </div>
+              <div class="ebay-note shipping-hint">{{ t('platformListings.packageSizeHint') }} &nbsp;|&nbsp; {{ t('platformListings.packageWeightHint') }}</div>
             </section>
 
             <section class="ebay-section preferences-section">
@@ -223,7 +239,7 @@
                   <h3>{{ t('platformListings.basicInformation') }}</h3>
                   <div class="tiktok-field-block">
                     <label class="tiktok-required-label">{{ t('platformListings.productNameLabel') }}</label>
-                    <el-input v-model="form.defaultTitle" maxlength="255" show-word-limit :placeholder="t('platformListings.productNamePlaceholder')" />
+                    <el-input ref="titleInputRef" v-model="form.defaultTitle" maxlength="255" show-word-limit :placeholder="t('platformListings.productNamePlaceholder')" @focus="lastFocusedField = 'title'" />
                   </div>
 
                   <div class="tiktok-field-block">
@@ -260,7 +276,7 @@
                 <section class="tiktok-form-section">
                   <h3>{{ t('platformListings.productDetails') }}</h3>
                   <label class="tiktok-required-label">{{ t('platformListings.ebayDescription') }}</label>
-                  <div class="tiktok-rich-editor seller-editor"><Editor v-model="form.descriptionFormat" :height="280" :min-height="240" /></div>
+                  <div class="tiktok-rich-editor seller-editor" @focusin="lastFocusedField = 'description'"><Editor v-model="form.descriptionFormat" :height="280" :min-height="240" /></div>
                 </section>
 
                 <section class="tiktok-form-section">
@@ -272,7 +288,7 @@
                   </div>
                   <div class="tiktok-stock-grid editable-stock-grid">
                     <div><label>{{ t('platformListings.stock') }}</label><el-input-number v-model="form.tiktokQuantity" :min="1" :max="999" style="width:100%" /></div>
-                    <div><label>{{ t('platformListings.retailPrice') }}</label><el-input-number v-model="form.defaultPrice" :min="0" :precision="2" :step="10" style="width:100%" /></div>
+                    <div><label>{{ t('platformListings.retailPrice') }}</label><div style="display:flex;align-items:center;gap:6px"><el-input-number v-model="form.defaultPrice" :min="0" :precision="2" :step="10" :placeholder="t('platformListings.priceDefaultHint')" style="flex:1" /><el-button v-if="form.defaultPrice != null" link type="warning" size="small" @click="form.defaultPrice = null">{{ t('platformListings.priceResetDefault') }}</el-button></div><div class="tiktok-tip">{{ t('platformListings.priceDefaultHint') }}</div></div>
                     <div><label>{{ t('platformListings.currency') }}</label><el-select v-model="form.tiktokCurrency" style="width:100%"><el-option label="USD" value="USD" /><el-option label="GBP" value="GBP" /></el-select></div>
                   </div>
                 </section>
@@ -284,6 +300,7 @@
                     <el-select v-model="form.packageWeightUnit" class="unit-select"><el-option v-for="u in weightUnitOptions" :key="u.value" :label="u.label" :value="u.value" /></el-select>
                     <el-input-number v-model="form.packageWeightValue" :min="0" :precision="weightPrecision" :step="weightStep" controls-position="right" style="width:100%" />
                   </div>
+                  <div class="tiktok-tip">{{ t('platformListings.packageWeightHint') }}</div>
                   <label class="tiktok-required-label">{{ t('platformListings.packageDimensionsLabel') }}</label>
                   <div class="dimension-label-row">
                     <span>{{ t('platformListings.length') }}</span>
@@ -299,6 +316,7 @@
                     <span class="unit-hint">{{ t('platformListings.dimensionUnit') }}</span>
                     <el-select v-model="form.packageDimensionUnit" style="width:180px"><el-option v-for="u in dimensionUnitOptions" :key="u.value" :label="u.label" :value="u.value" /></el-select>
                   </div>
+                  <div class="tiktok-tip">{{ t('platformListings.packageSizeHint') }}</div>
                   <div class="tiktok-toggle-line"><div><strong>{{ t('platformListings.codAllowed') }}</strong></div><el-switch v-model="form.tiktokCodAllowed" /></div>
                 </section>
 
@@ -326,7 +344,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, getCurrentInstance, watch } from 'vue'
+import { ref, reactive, computed, nextTick, onMounted, getCurrentInstance, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { listTemplates, addTemplate, updateTemplate, delTemplate, getTemplate, getCategories, syncCategories, getEbayPolicies, getTiktokWarehouses } from '@/api/wms/platformListing'
 import { listAllPlatformShops } from '@/api/wms/platformShop'
@@ -413,10 +431,10 @@ const weightUnitOptions = computed(() => {
   locale.value
   return form.platform === 'TIKTOK'
     ? [
-        { label: t('platformListings.unitGram'), value: 'GRAM', short: 'g' },
-        { label: t('platformListings.unitKilogram'), value: 'KILOGRAM', short: 'kg' },
         { label: t('platformListings.unitPound'), value: 'POUND', short: 'lb' },
-        { label: t('platformListings.unitOunce'), value: 'OUNCE', short: 'oz' }
+        { label: t('platformListings.unitOunce'), value: 'OUNCE', short: 'oz' },
+        { label: t('platformListings.unitKilogram'), value: 'KILOGRAM', short: 'kg' },
+        { label: t('platformListings.unitGram'), value: 'GRAM', short: 'g' }
       ]
     : [
         { label: t('platformListings.unitPound'), value: 'POUND', short: 'lb' },
@@ -429,8 +447,8 @@ const dimensionUnitOptions = computed(() => {
   locale.value
   return form.platform === 'TIKTOK'
     ? [
-        { label: t('platformListings.unitCentimeter'), value: 'CENTIMETER', short: 'cm' },
-        { label: t('platformListings.unitInch'), value: 'INCH', short: 'in' }
+        { label: t('platformListings.unitInch'), value: 'INCH', short: 'in' },
+        { label: t('platformListings.unitCentimeter'), value: 'CENTIMETER', short: 'cm' }
       ]
     : [
         { label: t('platformListings.unitInch'), value: 'INCH', short: 'in' },
@@ -443,8 +461,8 @@ const weightPrecision = computed(() => ['GRAM', 'OUNCE'].includes(form.packageWe
 const weightStep = computed(() => form.packageWeightUnit === 'GRAM' ? 100 : (form.packageWeightUnit === 'OUNCE' ? 1 : 0.5))
 function applyPlatformUnitDefaults() {
   if (form.platform === 'TIKTOK') {
-    convertWeightUnit('KILOGRAM')  // TikTok API 只接受 KG，默认转为 KG
-    form.packageDimensionUnit = 'CENTIMETER'
+    convertWeightUnit('POUND')
+    form.packageDimensionUnit = 'INCH'
   } else {
     convertWeightUnit('POUND')
     form.packageDimensionUnit = 'INCH'
@@ -484,6 +502,68 @@ const dialog = reactive({ visible: false, title: '', isEdit: false })
 const shopNameMap = ref({})
 const warehouseList = ref([])
 const warehouseLoading = ref(false)
+
+// 模板参数替换
+const titleInputRef = ref(null)
+const lastFocusedField = ref('title')
+const templateParams = [
+  { label: t('platformListings.paramItemName'), placeholder: '{itemName}' },
+  { label: t('platformListings.paramBrand'), placeholder: '{brand}' },
+  { label: t('platformListings.paramBrandEn'), placeholder: '{brandEn}' },
+  { label: t('platformListings.paramMaterial'), placeholder: '{material}' },
+  { label: t('platformListings.paramCategory'), placeholder: '{category}' },
+  { label: t('platformListings.paramCondition'), placeholder: '{condition}' },
+  { label: t('platformListings.paramYear'), placeholder: '{year}' },
+  { label: t('platformListings.paramSkuCode'), placeholder: '{skuCode}' },
+  { label: t('platformListings.paramSellingPrice'), placeholder: '{sellingPrice}' },
+  { label: t('platformListings.paramDefect'), placeholder: '{defect}' },
+  { label: t('platformListings.paramAccessories'), placeholder: '{accessories}' },
+]
+
+function insertParam(placeholder) {
+  if (lastFocusedField.value === 'description') {
+    // 描述编辑器：聚焦 Quill 编辑区并通过 execCommand 插入文本
+    const editorEl = document.querySelector('.template-dialog-body .ql-editor')
+    if (editorEl) {
+      editorEl.focus()
+      // 先确保 Quill 有选区（若无则设到末尾）
+      const quillContainer = editorEl.closest('.ql-container')
+      if (quillContainer) {
+        // Quill 将实例存在 container 的 __quill 属性上
+        const quill = quillContainer.__quill
+        if (quill) {
+          const range = quill.getSelection()
+          if (range && range.length >= 0) {
+            // 先删除可能存在的选中内容（用户拖蓝），再插入
+            if (range.length > 0) {
+              quill.deleteText(range.index, range.length)
+            }
+            quill.insertText(range.index, placeholder)
+            quill.setSelection(range.index + placeholder.length)
+            return
+          }
+        }
+      }
+      // 兜底：直接执行 insertText 命令（contenteditable 原生支持）
+      document.execCommand('insertText', false, placeholder)
+    }
+  } else {
+    // 标题字段：使用 selectionStart/selectionEnd 在光标处插入
+    const el = titleInputRef.value
+    if (el) {
+      const inputEl = el.$el?.querySelector('input') || el.$el || el
+      inputEl.focus()
+      const start = inputEl.selectionStart ?? 0
+      const end = inputEl.selectionEnd ?? 0
+      const current = form.defaultTitle || ''
+      form.defaultTitle = current.substring(0, start) + placeholder + current.substring(end)
+      nextTick(() => {
+        const newCursor = start + placeholder.length
+        inputEl.setSelectionRange(newCursor, newCursor)
+      })
+    }
+  }
+}
 
 // 选择 TikTok 店铺后自动加载仓库列表
 function toggleTiktokDraft(enabled) {
@@ -542,8 +622,8 @@ function handleEdit(row) {
       tiktokCategoryId: d.tiktokCategoryId || '', tiktokCategoryVersion: d.tiktokCategoryVersion || 'v2', tiktokSaveMode: d.tiktokSaveMode || 'LISTING',
       tiktokBrandId: d.tiktokBrandId || '', tiktokConditionValue: d.tiktokConditionValue || 'Pre-owned',
       tiktokWarehouseId: d.tiktokWarehouseId || '', tiktokQuantity: d.tiktokQuantity || 1, tiktokCurrency: d.tiktokCurrency || 'USD', tiktokCodAllowed: !!d.tiktokCodAllowed,
-      packageWeightValue: d.packageWeightValue, packageWeightUnit: d.packageWeightUnit || (d.platform === 'TIKTOK' ? 'GRAM' : 'POUND'), packageLength: d.packageLength,
-      packageWidth: d.packageWidth, packageHeight: d.packageHeight, packageDimensionUnit: d.packageDimensionUnit || (d.platform === 'TIKTOK' ? 'CENTIMETER' : 'INCH')
+      packageWeightValue: d.packageWeightValue, packageWeightUnit: d.packageWeightUnit || 'POUND', packageLength: d.packageLength,
+      packageWidth: d.packageWidth, packageHeight: d.packageHeight, packageDimensionUnit: d.packageDimensionUnit || 'INCH'
     })
     filterShops()
     // 预加载根类目 + 已选类目节点（显示名称而非ID）
@@ -567,8 +647,42 @@ function submitForm() {
   if (!form.templateName) { proxy.$modal.msgWarning(t('platformListings.templateNameRequired')); return }
   if (!form.platform) { proxy.$modal.msgWarning(t('platformListings.platformRequired')); return }
   if (!form.shopId) { proxy.$modal.msgWarning(t('platformListings.shopRequired')); return }
-  submitting.value = true
+
+  // 收集缺失的关键信息
   const isEbay = form.platform === 'EBAY'
+  const missing = []
+  if (!form.packageLength || !form.packageWidth || !form.packageHeight) {
+    missing.push(t('platformListings.packageDimensionsLabel'))
+  }
+  if (form.packageWeightValue == null) {
+    missing.push(t('platformListings.packageWeight'))
+  }
+  if (isEbay && !form.ebayCategoryId) {
+    missing.push(t('platformListings.ebayItemCategory'))
+  }
+  if (!isEbay && !form.tiktokCategoryId) {
+    missing.push(t('platformListings.category'))
+  }
+  if (!form.descriptionFormat) {
+    missing.push(t('platformListings.ebayDescription'))
+  }
+
+  if (missing.length > 0) {
+    proxy.$modal.confirm(
+      t('platformListings.missingFieldsHint', { fields: missing.join('、') }),
+      t('platformListings.warningTitle'),
+      { type: 'warning', confirmButtonText: t('platformListings.continueAnyway'), cancelButtonText: t('platformListings.goBackToFill') }
+    ).then(() => {
+      doSubmit(isEbay)
+    }).catch(() => {})
+    return
+  }
+
+  doSubmit(isEbay)
+}
+
+function doSubmit(isEbay) {
+  submitting.value = true
   const data = {
     id: form.id, templateName: form.templateName, platform: form.platform,
     shopId: form.shopId, listingType: form.listingType, listingDuration: form.listingDuration,
@@ -651,6 +765,41 @@ onMounted(() => { loadShops(); getList() })
   overflow-y: auto;
   padding: 0 6px 4px 0;
   background: #fff;
+}
+
+.template-params-panel {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 12px;
+  margin: 0 -6px 14px 0;
+  background: #fff;
+  border: 1px solid var(--el-border-color-lighter, #ebeef5);
+  border-radius: 6px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+
+.template-params-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--el-text-color-secondary, #909399);
+  margin-right: 4px;
+  white-space: nowrap;
+}
+
+.template-param-tag {
+  cursor: pointer;
+  user-select: none;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.template-param-tag:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
 }
 
 .field-label { font-size: 13px; font-weight: 500; color: #303133; margin-bottom: 4px; margin-top: 4px; }
