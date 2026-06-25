@@ -106,7 +106,30 @@
           <el-button type="success" icon="RefreshRight" class="action-btn" @click="openSyncDialog" v-hasPermi="['wms:platform:tiktok:test']">{{ t('platformOrders.btnSync') }}</el-button>
           <el-button type="info" icon="Download" class="action-btn" :loading="exporting" @click="handleExport" v-hasPermi="['wms:platform:list']">{{ t('platformOrders.btnExport') }}</el-button>
           <el-button type="primary" icon="Upload" class="action-btn" @click="openImportNotesDialog" v-hasPermi="['wms:platform:edit']">{{ t('platformOrders.btnImportNotes') }}</el-button>
-          <el-button type="warning" icon="Box" class="action-btn" :loading="shipmentCreating" @click="handleCreateShipments" v-hasPermi="['wms:platform:edit']">{{ t('platformOrders.btnCreateShipment') }}</el-button>
+          <span class="auto-create-toggle">
+            <el-switch
+              v-model="autoCreateEnabled"
+              :loading="configLoading"
+              @change="handleAutoCreateToggle"
+              size="small"
+            />
+            <span class="auto-create-label">{{ t('platformOrders.autoCreateLabel') }}</span>
+          </span>
+          <el-tooltip
+            :content="t('platformOrders.shipmentDisabled')"
+            :disabled="autoCreateEnabled"
+            placement="top"
+          >
+            <el-button
+              type="warning"
+              icon="Box"
+              class="action-btn"
+              :loading="shipmentCreating"
+              :disabled="!autoCreateEnabled"
+              @click="handleCreateShipments"
+              v-hasPermi="['wms:platform:edit']"
+            >{{ t('platformOrders.btnCreateShipment') }}</el-button>
+          </el-tooltip>
         </el-form-item>
       </el-form>
     </el-card>
@@ -621,7 +644,7 @@
 <script setup name="PlatformOrders">
 import { computed, defineComponent, getCurrentInstance, h, onMounted, ref } from 'vue'
 import { ArrowDown, ArrowRight, CopyDocument, Edit } from '@element-plus/icons-vue'
-import { getPlatformOrder, listPlatformOrders, getOrderStatusMap, updateOrderSku, createShipments, exportPlatformOrders, importNotes } from '@/api/wms/platformOrder'
+import { getPlatformOrder, listPlatformOrders, getOrderStatusMap, updateOrderSku, createShipments, exportPlatformOrders, importNotes, getAutoCreateConfig, updateAutoCreateConfig } from '@/api/wms/platformOrder'
 import { listAllPlatformShops, batchSyncOrders } from '@/api/wms/platformShop'
 import SkuSelect from '@/views/components/SkuSelect.vue'
 
@@ -655,6 +678,8 @@ const defaultTime = reactive([new Date(2000, 0, 1, 0, 0, 0), new Date(2000, 0, 1
 const loading = ref(false)
 const syncLoading = ref(false)
 const shipmentCreating = ref(false)
+const autoCreateEnabled = ref(true)
+const configLoading = ref(false)
 const exporting = ref(false)
 const shopLoading = ref(false)
 const total = ref(0)
@@ -879,6 +904,34 @@ function handleCreateShipments() {
   }).finally(() => {
     shipmentCreating.value = false
   })
+}
+
+async function fetchAutoCreateConfig() {
+  configLoading.value = true
+  try {
+    const response = await getAutoCreateConfig()
+    const value = response?.data
+    autoCreateEnabled.value = value !== 'false'
+  } catch (e) {
+    // 获取失败默认启用
+    autoCreateEnabled.value = true
+  } finally {
+    configLoading.value = false
+  }
+}
+
+async function handleAutoCreateToggle(value) {
+  try {
+    await updateAutoCreateConfig(value)
+    autoCreateEnabled.value = value
+    proxy.$modal.msgSuccess(value
+      ? t('platformOrders.autoCreateEnabledMsg')
+      : t('platformOrders.autoCreateDisabledMsg'))
+  } catch (e) {
+    // 失败时回滚开关状态
+    autoCreateEnabled.value = !value
+    proxy.$modal.msgError(t('platformOrders.autoCreateConfigFailed'))
+  }
 }
 
 function handleExport() {
@@ -1399,6 +1452,7 @@ onMounted(() => {
   loadShops()
   loadStatusMap()
   getList()
+  fetchAutoCreateConfig()
 })
 </script>
 
@@ -2202,5 +2256,20 @@ onMounted(() => {
   .detail-panel {
     padding: 10px;
   }
+}
+
+// ==================== 自动创建出库单开关 ====================
+.auto-create-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  padding: 0 4px;
+}
+
+.auto-create-label {
+  font-size: 12px;
+  color: #667085;
+  white-space: nowrap;
 }
 </style>
