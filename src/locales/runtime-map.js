@@ -674,6 +674,12 @@
   '预出库': 'Pending Stock Out',
   '截单': 'Cutoff',
   '异常': 'Abnormal',
+  '批量操作': 'Batch Operations',
+  '取消批量操作': 'Cancel Batch',
+  '批量上架': 'Batch Publish',
+  '已选择 {count} 个商品': '{count} selected',
+  '请先勾选商品': 'Please select products first',
+  '可用参数': 'Available Parameters',
 }
 
 const replacerKeys = Object.keys(zhToEnMap).sort((a, b) => b.length - a.length)
