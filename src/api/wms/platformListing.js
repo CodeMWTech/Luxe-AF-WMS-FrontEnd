@@ -83,7 +83,7 @@ export function getCategories(platform, parentId, lang) {
 
 /** 按类目ID查询名称（编辑回显用） */
 export function getCategoryById(platform, categoryId) {
-  return request({ url: '/wms/platform/listings/categories/' + encodeURIComponent(categoryId), method: 'get', params: { platform } })
+  return request({ url: '/wms/platform/listings/categories/' + encodeURIComponent(categoryId), method: 'get', params: { platform, lang: 'en' } })
 }
 
 /** 从平台 API 同步类目到数据库 */

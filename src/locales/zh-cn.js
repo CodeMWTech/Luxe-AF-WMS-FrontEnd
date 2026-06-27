@@ -433,6 +433,7 @@
     defaultTitleHint: '上架时可修改。eBay 标题限制 80 字符。',
     primaryCategory: 'Primary Category',
     primaryCategoryPlaceholder: '逐级展开，选择最底层类目',
+    mustSelectLeafCategory: '必须选择最底层类目（叶子节点），请展开到最后一级再选择',
     primaryCategoryHint: '必填。从 eBay 类目树中选择',
     syncCategoriesBtn: '同步最新类目',
     loadPoliciesBtn: '从 eBay 加载 Business Policies',

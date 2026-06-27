@@ -200,15 +200,39 @@
 
       <!-- 批量操作栏 -->
       <div v-if="batchMode" class="batch-action-bar">
-        <span class="batch-action-info">{{ tr('已选择 {count} 个商品').replace('{count}', selectedRows.length) }}</span>
-        <el-button
-          type="success"
-          icon="Upload"
-          :disabled="selectedRows.length === 0"
-          @click="handleBatchPublish"
-        >
-          {{ tr('批量上架') }}
-        </el-button>
+        <div class="batch-action-left">
+          <el-icon class="batch-action-icon"><Select /></el-icon>
+          <span class="batch-action-info">{{ tr('已选择 {count} 个商品').replace('{count}', selectedRows.length) }}</span>
+        </div>
+        <div class="batch-action-right">
+          <el-button
+            type="primary"
+            icon="Download"
+            :loading="batchExportExcelLoading"
+            :disabled="selectedRows.length === 0"
+            @click="handleBatchExportExcel"
+          >
+            {{ tr('批量导出为Excel') }}
+          </el-button>
+          <el-button
+            type="primary"
+            icon="Printer"
+            :loading="batchExportPdfLoading"
+            :disabled="selectedRows.length === 0"
+            @click="handleBatchExportPdf"
+          >
+            {{ tr('批量导出为PDF') }}
+          </el-button>
+          <el-divider direction="vertical" />
+          <el-button
+            type="success"
+            icon="Upload"
+            :disabled="selectedRows.length === 0"
+            @click="handleBatchPublish"
+          >
+            {{ tr('批量上架') }}
+          </el-button>
+        </div>
       </div>
 
       <el-table
@@ -222,9 +246,9 @@
         class="statistic-table"
         :default-sort="{ prop: 'receiptTime', order: 'descending' }"
         @sort-change="handleColumnSortChange"
-        @selection-change="val => selectedRows = val"
+        @selection-change="handleSelectionChange"
       >
-        <el-table-column v-if="batchMode" type="selection" width="50" align="center" />
+        <el-table-column v-if="batchMode" type="selection" width="50" align="center" fixed="left" />
         <el-table-column :label="tr('操作')" :width="isEn ? 132 : 110" align="center" fixed="left">
           <template #default="{ row }">
             <el-button
@@ -551,6 +575,7 @@
 
 <script setup name="Inventory">
 import {
+  batchExportInventoryBoardExcel,
   exportInventoryBoardItem,
   listInventoryBoard,
   listInventoryBoardWarehouseSummary
@@ -581,6 +606,9 @@ const defaultTime = [new Date(2000, 0, 1, 0, 0, 0), new Date(2000, 0, 1, 23, 59,
 const inventoryList = ref([])
 const loading = ref(true)
 const exportLoading = ref(false)
+const batchExportExcelLoading = ref(false)
+const batchExportPdfLoading = ref(false)
+const selectedRows = ref([])
 const total = ref(0)
 const tableRef = ref(null)
 const rowSpanArray = ref(['itemGroupKey', 'skuGroupKey', 'skuWarehouseGroupKey'])
@@ -644,7 +672,6 @@ const DEFAULT_INVENTORY_SORT = {
 
 const filterable = ref(true)
 const batchMode = ref(false)
-const selectedRows = ref([])
 const publishDialogRef = ref(null)
 const queryType = ref('item')
 const queryParams = ref({
@@ -1463,6 +1490,168 @@ const handleExportExcel = async () => {
   }
 }
 
+function handleSelectionChange(selection) {
+  selectedRows.value = selection
+}
+
+async function handleBatchExportExcel() {
+  if (selectedRows.value.length === 0) {
+    proxy.$modal.msgWarning(tr('请至少选择一条库存记录'))
+    return
+  }
+  try {
+    batchExportExcelLoading.value = true
+    const rows = selectedRows.value.map(row => ({
+      skuId: row.skuId,
+      warehouseId: row.warehouseId
+    }))
+    const exportLanguage = getExportLanguagePayload()
+    const blobData = await batchExportInventoryBoardExcel(
+      { rows },
+      {
+        headers: {
+          'Content-Language': exportLanguage.contentLanguage,
+          'Accept-Language': isEn.value ? 'en-US,en;q=0.9' : 'zh-CN,zh;q=0.9'
+        }
+      }
+    )
+    const isBlob = blobValidate(blobData)
+    if (!isBlob) {
+      const resText = await blobData.text()
+      const rspObj = JSON.parse(resText)
+      throw new Error(rspObj?.msg || tr('批量导出失败'))
+    }
+    const excelData = isEn.value ? await translateInventoryExportXlsx(blobData) : blobData
+    const blob = new Blob([excelData], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    })
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = isEn.value ? 'MichaelStudioWMS-Inventory Batch Export.xlsx' : 'MichaelStudioWMS-库存统计批量导出.xlsx'
+    a.click()
+    window.URL.revokeObjectURL(url)
+    proxy.$modal.msgSuccess(tr('批量导出成功'))
+  } catch (e) {
+    proxy.$modal.msgError(e?.message || tr('批量导出失败'))
+  } finally {
+    batchExportExcelLoading.value = false
+  }
+}
+
+/**
+ * 批量导出 PDF（参考详细信息页面的 exportDetailPdf 实现方式：
+ * 前端构建 HTML，新窗口打开后自动触发浏览器打印为 PDF）。
+ */
+function handleBatchExportPdf() {
+  if (selectedRows.value.length === 0) {
+    proxy.$modal.msgWarning(tr('请至少选择一条库存记录'))
+    return
+  }
+  try {
+    batchExportPdfLoading.value = true
+    const canViewCost = canViewCostPrice.value
+    const canViewSelling = canViewSellingPrice.value
+
+    // ── 表头 ──
+    const headers = [
+      tr('商品图片'), tr('商品名称'), tr('SKU编号'), tr('仓库'), tr('库存数量'),
+      tr('入库时间'), tr('出库时间'), tr('出库平台'), tr('周转天数')
+    ]
+    if (canViewCost) headers.push(tr('平均成本价'))
+    if (canViewSelling) headers.push(tr('平均销售价'))
+    if (canViewCost && canViewSelling) headers.push(tr('利润'))
+    headers.push(tr('成色'), tr('瑕疵'))
+    const headerHtml = headers.map(h => `<th>${escapeHtml(h)}</th>`).join('')
+
+    // ── 数据行 ──
+    const rowsHtml = selectedRows.value.map(row => {
+      const cells = []
+      // 图片列（参考前端 72×72 展示尺寸）
+      const imgUrl = row.itemImage || ''
+      cells.push(imgUrl
+        ? `<img src="${escapeHtml(imgUrl)}" style="width:72px;height:72px;object-fit:cover;border-radius:4px;display:block;margin:0 auto;" />`
+        : escapeHtml(tr('暂无图片')))
+      cells.push(escapeHtml(row.itemName || '--'))
+      cells.push(escapeHtml(row.skuCode || '--'))
+      cells.push(escapeHtml(row.warehouseName || '--'))
+      cells.push(row.quantity != null ? row.quantity : '--')
+      cells.push(formatTime(row.receiptTime))
+      cells.push(formatTime(row.shipmentTime))
+      cells.push(escapeHtml(row.outboundPlatform || '--'))
+      cells.push(row.turnoverDays != null ? row.turnoverDays : '--')
+      if (canViewCost) cells.push(formatMoney(row.avgReceiptCost))
+      if (canViewSelling) cells.push(formatMoney(row.avgShipmentPrice))
+      if (canViewCost && canViewSelling) cells.push(formatProfit(row.totalProfit))
+      cells.push(escapeHtml(row.itemCondition || '--'))
+      cells.push(escapeHtml(row.defect || '--'))
+      return `<tr>${cells.map(c => `<td>${c}</td>`).join('')}</tr>`
+    }).join('')
+
+    // ── 报表标题与导出时间 ──
+    const title = tr('库存统计报表')
+    const now = new Date()
+    const nowStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`
+    const count = selectedRows.value.length
+    const metaText = isEn.value
+      ? `${nowStr} | ${count} records`
+      : `${nowStr} | 共 ${count} 条记录`
+    const printWindow = window.open('', '_blank')
+    if (!printWindow) {
+      proxy.$modal.msgError(tr('批量导出失败'))
+      batchExportPdfLoading.value = false
+      return
+    }
+    printWindow.document.write(`
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>${escapeHtml(safeFileName(title, title))}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, "Microsoft YaHei", sans-serif; padding: 20px; color: #1f2329; }
+    h1 { font-size: 18px; margin-bottom: 4px; }
+    .meta { color: #667085; font-size: 11px; margin-bottom: 16px; }
+    table { width: 100%; border-collapse: collapse; font-size: 11px; table-layout: auto; }
+    th, td { border: 1px solid #dfe3eb; padding: 4px 6px; text-align: left; vertical-align: middle; overflow-wrap: break-word; }
+    th { background: #f5f7fa; color: #4b5563; font-weight: 600; white-space: nowrap; }
+    tr:nth-child(even) td { background: #fafbfc; }
+    td:first-child { width: 80px; text-align: center; }
+    .cell-num { text-align: right; white-space: nowrap; }
+    @page { size: landscape; margin: 6mm; }
+    @media print {
+      body { padding: 0; }
+      table { font-size: 8px; }
+      th, td { padding: 2px 3px; }
+      th { white-space: normal; }
+      td:first-child { width: 56px; }
+      td:first-child img { width: 48px; height: 48px; }
+      h1 { font-size: 14px; }
+      .meta { font-size: 8px; margin-bottom: 8px; }
+    }
+  </style>
+</head>
+<body>
+  <h1>${escapeHtml(title)}</h1>
+  <div class="meta">${escapeHtml(metaText)}</div>
+  <table><thead><tr>${headerHtml}</tr></thead><tbody>${rowsHtml}</tbody></table>
+</body>
+</html>
+    `)
+    printWindow.document.close()
+    // 等新窗口渲染完成后自动呼出浏览器打印对话框
+    setTimeout(function () {
+      try { printWindow.print(); } catch (e) { /* 用户可能已关闭窗口 */ }
+    }, 800)
+    proxy.$modal.msgSuccess(tr('批量导出成功'))
+  } catch (e) {
+    proxy.$modal.msgError(e?.message || tr('批量导出失败'))
+  } finally {
+    batchExportPdfLoading.value = false
+  }
+}
+
 const handleQuery = () => {
   queryParams.value.pageNum = 1
   getList()
@@ -1600,17 +1789,39 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
   padding: 10px 16px;
-  margin-bottom: 8px;
-  background: var(--el-color-warning-light-9, #fdf6ec);
-  border: 1px solid var(--el-color-warning-light-5, #f5dab1);
+  margin-bottom: 12px;
+  background: var(--el-color-primary-light-9, #ecf5ff);
+  border: 1px solid var(--el-color-primary-light-5, #c6e2ff);
   border-radius: 6px;
 }
 
+.batch-action-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.batch-action-icon {
+  font-size: 18px;
+  color: var(--el-color-primary, #409eff);
+}
+
 .batch-action-info {
-  color: var(--el-color-warning-dark-2, #b88230);
+  color: var(--el-text-color-primary, #303133);
   font-size: 14px;
   font-weight: 500;
+  white-space: nowrap;
+}
+
+.batch-action-right {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .statistic-table {

@@ -421,6 +421,7 @@
     defaultTitleHint: 'Can be changed when publishing. eBay title limit 80 chars.',
     primaryCategory: 'Primary Category',
     primaryCategoryPlaceholder: 'Expand and select the leaf category',
+    mustSelectLeafCategory: 'Must select a leaf category. Please expand to the deepest level.',
     primaryCategoryHint: 'Required. Select from eBay category tree',
     syncCategoriesBtn: 'Sync Latest Categories',
     loadPoliciesBtn: 'Load Business Policies from eBay',
