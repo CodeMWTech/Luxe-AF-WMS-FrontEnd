@@ -103,10 +103,33 @@
         <el-form-item class="filter-item filter-item-actions">
           <el-button type="primary" icon="Search" class="action-btn" native-type="submit" v-hasPermi="['wms:platform:list']">{{ t('platformOrders.btnQuery') }}</el-button>
           <el-button icon="Refresh" class="action-btn" @click="resetQuery">{{ t('platformOrders.btnReset') }}</el-button>
-          <el-button type="success" icon="RefreshRight" class="action-btn" @click="openSyncDialog" v-hasPermi="['wms:platform:tiktok:test']">{{ t('platformOrders.btnSync') }}</el-button>
+          <el-button type="success" icon="RefreshRight" class="action-btn" @click="openSyncDialog" v-hasPermi="['wms:platform:sync']">{{ t('platformOrders.btnSync') }}</el-button>
           <el-button type="info" icon="Download" class="action-btn" :loading="exporting" @click="handleExport" v-hasPermi="['wms:platform:list']">{{ t('platformOrders.btnExport') }}</el-button>
           <el-button type="primary" icon="Upload" class="action-btn" @click="openImportNotesDialog" v-hasPermi="['wms:platform:edit']">{{ t('platformOrders.btnImportNotes') }}</el-button>
-          <el-button type="warning" icon="Box" class="action-btn" :loading="shipmentCreating" @click="handleCreateShipments" v-hasPermi="['wms:platform:edit']">{{ t('platformOrders.btnCreateShipment') }}</el-button>
+          <span class="auto-create-toggle">
+            <el-switch
+              v-model="autoCreateEnabled"
+              :loading="configLoading"
+              @change="handleAutoCreateToggle"
+              size="small"
+            />
+            <span class="auto-create-label">{{ t('platformOrders.autoCreateLabel') }}</span>
+          </span>
+          <el-tooltip
+            :content="t('platformOrders.shipmentDisabled')"
+            :disabled="autoCreateEnabled"
+            placement="top"
+          >
+            <el-button
+              type="warning"
+              icon="Box"
+              class="action-btn"
+              :loading="shipmentCreating"
+              :disabled="!autoCreateEnabled"
+              @click="handleCreateShipments"
+              v-hasPermi="['wms:platform:edit']"
+            >{{ t('platformOrders.btnCreateShipment') }}</el-button>
+          </el-tooltip>
         </el-form-item>
       </el-form>
     </el-card>
@@ -130,12 +153,13 @@
           </template>
         </el-empty>
 
-        <article
-          v-for="(order, index) in orderList"
-          :key="orderKey(order, index)"
-          class="order-card"
-          :class="{ 'is-open': isExpanded(order, index) }"
-        >
+        <div class="orders-scroll">
+          <article
+            v-for="(order, index) in orderList"
+            :key="orderKey(order, index)"
+            class="order-card"
+            :class="{ 'is-open': isExpanded(order, index) }"
+          >
           <button class="summary-row" type="button" @click="toggleOrder(order, index)">
             <div class="summary-cell order-id-cell">
               <span class="cell-label">{{ t('platformOrders.orderId') }}</span>
@@ -447,6 +471,7 @@
             </div>
           </transition>
         </article>
+        </div>
       </div>
 
       <pagination
@@ -619,7 +644,7 @@
 <script setup name="PlatformOrders">
 import { computed, defineComponent, getCurrentInstance, h, onMounted, ref } from 'vue'
 import { ArrowDown, ArrowRight, CopyDocument, Edit } from '@element-plus/icons-vue'
-import { getPlatformOrder, listPlatformOrders, getOrderStatusMap, updateOrderSku, createShipments, exportPlatformOrders, importNotes } from '@/api/wms/platformOrder'
+import { getPlatformOrder, listPlatformOrders, getOrderStatusMap, updateOrderSku, createShipments, exportPlatformOrders, importNotes, getAutoCreateConfig, updateAutoCreateConfig } from '@/api/wms/platformOrder'
 import { listAllPlatformShops, batchSyncOrders } from '@/api/wms/platformShop'
 import SkuSelect from '@/views/components/SkuSelect.vue'
 
@@ -653,6 +678,8 @@ const defaultTime = reactive([new Date(2000, 0, 1, 0, 0, 0), new Date(2000, 0, 1
 const loading = ref(false)
 const syncLoading = ref(false)
 const shipmentCreating = ref(false)
+const autoCreateEnabled = ref(true)
+const configLoading = ref(false)
 const exporting = ref(false)
 const shopLoading = ref(false)
 const total = ref(0)
@@ -877,6 +904,34 @@ function handleCreateShipments() {
   }).finally(() => {
     shipmentCreating.value = false
   })
+}
+
+async function fetchAutoCreateConfig() {
+  configLoading.value = true
+  try {
+    const response = await getAutoCreateConfig()
+    const value = response?.data
+    autoCreateEnabled.value = value !== 'false'
+  } catch (e) {
+    // 获取失败默认启用
+    autoCreateEnabled.value = true
+  } finally {
+    configLoading.value = false
+  }
+}
+
+async function handleAutoCreateToggle(value) {
+  try {
+    await updateAutoCreateConfig(value)
+    autoCreateEnabled.value = value
+    proxy.$modal.msgSuccess(value
+      ? t('platformOrders.autoCreateEnabledMsg')
+      : t('platformOrders.autoCreateDisabledMsg'))
+  } catch (e) {
+    // 失败时回滚开关状态
+    autoCreateEnabled.value = !value
+    proxy.$modal.msgError(t('platformOrders.autoCreateConfigFailed'))
+  }
 }
 
 function handleExport() {
@@ -1397,6 +1452,7 @@ onMounted(() => {
   loadShops()
   loadStatusMap()
   getList()
+  fetchAutoCreateConfig()
 })
 </script>
 
@@ -1507,6 +1563,41 @@ onMounted(() => {
 // ==================== Order Card ====================
 .orders-list {
   min-height: 160px;
+}
+
+// 横向滚动容器：小屏时订单卡片保持完整列宽，通过拖拽滚动查看
+.orders-scroll {
+  @media (max-width: 1440px) {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: #c0c6d0 transparent;
+
+    &::-webkit-scrollbar {
+      height: 6px;
+    }
+    &::-webkit-scrollbar-thumb {
+      border-radius: 3px;
+      background: #c0c6d0;
+      &:hover {
+        background: #98a2b3;
+      }
+    }
+    &::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .order-card {
+      min-width: 1400px;
+      overflow: visible;
+    }
+
+    // 为防止展开详情溢出圆角，给 detail-area 单独裁剪
+    .detail-area {
+      overflow: hidden;
+      border-radius: 0 0 10px 10px;
+    }
+  }
 }
 
 .order-card {
@@ -1997,8 +2088,46 @@ onMounted(() => {
     width: calc(50% - 8px);
   }
 
+  // 筛选框标签宽度缩减
+  .platform-orders-page .filter-form {
+    :deep(.el-form-item__label) {
+      width: 84px !important;
+    }
+  }
+
+  // 筛选按钮行：允许换行
+  .platform-orders-page .filter-item-actions {
+    :deep(.el-form-item__content) {
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+  }
+  .platform-orders-page .action-btn {
+    min-width: 68px;
+    height: 32px;
+    font-size: 12px;
+    padding: 0 8px;
+  }
+
+  // 小屏保留与全屏一致的列宽，通过 .orders-scroll 横向拖拽查看
   .summary-row {
-    grid-template-columns: repeat(3, minmax(0, 1fr)) 36px;
+    gap: 10px;
+  }
+
+  .cell-label {
+    font-size: 10px;
+    margin-bottom: 2px;
+  }
+  .primary-value {
+    font-size: 13px;
+  }
+  .secondary-value {
+    font-size: 12px;
+  }
+
+  // 隐藏仅大屏展示的平台列
+  .platform-cell {
+    display: none;
   }
 
   .detail-grid {
@@ -2013,36 +2142,134 @@ onMounted(() => {
     width: 100%;
   }
 
-  .orders-header {
-    align-items: flex-start;
-    gap: 8px;
-    flex-direction: column;
+  // 筛选卡片紧凑化
+  .platform-orders-page .filter-card {
+    border-radius: 8px;
+    :deep(.el-card__body) {
+      padding: 8px 10px 0;
+    }
   }
 
-  .summary-row,
-  .detail-grid,
-  .notes-grid {
-    grid-template-columns: 1fr;
+  .platform-orders-page .filter-form {
+    column-gap: 6px;
+    :deep(.el-form-item) {
+      margin-bottom: 8px;
+    }
+    :deep(.el-form-item__label) {
+      width: 64px !important;
+      font-size: 11px;
+      line-height: 30px;
+    }
+  }
+
+  .platform-orders-page .action-btn {
+    min-width: 56px;
+    height: 28px;
+    font-size: 11px;
+    padding: 0 6px;
+    border-radius: 6px;
+  }
+
+  .platform-orders-page .filter-item-actions {
+    padding-top: 0;
+    :deep(.el-form-item__content) {
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+  }
+
+  .orders-header {
+    align-items: flex-start;
+    gap: 6px;
+    flex-direction: column;
+    margin-bottom: 6px;
+
+    h2 { font-size: 17px; }
+  }
+
+  // 手机端取消横向滚动，切换为单列堆叠布局
+  .orders-scroll {
+    overflow-x: visible;
+    -webkit-overflow-scrolling: auto;
+
+    .order-card {
+      min-width: 0;
+    }
+  }
+
+  .order-card {
+    margin-bottom: 8px;
+    border-radius: 8px;
   }
 
   .summary-row {
-    gap: 10px;
-    padding-right: 52px;
+    grid-template-columns: 1fr;
+    gap: 6px;
+    padding: 8px 44px 8px 12px;
+    min-height: auto;
     position: relative;
   }
 
+  // 单列布局：每列改为水平排列（label 在左，值在右）
+  .summary-cell {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .cell-label {
+    min-width: 56px;
+    max-width: 56px;
+    margin-bottom: 0;
+    font-size: 10px;
+    flex-shrink: 0;
+  }
+  .primary-value { font-size: 13px; }
+  .secondary-value { font-size: 12px; }
+
+  // 恢复所有列
+  .sku-cell,
+  .shipment-cell,
+  .platform-cell {
+    display: flex;
+  }
+
+  // 展开按钮绝对定位
   .expand-btn {
     position: absolute;
-    right: 12px;
-    top: 14px;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 30px;
+    height: 30px;
+  }
+
+  .detail-grid,
+  .notes-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
   }
 
   .detail-area {
-    padding: 14px;
+    padding: 10px;
   }
 
   .detail-panel {
-    padding: 14px;
+    padding: 10px;
   }
+}
+
+// ==================== 自动创建出库单开关 ====================
+.auto-create-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  padding: 0 4px;
+}
+
+.auto-create-label {
+  font-size: 12px;
+  color: #667085;
+  white-space: nowrap;
 }
 </style>
