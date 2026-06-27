@@ -159,8 +159,10 @@ function handleDelist(row) {
     delistListing(row.id).then(() => {
       proxy.$modal.msgSuccess(t('platformListings.delistSuccess'))
       getList()
-    }).catch(() => {
-      proxy.$modal.msgError(t('platformListings.delistFailed'))
+    }).catch((err) => {
+      // 优先展示后端返回的具体错误原因（如"商品正在审核中"）
+      const msg = err?.data?.msg || err?.message || t('platformListings.delistFailed')
+      proxy.$modal.msgError(msg)
     })
   }).catch(() => {})
 }
