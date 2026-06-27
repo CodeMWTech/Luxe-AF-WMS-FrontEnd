@@ -103,7 +103,7 @@
         <el-form-item class="filter-item filter-item-actions">
           <el-button type="primary" icon="Search" class="action-btn" native-type="submit" v-hasPermi="['wms:platform:list']">{{ t('platformOrders.btnQuery') }}</el-button>
           <el-button icon="Refresh" class="action-btn" @click="resetQuery">{{ t('platformOrders.btnReset') }}</el-button>
-          <el-button type="success" icon="RefreshRight" class="action-btn" @click="openSyncDialog" v-hasPermi="['wms:platform:tiktok:test']">{{ t('platformOrders.btnSync') }}</el-button>
+          <el-button type="success" icon="RefreshRight" class="action-btn" @click="openSyncDialog" v-hasPermi="['wms:platform:sync']">{{ t('platformOrders.btnSync') }}</el-button>
           <el-button type="info" icon="Download" class="action-btn" :loading="exporting" @click="handleExport" v-hasPermi="['wms:platform:list']">{{ t('platformOrders.btnExport') }}</el-button>
           <el-button type="primary" icon="Upload" class="action-btn" @click="openImportNotesDialog" v-hasPermi="['wms:platform:edit']">{{ t('platformOrders.btnImportNotes') }}</el-button>
           <span class="auto-create-toggle">
