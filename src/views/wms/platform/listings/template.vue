@@ -141,6 +141,7 @@
                     lazy
                     :load="loadEbayChildren"
                     style="width:100%"
+                    @change="onEbayCategoryChange"
                   />
                 </div>
               </div>
@@ -253,13 +254,14 @@
                       lazy
                       :load="loadTiktokChildren"
                       style="width:100%"
+                      @change="onTiktokCategoryChange"
                     />
                     <el-button link type="primary" size="small" @click="handleSyncCategories('TIKTOK')" :loading="syncingTiktok">{{ t('platformListings.syncLatestCategories') }}</el-button>
                   </div>
 
                   <div class="tiktok-field-block">
                     <label class="tiktok-required-label">{{ t('platformListings.brand') }}</label>
-                    <el-input v-model="form.tiktokBrandId" :placeholder="t('platformListings.tiktokBrandPlaceholder')" />
+                    <el-input v-model="form.tiktokBrandId" :placeholder="t('platformListings.tiktokBrandPlaceholder')" disabled />
                   </div>
 
                   <div class="tiktok-field-block">
@@ -346,13 +348,12 @@
 <script setup>
 import { ref, reactive, computed, nextTick, onMounted, getCurrentInstance, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { listTemplates, addTemplate, updateTemplate, delTemplate, getTemplate, getCategories, syncCategories, getEbayPolicies, getTiktokWarehouses } from '@/api/wms/platformListing'
+import { listTemplates, addTemplate, updateTemplate, delTemplate, getTemplate, getCategories, getCategoryById, syncCategories, getEbayPolicies, getTiktokWarehouses } from '@/api/wms/platformListing'
 import { listAllPlatformShops } from '@/api/wms/platformShop'
 
 const { proxy } = getCurrentInstance()
 const { locale } = useI18n()
 const t = (key, values) => proxy?.$t?.(key, values) || key
-const lang = () => locale.value === 'en' ? 'en' : 'zh'
 
 const loading = ref(false), total = ref(0), templateList = ref([]), submitting = ref(false)
 const queryRef = ref(null), formRef = ref(null)
@@ -390,22 +391,36 @@ function onPlatformChange() {
   returnPolicies.value = []
 }
 
-// 懒加载：根据层级获取对应类目
+// 懒加载：根据层级获取对应类目，始终使用英文名
+const ebayLeafIds = ref(new Set())
+const tiktokLeafIds = ref(new Set())
+
 function loadEbayChildren(node, resolve) {
   const parentId = node.level === 0 ? null : node.data?.dbId
-  getCategories('EBAY', parentId, lang()).then(res => {
-    const data = res.data || []
-    // 同时写入 :data 确保顶级节点渲染（level===0 时 node.data 为空）
-    if (node.level === 0) ebayCategoryTree.value = data
+  getCategories('EBAY', parentId, 'en').then(res => {
+    const data = (res.data || []).map(item => {
+      if (item.isLeaf) ebayLeafIds.value.add(item.id)
+      return item
+    })
+    // 根级别只设置初始数据，编辑时的预加载数据不覆盖
+    if (node.level === 0 && ebayCategoryTree.value.length === 0) {
+      ebayCategoryTree.value = data
+    }
     resolve(data)
   }).catch(() => resolve([]))
 }
 
 function loadTiktokChildren(node, resolve) {
   const parentId = node.level === 0 ? null : node.data?.dbId
-  getCategories('TIKTOK', parentId, lang()).then(res => {
-    const data = res.data || []
-    if (node.level === 0) tiktokCategoryTree.value = data
+  getCategories('TIKTOK', parentId, 'en').then(res => {
+    const data = (res.data || []).map(item => {
+      if (item.isLeaf) tiktokLeafIds.value.add(item.id)
+      return item
+    })
+    // 根级别只设置初始数据，编辑时的预加载数据不覆盖
+    if (node.level === 0 && tiktokCategoryTree.value.length === 0) {
+      tiktokCategoryTree.value = data
+    }
     resolve(data)
   }).catch(() => resolve([]))
 }
@@ -626,17 +641,43 @@ function handleEdit(row) {
       packageWidth: d.packageWidth, packageHeight: d.packageHeight, packageDimensionUnit: d.packageDimensionUnit || 'INCH'
     })
     filterShops()
-    // 预加载根类目 + 已选类目节点（显示名称而非ID）
-    if (d.platform === 'EBAY') {
-      getCategories('EBAY', null).then(r => {
+    // 预加载类目/仓库/策略列表，翻译 ID 为英文名称
+    const platform = d.platform
+    const catId = platform === 'EBAY' ? d.ebayCategoryId : d.tiktokCategoryId
+    if (catId && platform) {
+      getCategories(platform, null, 'en').then(r => {
         const items = (r.data || []).map(c => ({ ...c }))
-        if (d.ebayCategoryId && d.ebayCategoryName) {
-          const exists = items.find(c => c.id === d.ebayCategoryId)
-          if (!exists) {
-            items.unshift({ id: d.ebayCategoryId, label: d.ebayCategoryNameZh || d.ebayCategoryName, labelEn: d.ebayCategoryName || d.ebayCategoryNameZh, isLeaf: false })
+        getCategoryById(platform, catId).then(catRes => {
+          const cat = catRes.data || {}
+          const label = cat.label || catId
+          if (!items.find(c => c.id === catId)) {
+            items.unshift({ id: catId, label, isLeaf: !!cat.isLeaf })
           }
-        }
-        ebayCategoryTree.value = items
+          if (platform === 'EBAY') ebayCategoryTree.value = items
+          else tiktokCategoryTree.value = items
+        }).catch(() => {
+          if (platform === 'EBAY') ebayCategoryTree.value = items
+          else tiktokCategoryTree.value = items
+        })
+      }).catch(() => {})
+    } else if (platform === 'EBAY') {
+      getCategories('EBAY', null, 'en').then(r => {
+        ebayCategoryTree.value = r.data || []
+      }).catch(() => {})
+    }
+    // TikTok：加载仓库列表让 select 显示仓库名而非 ID
+    if (platform === 'TIKTOK' && d.shopId) {
+      getTiktokWarehouses(d.shopId).then(res => {
+        warehouseList.value = res.data || []
+      }).catch(() => {})
+    }
+    // eBay：加载策略列表让 select 显示策略名而非 ID
+    if (platform === 'EBAY' && d.shopId) {
+      getEbayPolicies(d.shopId).then(res => {
+        const data = res.data || {}
+        fulfillmentPolicies.value = data.fulfillmentPolicies || []
+        paymentPolicies.value = data.paymentPolicies || []
+        returnPolicies.value = data.returnPolicies || []
       }).catch(() => {})
     }
   })
@@ -682,6 +723,7 @@ function submitForm() {
 }
 
 function doSubmit(isEbay) {
+  if (!validateLeafCategory()) return
   submitting.value = true
   const data = {
     id: form.id, templateName: form.templateName, platform: form.platform,
@@ -740,6 +782,30 @@ function loadEbayPolicies() {
   }).finally(() => {
     loadingPolicies.value = false
   })
+}
+
+function onEbayCategoryChange(val) {
+  if (val && ebayLeafIds.value.size > 0 && !ebayLeafIds.value.has(val)) {
+    proxy.$modal.msgWarning(t('platformListings.mustSelectLeafCategory'))
+    form.ebayCategoryId = ''
+  }
+}
+function onTiktokCategoryChange(val) {
+  if (val && tiktokLeafIds.value.size > 0 && !tiktokLeafIds.value.has(val)) {
+    proxy.$modal.msgWarning(t('platformListings.mustSelectLeafCategory'))
+    form.tiktokCategoryId = ''
+  }
+}
+
+function validateLeafCategory() {
+  const isEbay = form.platform === 'EBAY'
+  const leafIds = isEbay ? ebayLeafIds.value : tiktokLeafIds.value
+  const catId = isEbay ? form.ebayCategoryId : form.tiktokCategoryId
+  if (catId && leafIds.size > 0 && !leafIds.has(catId)) {
+    proxy.$modal.msgWarning(t('platformListings.mustSelectLeafCategory'))
+    return false
+  }
+  return true
 }
 
 function handleSyncCategories(platform) {
