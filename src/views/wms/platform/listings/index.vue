@@ -21,6 +21,7 @@
             <el-option :label="t('platformListings.statusListed')" value="LISTED" />
             <el-option :label="t('platformListings.statusFailed')" value="FAILED" />
             <el-option :label="t('platformListings.statusDelisted')" value="DELISTED" />
+            <el-option :label="t('platformListings.statusAuditing')" value="AUDITING" />
           </el-select>
         </el-form-item>
         <el-form-item>
@@ -62,8 +63,8 @@
         <el-table-column :label="t('platformListings.listingTime')" prop="createTime" width="160" align="center" />
         <el-table-column :label="t('platformListings.operation')" width="260" align="center" fixed="right">
           <template #default="{ row }">
-            <el-button link type="primary" size="small" icon="Refresh" @click="handleSync(row)" v-if="row.listingStatus === 'LISTED'">{{ t('platformListings.btnSyncStatus') }}</el-button>
-            <el-button link type="danger" size="small" icon="Close" @click="handleDelist(row)" v-if="row.listingStatus === 'LISTED'">{{ t('platformListings.btnDelist') }}</el-button>
+            <el-button link type="primary" size="small" icon="Refresh" @click="handleSync(row)" v-if="row.listingStatus === 'LISTED' || row.listingStatus === 'AUDITING'">{{ t('platformListings.btnSyncStatus') }}</el-button>
+            <el-button link type="danger" size="small" icon="Close" @click="handleDelist(row)" v-if="row.listingStatus === 'LISTED' || row.listingStatus === 'AUDITING'">{{ t('platformListings.btnDelist') }}</el-button>
             <el-button link type="warning" size="small" icon="Refresh" @click="handleRetry(row)" v-if="row.listingStatus === 'FAILED' || row.listingStatus === 'DELISTED'">{{ row.listingStatus === 'DELISTED' ? t('platformListings.btnRelist') : t('platformListings.btnRetry') }}</el-button>
             <el-button link type="danger" size="small" icon="Delete" @click="handleDelete(row)" v-if="row.listingStatus === 'DELISTED'">{{ t('platformListings.btnDeleteRecord') }}</el-button>
           </template>
@@ -105,7 +106,7 @@ const queryParams = reactive({
 })
 
 function statusTagType(status) {
-  const map = { PENDING: 'info', LISTING: 'warning', LISTED: 'success', FAILED: 'danger', DELISTED: '' }
+  const map = { PENDING: 'info', LISTING: 'warning', LISTED: 'success', FAILED: 'danger', DELISTED: '', AUDITING: 'warning' }
   return map[status] || 'info'
 }
 
@@ -115,7 +116,8 @@ function statusLabel(status) {
     LISTING: t('platformListings.statusListing'),
     LISTED: t('platformListings.statusListed'),
     FAILED: t('platformListings.statusFailed'),
-    DELISTED: t('platformListings.statusDelisted')
+    DELISTED: t('platformListings.statusDelisted'),
+    AUDITING: t('platformListings.statusAuditing')
   }
   return map[status] || status
 }

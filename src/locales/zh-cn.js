@@ -370,6 +370,7 @@
     statusListed: '已上架',
     statusFailed: '失败',
     statusDelisted: '已下架',
+    statusAuditing: '审核中',
     // 操作
     btnPublish: '上架',
     btnDelist: '下架',

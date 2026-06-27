@@ -361,6 +361,7 @@
     statusListed: 'Listed',
     statusFailed: 'Failed',
     statusDelisted: 'Delisted',
+    statusAuditing: 'Under Review',
     btnPublish: 'Publish',
     btnDelist: 'Delist',
     btnSyncStatus: 'Sync Status',
