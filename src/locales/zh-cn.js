@@ -127,6 +127,12 @@
     skuMatchMatched: '已匹配',
     skuMatchUnmatched: '未匹配',
     filterStatus: '订单状态',
+    filterShipmentStatus: '出库单状态',
+    shipmentStatusAll: '全部',
+    shipmentStatusNone: '未创建出库单',
+    shipmentStatusPending: '出库单待出库',
+    shipmentStatusFinish: '出库单已完成',
+    shipmentStatusInvalid: '出库单已作废',
     filterTime: '创建时间',
     btnQuery: '查询',
     btnReset: '重置',
@@ -282,10 +288,21 @@
     importNotesTitle: '从 CSV 导入 Note',
     importNotesHelp: '支持 TikTok（ALL 开头）和 eBay（eBay 开头）导出的 CSV 文件。Note 字段用英文分号分割，前半部分为 SKU，后半部分为备注。已匹配 SKU 的订单将整个 Note 放入备注。',
     importNotesSelectFile: '选择 CSV 文件',
+    importNotesFileHint: 'CSV 文件（.csv），支持 TikTok 和 eBay 格式',
     importNotesStart: '开始导入',
-    importNotesSuccess: '导入完成：成功 {updated} 条，跳过 {skipped} 条，未找到 {notFound} 条',
+    importNotesSuccess: '导入完成',
     importNotesFailed: '导入失败',
-    importNoteResult: '平台：{platform}，数据行：{total}，更新：{updated}，跳过：{skipped}，未找到：{notFound}',
+    importNoteResult: '{platform} 导入完成：上传 {total} 条，更新 {updated} 条，匹配SKU {skuMatched} 条（其中无库存 {noStock} 条），预计出库 {expectShip} 条，未匹配SKU {unmatched} 条，未找到订单 {notFound} 条',
+    importNotesUnmatchedHint: '有 {count} 条未匹配SKU，请检查导入文件中 Note 列的 SKU 数据是否正确',
+    // 未创建出库单原因
+    skipReason: {
+      'Order cancelled': '订单已取消',
+      'Order status not allowed': '订单状态不允许自动出库',
+      'Seller SKU is empty': '商家SKU为空',
+      'SKU not matched': 'SKU未匹配',
+      'No stock': '无库存',
+      'Manually removed from shipment': '人工从出库单中清除'
+    },
     // 订单状态
     orderStatus: {
       FULFILLED: '已发货',
