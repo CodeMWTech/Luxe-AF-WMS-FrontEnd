@@ -1,5 +1,12 @@
 <template>
   <div class="app-container platform-orders-page">
+    <el-alert
+      :title="t('platformOrders.shipmentHint')"
+      type="info"
+      :closable="false"
+      show-icon
+      class="page-hint"
+    />
     <el-card class="filter-card">
       <el-form
         ref="queryRef"
@@ -1496,6 +1503,12 @@ onMounted(() => {
 <style lang="scss">
 .platform-orders-page {
   background: transparent;
+}
+
+// ==================== Page Hint ====================
+.platform-orders-page .page-hint {
+  margin-bottom: 12px;
+  border-radius: 8px;
 }
 
 // ==================== Filter Card ====================
