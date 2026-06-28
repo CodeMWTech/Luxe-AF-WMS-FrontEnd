@@ -87,6 +87,20 @@
             />
           </el-select>
         </el-form-item>
+        <el-form-item class="filter-item" :label="t('platformOrders.filterShipmentStatus')" prop="shipmentStatus">
+          <el-select
+            v-model="queryParams.shipmentStatus"
+            :placeholder="t('platformOrders.shipmentStatusAll')"
+            clearable
+            style="width: 100%"
+          >
+            <el-option :label="t('platformOrders.shipmentStatusAll')" value="" />
+            <el-option :label="t('platformOrders.shipmentStatusNone')" value="NONE" />
+            <el-option :label="t('platformOrders.shipmentStatusPending')" value="PENDING" />
+            <el-option :label="t('platformOrders.shipmentStatusFinish')" value="FINISH" />
+            <el-option :label="t('platformOrders.shipmentStatusInvalid')" value="INVALID" />
+          </el-select>
+        </el-form-item>
         <el-form-item class="filter-item filter-item-time" :label="t('platformOrders.filterTime')" prop="orderCreateTimeRange">
           <el-date-picker
             v-model="queryParams.orderCreateTimeRange"
@@ -213,7 +227,7 @@
                 <span class="primary-value shipment-order-no">{{ order.shipmentOrderNo || order.shipmentOrderId }}</span>
               </template>
               <template v-else>
-                <span v-if="order.skipReason" class="skip-reason-text">{{ order.skipReason }}</span>
+                <span v-if="order.skipReason" class="skip-reason-text">{{ formatSkipReason(order.skipReason) }}</span>
                 <span v-else class="no-shipment-text">-</span>
               </template>
             </div>
@@ -613,7 +627,7 @@
         :closable="false"
         class="mb20"
       />
-      <el-form label-width="100px">
+      <el-form label-width="130px">
         <el-form-item :label="t('platformOrders.importNotesSelectFile')">
           <el-upload
             ref="importUploadRef"
@@ -626,7 +640,7 @@
           >
             <el-button type="primary" icon="FolderOpened">{{ t('platformOrders.importNotesSelectFile') }}</el-button>
             <template #tip>
-              <div class="el-upload__tip">CSV 文件（.csv），支持 TikTok 和 eBay 格式</div>
+              <div class="el-upload__tip">{{ t('platformOrders.importNotesFileHint') }}</div>
             </template>
           </el-upload>
         </el-form-item>
@@ -643,6 +657,7 @@
 
 <script setup name="PlatformOrders">
 import { computed, defineComponent, getCurrentInstance, h, onMounted, ref } from 'vue'
+import { ElMessage } from 'element-plus'
 import { ArrowDown, ArrowRight, CopyDocument, Edit } from '@element-plus/icons-vue'
 import { getPlatformOrder, listPlatformOrders, getOrderStatusMap, updateOrderSku, createShipments, exportPlatformOrders, importNotes, getAutoCreateConfig, updateAutoCreateConfig } from '@/api/wms/platformOrder'
 import { listAllPlatformShops, batchSyncOrders } from '@/api/wms/platformShop'
@@ -763,6 +778,7 @@ const queryParams = ref({
   orderStatus: undefined,
   sellerSku: undefined,
   skuMatched: '',
+  shipmentStatus: '',
   orderCreateTimeRange: []
 })
 
@@ -810,6 +826,7 @@ function normalizeQuery() {
   query.platformOrderId = query.platformOrderId?.trim() || undefined
   query.sellerSku = query.sellerSku?.trim() || undefined
   query.skuMatched = query.skuMatched || undefined
+  query.shipmentStatus = query.shipmentStatus || undefined
   if (!query.platform) delete query.platform
 
   if (query.orderCreateTimeRange?.length === 2) {
@@ -1274,6 +1291,18 @@ function formatTaxes(taxes, currency) {
   return taxes
 }
 
+function formatSkipReason(reason) {
+  if (!reason) return ''
+  // 处理 "Order status not allowed: XXX" 格式：翻译前半部分，保留状态值
+  const colonIdx = reason.indexOf(':')
+  if (colonIdx > 0) {
+    const key = reason.substring(0, colonIdx)
+    const value = reason.substring(colonIdx + 1)
+    return t(`platformOrders.skipReason['${key}']`, key) + ': ' + value
+  }
+  return t(`platformOrders.skipReason['${reason}']`, reason)
+}
+
 function formatStatusText(status, platform) {
   if (!status) return '-'
   return t(`platformOrders.orderStatus.${status}`, status)
@@ -1404,17 +1433,38 @@ function submitImportNotes() {
   notesImportLoading.value = true
   importNotes(notesImportFile.value).then(response => {
     const data = response.data || response
-    proxy.$modal.msgSuccess(t('platformOrders.importNoteResult', {
-      platform: data.platform || '-',
-      total: data.totalRows ?? 0,
-      updated: data.updated ?? 0,
-      skipped: data.skipped ?? 0,
-      notFound: data.notFound ?? 0
-    }))
+    const matched = data.matched ?? 0
+    const noStock = data.noStock ?? 0
+    ElMessage({
+      message: t('platformOrders.importNoteResult', {
+        platform: data.platform || '-',
+        total: data.totalRows ?? 0,
+        updated: data.updated ?? 0,
+        skipped: data.skipped ?? 0,
+        skuMatched: matched + noStock,
+        noStock: noStock,
+        expectShip: matched,
+        unmatched: data.unmatched ?? 0,
+        notFound: data.notFound ?? 0
+      }),
+      type: 'success',
+      duration: 60000,
+      showClose: true
+    })
     if (data.errors && data.errors.length > 0) {
       setTimeout(() => {
-        proxy.$modal.msgWarning(data.errors.slice(0, 3).join('; '))
+        ElMessage({ message: data.errors.slice(0, 3).join('; '), type: 'warning', duration: 60000, showClose: true })
       }, 500)
+    }
+    if (data.unmatched > 0) {
+      setTimeout(() => {
+        ElMessage({
+          message: t('platformOrders.importNotesUnmatchedHint', { count: data.unmatched }),
+          type: 'warning',
+          duration: 60000,
+          showClose: true
+        })
+      }, 800)
     }
     cancelImportNotes()
     getList()
