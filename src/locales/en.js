@@ -117,6 +117,7 @@
   platformOrders: {
     title: 'Platform Orders',
     subtitle: 'TikTok + eBay Order List',
+    shipmentHint: 'After importing Notes, click "Create Shipment" to generate shipment orders',
     filterShop: 'Shop',
     filterPlatform: 'Platform',
     filterOrderId: 'Order ID',
