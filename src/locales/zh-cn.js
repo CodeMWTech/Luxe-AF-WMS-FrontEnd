@@ -117,6 +117,7 @@
   platformOrders: {
     title: '平台订单',
     subtitle: 'TikTok + eBay 订单卡片列表',
+    shipmentHint: '导入 Note 后需要点击「创建出库单」按钮才会生成出库单',
     filterShop: '店铺',
     filterPlatform: '平台',
     filterOrderId: '订单号',
