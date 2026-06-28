@@ -31,6 +31,11 @@
                   <div v-if="row.itemSku.skuCode">{{ row.itemSku.skuCode }}</div>
                 </template>
               </el-table-column>
+              <el-table-column :label="tr('备注')" min-width="120" show-overflow-tooltip>
+                <template #default="{ row }">
+                  {{ row.item?.remark || '-' }}
+                </template>
+              </el-table-column>
               <el-table-column :label="tr('价格(元)')" min-width="100" align="left" class-name="price-col">
                 <template #default="{ row }">
                   <div v-if="row.itemSku.costPrice || row.itemSku.costPrice === 0" class="flex-space-between price-line">
@@ -115,7 +120,8 @@ const normalizeSkuRow = (raw: any) => {
   const item = raw?.item || {
     id: raw?.itemId,
     itemName: raw?.itemName,
-    itemBrand: raw?.itemBrand
+    itemBrand: raw?.itemBrand,
+    remark: raw?.remark
   }
   return {
     ...raw,
