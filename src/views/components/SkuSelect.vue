@@ -26,12 +26,12 @@
                   <div v-if="row.item?.itemBrand && getBrandName(row.item.itemBrand)">{{ tr('品牌：') }}{{ getBrandName(row.item.itemBrand) }}</div>
                 </template>
               </el-table-column>
-              <el-table-column :label="tr('SKU编号')" min-width="200" show-overflow-tooltip>
+              <el-table-column :label="tr('SKU编号')" min-width="100" show-overflow-tooltip>
                 <template #default="{ row }">
                   <div v-if="row.itemSku.skuCode">{{ row.itemSku.skuCode }}</div>
                 </template>
               </el-table-column>
-              <el-table-column :label="tr('备注')" min-width="120" show-overflow-tooltip>
+              <el-table-column :label="tr('备注')" min-width="100" show-overflow-tooltip>
                 <template #default="{ row }">
                   {{ row.item?.remark || '-' }}
                 </template>
