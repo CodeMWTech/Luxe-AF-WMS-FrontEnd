@@ -259,7 +259,7 @@
           </button>
 
           <transition name="order-expand">
-            <div v-show="isExpanded(order, index)" class="detail-area" v-loading="isDetailLoading(order, index)">
+            <div v-show="isExpanded(order, index)" class="detail-area">
               <div class="order-info-bar">
                 <div class="order-info-item">
                   <span class="order-info-label">{{ t('platformOrders.orderInfoId') }}</span>
@@ -659,7 +659,7 @@
 import { computed, defineComponent, getCurrentInstance, h, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ArrowDown, ArrowRight, CopyDocument, Edit } from '@element-plus/icons-vue'
-import { getPlatformOrder, listPlatformOrders, getOrderStatusMap, updateOrderSku, createShipments, exportPlatformOrders, importNotes, getAutoCreateConfig, updateAutoCreateConfig } from '@/api/wms/platformOrder'
+import { listPlatformOrders, getOrderStatusMap, updateOrderSku, createShipments, exportPlatformOrders, importNotes, getAutoCreateConfig, updateAutoCreateConfig } from '@/api/wms/platformOrder'
 import { listAllPlatformShops, batchSyncOrders } from '@/api/wms/platformShop'
 import SkuSelect from '@/views/components/SkuSelect.vue'
 
@@ -702,7 +702,6 @@ const orderList = ref([])
 const shopList = ref([])
 const expandedKeys = ref([])
 const detailCache = reactive({})
-const detailLoading = reactive({})
 const rawJsonCache = new Map()
 
 // ==================== Raw JSON 字段提取 ====================
@@ -885,18 +884,10 @@ function toggleOrder(order, index) {
 }
 
 function ensureDetail(order, index) {
+  // 列表数据已包含展开所需的全部字段，无需额外请求
   const key = orderKey(order, index)
-  const id = getOrderId(order)
-  const platform = order.platform || queryParams.value.platform
-  const shopAuthId = order.shopAuthId || queryParams.value.shopAuthId
-  if (!id || !platform || detailCache[key] || detailLoading[key]) return
-
-  detailLoading[key] = true
-  getPlatformOrder(id, platform, shopAuthId).then(response => {
-    detailCache[key] = response.data || response
-  }).catch(handleApiError).finally(() => {
-    detailLoading[key] = false
-  })
+  if (detailCache[key]) return
+  detailCache[key] = order
 }
 
 function handleQuery() {
@@ -1039,10 +1030,6 @@ function orderKey(order, index) {
 
 function isExpanded(order, index) {
   return expandedKeys.value.includes(orderKey(order, index))
-}
-
-function isDetailLoading(order, index) {
-  return Boolean(detailLoading[orderKey(order, index)])
 }
 
 function getDisplayOrder(order, index) {
