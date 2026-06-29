@@ -13,7 +13,11 @@ import { getRouteTitle } from '@/utils/routeTitle'
 
 NProgress.configure({ showSpinner: false });
 
-const whiteList = ['/login', '/register'];
+const whiteList = ['/login', '/register', '/m/login'];
+
+function isMobilePath(path) {
+  return path === '/m/login' || path.startsWith('/m/')
+}
 
 router.beforeEach((to, from, next) => {
   NProgress.start()
@@ -25,6 +29,9 @@ router.beforeEach((to, from, next) => {
     /* has token*/
     if (to.path === '/login') {
       next({ path: '/' })
+      NProgress.done()
+    } else if (to.path === '/m/login') {
+      next({ path: '/m/sku-search' })
       NProgress.done()
     } else {
       if (useUserStore().roles.length === 0) {
@@ -44,7 +51,7 @@ router.beforeEach((to, from, next) => {
         }).catch(err => {
           useUserStore().logOut().then(() => {
             ElMessage.error(err)
-            next({ path: '/' })
+            next({ path: to.path.startsWith('/m') ? '/m/login' : '/' })
           })
         })
       } else {
@@ -56,6 +63,9 @@ router.beforeEach((to, from, next) => {
     if (whiteList.indexOf(to.path) !== -1) {
       // 在免登录白名单，直接进入
       next()
+    } else if (isMobilePath(to.path)) {
+      next(`/m/login?redirect=${encodeURIComponent(to.fullPath)}`)
+      NProgress.done()
     } else {
       next(`/login?redirect=${to.fullPath}`) // 否则全部重定向到登录页
       NProgress.done()

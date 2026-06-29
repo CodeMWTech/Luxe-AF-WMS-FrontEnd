@@ -6,6 +6,7 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import zhCn from 'element-plus/lib/locale/lang/zh-cn'
 import en from 'element-plus/lib/locale/lang/en'
 import useSettingsStore from '@/store/modules/settings'
@@ -13,6 +14,15 @@ import { handleThemeStyle } from '@/utils/theme'
 import { setupRuntimeI18nWatcher } from '@/utils/runtimeI18n'
 
 const settingsStore = useSettingsStore()
+const route = useRoute()
+
+watch(
+  () => route.path,
+  (path) => {
+    document.documentElement.classList.toggle('mobile-app', path.startsWith('/m'))
+  },
+  { immediate: true }
+)
 
 const elementLocale = computed(() =>
   settingsStore.language === 'en' ? en : zhCn

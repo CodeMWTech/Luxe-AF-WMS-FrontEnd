@@ -43,6 +43,33 @@ export const constantRoutes = [
     hidden: true
   },
   {
+    path: '/m/login',
+    component: () => import('@/views/mobile/login.vue'),
+    hidden: true,
+    meta: { title: '手机登录', titleEn: 'Mobile Login', mobile: true }
+  },
+  {
+    path: '/m',
+    component: () => import('@/layout/MobileLayout.vue'),
+    hidden: true,
+    redirect: '/m/sku-search',
+    meta: { mobile: true },
+    children: [
+      {
+        path: 'sku-search',
+        name: 'MobileSkuSearch',
+        component: () => import('@/views/mobile/sku-search.vue'),
+        meta: { title: 'SKU搜索', titleEn: 'SKU Search', mobile: true }
+      },
+      {
+        path: 'product/:skuId',
+        name: 'MobileProductDetail',
+        component: () => import('@/views/mobile/product-detail.vue'),
+        meta: { title: '商品详情', titleEn: 'Product Detail', mobile: true }
+      }
+    ]
+  },
+  {
     path: '/register',
     component: () => import('@/views/register'),
     hidden: true
