@@ -1,64 +1,63 @@
 <template>
   <div class="mobile-login">
-    <div class="mobile-login__panel">
-      <h1 class="mobile-login__title">{{ $t('login.title') }}</h1>
+    <el-form ref="loginRef" :model="loginForm" :rules="loginRules" class="mobile-login__form" @submit.prevent="handleLogin">
+      <h3 class="mobile-login__title">{{ $t('login.title') }}</h3>
       <p class="mobile-login__subtitle">手机端 SKU 查询</p>
-      <el-form ref="loginRef" :model="loginForm" :rules="loginRules" @submit.prevent="handleLogin">
-        <el-form-item prop="username">
-          <el-input
-            v-model="loginForm.username"
-            size="large"
-            clearable
-            :placeholder="$t('login.usernamePlaceholder')"
-          >
-            <template #prefix><svg-icon icon-class="user" class="el-input__icon input-icon" /></template>
-          </el-input>
-        </el-form-item>
-        <el-form-item prop="password">
-          <el-input
-            v-model="loginForm.password"
-            type="password"
-            size="large"
-            show-password
-            :placeholder="$t('login.passwordPlaceholder')"
-            @keyup.enter="handleLogin"
-          >
-            <template #prefix><svg-icon icon-class="password" class="el-input__icon input-icon" /></template>
-          </el-input>
-        </el-form-item>
-        <el-form-item v-if="captchaEnabled" prop="code">
-          <div class="mobile-login__captcha">
-            <el-input
-              v-model="loginForm.code"
-              size="large"
-              clearable
-              :placeholder="$t('login.codePlaceholder')"
-              @keyup.enter="handleLogin"
-            >
-              <template #prefix><svg-icon icon-class="validCode" class="el-input__icon input-icon" /></template>
-            </el-input>
-            <img :src="codeUrl" alt="captcha" @click="getCode">
-          </div>
-        </el-form-item>
-        <el-checkbox v-model="loginForm.rememberMe" style="margin-bottom: 18px;">
-          {{ $t('login.rememberMe') }}
-        </el-checkbox>
+      <el-form-item prop="username">
+        <el-input
+          v-model="loginForm.username"
+          type="text"
+          auto-complete="off"
+          :placeholder="$t('login.usernamePlaceholder')"
+        >
+          <template #prefix><svg-icon icon-class="user" class="input-icon" /></template>
+        </el-input>
+      </el-form-item>
+      <el-form-item prop="password">
+        <el-input
+          v-model="loginForm.password"
+          type="password"
+          auto-complete="off"
+          show-password
+          :placeholder="$t('login.passwordPlaceholder')"
+          @keyup.enter="handleLogin"
+        >
+          <template #prefix><svg-icon icon-class="password" class="input-icon" /></template>
+        </el-input>
+      </el-form-item>
+      <el-form-item v-if="captchaEnabled" prop="code">
+        <el-input
+          v-model="loginForm.code"
+          auto-complete="off"
+          :placeholder="$t('login.codePlaceholder')"
+          class="mobile-login__code-input"
+          @keyup.enter="handleLogin"
+        >
+          <template #prefix><svg-icon icon-class="validCode" class="input-icon" /></template>
+        </el-input>
+        <div class="mobile-login__code-img">
+          <img :src="codeUrl" alt="captcha" @click="getCode">
+        </div>
+      </el-form-item>
+      <el-checkbox v-model="loginForm.rememberMe" class="mobile-login__remember">
+        {{ $t('login.rememberMe') }}
+      </el-checkbox>
+      <el-form-item class="mobile-login__submit-item">
         <el-button
           type="primary"
-          size="large"
-          style="width: 100%;"
           :loading="loading"
+          class="mobile-login__submit"
           @click.prevent="handleLogin"
         >
           {{ loading ? $t('login.loggingIn') : $t('login.login') }}
         </el-button>
-      </el-form>
-    </div>
+      </el-form-item>
+    </el-form>
   </div>
 </template>
 
 <script setup>
-import { computed, getCurrentInstance, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import Cookies from 'js-cookie'
 import { useI18n } from 'vue-i18n'
@@ -66,7 +65,6 @@ import { getCodeImg } from '@/api/login'
 import { decrypt, encrypt } from '@/utils/jsencrypt'
 import useUserStore from '@/store/modules/user'
 
-const { proxy } = getCurrentInstance()
 const router = useRouter()
 const route = useRoute()
 const userStore = useUserStore()
@@ -146,5 +144,6 @@ getCookie()
 <style scoped lang="scss">
 .input-icon {
   width: 14px;
+  height: 39px;
 }
 </style>

@@ -93,7 +93,6 @@
 import { computed, getCurrentInstance, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { getInventoryItemBoardDetail } from '@/api/wms/inventory'
 import { getItem, getItemImages } from '@/api/wms/item'
 import { getItemSku } from '@/api/wms/itemSku'
 import {
@@ -196,31 +195,26 @@ async function loadImages(itemId) {
 }
 
 async function loadDetailBySkuId(skuId, summary) {
-  let payload = summary || null
+  let payload = null
   let images = []
 
   try {
-    const res = await getInventoryItemBoardDetail(skuId)
-    payload = res.data || res || payload
-  } catch (_) {
-    // fallback below
-  }
-
-  if (!payload || (!payload.itemName && !payload.skuCode)) {
-    try {
-      const skuRes = await getItemSku(skuId)
-      const skuData = skuRes.data || skuRes || {}
-      const itemId = skuData.itemId || skuData.item?.id
-      if (itemId) {
-        const itemRes = await getItem(itemId)
-        payload = {
-          item: itemRes.data || itemRes,
-          itemSku: skuData
-        }
-      } else {
-        payload = { itemSku: skuData }
+    const skuRes = await getItemSku(skuId)
+    const skuData = skuRes.data || skuRes || {}
+    const itemId = skuData.itemId || skuData.item?.id || summary?.itemId
+    if (itemId) {
+      const itemRes = await getItem(itemId)
+      payload = {
+        item: itemRes.data || itemRes,
+        itemSku: skuData
       }
-    } catch (error) {
+    } else {
+      payload = { itemSku: skuData, ...(summary || {}) }
+    }
+  } catch (error) {
+    if (summary) {
+      payload = summary
+    } else {
       throw error
     }
   }

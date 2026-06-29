@@ -19,11 +19,12 @@ html.mobile-app #app {
   display: grid;
   grid-template-columns: 72px 1fr 72px;
   align-items: center;
-  min-height: 52px;
+  min-height: 48px;
   padding: 0 8px;
-  background: #fff;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(8px);
   border-bottom: 1px solid #ebeef5;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.04);
 }
 
 .mobile-header__side {
@@ -144,42 +145,74 @@ html.mobile-app #app {
   align-items: center;
   justify-content: center;
   padding: 24px 16px;
-  background: linear-gradient(180deg, #eef4ff 0%, #f5f7fa 100%);
+  background-image: url('../images/login-background.jpg');
+  background-size: cover;
+  background-position: center;
 }
 
-.mobile-login__panel {
+.mobile-login__form {
   width: 100%;
-  max-width: 420px;
-  background: #fff;
-  border-radius: 16px;
-  padding: 24px 20px;
-  box-shadow: 0 8px 24px rgba(31, 45, 61, 0.08);
+  max-width: 400px;
+  border-radius: 6px;
+  background: #ffffff;
+  padding: 22px 22px 8px;
+  box-shadow: 0 8px 24px rgba(31, 45, 61, 0.12);
+
+  .el-input {
+    height: 40px;
+
+    input {
+      height: 40px;
+    }
+  }
 }
 
 .mobile-login__title {
-  margin: 0 0 8px;
+  margin: 0 auto 8px;
   text-align: center;
-  font-size: 22px;
-  color: #303133;
+  color: #707070;
+  font-size: 20px;
+  font-weight: 600;
 }
 
 .mobile-login__subtitle {
-  margin: 0 0 20px;
+  margin: 0 0 22px;
   text-align: center;
   color: #909399;
   font-size: 13px;
 }
 
-.mobile-login__captcha {
-  display: flex;
-  gap: 8px;
+.mobile-login__code-input {
+  width: 63%;
 }
 
-.mobile-login__captcha img {
-  width: 112px;
+.mobile-login__code-img {
+  width: 33%;
   height: 40px;
-  border-radius: 6px;
-  cursor: pointer;
+  float: right;
+
+  img {
+    width: 100%;
+    height: 40px;
+    cursor: pointer;
+    vertical-align: middle;
+    padding-left: 12px;
+    box-sizing: border-box;
+  }
+}
+
+.mobile-login__remember {
+  margin: 0 0 18px;
+}
+
+.mobile-login__submit-item {
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+.mobile-login__submit {
+  width: 100%;
+  height: 40px;
 }
 
 @media (orientation: landscape) and (max-height: 500px) {

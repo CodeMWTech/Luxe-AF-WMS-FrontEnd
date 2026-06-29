@@ -68,7 +68,7 @@ export function normalizeSkuSearchRow(raw = {}) {
     quantity: 0,
     itemImage: pickField(item, 'mainThumbUrl', 'itemImage'),
     warehouseName: undefined,
-    inventoryStatus: '未入库',
+    inventoryStatus: '商品已建档',
     currentStatus: displayValue(pickField(item, 'itemCondition')),
     source: 'sku',
     raw

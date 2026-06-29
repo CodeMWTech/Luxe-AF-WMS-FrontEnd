@@ -1,6 +1,6 @@
 <template>
   <div class="mobile-page">
-    <section class="mobile-card">
+    <section class="mobile-card mobile-search-card">
       <div class="mobile-search-bar">
         <el-input
           v-model="skuCode"
@@ -10,7 +10,7 @@
         />
         <el-button type="primary" :loading="loading" @click="handleSearch">搜索</el-button>
       </div>
-      <p class="mobile-tip">支持精确匹配 SKU，Enter 键可快速搜索。</p>
+      <p class="mobile-tip">与「商品管理」列表相同数据源，按 SKU 精确搜索。</p>
     </section>
 
     <section v-if="searched && !loading && results.length === 0" class="mobile-card">
@@ -30,10 +30,10 @@
           style="width: 88px; height: 88px;"
         >
           <template #error>
-            <div class="mobile-empty" style="padding: 20px 0;">暂无图片</div>
+            <div class="mobile-image-placeholder">暂无图片</div>
           </template>
         </el-image>
-        <div v-else class="mobile-empty" style="padding: 20px 0;">暂无图片</div>
+        <div v-else class="mobile-image-placeholder">暂无图片</div>
       </div>
       <div class="mobile-result-card__content">
         <div class="mobile-field-list">
@@ -65,7 +65,7 @@
         <el-button
           type="primary"
           plain
-          style="margin-top: 12px; width: 100%;"
+          class="mobile-detail-btn"
           :disabled="!item.skuId"
           @click="openDetail(item)"
         >
@@ -81,11 +81,10 @@ import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { listItemSkuPage } from '@/api/wms/itemSku'
-import { listInventoryBoard } from '@/api/wms/inventory'
+import { getItemImages } from '@/api/wms/item'
 import { useWmsStore } from '@/store/modules/wms'
 import {
   displayValue,
-  normalizeInventorySearchRow,
   normalizeSkuSearchRow
 } from '@/utils/mobileProduct'
 
@@ -96,11 +95,41 @@ const loading = ref(false)
 const searched = ref(false)
 const results = ref([])
 
+function getImageListFromResponse(res) {
+  if (Array.isArray(res?.data)) return res.data
+  if (Array.isArray(res)) return res
+  return []
+}
+
 function enrichSearchRow(item) {
-  if (!item.brandName && item.raw?.item?.itemBrand) {
-    item.brandName = wmsStore.itemBrandMap.get(item.raw.item.itemBrand)?.brandName
+  const itemData = item.raw?.item || {}
+  if (!item.brandName && itemData.itemBrand) {
+    item.brandName = wmsStore.itemBrandMap.get(itemData.itemBrand)?.brandName
+  }
+  if (!item.modelName && itemData.modelName) {
+    item.modelName = itemData.modelName
+  }
+  if (!item.modelName && itemData.modelId) {
+    item.modelName = wmsStore.itemModelMap.get(itemData.modelId)?.modelName
   }
   return item
+}
+
+async function loadMainImage(item) {
+  if (!item?.itemId || item.itemImage) return
+  try {
+    const res = await getItemImages(item.itemId)
+    const imageList = getImageListFromResponse(res)
+    if (!imageList.length) return
+    const mainImage = imageList.find(img => Number(img?.isMain) === 1) || imageList[0]
+    item.itemImage = mainImage?.thumbUrl || mainImage?.url || mainImage?.imageUrl || ''
+  } catch (_) {
+    // 图片加载失败时静默处理
+  }
+}
+
+async function preloadResultImages(rows) {
+  await Promise.all(rows.map(row => loadMainImage(row)))
 }
 
 async function handleSearch() {
@@ -113,18 +142,6 @@ async function handleSearch() {
   searched.value = true
   results.value = []
   try {
-    const invRes = await listInventoryBoard({
-      skuCode: keyword,
-      skuCodeExact: true,
-      pageNum: 1,
-      pageSize: 20
-    }, 'item')
-    const inventoryRows = Array.isArray(invRes?.rows) ? invRes.rows : []
-    if (inventoryRows.length) {
-      results.value = inventoryRows.map(row => enrichSearchRow(normalizeInventorySearchRow(row)))
-      return
-    }
-
     const skuRes = await listItemSkuPage({
       skuCode: keyword,
       skuCodeExact: true,
@@ -136,7 +153,10 @@ async function handleSearch() {
 
     if (!results.value.length) {
       ElMessage.warning('未找到该 SKU')
+      return
     }
+
+    await preloadResultImages(results.value)
   } catch (error) {
     ElMessage.error(error?.message || '搜索失败，请稍后重试')
   } finally {
@@ -160,6 +180,9 @@ onMounted(() => {
   if (!wmsStore.itemBrandList.length) {
     wmsStore.getItemBrandList()
   }
+  if (!wmsStore.itemModelList.length) {
+    wmsStore.getItemModelList()
+  }
 })
 </script>
 
@@ -168,5 +191,26 @@ onMounted(() => {
   margin: 10px 0 0;
   font-size: 12px;
   color: #909399;
+  line-height: 1.5;
+}
+
+.mobile-image-placeholder {
+  width: 88px;
+  height: 88px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f2f3f5;
+  border-radius: 8px;
+  color: #909399;
+  font-size: 12px;
+  text-align: center;
+  padding: 8px;
+  box-sizing: border-box;
+}
+
+.mobile-detail-btn {
+  margin-top: 12px;
+  width: 100%;
 }
 </style>
