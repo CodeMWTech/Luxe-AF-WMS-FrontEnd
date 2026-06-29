@@ -1,24 +1,25 @@
 <template>
-  <div v-loading="loading" class="mobile-page">
+  <div v-loading="loading" class="mobile-page mobile-detail-page">
     <template v-if="detail">
-      <section class="mobile-card">
-        <div v-if="imagePreviewList.length" class="mobile-detail-gallery">
-          <el-image
-            :src="imagePreviewList[activeImageIndex]"
-            fit="cover"
-            class="mobile-detail-gallery__image"
-            :preview-src-list="imagePreviewList"
-            preview-teleported
-          />
-          <div v-if="imagePreviewList.length > 1" class="mobile-gallery-dots">
-            <span
-              v-for="(_, index) in imagePreviewList"
-              :key="index"
-              :class="['mobile-gallery-dot', { active: index === activeImageIndex }]"
-              @click="activeImageIndex = index"
+      <section class="mobile-card mobile-gallery-card">
+        <el-carousel
+          v-if="imagePreviewList.length"
+          height="240px"
+          indicator-position="outside"
+          :autoplay="false"
+          :loop="imagePreviewList.length > 1"
+        >
+          <el-carousel-item v-for="(url, index) in imagePreviewList" :key="`${url}-${index}`">
+            <el-image
+              :src="url"
+              fit="cover"
+              class="mobile-detail-gallery__image"
+              :preview-src-list="imagePreviewList"
+              :initial-index="index"
+              preview-teleported
             />
-          </div>
-        </div>
+          </el-carousel-item>
+        </el-carousel>
         <div v-else class="mobile-empty">暂无图片</div>
       </section>
 
@@ -62,14 +63,15 @@
         </div>
       </section>
 
-      <section v-if="priceFields.length" class="mobile-card">
+      <section class="mobile-card">
         <h3 class="mobile-section-title">价格信息</h3>
-        <div class="mobile-field-list">
+        <div v-if="priceFields.length" class="mobile-field-list">
           <div v-for="field in priceFields" :key="field.label" class="mobile-field-row">
             <div class="mobile-field-row__label">{{ field.label }}</div>
             <div class="mobile-field-row__value">{{ field.value }}</div>
           </div>
         </div>
+        <div v-else class="mobile-empty mobile-empty--compact">暂无价格查看权限</div>
       </section>
 
       <section v-if="orderFields.length" class="mobile-card">
@@ -96,18 +98,27 @@ import { ElMessage } from 'element-plus'
 import { getItem, getItemImages } from '@/api/wms/item'
 import { getItemSku } from '@/api/wms/itemSku'
 import {
+  getInventoryItemBoardDetail,
+  listInventory,
+  listInventoryNoPage
+} from '@/api/wms/inventory'
+import { useWmsStore } from '@/store/modules/wms'
+import {
   buildDetailViewModel,
   displayValue,
+  enrichDetailMetadata,
   formatMoney,
-  formatTime
+  formatTime,
+  mergeInventoryIntoDetail,
+  summarizeInventoryRows
 } from '@/utils/mobileProduct'
 
 const route = useRoute()
 const { proxy } = getCurrentInstance()
+const wmsStore = useWmsStore()
 
 const loading = ref(false)
 const detail = ref(null)
-const activeImageIndex = ref(0)
 
 const canViewCostPrice = computed(() => proxy?.$auth?.hasPermi('wms:itemCostPrice:view'))
 const canViewSellingPrice = computed(() => proxy?.$auth?.hasPermi('wms:itemSellingPrice:view'))
@@ -122,10 +133,14 @@ const basicFields = computed(() => {
   return [
     { label: 'SKU', value: displayValue(item.skuCode) },
     { label: '商品名称', value: displayValue(item.itemName) },
+    { label: '商品分类', value: displayValue(item.categoryName) },
     { label: '品牌', value: displayValue(item.brandName) },
     { label: '型号', value: displayValue(item.modelName) },
+    { label: '年份', value: displayValue(item.year) },
+    { label: '材质', value: displayValue(item.materialName) },
     { label: '成色', value: displayValue(item.itemCondition) },
     { label: '瑕疵', value: displayValue(item.defect) },
+    { label: '配件', value: displayValue(item.accessories) },
     { label: '备注', value: displayValue(item.remark) }
   ]
 })
@@ -163,7 +178,7 @@ const priceFields = computed(() => {
   if (canViewSellingPrice.value) {
     fields.push({ label: '销售价', value: formatMoney(item.sellingPrice) })
   }
-  if (canViewCostPrice.value && canViewSellingPrice.value) {
+  if (canViewCostPrice.value && canViewSellingPrice.value && item.totalProfit !== null && item.totalProfit !== undefined) {
     fields.push({ label: '利润', value: formatMoney(item.totalProfit) })
   }
   return fields
@@ -184,44 +199,92 @@ const orderFields = computed(() => {
   return fields
 })
 
+function getImageListFromResponse(res) {
+  if (Array.isArray(res?.data)) return res.data
+  if (Array.isArray(res)) return res
+  return []
+}
+
+async function ensureStoreReady() {
+  const tasks = []
+  if (!wmsStore.itemBrandList.length) tasks.push(wmsStore.getItemBrandList())
+  if (!wmsStore.itemCategoryList.length) tasks.push(wmsStore.getItemCategoryList())
+  if (!wmsStore.itemModelList.length) tasks.push(wmsStore.getItemModelList())
+  await Promise.all(tasks)
+}
+
 async function loadImages(itemId) {
   if (!itemId) return []
   try {
     const res = await getItemImages(itemId)
-    return res.data || []
+    return getImageListFromResponse(res)
   } catch (_) {
     return []
   }
 }
 
-async function loadDetailBySkuId(skuId, summary) {
-  let payload = null
-  let images = []
-
+async function loadInventoryExtra(skuId, skuCode) {
   try {
-    const skuRes = await getItemSku(skuId)
-    const skuData = skuRes.data || skuRes || {}
-    const itemId = skuData.itemId || skuData.item?.id || summary?.itemId
-    if (itemId) {
-      const itemRes = await getItem(itemId)
-      payload = {
-        item: itemRes.data || itemRes,
-        itemSku: skuData
-      }
-    } else {
-      payload = { itemSku: skuData, ...(summary || {}) }
+    const boardRes = await getInventoryItemBoardDetail(skuId)
+    const boardData = boardRes?.data || boardRes
+    if (boardData && (boardData.skuCode || boardData.itemName || boardData.quantity != null)) {
+      return boardData
     }
-  } catch (error) {
-    if (summary) {
-      payload = summary
-    } else {
-      throw error
-    }
+  } catch (_) {
+    // 本地库缺 platform 表时会失败，继续尝试其它接口
   }
 
-  const itemId = payload?.itemId || payload?.item?.id
-  images = await loadImages(itemId)
-  detail.value = buildDetailViewModel(payload, images)
+  const query = { skuId, skuCode, skuCodeExact: !!skuCode }
+
+  try {
+    const noPageRes = await listInventoryNoPage(query, { silentError: true })
+    const rows = noPageRes?.data || noPageRes?.rows || []
+    const summary = summarizeInventoryRows(Array.isArray(rows) ? rows : [])
+    if (summary) return summary
+  } catch (_) {
+    // ignore
+  }
+
+  try {
+    const listRes = await listInventory({
+      ...query,
+      pageNum: 1,
+      pageSize: 20
+    }, { silentError: true })
+    return summarizeInventoryRows(listRes?.rows || [])
+  } catch (_) {
+    return null
+  }
+}
+
+async function loadDetailBySkuId(skuId, summary) {
+  await ensureStoreReady()
+
+  const skuRes = await getItemSku(skuId)
+  const skuData = skuRes.data || skuRes || {}
+  const itemId = skuData.itemId || skuData.item?.id || summary?.itemId
+
+  let payload
+  if (itemId) {
+    const itemRes = await getItem(itemId)
+    payload = {
+      item: itemRes.data || itemRes,
+      itemSku: skuData
+    }
+  } else {
+    payload = { itemSku: skuData, ...(summary || {}) }
+  }
+
+  const images = await loadImages(itemId)
+  let viewModel = buildDetailViewModel(payload, images)
+  viewModel = enrichDetailMetadata(viewModel, wmsStore)
+
+  const inventoryExtra = await loadInventoryExtra(skuId, viewModel.skuCode)
+  if (inventoryExtra) {
+    viewModel = mergeInventoryIntoDetail(viewModel, inventoryExtra)
+  }
+
+  detail.value = viewModel
 }
 
 onMounted(async () => {
@@ -242,21 +305,20 @@ onMounted(async () => {
 </script>
 
 <style scoped lang="scss">
-.mobile-gallery-dots {
-  display: flex;
-  justify-content: center;
-  gap: 6px;
-  margin-top: 10px;
+.mobile-gallery-card {
+  padding-bottom: 8px;
 }
 
-.mobile-gallery-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #dcdfe6;
+.mobile-gallery-card :deep(.el-carousel__container) {
+  border-radius: 8px;
+  overflow: hidden;
 }
 
-.mobile-gallery-dot.active {
-  background: #409eff;
+.mobile-gallery-card :deep(.el-carousel__indicators--outside) {
+  margin-top: 8px;
+}
+
+.mobile-empty--compact {
+  padding: 8px 0;
 }
 </style>

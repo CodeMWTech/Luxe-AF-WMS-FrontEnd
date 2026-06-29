@@ -112,6 +112,9 @@ function enrichSearchRow(item) {
   if (!item.modelName && itemData.modelId) {
     item.modelName = wmsStore.itemModelMap.get(itemData.modelId)?.modelName
   }
+  if (!item.categoryName && itemData.itemCategory) {
+    item.categoryName = wmsStore.itemCategoryMap.get(itemData.itemCategory)?.categoryName
+  }
   return item
 }
 
@@ -182,6 +185,9 @@ onMounted(() => {
   }
   if (!wmsStore.itemModelList.length) {
     wmsStore.getItemModelList()
+  }
+  if (!wmsStore.itemCategoryList.length) {
+    wmsStore.getItemCategoryList()
   }
 })
 </script>

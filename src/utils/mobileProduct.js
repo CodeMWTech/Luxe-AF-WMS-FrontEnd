@@ -92,8 +92,15 @@ export function buildDetailViewModel(payload = {}, images = []) {
     itemId: pickField(item, 'id', 'itemId') || pickField(merged, 'itemId'),
     skuCode: pickField(sku, 'skuCode') || pickField(merged, 'skuCode'),
     itemName: pickField(item, 'itemName') || pickField(merged, 'itemName'),
+    categoryName: pickField(item, 'categoryName') || pickField(merged, 'categoryName'),
     brandName: pickField(item, 'brandName') || pickField(merged, 'brandName'),
     modelName: pickField(item, 'modelName') || pickField(merged, 'modelName'),
+    materialName: pickField(item, 'materialName', 'material') || pickField(merged, 'materialName', 'material'),
+    year: pickField(item, 'year') ?? pickField(merged, 'year'),
+    accessories: pickField(item, 'accessories') || pickField(merged, 'accessories'),
+    itemBrand: pickField(item, 'itemBrand') ?? pickField(merged, 'itemBrand'),
+    itemCategory: pickField(item, 'itemCategory') ?? pickField(merged, 'itemCategory'),
+    modelId: pickField(item, 'modelId') ?? pickField(merged, 'modelId'),
     itemCondition: pickField(item, 'itemCondition') || pickField(merged, 'itemCondition'),
     defect: pickField(item, 'defect') || pickField(merged, 'defect'),
     remark: pickField(item, 'remark', 'itemRemark') || pickField(merged, 'remark', 'itemRemark'),
@@ -111,5 +118,73 @@ export function buildDetailViewModel(payload = {}, images = []) {
     orderInfo: pickField(merged, 'orderInfo', 'platformOrderInfo'),
     images: imageList,
     raw: payload
+  }
+}
+
+export function enrichDetailMetadata(detail, store) {
+  if (!detail || !store) return detail
+  const item = detail.raw?.item || {}
+  const brandId = detail.itemBrand ?? item.itemBrand
+  const categoryId = detail.itemCategory ?? item.itemCategory
+  const modelId = detail.modelId ?? item.modelId
+
+  if (!detail.brandName && brandId !== null && brandId !== undefined) {
+    detail.brandName = store.itemBrandMap?.get?.(brandId)?.brandName
+  }
+  if (!detail.categoryName && categoryId !== null && categoryId !== undefined) {
+    detail.categoryName = store.itemCategoryMap?.get?.(categoryId)?.categoryName
+  }
+  if (!detail.modelName && modelId !== null && modelId !== undefined) {
+    detail.modelName = store.itemModelMap?.get?.(modelId)?.modelName
+  }
+  if (!detail.materialName) {
+    detail.materialName = item.material || item.materialName
+  }
+  if (detail.year === null || detail.year === undefined || detail.year === '') {
+    detail.year = item.year
+  }
+  if (!detail.accessories) {
+    detail.accessories = item.accessories
+  }
+  return detail
+}
+
+export function mergeInventoryIntoDetail(detail, inventoryRow = {}) {
+  if (!detail || !inventoryRow) return detail
+  detail.quantity = pickField(inventoryRow, 'quantity') ?? detail.quantity
+  detail.warehouseName = pickField(inventoryRow, 'warehouseName') ?? detail.warehouseName
+  detail.receiptTime = pickField(inventoryRow, 'receiptTime') ?? detail.receiptTime
+  detail.shipmentTime = pickField(inventoryRow, 'shipmentTime') ?? detail.shipmentTime
+  detail.outboundPlatform = pickField(inventoryRow, 'outboundPlatform') ?? detail.outboundPlatform
+  detail.turnoverDays = pickField(inventoryRow, 'turnoverDays') ?? detail.turnoverDays
+  detail.totalProfit = pickField(inventoryRow, 'totalProfit') ?? detail.totalProfit
+  detail.trackingNumber = pickField(inventoryRow, 'trackingNumber', 'itemTrackingNumber') ?? detail.trackingNumber
+  detail.platformOrderNo = pickField(inventoryRow, 'platformOrderNo', 'orderNo', 'outboundOrderNo') ?? detail.platformOrderNo
+  detail.avgReceiptCost = pickField(inventoryRow, 'avgReceiptCost')
+  detail.avgShipmentPrice = pickField(inventoryRow, 'avgShipmentPrice')
+  if ((detail.costPrice === null || detail.costPrice === undefined) && inventoryRow.costPrice !== undefined) {
+    detail.costPrice = inventoryRow.costPrice
+  }
+  if ((detail.sellingPrice === null || detail.sellingPrice === undefined) && inventoryRow.sellingPrice !== undefined) {
+    detail.sellingPrice = inventoryRow.sellingPrice
+  }
+  return detail
+}
+
+export function summarizeInventoryRows(rows = []) {
+  if (!Array.isArray(rows) || !rows.length) return null
+  const totalQty = rows.reduce((sum, row) => sum + Number(row.quantity || 0), 0)
+  const primary = rows[0]
+  const warehouseNames = [...new Set(rows.map(row => row.warehouseName).filter(Boolean))]
+  return {
+    quantity: totalQty,
+    warehouseName: warehouseNames.join('、') || primary.warehouseName,
+    receiptTime: primary.receiptTime,
+    shipmentTime: primary.shipmentTime,
+    outboundPlatform: primary.outboundPlatform,
+    turnoverDays: primary.turnoverDays,
+    totalProfit: primary.totalProfit,
+    costPrice: primary.costPrice,
+    sellingPrice: primary.sellingPrice
   }
 }
