@@ -63,6 +63,14 @@
               <el-input v-model="queryParams.consignInfo" placeholder="请输入寄售信息关键字" clearable @keyup.enter="handleQuery" style="width: 100%"/>
             </el-form-item>
           </el-col>
+          <el-col :xs="24" :sm="24" :md="12" :lg="12" v-if="!isSupplierUser">
+            <el-form-item label="供应商" prop="supplierId">
+              <el-select v-model="queryParams.supplierId" placeholder="请选择供应商" clearable style="width: 100%">
+                <el-option :label="tr('Luxeaf 自有')" :value="-1" />
+                <el-option v-for="s in supplierOptions" :key="s.id" :label="s.supplierName" :value="s.id" />
+              </el-select>
+            </el-form-item>
+          </el-col>
         </el-row>
         <el-row :gutter="16">
           <el-col :xs="24" :sm="24" :md="12" :lg="12">
@@ -181,6 +189,11 @@
                 <div v-if="row.item.cared !== null && row.item.cared !== undefined">
                   {{ fieldLabel('护理') }}{{ row.item.cared ? tr('已护理') : tr('未护理') }}
                 </div>
+              </template>
+            </el-table-column>
+            <el-table-column :label="tr('供应商')" prop="item.supplierName" align="center" width="140">
+              <template #default="{ row }">
+                <span>{{ row.item.supplierName || tr('Luxeaf 自有') }}</span>
               </template>
             </el-table-column>
             <el-table-column :label="tr('SKU编码')" prop="skuName" align="left">
@@ -473,6 +486,17 @@
                 </el-form-item>
               </el-col>
             </el-row>
+            <!-- 供应商归属（仅 Luxeaf 后台可见） -->
+            <el-row :gutter="24" v-if="!isSupplierUser">
+              <el-col :span="12">
+                <el-form-item label="供应商">
+                  <el-select v-model="form.supplierId" placeholder="请选择供应商（不选归 Luxeaf）" clearable style="width: 100%">
+                    <el-option :label="tr('Luxeaf 自有')" :value="null" />
+                    <el-option v-for="s in supplierOptions" :key="s.id" :label="s.supplierName" :value="s.id" />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+            </el-row>
             <!-- 13.商品图片 -->
             <el-row :gutter="24">
               <el-col :span="24">
@@ -634,6 +658,7 @@
 
 <script setup name="Item">
 import { getItem, delItem, addItem, updateItem, uploadItemImage, deleteItemImage, getItemImages } from '@/api/wms/item';
+import { listSupplierNoPage, getCurrentSupplier } from '@/api/wms/supplier';
 import { computed, getCurrentInstance, nextTick, onBeforeUnmount, onMounted, reactive, ref, toRefs, watch } from 'vue';
 import { ElForm, ElTree, ElTreeSelect, ElMessage } from 'element-plus';
 import { Plus, Delete, Ticket, Check } from '@element-plus/icons-vue';
@@ -662,6 +687,30 @@ const {proxy} = getCurrentInstance();
 const settingsStore = useSettingsStore()
 const tr = (text) => translateByMap(text, settingsStore.language || 'zh-cn')
 const isEn = computed(() => (settingsStore.language || 'zh-cn') === 'en')
+const supplierOptions = ref([]);
+const isSupplierUser = ref(false);
+
+/** 初始化供应商相关数据 */
+async function initSupplierData() {
+  // 获取当前用户供应商身份（后端自动识别）
+  try {
+    const res = await getCurrentSupplier();
+    if (res.data && res.data.isSupplier) {
+      isSupplierUser.value = true;
+    }
+  } catch (_) {
+    isSupplierUser.value = false;
+  }
+  // 非供应商用户加载全部供应商列表（用于筛选下拉）
+  if (!isSupplierUser.value) {
+    try {
+      const res = await listSupplierNoPage({ status: 0 });
+      supplierOptions.value = res.data || [];
+    } catch (_) {
+      supplierOptions.value = [];
+    }
+  }
+}
 const amountColumnLabel = computed(() => isEn.value ? 'Amount($)' : '金额($)')
 const fieldLabel = (text) => `${tr(text)}${isEn.value ? ': ' : '：'}`
 const canViewSellingPrice = computed(() => proxy?.$auth?.hasPermi('wms:itemSellingPrice:view'));
@@ -904,6 +953,7 @@ const data = reactive({
     createTimeRange: [],        // 创建时间区间 [开始, 结束]
     sellingPriceMin: undefined, // 销售价下限(元)
     sellingPriceMax: undefined, // 销售价上限(元)
+    supplierId: undefined,      // 供应商筛选
   },
   rules: {
     itemName: [
@@ -1820,6 +1870,7 @@ onMounted(async () => {
   } catch (_) {
     // 分类数据加载失败不阻断列表渲染
   }
+  initSupplierData();
   nextTick(() => {
     getList();
     if (route.query.openDrawer) {
