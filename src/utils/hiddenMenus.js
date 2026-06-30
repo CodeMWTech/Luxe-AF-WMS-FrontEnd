@@ -10,8 +10,8 @@ export const HIDDEN_FRONTEND_ROUTE_PATHS = [
   '/system/dict',
   'config',
   '/system/config',
-  'notice',
-  '/system/notice',
+  // 'notice',
+  // '/system/notice',
   'oss',
   '/system/oss',
   // 系统工具：代码生成

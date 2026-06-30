@@ -311,7 +311,7 @@
                     <div class="ebay-customer-block">
                       <div class="ebay-customer-line">
                         <span class="ebay-customer-label">{{ t('platformOrders.buyerUserId') }}</span>
-                        <span class="ebay-customer-value">{{ displayValue(rawField(getDisplayOrder(order, index), null, 'buyer.username')) }}</span>
+                        <span class="ebay-customer-value">{{ displayValue(getDisplayOrder(order, index).buyerName || rawField(getDisplayOrder(order, index), null, 'buyer.username')) }}</span>
                       </div>
                       <div class="ebay-customer-line">
                         <span class="ebay-customer-label">{{ t('platformOrders.labelName') }}</span>
@@ -319,11 +319,11 @@
                       </div>
                       <div class="ebay-customer-line">
                         <span class="ebay-customer-label">{{ t('platformOrders.buyerFirstName') }}</span>
-                        <span class="ebay-customer-value">{{ displayValue(rawField(getDisplayOrder(order, index), null, 'buyer.firstName')) }}</span>
+                        <span class="ebay-customer-value">{{ displayValue(getDisplayOrder(order, index).buyerFirstName || rawField(getDisplayOrder(order, index), null, 'buyer.firstName')) }}</span>
                       </div>
                       <div class="ebay-customer-line">
                         <span class="ebay-customer-label">{{ t('platformOrders.buyerLastName') }}</span>
-                        <span class="ebay-customer-value">{{ displayValue(rawField(getDisplayOrder(order, index), null, 'buyer.lastName')) }}</span>
+                        <span class="ebay-customer-value">{{ displayValue(getDisplayOrder(order, index).buyerLastName || rawField(getDisplayOrder(order, index), null, 'buyer.lastName')) }}</span>
                       </div>
                       <div class="ebay-customer-line" v-if="getRecipient(getDisplayOrder(order, index)).addressLine1">
                         <span class="ebay-customer-label">{{ t('platformOrders.labelAddress') }}</span>
@@ -362,16 +362,16 @@
                       </div>
                       <div class="ebay-customer-line">
                         <span class="ebay-customer-label">{{ t('platformOrders.buyerMessage') }}</span>
-                        <span class="ebay-customer-value">{{ displayValue(rawField(getDisplayOrder(order, index), null, 'buyerCheckoutNotes')) }}</span>
+                        <span class="ebay-customer-value">{{ displayValue(getDisplayOrder(order, index).buyerMessage || rawField(getDisplayOrder(order, index), null, 'buyerCheckoutNotes')) }}</span>
                       </div>
                     </div>
                   </template>
                   <template v-else>
-                    <InfoLine :label="t('platformOrders.buyerUserId')" :value="rawField(getDisplayOrder(order, index), 'user_id')" />
-                    <InfoLine :label="t('platformOrders.buyerNickname')" :value="rawField(getDisplayOrder(order, index), 'buyer_nickname')" />
+                    <InfoLine :label="t('platformOrders.buyerUserId')" :value="getDisplayOrder(order, index).buyerName || rawField(getDisplayOrder(order, index), 'user_id')" />
+                    <InfoLine :label="t('platformOrders.buyerNickname')" :value="getDisplayOrder(order, index).buyerNickname || rawField(getDisplayOrder(order, index), 'buyer_nickname')" />
                     <InfoLine :label="t('platformOrders.labelName')" :value="getRecipient(getDisplayOrder(order, index)).name" strong />
-                    <InfoLine :label="t('platformOrders.buyerFirstName')" :value="rawField(getDisplayOrder(order, index), 'recipient_address.first_name')" />
-                    <InfoLine :label="t('platformOrders.buyerLastName')" :value="rawField(getDisplayOrder(order, index), 'recipient_address.last_name')" />
+                    <InfoLine :label="t('platformOrders.buyerFirstName')" :value="getDisplayOrder(order, index).buyerFirstName || rawField(getDisplayOrder(order, index), 'recipient_address.first_name')" />
+                    <InfoLine :label="t('platformOrders.buyerLastName')" :value="getDisplayOrder(order, index).buyerLastName || rawField(getDisplayOrder(order, index), 'recipient_address.last_name')" />
                     <InfoLine :label="t('platformOrders.labelPhone')">
                       <span class="inline-copy">
                         {{ displayValue(getRecipient(getDisplayOrder(order, index)).phoneNumber) }}
@@ -388,7 +388,7 @@
                     <InfoLine :label="t('platformOrders.labelAddress')" :value="getRecipient(getDisplayOrder(order, index)).addressLine1 || getRecipient(getDisplayOrder(order, index)).fullAddress" />
                     <InfoLine :label="t('platformOrders.labelPostalCode')" :value="getRecipient(getDisplayOrder(order, index)).postalCode" />
                     <InfoLine :label="t('platformOrders.labelRegion')" :value="getRecipient(getDisplayOrder(order, index)).regionCode" />
-                    <InfoLine :label="t('platformOrders.buyerMessage')" :value="rawField(getDisplayOrder(order, index), 'buyer_message')" />
+                    <InfoLine :label="t('platformOrders.buyerMessage')" :value="getDisplayOrder(order, index).buyerMessage || rawField(getDisplayOrder(order, index), 'buyer_message')" />
                   </template>
                 </section>
 
@@ -479,7 +479,7 @@
                 <div class="notes-grid">
                   <div>
                     <span class="note-label">{{ t('platformOrders.remark') }}</span>
-                    <p>{{ displayValue(getDisplayOrder(order, index).internalRemark || rawField(getDisplayOrder(order, index), 'buyer_message', 'buyerCheckoutNotes') || getDisplayOrder(order, index).buyerMessage) }}</p>
+                    <p>{{ displayValue(getDisplayOrder(order, index).internalRemark || getDisplayOrder(order, index).buyerMessage || rawField(getDisplayOrder(order, index), 'buyer_message', 'buyerCheckoutNotes')) }}</p>
                   </div>
                 </div>
               </section>
