@@ -243,7 +243,7 @@
     endTime: '结束时间',
     internalNotePlaceholder: '内部备注预留，后续接入接口',
     syncTitle: '同步平台订单',
-    syncHelp: '默认全选所有已授权店铺。不选择开始时间时，后端自动按各店铺 lastSyncTime 增量同步，首次同步默认最近 7 天。',
+    syncHelp: '默认全选所有已授权店铺。同步窗口按平台订单更新时间拉取；不选择开始时间时，后端自动按各店铺 lastSyncTime 增量同步，首次同步默认最近 7 天。',
     selectShops: '选择店铺',
     selectAll: '全选',
     selectedPrefix: '已选',
@@ -251,6 +251,10 @@
     selectedSuffix: '个可同步（总计',
     selectedShopSummary: '已选 {selected} 个，共 {eligible} 个可同步（总计 {total}）',
     authorized: '已授权',
+    syncStartTime: '更新时间开始',
+    syncEndTime: '更新时间结束',
+    syncStartTimePlaceholder: '请选择订单更新时间开始',
+    syncEndTimePlaceholder: '请选择订单更新时间结束',
     startTimePlaceholder: '请选择开始时间',
     endTimePlaceholder: '请选择结束时间',
     syncSelectedShops: '同步所选店铺',
@@ -264,6 +268,7 @@
     shipmentCreateSuccess: '出库暂存单创建完成',
     shipmentCreateSubmitted: '出库暂存单创建任务已提交，请稍后刷新查看',
     shipmentCreateFailed: '创建出库暂存单失败',
+    createShipmentConfirm: '创建出库单前，请确认已经提前导入所有刷单的 Note。未导入 Note 可能导致 SKU 未匹配或出库单遗漏。确定继续创建出库单吗？',
     shipmentDisabled: '出库暂存单功能已临时禁用，如有需要请联系管理员',
     autoCreateLabel: '自动创建出库单',
     autoCreateEnabledMsg: '自动创建出库单已启用',
@@ -599,6 +604,5 @@
     save: '保存',
   },
 }
-
 
 

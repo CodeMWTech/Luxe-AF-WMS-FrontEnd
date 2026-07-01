@@ -243,7 +243,7 @@
     endTime: 'End Time',
     internalNotePlaceholder: 'Internal note reserved for a future API',
     syncTitle: 'Sync Platform Orders',
-    syncHelp: 'All authorized shops are selected by default. If no start time is selected, the backend syncs incrementally by each shop lastSyncTime; the first sync defaults to the last 7 days.',
+    syncHelp: 'All authorized shops are selected by default. The sync window uses platform order update time; if no start time is selected, the backend syncs incrementally by each shop lastSyncTime, and the first sync defaults to the last 7 days.',
     selectShops: 'Select Shops',
     selectAll: 'Select All',
     selectedPrefix: 'Selected',
@@ -251,6 +251,10 @@
     selectedSuffix: 'syncable shops (total',
     selectedShopSummary: 'Selected {selected} of {eligible} syncable shops (total {total})',
     authorized: 'Authorized',
+    syncStartTime: 'Update Time Start',
+    syncEndTime: 'Update Time End',
+    syncStartTimePlaceholder: 'Select order update start time',
+    syncEndTimePlaceholder: 'Select order update end time',
     startTimePlaceholder: 'Select start time',
     endTimePlaceholder: 'Select end time',
     syncSelectedShops: 'Sync Selected Shops',
@@ -264,6 +268,7 @@
     shipmentCreateSuccess: 'Shipment draft orders created',
     shipmentCreateSubmitted: 'Shipment creation task submitted. Please refresh later.',
     shipmentCreateFailed: 'Failed to create shipment draft orders',
+    createShipmentConfirm: 'Before creating shipment orders, please confirm that all brush-order Notes have been imported. Missing Notes may leave SKUs unmatched or shipment orders omitted. Continue creating shipment orders?',
     shipmentDisabled: 'Shipment order creation is temporarily disabled. Please contact administrator if needed.',
     autoCreateLabel: 'Auto-create Shipments',
     autoCreateEnabledMsg: 'Auto-create shipments enabled',
@@ -587,7 +592,6 @@
     save: 'Save',
   },
 }
-
 
 
 

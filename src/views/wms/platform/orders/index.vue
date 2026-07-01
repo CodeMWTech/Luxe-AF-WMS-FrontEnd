@@ -121,7 +121,7 @@
           <el-button type="success" icon="RefreshRight" class="action-btn" @click="openSyncDialog" v-hasPermi="['wms:platform:sync']">{{ t('platformOrders.btnSync') }}</el-button>
           <el-button type="info" icon="Download" class="action-btn" :loading="exporting" @click="handleExport" v-hasPermi="['wms:platform:list']">{{ t('platformOrders.btnExport') }}</el-button>
           <el-button type="primary" icon="Upload" class="action-btn" @click="openImportNotesDialog" v-hasPermi="['wms:platform:edit']">{{ t('platformOrders.btnImportNotes') }}</el-button>
-          <span class="auto-create-toggle">
+          <span v-if="canManageAutoCreateConfig" class="auto-create-toggle">
             <el-switch
               v-model="autoCreateEnabled"
               :loading="configLoading"
@@ -130,21 +130,14 @@
             />
             <span class="auto-create-label">{{ t('platformOrders.autoCreateLabel') }}</span>
           </span>
-          <el-tooltip
-            :content="t('platformOrders.shipmentDisabled')"
-            :disabled="autoCreateEnabled"
-            placement="top"
-          >
-            <el-button
-              type="warning"
-              icon="Box"
-              class="action-btn"
-              :loading="shipmentCreating"
-              :disabled="!autoCreateEnabled"
-              @click="handleCreateShipments"
-              v-hasPermi="['wms:platform:edit']"
-            >{{ t('platformOrders.btnCreateShipment') }}</el-button>
-          </el-tooltip>
+          <el-button
+            type="warning"
+            icon="Box"
+            class="action-btn"
+            :loading="shipmentCreating"
+            @click="handleCreateShipments"
+            v-hasPermi="['wms:platform:edit']"
+          >{{ t('platformOrders.btnCreateShipment') }}</el-button>
         </el-form-item>
       </el-form>
     </el-card>
@@ -558,21 +551,21 @@
             </div>
           </div>
         </el-form-item>
-        <el-form-item :label="t('platformOrders.startTime')" prop="startTime">
+        <el-form-item :label="t('platformOrders.syncStartTime')" prop="startTime">
           <el-date-picker
             v-model="syncForm.startTime"
             type="datetime"
-            :placeholder="t('platformOrders.startTimePlaceholder')"
+            :placeholder="t('platformOrders.syncStartTimePlaceholder')"
             value-format="YYYY-MM-DD HH:mm:ss"
             format="YYYY-MM-DD HH:mm:ss"
             style="width: 100%"
           />
         </el-form-item>
-        <el-form-item :label="t('platformOrders.endTime')" prop="endTime">
+        <el-form-item :label="t('platformOrders.syncEndTime')" prop="endTime">
           <el-date-picker
             v-model="syncForm.endTime"
             type="datetime"
-            :placeholder="t('platformOrders.endTimePlaceholder')"
+            :placeholder="t('platformOrders.syncEndTimePlaceholder')"
             value-format="YYYY-MM-DD HH:mm:ss"
             format="YYYY-MM-DD HH:mm:ss"
             style="width: 100%"
@@ -657,7 +650,7 @@
 </template>
 
 <script setup name="PlatformOrders">
-import { computed, defineComponent, getCurrentInstance, h, onMounted, ref } from 'vue'
+import { computed, defineComponent, getCurrentInstance, h, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ArrowDown, ArrowRight, CopyDocument, Edit } from '@element-plus/icons-vue'
 import { listPlatformOrders, getOrderStatusMap, updateOrderSku, createShipments, exportPlatformOrders, importNotes, getAutoCreateConfig, updateAutoCreateConfig } from '@/api/wms/platformOrder'
@@ -696,6 +689,7 @@ const syncLoading = ref(false)
 const shipmentCreating = ref(false)
 const autoCreateEnabled = ref(true)
 const configLoading = ref(false)
+const canManageAutoCreateConfig = computed(() => proxy?.$auth?.hasPermi('wms:platform:auto-create-config'))
 const exporting = ref(false)
 const shopLoading = ref(false)
 const total = ref(0)
@@ -903,24 +897,26 @@ function resetQuery() {
 }
 
 function handleCreateShipments() {
-  shipmentCreating.value = true
-  createShipments().then(() => {
-    proxy.$modal.msgSuccess(t('platformOrders.shipmentCreateSubmitted'))
-    // 异步后台执行，延迟刷新列表
-    setTimeout(() => { getList() }, 3000)
-  }).catch(() => {
-    proxy.$modal.msgError(t('platformOrders.shipmentCreateFailed'))
-  }).finally(() => {
-    shipmentCreating.value = false
-  })
+  proxy.$modal.confirm(t('platformOrders.createShipmentConfirm')).then(() => {
+    shipmentCreating.value = true
+    return createShipments().then(() => {
+      proxy.$modal.msgSuccess(t('platformOrders.shipmentCreateSubmitted'))
+      // 异步后台执行，延迟刷新列表
+      setTimeout(() => { getList() }, 3000)
+    }).catch(() => {
+      proxy.$modal.msgError(t('platformOrders.shipmentCreateFailed'))
+    }).finally(() => {
+      shipmentCreating.value = false
+    })
+  }).catch(() => {})
 }
 
 async function fetchAutoCreateConfig() {
   configLoading.value = true
   try {
     const response = await getAutoCreateConfig()
-    const value = response?.data
-    autoCreateEnabled.value = value !== 'false'
+    const value = response?.data ?? response
+    autoCreateEnabled.value = value !== false && String(value).toLowerCase() !== 'false'
   } catch (e) {
     // 获取失败默认启用
     autoCreateEnabled.value = true
@@ -930,9 +926,11 @@ async function fetchAutoCreateConfig() {
 }
 
 async function handleAutoCreateToggle(value) {
+  if (!canManageAutoCreateConfig.value) return
   try {
-    await updateAutoCreateConfig(value)
-    autoCreateEnabled.value = value
+    const response = await updateAutoCreateConfig(value)
+    const savedValue = response?.data ?? response
+    autoCreateEnabled.value = savedValue === true || String(savedValue).toLowerCase() === 'true'
     proxy.$modal.msgSuccess(value
       ? t('platformOrders.autoCreateEnabledMsg')
       : t('platformOrders.autoCreateDisabledMsg'))
@@ -1490,7 +1488,9 @@ onMounted(() => {
   loadShops()
   loadStatusMap()
   getList()
-  fetchAutoCreateConfig()
+  if (canManageAutoCreateConfig.value) {
+    fetchAutoCreateConfig()
+  }
 })
 </script>
 

@@ -69,7 +69,7 @@ export function exportPlatformOrders(query) {
 // 获取自动创建出库单开关配置
 export function getAutoCreateConfig() {
   return request({
-    url: '/system/config/configKey/wms.shipment.auto-create-enabled',
+    url: '/wms/platform/orders/auto-create-config',
     method: 'get'
   })
 }
@@ -77,12 +77,10 @@ export function getAutoCreateConfig() {
 // 更新自动创建出库单开关配置
 export function updateAutoCreateConfig(enabled) {
   return request({
-    url: '/system/config/updateByKey',
+    url: '/wms/platform/orders/auto-create-config',
     method: 'put',
     data: {
-      configName: '自动创建出库暂存单开关',
-      configKey: 'wms.shipment.auto-create-enabled',
-      configValue: enabled ? 'true' : 'false'
+      enabled
     }
   })
 }
