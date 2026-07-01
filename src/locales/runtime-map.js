@@ -1,4 +1,4 @@
-const zhToEnMap = {
+﻿const zhToEnMap = {
   首页: 'Home',
   系统概述: 'System Overview',
   个人中心: 'Profile',
@@ -39,6 +39,12 @@ const zhToEnMap = {
   开始盘库: 'Start Stocktake',
   导出: 'Export',
   导出Excel: 'Export Excel',
+  批量操作: 'Batch Operations',
+  批量导出为Excel: 'Batch Export Excel',
+  批量导出为PDF: 'Batch Export PDF',
+  批量导出成功: 'Batch export successful',
+  批量导出失败: 'Batch export failed',
+  请至少选择一条库存记录: 'Please select at least one record',
   下载: 'Download',
   上传: 'Upload',
   导入: 'Import',
@@ -249,6 +255,7 @@ const zhToEnMap = {
   创建人精准匹配: 'Exact match on creator',
   入库时间: 'Inbound Time',
   出库时间: 'Outbound Time',
+  出库平台: 'Outbound Platform',
   周转天数: 'Turnover Days',
   库存数量: 'Stock Qty',
   利润: 'Profit',
@@ -281,7 +288,9 @@ const zhToEnMap = {
   新增材质: 'Add Material',
   修改材质: 'Edit Material',
   缺陷: 'Defect',
+  瑕疵: 'Defect',
   默认数量: 'Default Qty',
+  库存统计报表: 'Inventory Report',
   去入库: 'Inbound',
   商品管理: 'Item Management',
   操作单号: 'Operation No.',
@@ -595,6 +604,18 @@ const zhToEnMap = {
 
   // Platform Orders
   '平台订单': 'Platform Orders',
+  '上架管理': 'Listing Management',
+  '商品上架': 'Product Listings',
+  '上架模板': 'Listing Templates',
+  '上架状态': 'Listing Status',
+  '上架标题': 'Listing Title',
+  '上架时间': 'Listing Time',
+  '管理模板': 'Templates',
+  'Listings标题': 'Listing Title',
+  'Listings时间': 'Listing Time',
+  'ListingsStatus': 'Listing Status',
+  'Management模板': 'Templates',
+  '上架Management': 'Listing Management',
   'TikTok + eBay 订单卡片列表': 'TikTok + eBay Order List',
   '店铺': 'Shop',
   '平台': 'Platform',
@@ -661,6 +682,12 @@ const zhToEnMap = {
   '预出库': 'Pending Stock Out',
   '截单': 'Cutoff',
   '异常': 'Abnormal',
+  '批量操作': 'Batch Operations',
+  '取消批量操作': 'Cancel Batch',
+  '批量上架': 'Batch Publish',
+  '已选择 {count} 个商品': '{count} selected',
+  '请先勾选商品': 'Please select products first',
+  '可用参数': 'Available Parameters',
 }
 
 const replacerKeys = Object.keys(zhToEnMap).sort((a, b) => b.length - a.length)
@@ -697,3 +724,5 @@ export function translateByMap(text, language = 'zh-cn') {
 }
 
 export default zhToEnMap
+
+

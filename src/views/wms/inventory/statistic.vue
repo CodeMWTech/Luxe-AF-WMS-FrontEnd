@@ -106,7 +106,7 @@
           </el-col>
         </el-row>
         <el-row :gutter="16">
-          <el-col :xs="24" :sm="24" :md="canViewSellingPrice ? 8 : 12" :lg="canViewSellingPrice ? 8 : 12">
+          <el-col :xs="24" :sm="24" :md="priceFilterColSpan" :lg="priceFilterColSpan">
             <el-form-item :label="tr('\u521b\u5efa\u65f6\u95f4')" prop="createTimeRange">
               <el-date-picker
                 v-model="queryParams.createTimeRange"
@@ -121,7 +121,7 @@
               />
             </el-form-item>
           </el-col>
-          <el-col :xs="24" :sm="24" :md="canViewSellingPrice ? 8 : 12" :lg="canViewSellingPrice ? 8 : 12">
+          <el-col :xs="24" :sm="24" :md="priceFilterColSpan" :lg="priceFilterColSpan">
             <el-form-item :label="tr('\u5165\u5e93\u65f6\u95f4')" prop="receiptTimeRange">
               <el-date-picker
                 v-model="queryParams.receiptTimeRange"
@@ -136,7 +136,20 @@
               />
             </el-form-item>
           </el-col>
-          <el-col :xs="24" :sm="24" :md="8" :lg="8" v-if="canViewSellingPrice">
+          <el-col :xs="24" :sm="24" :md="priceFilterColSpan" :lg="priceFilterColSpan" v-if="canViewCostPrice">
+            <el-form-item :label="tr('成本价')">
+              <div class="query-price-range">
+                <el-form-item prop="costPriceMin" class="query-price-range-item">
+                  <el-input-number v-model="queryParams.costPriceMin" :min="0" :precision="2" :controls="false" :placeholder="tr('最低')" style="width: 100%" @keyup.enter="handleQuery" />
+                </el-form-item>
+                <span class="query-price-range-separator">{{ tr('至') }}</span>
+                <el-form-item prop="costPriceMax" class="query-price-range-item">
+                  <el-input-number v-model="queryParams.costPriceMax" :min="0" :precision="2" :controls="false" :placeholder="tr('最高')" style="width: 100%" @keyup.enter="handleQuery" />
+                </el-form-item>
+              </div>
+            </el-form-item>
+          </el-col>
+          <el-col :xs="24" :sm="24" :md="priceFilterColSpan" :lg="priceFilterColSpan" v-if="canViewSellingPrice">
             <el-form-item :label="tr('\u9500\u552e\u4ef7')">
               <div class="query-price-range">
                 <el-form-item prop="sellingPriceMin" class="query-price-range-item">
@@ -169,6 +182,12 @@
         <el-col :span="12" class="toolbar-right">
           <el-checkbox v-model="filterable" :label="tr('过滤掉库存为0的商品')" size="large" @change="handleChangeFilterZero"/>
           <el-button
+            :type="batchMode ? 'warning' : 'default'"
+            @click="toggleBatchMode"
+          >
+            {{ batchMode ? tr('取消批量操作') : tr('批量操作') }}
+          </el-button>
+          <el-button
             type="primary"
             :loading="exportLoading"
             :disabled="loading"
@@ -179,6 +198,43 @@
         </el-col>
       </el-row>
 
+      <!-- 批量操作栏 -->
+      <div v-if="batchMode" class="batch-action-bar">
+        <div class="batch-action-left">
+          <el-icon class="batch-action-icon"><Select /></el-icon>
+          <span class="batch-action-info">{{ tr('已选择 {count} 个商品').replace('{count}', selectedRows.length) }}</span>
+        </div>
+        <div class="batch-action-right">
+          <el-button
+            type="primary"
+            icon="Download"
+            :loading="batchExportExcelLoading"
+            :disabled="selectedRows.length === 0"
+            @click="handleBatchExportExcel"
+          >
+            {{ tr('批量导出为Excel') }}
+          </el-button>
+          <el-button
+            type="primary"
+            icon="Printer"
+            :loading="batchExportPdfLoading"
+            :disabled="selectedRows.length === 0"
+            @click="handleBatchExportPdf"
+          >
+            {{ tr('批量导出为PDF') }}
+          </el-button>
+          <el-divider direction="vertical" />
+          <el-button
+            type="success"
+            icon="Upload"
+            :disabled="selectedRows.length === 0"
+            @click="handleBatchPublish"
+          >
+            {{ tr('批量上架') }}
+          </el-button>
+        </div>
+      </div>
+
       <el-table
         ref="tableRef"
         :data="inventoryList"
@@ -188,8 +244,11 @@
         v-loading="loading"
         :empty-text="tr('暂无库存')"
         class="statistic-table"
+        :default-sort="{ prop: 'receiptTime', order: 'descending' }"
         @sort-change="handleColumnSortChange"
+        @selection-change="handleSelectionChange"
       >
+        <el-table-column v-if="batchMode" type="selection" width="50" align="center" fixed="left" />
         <el-table-column :label="tr('操作')" :width="isEn ? 132 : 110" align="center" fixed="left">
           <template #default="{ row }">
             <el-button
@@ -210,10 +269,10 @@
             <template #default="{ row }">
               <div>{{ getWarehouseName(row) }}</div>
               <div>{{ tr('仓库商品总数') }}：{{ getWarehouseSummaryQuantity(row) }}</div>
-              <div>{{ tr('仓库商品总价') }}：{{ formatMoney(getWarehouseSummaryAmount(row)) }}</div>
+              <div v-if="canViewCostPrice">{{ tr('仓库商品总价') }}：{{ formatMoney(getWarehouseSummaryAmount(row)) }}</div>
             </template>
           </el-table-column>
-          <el-table-column :label="tr('商品名称')" prop="warehouseItemGroupKey" min-width="120" align="center" show-overflow-tooltip>
+          <el-table-column :label="tr('商品名称')" prop="warehouseItemGroupKey" min-width="480" align="center" show-overflow-tooltip>
             <template #default="{ row }">
               <span class="copyable-cell">
                 <span class="copyable-text">{{ getItemName(row) }}</span>
@@ -280,7 +339,7 @@
 
         <!-- ========== 商品维度列 ========== -->
         <template v-else>
-          <el-table-column :label="tr('商品名称')" prop="itemGroupKey" min-width="120" align="center" show-overflow-tooltip>
+          <el-table-column :label="tr('商品名称')" prop="itemGroupKey" min-width="480" align="center" show-overflow-tooltip>
             <template #default="{ row }">
               <span class="copyable-cell">
                 <span class="copyable-text">{{ getItemName(row) }}</span>
@@ -372,6 +431,12 @@
           </template>
         </el-table-column>
 
+        <el-table-column :label="tr('出库平台')" prop="outboundPlatform" :width="isEn ? 165 : 120" align="center" show-overflow-tooltip>
+          <template #default="{ row }">
+            {{ row.outboundPlatform || '--' }}
+          </template>
+        </el-table-column>
+
         <!-- ========== 新增列：周转天数 ========== -->
         <el-table-column :label="tr('周转天数')" prop="turnoverDays" :width="isEn ? 150 : 125" align="center" sortable="custom">
           <template #default="{ row }">
@@ -381,14 +446,14 @@
         </el-table-column>
 
         <!-- ========== 新增列：平均成本价 ========== -->
-        <el-table-column :label="tr('平均成本价')" prop="avgReceiptCost" :width="isEn ? 165 : 135" align="center" sortable="custom">
+        <el-table-column v-if="canViewCostPrice" :label="tr('平均成本价')" prop="avgReceiptCost" :width="isEn ? 165 : 135" align="center" sortable="custom">
           <template #default="{ row }">
             {{ formatMoney(row.avgReceiptCost) }}
           </template>
         </el-table-column>
 
         <!-- ========== 新增列：平均销售价 ========== -->
-        <el-table-column :label="tr('平均销售价')" prop="avgShipmentPrice" :width="isEn ? 178 : 135" align="center" sortable="custom">
+        <el-table-column v-if="canViewSellingPrice" :label="tr('平均销售价')" prop="avgShipmentPrice" :width="isEn ? 178 : 135" align="center" sortable="custom">
           <template #default="{ row }">
             <!-- 有出库历史但库存未清零时 avgShipmentPrice 正常显示；无出库时为 null，显示 -- -->
             {{ formatMoney(row.avgShipmentPrice) }}
@@ -396,7 +461,7 @@
         </el-table-column>
 
         <!-- ========== 新增列：利润 ========== -->
-        <el-table-column :label="tr('利润')" prop="totalProfit" width="110" align="center" sortable="custom">
+        <el-table-column v-if="canViewCostPrice && canViewSellingPrice" :label="tr('利润')" prop="totalProfit" width="110" align="center" sortable="custom">
           <template #default="{ row }">
             <!--
               totalProfit 语义：
@@ -502,23 +567,28 @@
         <el-empty v-else :description="tr('暂无数据')" />
       </div>
     </el-drawer>
+
+    <!-- 批量上架对话框 -->
+    <PublishDialog ref="publishDialogRef" @success="getList" />
   </div>
 </template>
 
 <script setup name="Inventory">
 import {
+  batchExportInventoryBoardExcel,
   exportInventoryBoardItem,
   listInventoryBoard,
   listInventoryBoardWarehouseSummary
 } from '@/api/wms/inventory'
 import { downloadItemImage, getItemImages } from '@/api/wms/item'
-import { computed, getCurrentInstance, onMounted, ref } from 'vue'
+import { computed, getCurrentInstance, nextTick, onMounted, ref } from 'vue'
 import { getRowspanMethod } from '@/utils/getRowSpanMethod'
 import { useWmsStore } from '@/store/modules/wms'
 import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
 import { blobValidate } from '@/utils/ruoyi'
 import { formatDateTimeForQuery } from '@/utils/laTime'
+import PublishDialog from '@/views/wms/platform/listings/components/PublishDialog.vue'
 
 const { proxy } = getCurrentInstance()
 const settingsStore = useSettingsStore()
@@ -526,6 +596,8 @@ const isEn = computed(() => (settingsStore.language || 'zh-cn') === 'en')
 const spanMethod = computed(() => getRowspanMethod(inventoryList.value, rowSpanArray.value))
 const canViewSellingPrice = computed(() => proxy?.$auth?.hasPermi('wms:itemSellingPrice:view'))
 const canViewCostPrice = computed(() => proxy?.$auth?.hasPermi('wms:itemCostPrice:view'))
+const visiblePriceFilterCount = computed(() => Number(canViewCostPrice.value) + Number(canViewSellingPrice.value))
+const priceFilterColSpan = computed(() => visiblePriceFilterCount.value === 0 ? 12 : visiblePriceFilterCount.value === 1 ? 8 : 6)
 const itemCategoryTreeSelectList = computed(() => useWmsStore().itemCategoryTreeList)
 const AUTH_AGENCY_OPTIONS = ['Entrupy', 'Real Authentication', 'Legitmark', 'CheckCheck', 'N/A']
 const ITEM_CONDITION_OPTIONS = ['S', 'A', 'B', 'C', 'D']
@@ -534,6 +606,9 @@ const defaultTime = [new Date(2000, 0, 1, 0, 0, 0), new Date(2000, 0, 1, 23, 59,
 const inventoryList = ref([])
 const loading = ref(true)
 const exportLoading = ref(false)
+const batchExportExcelLoading = ref(false)
+const batchExportPdfLoading = ref(false)
+const selectedRows = ref([])
 const total = ref(0)
 const tableRef = ref(null)
 const rowSpanArray = ref(['itemGroupKey', 'skuGroupKey', 'skuWarehouseGroupKey'])
@@ -590,7 +665,14 @@ function getDetailExportLabels() {
   return labels
 }
 
-const filterable = ref(false)
+const DEFAULT_INVENTORY_SORT = {
+  prop: 'receiptTime',
+  order: 'descending'
+}
+
+const filterable = ref(true)
+const batchMode = ref(false)
+const publishDialogRef = ref(null)
 const queryType = ref('item')
 const queryParams = ref({
   pageNum: 1,
@@ -609,11 +691,13 @@ const queryParams = ref({
   consignInfo: undefined,
   createTimeRange: [],
   receiptTimeRange: [],
+  costPriceMin: undefined,
+  costPriceMax: undefined,
   sellingPriceMin: undefined,
   sellingPriceMax: undefined,
   minQuantity: undefined,
-  orderByColumn: undefined,
-  isAsc: undefined
+  orderByColumn: DEFAULT_INVENTORY_SORT.prop,
+  isAsc: DEFAULT_INVENTORY_SORT.order
 })
 
 // ───────────── 格式化工具函数 ─────────────
@@ -909,7 +993,7 @@ function buildWarehouseSummaryMap(items = []) {
   for (const it of items) {
     const quantity = Number(it.totalQuantity) || 0
     const amt = Number(it.totalAmount)
-    const amount = Number.isFinite(amt) ? amt : 0
+    const amount = Number.isFinite(amt) ? amt : null
     const entry = { quantity, amount }
     if (it.warehouseId != null && it.warehouseId !== '') {
       map.set(String(it.warehouseId), entry)
@@ -944,7 +1028,7 @@ function getWarehouseSummaryQuantity(row) {
  * 获取仓库聚合后的总价（后端汇总接口）
  */
 function getWarehouseSummaryAmount(row) {
-  return getWarehouseSummaryEntry(row)?.amount ?? 0
+  return getWarehouseSummaryEntry(row)?.amount ?? null
 }
 
 function getWarehouseGroupKey(row) {
@@ -992,6 +1076,10 @@ function formatTime(t) {
 
 const getCurrentQuery = () => {
   const query = { ...queryParams.value }
+  if (!canViewCostPrice.value) {
+    delete query.costPriceMin
+    delete query.costPriceMax
+  }
   if (!canViewSellingPrice.value) {
     delete query.sellingPriceMin
     delete query.sellingPriceMax
@@ -1032,6 +1120,7 @@ const INVENTORY_EXPORT_HEADER_MAP = {
   库存数量: 'Stock Qty',
   入库时间: 'Inbound Time',
   出库时间: 'Outbound Time',
+  出库平台: 'Outbound Platform',
   周转天数: 'Turnover Days',
   平均成本价: 'Avg Cost Price',
   平均销售价: 'Avg Selling Price',
@@ -1401,22 +1490,197 @@ const handleExportExcel = async () => {
   }
 }
 
+function handleSelectionChange(selection) {
+  selectedRows.value = selection
+}
+
+async function handleBatchExportExcel() {
+  if (selectedRows.value.length === 0) {
+    proxy.$modal.msgWarning(tr('请至少选择一条库存记录'))
+    return
+  }
+  try {
+    batchExportExcelLoading.value = true
+    const rows = selectedRows.value.map(row => ({
+      skuId: row.skuId,
+      warehouseId: row.warehouseId
+    }))
+    const exportLanguage = getExportLanguagePayload()
+    const blobData = await batchExportInventoryBoardExcel(
+      { rows },
+      {
+        headers: {
+          'Content-Language': exportLanguage.contentLanguage,
+          'Accept-Language': isEn.value ? 'en-US,en;q=0.9' : 'zh-CN,zh;q=0.9'
+        }
+      }
+    )
+    const isBlob = blobValidate(blobData)
+    if (!isBlob) {
+      const resText = await blobData.text()
+      const rspObj = JSON.parse(resText)
+      throw new Error(rspObj?.msg || tr('批量导出失败'))
+    }
+    const excelData = isEn.value ? await translateInventoryExportXlsx(blobData) : blobData
+    const blob = new Blob([excelData], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    })
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = isEn.value ? 'MichaelStudioWMS-Inventory Batch Export.xlsx' : 'MichaelStudioWMS-库存统计批量导出.xlsx'
+    a.click()
+    window.URL.revokeObjectURL(url)
+    proxy.$modal.msgSuccess(tr('批量导出成功'))
+  } catch (e) {
+    proxy.$modal.msgError(e?.message || tr('批量导出失败'))
+  } finally {
+    batchExportExcelLoading.value = false
+  }
+}
+
+/**
+ * 批量导出 PDF（参考详细信息页面的 exportDetailPdf 实现方式：
+ * 前端构建 HTML，新窗口打开后自动触发浏览器打印为 PDF）。
+ */
+function handleBatchExportPdf() {
+  if (selectedRows.value.length === 0) {
+    proxy.$modal.msgWarning(tr('请至少选择一条库存记录'))
+    return
+  }
+  try {
+    batchExportPdfLoading.value = true
+    const canViewCost = canViewCostPrice.value
+    const canViewSelling = canViewSellingPrice.value
+
+    // ── 表头 ──
+    const headers = [
+      tr('商品图片'), tr('商品名称'), tr('SKU编号'), tr('仓库'), tr('库存数量'),
+      tr('入库时间'), tr('出库时间'), tr('出库平台'), tr('周转天数')
+    ]
+    if (canViewCost) headers.push(tr('平均成本价'))
+    if (canViewSelling) headers.push(tr('平均销售价'))
+    if (canViewCost && canViewSelling) headers.push(tr('利润'))
+    headers.push(tr('成色'), tr('瑕疵'))
+    const headerHtml = headers.map(h => `<th>${escapeHtml(h)}</th>`).join('')
+
+    // ── 数据行 ──
+    const rowsHtml = selectedRows.value.map(row => {
+      const cells = []
+      // 图片列（参考前端 72×72 展示尺寸）
+      const imgUrl = row.itemImage || ''
+      cells.push(imgUrl
+        ? `<img src="${escapeHtml(imgUrl)}" style="width:72px;height:72px;object-fit:cover;border-radius:4px;display:block;margin:0 auto;" />`
+        : escapeHtml(tr('暂无图片')))
+      cells.push(escapeHtml(row.itemName || '--'))
+      cells.push(escapeHtml(row.skuCode || '--'))
+      cells.push(escapeHtml(row.warehouseName || '--'))
+      cells.push(row.quantity != null ? row.quantity : '--')
+      cells.push(formatTime(row.receiptTime))
+      cells.push(formatTime(row.shipmentTime))
+      cells.push(escapeHtml(row.outboundPlatform || '--'))
+      cells.push(row.turnoverDays != null ? row.turnoverDays : '--')
+      if (canViewCost) cells.push(formatMoney(row.avgReceiptCost))
+      if (canViewSelling) cells.push(formatMoney(row.avgShipmentPrice))
+      if (canViewCost && canViewSelling) cells.push(formatProfit(row.totalProfit))
+      cells.push(escapeHtml(row.itemCondition || '--'))
+      cells.push(escapeHtml(row.defect || '--'))
+      return `<tr>${cells.map(c => `<td>${c}</td>`).join('')}</tr>`
+    }).join('')
+
+    // ── 报表标题与导出时间 ──
+    const title = tr('库存统计报表')
+    const now = new Date()
+    const nowStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`
+    const count = selectedRows.value.length
+    const metaText = isEn.value
+      ? `${nowStr} | ${count} records`
+      : `${nowStr} | 共 ${count} 条记录`
+    const printWindow = window.open('', '_blank')
+    if (!printWindow) {
+      proxy.$modal.msgError(tr('批量导出失败'))
+      batchExportPdfLoading.value = false
+      return
+    }
+    printWindow.document.write(`
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>${escapeHtml(safeFileName(title, title))}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, "Microsoft YaHei", sans-serif; padding: 20px; color: #1f2329; }
+    h1 { font-size: 18px; margin-bottom: 4px; }
+    .meta { color: #667085; font-size: 11px; margin-bottom: 16px; }
+    table { width: 100%; border-collapse: collapse; font-size: 11px; table-layout: auto; }
+    th, td { border: 1px solid #dfe3eb; padding: 4px 6px; text-align: left; vertical-align: middle; overflow-wrap: break-word; }
+    th { background: #f5f7fa; color: #4b5563; font-weight: 600; white-space: nowrap; }
+    tr:nth-child(even) td { background: #fafbfc; }
+    td:first-child { width: 80px; text-align: center; }
+    .cell-num { text-align: right; white-space: nowrap; }
+    @page { size: landscape; margin: 6mm; }
+    @media print {
+      body { padding: 0; }
+      table { font-size: 8px; }
+      th, td { padding: 2px 3px; }
+      th { white-space: normal; }
+      td:first-child { width: 56px; }
+      td:first-child img { width: 48px; height: 48px; }
+      h1 { font-size: 14px; }
+      .meta { font-size: 8px; margin-bottom: 8px; }
+    }
+  </style>
+</head>
+<body>
+  <h1>${escapeHtml(title)}</h1>
+  <div class="meta">${escapeHtml(metaText)}</div>
+  <table><thead><tr>${headerHtml}</tr></thead><tbody>${rowsHtml}</tbody></table>
+</body>
+</html>
+    `)
+    printWindow.document.close()
+    // 等新窗口渲染完成后自动呼出浏览器打印对话框
+    setTimeout(function () {
+      try { printWindow.print(); } catch (e) { /* 用户可能已关闭窗口 */ }
+    }, 800)
+    proxy.$modal.msgSuccess(tr('批量导出成功'))
+  } catch (e) {
+    proxy.$modal.msgError(e?.message || tr('批量导出失败'))
+  } finally {
+    batchExportPdfLoading.value = false
+  }
+}
+
 const handleQuery = () => {
   queryParams.value.pageNum = 1
   getList()
 }
 
+let suppressSortChangeQuery = false
+
+const applyDefaultInventorySort = () => {
+  queryParams.value.orderByColumn = DEFAULT_INVENTORY_SORT.prop
+  queryParams.value.isAsc = DEFAULT_INVENTORY_SORT.order
+}
+
 const resetQuery = () => {
-  queryParams.value.orderByColumn = undefined
-  queryParams.value.isAsc = undefined
+  filterable.value = true
   proxy.resetForm('queryRef')
-  tableRef.value?.clearSort?.()
-  handleQuery()
+  applyDefaultInventorySort()
+  queryParams.value.pageNum = 1
+  nextTick(() => {
+    suppressSortChangeQuery = true
+    tableRef.value?.sort?.(DEFAULT_INVENTORY_SORT.prop, DEFAULT_INVENTORY_SORT.order)
+    suppressSortChangeQuery = false
+    getList()
+  })
 }
 
 const handleColumnSortChange = ({ prop, order }) => {
   queryParams.value.orderByColumn = prop || undefined
   queryParams.value.isAsc = order === 'ascending' ? 'ascending' : order === 'descending' ? 'descending' : undefined
+  if (suppressSortChangeQuery) return
   queryParams.value.pageNum = 1
   getList()
 }
@@ -1434,6 +1698,23 @@ const handleSortTypeChange = (e) => {
 const handleChangeFilterZero = () => {
   queryParams.value.pageNum = 1
   getList()
+}
+
+const toggleBatchMode = () => {
+  batchMode.value = !batchMode.value
+  if (!batchMode.value) {
+    selectedRows.value = []
+    tableRef.value?.clearSelection()
+  }
+}
+
+const handleBatchPublish = () => {
+  if (selectedRows.value.length === 0) {
+    proxy.$modal.msgWarning(tr('请先勾选商品'))
+    return
+  }
+  const skuIds = [...new Set(selectedRows.value.map(r => r.skuId).filter(Boolean))]
+  publishDialogRef.value?.openWithSkus(skuIds)
 }
 
 const tr = (text) => translateByMap(text, settingsStore.language || 'zh-cn')
@@ -1502,6 +1783,45 @@ onMounted(() => {
   justify-content: flex-end;
   align-items: center;
   gap: 12px;
+}
+
+.batch-action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 10px 16px;
+  margin-bottom: 12px;
+  background: var(--el-color-primary-light-9, #ecf5ff);
+  border: 1px solid var(--el-color-primary-light-5, #c6e2ff);
+  border-radius: 6px;
+}
+
+.batch-action-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.batch-action-icon {
+  font-size: 18px;
+  color: var(--el-color-primary, #409eff);
+}
+
+.batch-action-info {
+  color: var(--el-text-color-primary, #303133);
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.batch-action-right {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .statistic-table {

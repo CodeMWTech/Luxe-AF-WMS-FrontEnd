@@ -1,4 +1,4 @@
-import { createWebHistory, createRouter } from 'vue-router'
+﻿import { createWebHistory, createRouter } from 'vue-router'
 /* Layout */
 import Layout from '@/layout'
 
@@ -39,8 +39,48 @@ export const constantRoutes = [
   },
   {
     path: '/login',
-    component: () => import('@/views/login'),
+    component: () => import('@/views/login/index.vue'),
     hidden: true
+  },
+  {
+    path: '/m/login',
+    redirect: '/login',
+    hidden: true
+  },
+  {
+    path: '/m/sku-search',
+    redirect: '/sku-search',
+    hidden: true
+  },
+  {
+    path: '/m/product/:skuId',
+    redirect: to => `/product/${to.params.skuId}`,
+    hidden: true
+  },
+  {
+    path: '/m',
+    redirect: '/sku-search',
+    hidden: true
+  },
+  {
+    path: '/mobile-shell',
+    component: () => import('@/layout/MobileLayout.vue'),
+    hidden: true,
+    meta: { skuLookup: true },
+    children: [
+      {
+        path: '/sku-search',
+        name: 'MobileSkuSearch',
+        component: () => import('@/views/mobile/sku-search.vue'),
+        meta: { title: 'SKU搜索', titleEn: 'SKU Search', skuLookup: true }
+      },
+      {
+        path: '/product/:skuId',
+        name: 'MobileProductDetail',
+        component: () => import('@/views/mobile/product-detail.vue'),
+        meta: { title: '商品详情', titleEn: 'Product Detail', skuLookup: true }
+      }
+    ]
   },
   {
     path: '/register',
@@ -171,6 +211,34 @@ export const dynamicRoutes = [
         meta: { title: '平台订单', activeMenu: '/wms/platform/tiktok/orders' }
       }
     ]
+  },
+  {
+    path: '/wms/platform/listings',
+    component: Layout,
+    hidden: true,
+    permissions: ['wms:platform:listing'],
+    children: [
+      {
+        path: '',
+        component: () => import('@/views/wms/platform/listings/index'),
+        name: 'PlatformListings',
+        meta: { title: '商品上架', titleEn: 'Product Listings', activeMenu: '/wms/platform/listings' }
+      }
+    ]
+  },
+  {
+    path: '/wms/platform/listings/template',
+    component: Layout,
+    hidden: true,
+    permissions: ['wms:platform:listing'],
+    children: [
+      {
+        path: '',
+        component: () => import('@/views/wms/platform/listings/template'),
+        name: 'PlatformListingTemplate',
+        meta: { title: '上架模板', titleEn: 'Listing Templates', activeMenu: '/wms/platform/listings' }
+      }
+    ]
   }
 ]
 
@@ -187,3 +255,4 @@ const router = createRouter({
 });
 
 export default router;
+

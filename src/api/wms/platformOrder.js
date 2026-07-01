@@ -44,6 +44,18 @@ export function createShipments() {
   })
 }
 
+// 从 CSV 导入 Note 到平台订单
+export function importNotes(file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request({
+    url: '/wms/platform/orders/import-notes',
+    method: 'post',
+    data: formData,
+    headers: { 'Content-Type': 'multipart/form-data' }
+  })
+}
+
 // 导出平台订单 Excel
 export function exportPlatformOrders(query) {
   return request({
@@ -51,5 +63,34 @@ export function exportPlatformOrders(query) {
     method: 'post',
     params: query,
     responseType: 'blob'
+  })
+}
+
+// 导出平台订单财务周报 Excel
+export function exportPlatformOrderWeeklyReport(query) {
+  return request({
+    url: '/wms/platform/orders/weekly-report',
+    method: 'post',
+    params: query,
+    responseType: 'blob'
+  })
+}
+
+// 获取自动创建出库单开关配置
+export function getAutoCreateConfig() {
+  return request({
+    url: '/wms/platform/orders/auto-create-config',
+    method: 'get'
+  })
+}
+
+// 更新自动创建出库单开关配置
+export function updateAutoCreateConfig(enabled) {
+  return request({
+    url: '/wms/platform/orders/auto-create-config',
+    method: 'put',
+    data: {
+      enabled
+    }
   })
 }

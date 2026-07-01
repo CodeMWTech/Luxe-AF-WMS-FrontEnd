@@ -1,5 +1,6 @@
 <template>
   <div class="app-container platform-orders-page">
+    <el-alert :title="t('platformOrders.shipmentHint')" type="info" :closable="false" show-icon class="page-hint" />
     <el-card class="filter-card">
       <el-form
         ref="queryRef"
@@ -87,6 +88,20 @@
             />
           </el-select>
         </el-form-item>
+        <el-form-item class="filter-item" :label="t('platformOrders.filterShipmentStatus')" prop="shipmentStatus">
+          <el-select
+            v-model="queryParams.shipmentStatus"
+            :placeholder="t('platformOrders.shipmentStatusAll')"
+            clearable
+            style="width: 100%"
+          >
+            <el-option :label="t('platformOrders.shipmentStatusAll')" value="" />
+            <el-option :label="t('platformOrders.shipmentStatusNone')" value="NONE" />
+            <el-option :label="t('platformOrders.shipmentStatusPending')" value="PENDING" />
+            <el-option :label="t('platformOrders.shipmentStatusFinish')" value="FINISH" />
+            <el-option :label="t('platformOrders.shipmentStatusInvalid')" value="INVALID" />
+          </el-select>
+        </el-form-item>
         <el-form-item class="filter-item filter-item-time" :label="t('platformOrders.filterTime')" prop="orderCreateTimeRange">
           <el-date-picker
             v-model="queryParams.orderCreateTimeRange"
@@ -103,14 +118,27 @@
         <el-form-item class="filter-item filter-item-actions">
           <el-button type="primary" icon="Search" class="action-btn" native-type="submit" v-hasPermi="['wms:platform:list']">{{ t('platformOrders.btnQuery') }}</el-button>
           <el-button icon="Refresh" class="action-btn" @click="resetQuery">{{ t('platformOrders.btnReset') }}</el-button>
-          <el-button type="success" icon="RefreshRight" class="action-btn" @click="openSyncDialog" v-hasPermi="['wms:platform:tiktok:test']">{{ t('platformOrders.btnSync') }}</el-button>
+          <el-button type="success" icon="RefreshRight" class="action-btn" @click="openSyncDialog" v-hasPermi="['wms:platform:sync']">{{ t('platformOrders.btnSync') }}</el-button>
           <el-button type="info" icon="Download" class="action-btn" :loading="exporting" @click="handleExport" v-hasPermi="['wms:platform:list']">{{ t('platformOrders.btnExport') }}</el-button>
-          <!-- ========== 临时禁用：出库暂存单创建功能 ========== -->
-          <!-- 如需恢复：删除 disabled 和 el-tooltip，恢复 @click="handleCreateShipments" 和 :loading -->
-          <el-tooltip :content="t('platformOrders.shipmentDisabled')" placement="bottom">
-            <el-button type="warning" icon="Box" class="action-btn" disabled v-hasPermi="['wms:platform:edit']">{{ t('platformOrders.btnCreateShipment') }}</el-button>
-          </el-tooltip>
-          <!-- ========== 临时禁用结束 ========== -->
+          <el-button type="info" icon="Document" class="action-btn" :loading="weeklyReportExporting" @click="handleWeeklyReportExport" v-hasPermi="['wms:platform:list']">{{ t('platformOrders.btnWeeklyReportExport') }}</el-button>
+          <el-button type="primary" icon="Upload" class="action-btn" @click="openImportNotesDialog" v-hasPermi="['wms:platform:edit']">{{ t('platformOrders.btnImportNotes') }}</el-button>
+          <span v-if="canManageAutoCreateConfig" class="auto-create-toggle">
+            <el-switch
+              v-model="autoCreateEnabled"
+              :loading="configLoading"
+              @change="handleAutoCreateToggle"
+              size="small"
+            />
+            <span class="auto-create-label">{{ t('platformOrders.autoCreateLabel') }}</span>
+          </span>
+          <el-button
+            type="warning"
+            icon="Box"
+            class="action-btn"
+            :loading="shipmentCreating"
+            @click="handleCreateShipments"
+            v-hasPermi="['wms:platform:edit']"
+          >{{ t('platformOrders.btnCreateShipment') }}</el-button>
         </el-form-item>
       </el-form>
     </el-card>
@@ -134,12 +162,13 @@
           </template>
         </el-empty>
 
-        <article
-          v-for="(order, index) in orderList"
-          :key="orderKey(order, index)"
-          class="order-card"
-          :class="{ 'is-open': isExpanded(order, index) }"
-        >
+        <div class="orders-scroll">
+          <article
+            v-for="(order, index) in orderList"
+            :key="orderKey(order, index)"
+            class="order-card"
+            :class="{ 'is-open': isExpanded(order, index) }"
+          >
           <button class="summary-row" type="button" @click="toggleOrder(order, index)">
             <div class="summary-cell order-id-cell">
               <span class="cell-label">{{ t('platformOrders.orderId') }}</span>
@@ -179,10 +208,11 @@
               <span class="primary-value ellipsis">{{ displayValue(getFirstItem(order).productName) }}</span>
             </div>
 
-            <div class="summary-cell sku-cell">
+            <div class="summary-cell sku-cell" :class="{ 'sku-cell-problem': hasSkuIssue(order, index) }">
               <span class="cell-label">{{ t('platformOrders.sku') }}</span>
               <div class="sku-row">
-                <span class="secondary-value ellipsis">{{ displayValue(getSkuText(getFirstItem(order))) }}</span>
+                <span :class="['secondary-value', 'ellipsis', { 'sku-value-problem': hasSkuIssue(order, index) }]">{{ displayValue(getSkuText(getFirstItem(order))) }}</span>
+                <el-tag v-if="hasSkuIssue(order, index)" type="danger" effect="dark" size="small" class="sku-problem-tag">{{ getSkuIssueText(order, index) }}</el-tag>
                 <el-button v-if="canEditSku(order, index)" link size="small" class="sku-edit-btn" :icon="Edit" @click.stop="startSkuEdit(order, index, getFirstItem(order))" v-hasPermi="['wms:platform:edit']">{{ t('platformOrders.labelEditSku') }}</el-button>
               </div>
             </div>
@@ -190,10 +220,19 @@
             <div class="summary-cell shipment-cell">
               <span class="cell-label">{{ t('platformOrders.labelShipment') }}</span>
               <template v-if="order.shipmentOrderId">
-                <span class="primary-value shipment-order-no">{{ order.shipmentOrderNo || order.shipmentOrderId }}</span>
+                <span class="primary-value shipment-order-no with-copy" @click.stop>
+                  <span class="shipment-order-text">{{ order.shipmentOrderNo || order.shipmentOrderId }}</span>
+                  <el-button
+                    link
+                    class="copy-btn"
+                    :icon="CopyDocument"
+                    v-copyText="String(order.shipmentOrderNo || order.shipmentOrderId)"
+                    v-copyText:callback="copyTextSuccess"
+                  />
+                </span>
               </template>
               <template v-else>
-                <span v-if="order.skipReason" class="skip-reason-text">{{ order.skipReason }}</span>
+                <span v-if="order.skipReason" class="skip-reason-text">{{ formatSkipReason(order.skipReason) }}</span>
                 <span v-else class="no-shipment-text">-</span>
               </template>
             </div>
@@ -225,7 +264,7 @@
           </button>
 
           <transition name="order-expand">
-            <div v-show="isExpanded(order, index)" class="detail-area" v-loading="isDetailLoading(order, index)">
+            <div v-show="isExpanded(order, index)" class="detail-area">
               <div class="order-info-bar">
                 <div class="order-info-item">
                   <span class="order-info-label">{{ t('platformOrders.orderInfoId') }}</span>
@@ -276,7 +315,7 @@
                     <div class="ebay-customer-block">
                       <div class="ebay-customer-line">
                         <span class="ebay-customer-label">{{ t('platformOrders.buyerUserId') }}</span>
-                        <span class="ebay-customer-value">{{ displayValue(rawField(getDisplayOrder(order, index), null, 'buyer.username')) }}</span>
+                        <span class="ebay-customer-value">{{ displayValue(getDisplayOrder(order, index).buyerName || rawField(getDisplayOrder(order, index), null, 'buyer.username')) }}</span>
                       </div>
                       <div class="ebay-customer-line">
                         <span class="ebay-customer-label">{{ t('platformOrders.labelName') }}</span>
@@ -284,11 +323,11 @@
                       </div>
                       <div class="ebay-customer-line">
                         <span class="ebay-customer-label">{{ t('platformOrders.buyerFirstName') }}</span>
-                        <span class="ebay-customer-value">{{ displayValue(rawField(getDisplayOrder(order, index), null, 'buyer.firstName')) }}</span>
+                        <span class="ebay-customer-value">{{ displayValue(getDisplayOrder(order, index).buyerFirstName || rawField(getDisplayOrder(order, index), null, 'buyer.firstName')) }}</span>
                       </div>
                       <div class="ebay-customer-line">
                         <span class="ebay-customer-label">{{ t('platformOrders.buyerLastName') }}</span>
-                        <span class="ebay-customer-value">{{ displayValue(rawField(getDisplayOrder(order, index), null, 'buyer.lastName')) }}</span>
+                        <span class="ebay-customer-value">{{ displayValue(getDisplayOrder(order, index).buyerLastName || rawField(getDisplayOrder(order, index), null, 'buyer.lastName')) }}</span>
                       </div>
                       <div class="ebay-customer-line" v-if="getRecipient(getDisplayOrder(order, index)).addressLine1">
                         <span class="ebay-customer-label">{{ t('platformOrders.labelAddress') }}</span>
@@ -327,16 +366,16 @@
                       </div>
                       <div class="ebay-customer-line">
                         <span class="ebay-customer-label">{{ t('platformOrders.buyerMessage') }}</span>
-                        <span class="ebay-customer-value">{{ displayValue(rawField(getDisplayOrder(order, index), null, 'buyerCheckoutNotes')) }}</span>
+                        <span class="ebay-customer-value">{{ displayValue(getDisplayOrder(order, index).buyerMessage || rawField(getDisplayOrder(order, index), null, 'buyerCheckoutNotes')) }}</span>
                       </div>
                     </div>
                   </template>
                   <template v-else>
-                    <InfoLine :label="t('platformOrders.buyerUserId')" :value="rawField(getDisplayOrder(order, index), 'user_id')" />
-                    <InfoLine :label="t('platformOrders.buyerNickname')" :value="rawField(getDisplayOrder(order, index), 'buyer_nickname')" />
+                    <InfoLine :label="t('platformOrders.buyerUserId')" :value="getDisplayOrder(order, index).buyerName || rawField(getDisplayOrder(order, index), 'user_id')" />
+                    <InfoLine :label="t('platformOrders.buyerNickname')" :value="getDisplayOrder(order, index).buyerNickname || rawField(getDisplayOrder(order, index), 'buyer_nickname')" />
                     <InfoLine :label="t('platformOrders.labelName')" :value="getRecipient(getDisplayOrder(order, index)).name" strong />
-                    <InfoLine :label="t('platformOrders.buyerFirstName')" :value="rawField(getDisplayOrder(order, index), 'recipient_address.first_name')" />
-                    <InfoLine :label="t('platformOrders.buyerLastName')" :value="rawField(getDisplayOrder(order, index), 'recipient_address.last_name')" />
+                    <InfoLine :label="t('platformOrders.buyerFirstName')" :value="getDisplayOrder(order, index).buyerFirstName || rawField(getDisplayOrder(order, index), 'recipient_address.first_name')" />
+                    <InfoLine :label="t('platformOrders.buyerLastName')" :value="getDisplayOrder(order, index).buyerLastName || rawField(getDisplayOrder(order, index), 'recipient_address.last_name')" />
                     <InfoLine :label="t('platformOrders.labelPhone')">
                       <span class="inline-copy">
                         {{ displayValue(getRecipient(getDisplayOrder(order, index)).phoneNumber) }}
@@ -353,7 +392,7 @@
                     <InfoLine :label="t('platformOrders.labelAddress')" :value="getRecipient(getDisplayOrder(order, index)).addressLine1 || getRecipient(getDisplayOrder(order, index)).fullAddress" />
                     <InfoLine :label="t('platformOrders.labelPostalCode')" :value="getRecipient(getDisplayOrder(order, index)).postalCode" />
                     <InfoLine :label="t('platformOrders.labelRegion')" :value="getRecipient(getDisplayOrder(order, index)).regionCode" />
-                    <InfoLine :label="t('platformOrders.buyerMessage')" :value="rawField(getDisplayOrder(order, index), 'buyer_message')" />
+                    <InfoLine :label="t('platformOrders.buyerMessage')" :value="getDisplayOrder(order, index).buyerMessage || rawField(getDisplayOrder(order, index), 'buyer_message')" />
                   </template>
                 </section>
 
@@ -421,14 +460,15 @@
                   <InfoLine :label="t('platformOrders.paymentCurrency')" :value="getCurrency(getDisplayOrder(order, index))" />
                   <InfoLine :label="t('platformOrders.paymentSubtotal')" :value="formatMoney(getPayment(getDisplayOrder(order, index)).subTotal, getCurrency(getDisplayOrder(order, index)))" strong />
                   <InfoLine :label="t('platformOrders.paymentTax')" :value="formatMoney(getPayment(getDisplayOrder(order, index)).tax, getCurrency(getDisplayOrder(order, index)))" />
-                  <InfoLine :label="t('platformOrders.paymentShippingFee')" :value="formatMoney(getPayment(getDisplayOrder(order, index)).shippingFee, getCurrency(getDisplayOrder(order, index)))" />
+                  <InfoLine v-if="getPlatform(getDisplayOrder(order, index)) !== 'TIKTOK'" :label="t('platformOrders.paymentShippingFee')" :value="formatMoney(getPayment(getDisplayOrder(order, index)).shippingFee, getCurrency(getDisplayOrder(order, index)))" />
                   <InfoLine :label="t('platformOrders.paymentTotal')" :value="formatMoney(getPayment(getDisplayOrder(order, index)).totalAmount, getCurrency(getDisplayOrder(order, index)))" strong />
                   <InfoLine :label="t('platformOrders.paymentPlatformDiscount')" :value="formatMoney(getPayment(getDisplayOrder(order, index)).platformDiscount, getCurrency(getDisplayOrder(order, index)))" />
                   <InfoLine v-if="getPlatform(getDisplayOrder(order, index)) === 'TIKTOK'" :label="t('platformOrders.paymentSellerDiscount')" :value="formatMoney(getPayment(getDisplayOrder(order, index)).sellerDiscount, getCurrency(getDisplayOrder(order, index)))" />
                   <InfoLine v-if="getPlatform(getDisplayOrder(order, index)) === 'TIKTOK'" :label="t('platformOrders.paymentProductTax')" :value="formatMoney(getPayment(getDisplayOrder(order, index)).productTax, getCurrency(getDisplayOrder(order, index)))" />
-                  <InfoLine v-if="getPlatform(getDisplayOrder(order, index)) === 'TIKTOK'" :label="t('platformOrders.paymentOriginalShippingFee')" :value="formatMoney(rawField(getDisplayOrder(order, index), 'payment.original_shipping_fee'), getCurrency(getDisplayOrder(order, index)))" />
+                  <InfoLine v-if="getPlatform(getDisplayOrder(order, index)) === 'TIKTOK'" :label="t('platformOrders.paymentShippingFee')" :value="formatMoney(rawField(getDisplayOrder(order, index), 'payment.original_shipping_fee'), getCurrency(getDisplayOrder(order, index)))" />
                   <InfoLine v-if="getPlatform(getDisplayOrder(order, index)) === 'TIKTOK'" :label="t('platformOrders.paymentOriginalTotalPrice')" :value="formatMoney(rawField(getDisplayOrder(order, index), 'payment.original_total_product_price'), getCurrency(getDisplayOrder(order, index)))" />
                   <InfoLine v-if="getPlatform(getDisplayOrder(order, index)) === 'EBAY'" :label="t('platformOrders.paymentMarketplaceFee')" :value="formatMoney(getDisplayOrder(order, index).totalMarketplaceFee, getCurrency(getDisplayOrder(order, index)))" />
+                  <InfoLine v-if="getPlatform(getDisplayOrder(order, index)) === 'EBAY'" :label="t('platformOrders.paymentMarketplaceFeeRate')" :value="formatMarketplaceFeeRate(getDisplayOrder(order, index))" />
                   <InfoLine v-if="getPlatform(getDisplayOrder(order, index)) === 'EBAY'" :label="t('platformOrders.paymentDueSeller')" :value="formatMoney(getDisplayOrder(order, index).totalDueSeller, getCurrency(getDisplayOrder(order, index)))" strong />
                   <InfoLine :label="t('platformOrders.paymentGrossProfit')" :value="formatGrossProfit(getDisplayOrder(order, index))" />
                   <template v-for="(item, itemIndex) in getLineItems(getDisplayOrder(order, index))" :key="'pay-item-' + (item.lineItemId || item.skuId || itemIndex)">
@@ -442,24 +482,15 @@
                 <h3><el-icon><Memo /></el-icon>{{ t('platformOrders.detailNotes') }}</h3>
                 <div class="notes-grid">
                   <div>
-                    <span class="note-label">{{ t('platformOrders.buyerMessage') }}</span>
-                    <p>{{ displayValue(rawField(getDisplayOrder(order, index), 'buyer_message', 'buyerCheckoutNotes') || getDisplayOrder(order, index).buyerMessage) }}</p>
-                  </div>
-                  <div>
-                    <span class="note-label">{{ t('platformOrders.internalNote') }}</span>
-                    <el-input
-                      :model-value="getDisplayOrder(order, index).internalRemark || ''"
-                      type="textarea"
-                      :rows="2"
-                      :placeholder="t('platformOrders.internalNotePlaceholder')"
-                      disabled
-                    />
+                    <span class="note-label">{{ t('platformOrders.remark') }}</span>
+                    <p>{{ displayValue(getDisplayOrder(order, index).internalRemark || getDisplayOrder(order, index).buyerMessage || rawField(getDisplayOrder(order, index), 'buyer_message', 'buyerCheckoutNotes')) }}</p>
                   </div>
                 </div>
               </section>
             </div>
           </transition>
         </article>
+        </div>
       </div>
 
       <pagination
@@ -531,21 +562,21 @@
             </div>
           </div>
         </el-form-item>
-        <el-form-item :label="t('platformOrders.startTime')" prop="startTime">
+        <el-form-item :label="t('platformOrders.syncStartTime')" prop="startTime">
           <el-date-picker
             v-model="syncForm.startTime"
             type="datetime"
-            :placeholder="t('platformOrders.startTimePlaceholder')"
+            :placeholder="t('platformOrders.syncStartTimePlaceholder')"
             value-format="YYYY-MM-DD HH:mm:ss"
             format="YYYY-MM-DD HH:mm:ss"
             style="width: 100%"
           />
         </el-form-item>
-        <el-form-item :label="t('platformOrders.endTime')" prop="endTime">
+        <el-form-item :label="t('platformOrders.syncEndTime')" prop="endTime">
           <el-date-picker
             v-model="syncForm.endTime"
             type="datetime"
-            :placeholder="t('platformOrders.endTimePlaceholder')"
+            :placeholder="t('platformOrders.syncEndTimePlaceholder')"
             value-format="YYYY-MM-DD HH:mm:ss"
             format="YYYY-MM-DD HH:mm:ss"
             style="width: 100%"
@@ -591,13 +622,49 @@
       @handleCancelClick="skuSelectShow = false"
       :size="'40%'"
     />
+
+    <!-- 导入 Note 弹窗 -->
+    <el-dialog v-model="notesImportOpen" :title="t('platformOrders.importNotesTitle')" width="520px" @close="cancelImportNotes">
+      <el-alert
+        :title="t('platformOrders.importNotesHelp')"
+        type="info"
+        show-icon
+        :closable="false"
+        class="mb20"
+      />
+      <el-form label-width="130px">
+        <el-form-item :label="t('platformOrders.importNotesSelectFile')">
+          <el-upload
+            ref="importUploadRef"
+            :auto-upload="false"
+            :limit="1"
+            accept=".csv"
+            :on-change="handleImportFileChange"
+            :on-remove="handleImportFileRemove"
+            :file-list="importFileList"
+          >
+            <el-button type="primary" icon="FolderOpened">{{ t('platformOrders.importNotesSelectFile') }}</el-button>
+            <template #tip>
+              <div class="el-upload__tip">{{ t('platformOrders.importNotesFileHint') }}</div>
+            </template>
+          </el-upload>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="cancelImportNotes">{{ t('platformOrders.cancel') }}</el-button>
+        <el-button type="primary" :loading="notesImportLoading" :disabled="!notesImportFile" @click="submitImportNotes">
+          {{ t('platformOrders.importNotesStart') }}
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup name="PlatformOrders">
-import { computed, defineComponent, getCurrentInstance, h, onMounted, ref } from 'vue'
+import { computed, defineComponent, getCurrentInstance, h, onMounted, reactive, ref } from 'vue'
+import { ElMessage } from 'element-plus'
 import { ArrowDown, ArrowRight, CopyDocument, Edit } from '@element-plus/icons-vue'
-import { getPlatformOrder, listPlatformOrders, getOrderStatusMap, updateOrderSku, createShipments, exportPlatformOrders } from '@/api/wms/platformOrder'
+import { listPlatformOrders, getOrderStatusMap, updateOrderSku, createShipments, exportPlatformOrders, exportPlatformOrderWeeklyReport, importNotes, getAutoCreateConfig, updateAutoCreateConfig } from '@/api/wms/platformOrder'
 import { listAllPlatformShops, batchSyncOrders } from '@/api/wms/platformShop'
 import SkuSelect from '@/views/components/SkuSelect.vue'
 
@@ -631,14 +698,17 @@ const defaultTime = reactive([new Date(2000, 0, 1, 0, 0, 0), new Date(2000, 0, 1
 const loading = ref(false)
 const syncLoading = ref(false)
 const shipmentCreating = ref(false)
+const autoCreateEnabled = ref(true)
+const configLoading = ref(false)
+const canManageAutoCreateConfig = computed(() => proxy?.$auth?.hasPermi('wms:platform:config'))
 const exporting = ref(false)
+const weeklyReportExporting = ref(false)
 const shopLoading = ref(false)
 const total = ref(0)
 const orderList = ref([])
 const shopList = ref([])
 const expandedKeys = ref([])
 const detailCache = reactive({})
-const detailLoading = reactive({})
 const rawJsonCache = new Map()
 
 // ==================== Raw JSON 字段提取 ====================
@@ -699,6 +769,9 @@ function formatIsoTime(str) {
 
 const syncOpen = ref(false)
 const syncShopList = ref([])
+const notesImportOpen = ref(false)
+const notesImportFile = ref(null)
+const notesImportLoading = ref(false)
 const queryRef = ref(null)
 const syncRef = ref(null)
 
@@ -711,6 +784,7 @@ const queryParams = ref({
   orderStatus: undefined,
   sellerSku: undefined,
   skuMatched: '',
+  shipmentStatus: '',
   orderCreateTimeRange: []
 })
 
@@ -758,6 +832,7 @@ function normalizeQuery() {
   query.platformOrderId = query.platformOrderId?.trim() || undefined
   query.sellerSku = query.sellerSku?.trim() || undefined
   query.skuMatched = query.skuMatched || undefined
+  query.shipmentStatus = query.shipmentStatus || undefined
   if (!query.platform) delete query.platform
 
   if (query.orderCreateTimeRange?.length === 2) {
@@ -771,18 +846,28 @@ function normalizeQuery() {
   return query
 }
 
-function getList() {
+async function getList() {
   loading.value = true
   // 清空详情缓存，确保 canEditSku 等判断基于最新数据
   Object.keys(detailCache).forEach(k => delete detailCache[k])
   rawJsonCache.clear()
-  listPlatformOrders(normalizeQuery()).then(response => {
+  try {
+    const response = await listPlatformOrders(normalizeQuery())
     const data = response.data || {}
     orderList.value = response.rows || data.rows || data.records || (Array.isArray(data) ? data : [])
     total.value = response.total || data.total || orderList.value.length
-  }).catch(handleApiError).finally(() => {
+    // 深分页保护：返回空结果但 total > 0 说明当前页码超出可展示范围，自动重置到第1页
+    if (!orderList.value.length && total.value > 0 && queryParams.value.pageNum > 1) {
+      proxy.$modal.msgWarning(t('platformOrders.deepPageHint'))
+      queryParams.value.pageNum = 1
+      await getList()
+      return
+    }
+  } catch (e) {
+    handleApiError(e)
+  } finally {
     loading.value = false
-  })
+  }
 }
 
 function loadShops() {
@@ -806,18 +891,10 @@ function toggleOrder(order, index) {
 }
 
 function ensureDetail(order, index) {
+  // 列表数据已包含展开所需的全部字段，无需额外请求
   const key = orderKey(order, index)
-  const id = getOrderId(order)
-  const platform = order.platform || queryParams.value.platform
-  const shopAuthId = order.shopAuthId || queryParams.value.shopAuthId
-  if (!id || !platform || detailCache[key] || detailLoading[key]) return
-
-  detailLoading[key] = true
-  getPlatformOrder(id, platform, shopAuthId).then(response => {
-    detailCache[key] = response.data || response
-  }).catch(handleApiError).finally(() => {
-    detailLoading[key] = false
-  })
+  if (detailCache[key]) return
+  detailCache[key] = order
 }
 
 function handleQuery() {
@@ -832,15 +909,48 @@ function resetQuery() {
 }
 
 function handleCreateShipments() {
-  shipmentCreating.value = true
-  createShipments().then(() => {
-    proxy.$modal.msgSuccess(t('platformOrders.shipmentCreateSuccess'))
-    getList()
-  }).catch(() => {
-    proxy.$modal.msgError(t('platformOrders.shipmentCreateFailed'))
-  }).finally(() => {
-    shipmentCreating.value = false
-  })
+  proxy.$modal.confirm(t('platformOrders.createShipmentConfirm')).then(() => {
+    shipmentCreating.value = true
+    return createShipments().then(() => {
+      proxy.$modal.msgSuccess(t('platformOrders.shipmentCreateSubmitted'))
+      // 异步后台执行，延迟刷新列表
+      setTimeout(() => { getList() }, 3000)
+    }).catch(() => {
+      proxy.$modal.msgError(t('platformOrders.shipmentCreateFailed'))
+    }).finally(() => {
+      shipmentCreating.value = false
+    })
+  }).catch(() => {})
+}
+
+async function fetchAutoCreateConfig() {
+  configLoading.value = true
+  try {
+    const response = await getAutoCreateConfig()
+    const value = response?.data ?? response
+    autoCreateEnabled.value = value !== false && String(value).toLowerCase() !== 'false'
+  } catch (e) {
+    // 获取失败默认启用
+    autoCreateEnabled.value = true
+  } finally {
+    configLoading.value = false
+  }
+}
+
+async function handleAutoCreateToggle(value) {
+  if (!canManageAutoCreateConfig.value) return
+  try {
+    const response = await updateAutoCreateConfig(value)
+    const savedValue = response?.data ?? response
+    autoCreateEnabled.value = savedValue === true || String(savedValue).toLowerCase() === 'true'
+    proxy.$modal.msgSuccess(value
+      ? t('platformOrders.autoCreateEnabledMsg')
+      : t('platformOrders.autoCreateDisabledMsg'))
+  } catch (e) {
+    // 失败时回滚开关状态
+    autoCreateEnabled.value = !value
+    proxy.$modal.msgError(t('platformOrders.autoCreateConfigFailed'))
+  }
 }
 
 function handleExport() {
@@ -860,6 +970,27 @@ function handleExport() {
       proxy.$modal.msgError(t('platformOrders.exportFailed'))
     }).finally(() => {
       exporting.value = false
+    })
+  }).catch(() => {})
+}
+
+function handleWeeklyReportExport() {
+  proxy.$modal.confirm(t('platformOrders.weeklyReportExportConfirm')).then(() => {
+    weeklyReportExporting.value = true
+    const params = normalizeQuery()
+    delete params.pageNum
+    delete params.pageSize
+    exportPlatformOrderWeeklyReport(params).then((blob) => {
+      const link = document.createElement('a')
+      link.href = URL.createObjectURL(blob)
+      link.download = `财务周报_${new Date().toISOString().slice(0, 10)}.xlsx`
+      link.click()
+      URL.revokeObjectURL(link.href)
+      proxy.$modal.msgSuccess(t('platformOrders.exportSuccess'))
+    }).catch(() => {
+      proxy.$modal.msgError(t('platformOrders.exportFailed'))
+    }).finally(() => {
+      weeklyReportExporting.value = false
     })
   }).catch(() => {})
 }
@@ -931,10 +1062,6 @@ function orderKey(order, index) {
 
 function isExpanded(order, index) {
   return expandedKeys.value.includes(orderKey(order, index))
-}
-
-function isDetailLoading(order, index) {
-  return Boolean(detailLoading[orderKey(order, index)])
 }
 
 function getDisplayOrder(order, index) {
@@ -1013,6 +1140,25 @@ function getSkuText(item) {
   return item?.sellerSku || item?.skuName || item?.skuId
 }
 
+function isBrushOrder(order) {
+  return Number(order?.brushOrder || order?.isBrushOrder || 0) === 1
+}
+
+function hasSkuIssue(order, index) {
+  const ord = getDisplayOrder(order, index)
+  if (isBrushOrder(ord)) return true
+  const sku = String(getSkuText(getFirstItem(ord)) || '').trim()
+  if (!sku || sku === '-' || sku.toLowerCase() === 'empty') return true
+  const reason = String(ord?.skipReason || '')
+  return /SKU not matched|Seller SKU is empty|SKU未匹配|商家SKU为空/i.test(reason)
+}
+
+function getSkuIssueText(order, index) {
+  const ord = getDisplayOrder(order, index)
+  if (isBrushOrder(ord)) return t('platformOrders.skuIssueBrushOrder')
+  return t('platformOrders.skuIssue')
+}
+
 function getCurrency(order) {
   return order?.currency || getPayment(order).currency || 'USD'
 }
@@ -1065,14 +1211,14 @@ function formatMoney(value, currency = 'USD') {
 function formatOptionalMoney(value, currency) {
   if (value === null || value === undefined || value === '') return '-'
   const num = Number(value)
-  if (!Number.isFinite(num) || num === 0) return '-'
+  if (!Number.isFinite(num)) return '-'
   return formatMoney(value, currency)
 }
 
 function formatGrossProfit(order) {
   if (order.grossProfit === null || order.grossProfit === undefined || order.grossProfit === '') return '-'
   const num = Number(order.grossProfit)
-  if (!Number.isFinite(num) || num === 0) return '-'
+  if (!Number.isFinite(num)) return '-'
   return formatMoney(order.grossProfit, getCurrency(order))
 }
 
@@ -1089,6 +1235,17 @@ function formatEbayNetProfit(order) {
   if (!Number.isFinite(ta) || !Number.isFinite(c) || c <= 0) return '-'
   const netProfit = ta - f - c
   return formatMoney(netProfit, getCurrency(order))
+}
+
+/** eBay 平台收费率 = 平台交易费(totalMarketplaceFee) / 售价(totalAmount) * 100% */
+function formatMarketplaceFeeRate(order) {
+  const fee = order.totalMarketplaceFee
+  const totalAmount = order.totalAmount
+  if (fee == null || totalAmount == null) return '-'
+  const f = Number(fee)
+  const t = Number(totalAmount)
+  if (!Number.isFinite(f) || !Number.isFinite(t) || t === 0) return '-'
+  return (f / t * 100).toFixed(2) + '%'
 }
 
 const COUNTRY_MAP = {
@@ -1172,29 +1329,33 @@ function formatTaxes(taxes, currency) {
   return taxes
 }
 
+function formatSkipReason(reason) {
+  if (!reason) return ''
+  // 处理 "Order status not allowed: XXX" 格式：翻译前半部分，保留状态值
+  const colonIdx = reason.indexOf(':')
+  if (colonIdx > 0) {
+    const key = reason.substring(0, colonIdx)
+    const value = reason.substring(colonIdx + 1)
+    return t(`platformOrders.skipReason['${key}']`, key) + ': ' + value
+  }
+  return t(`platformOrders.skipReason['${reason}']`, reason)
+}
+
 function formatStatusText(status, platform) {
   if (!status) return '-'
-  // eBay 取消订单的 fulfillmentStatus 为 NOT_STARTED，卡片上映射为"已取消"
-  if (status === 'NOT_STARTED' && platform === 'EBAY') {
-    return orderStatusMap.value['CANCELLED'] || 'Cancelled'
-  }
-  return orderStatusMap.value[status] || status
+  return t(`platformOrders.orderStatus.${status}`, status)
 }
 
 function getStatusClass(status, platform) {
-  // eBay: NOT_STARTED = 已取消，使用 muted 样式
-  if (platform === 'EBAY' && status === 'NOT_STARTED') return 'muted'
   // 成功/完成
   if (['DELIVERED', 'COMPLETED', 'FULFILLED'].includes(status)) return 'success'
-  // 取消/退款/配送失败
-  if (['CANCELLED', 'REFUNDED', 'FAILED_DELIVERY'].includes(status)) return 'muted'
-  // 冻结
-  if (status === 'ON_HOLD') return 'warning'
-  // 待支付
-  if (status === 'UNPAID') return 'warning'
-  // 进行中：待发货/待取件/部分发货/运输中/处理中
-  if (['AWAITING_SHIPMENT', 'AWAITING_COLLECTION', 'PARTIALLY_SHIPPING', 'IN_TRANSIT', 'IN_PROGRESS'].includes(status)) return 'primary'
-  // 未开始
+  // 取消/退款/配送失败/支付失败
+  if (['CANCELLED', 'REFUNDED', 'FAILED_DELIVERY', 'PAYMENT_FAILED'].includes(status)) return 'muted'
+  // 冻结/待支付
+  if (['ON_HOLD', 'UNPAID'].includes(status)) return 'warning'
+  // 进行中：待发货/待取件/部分发货/运输中/处理中/已付款
+  if (['AWAITING_SHIPMENT', 'AWAITING_COLLECTION', 'PARTIALLY_SHIPPING', 'IN_TRANSIT', 'IN_PROGRESS', 'PAID'].includes(status)) return 'primary'
+  // 未开始/其他
   if (status === 'NOT_STARTED') return 'info'
   return 'info'
 }
@@ -1278,6 +1439,81 @@ function cancelSkuEdit() {
   selectedSkuForEdit.value = []
 }
 
+// ==================== 导入 Note ====================
+const importUploadRef = ref(null)
+const importFileList = ref([])
+
+function openImportNotesDialog() {
+  notesImportOpen.value = true
+  notesImportFile.value = null
+  importFileList.value = []
+}
+
+function handleImportFileChange(uploadFile) {
+  notesImportFile.value = uploadFile.raw
+}
+
+function handleImportFileRemove() {
+  notesImportFile.value = null
+}
+
+function cancelImportNotes() {
+  notesImportOpen.value = false
+  notesImportFile.value = null
+  importFileList.value = []
+}
+
+function submitImportNotes() {
+  if (!notesImportFile.value) {
+    proxy.$modal.msgWarning(t('platformOrders.importNotesSelectFile'))
+    return
+  }
+  notesImportLoading.value = true
+  importNotes(notesImportFile.value).then(response => {
+    const data = response.data || response
+    const matched = data.matched ?? 0
+    const noStock = data.noStock ?? 0
+    ElMessage({
+      message: t('platformOrders.importNoteResult', {
+        platform: data.platform || '-',
+        total: data.totalRows ?? 0,
+        updated: data.updated ?? 0,
+        skipped: data.skipped ?? 0,
+        skuMatched: matched + noStock,
+        noStock: noStock,
+        expectShip: matched,
+        brushOrder: data.brushOrder ?? 0,
+        unmatched: data.unmatched ?? 0,
+        notFound: data.notFound ?? 0
+      }),
+      type: 'success',
+      duration: 60000,
+      showClose: true
+    })
+    if (data.errors && data.errors.length > 0) {
+      setTimeout(() => {
+        ElMessage({ message: data.errors.slice(0, 3).join('; '), type: 'warning', duration: 60000, showClose: true })
+      }, 500)
+    }
+    if (data.unmatched > 0) {
+      setTimeout(() => {
+        ElMessage({
+          message: t('platformOrders.importNotesUnmatchedHint', { count: data.unmatched }),
+          type: 'warning',
+          duration: 60000,
+          showClose: true
+        })
+      }, 800)
+    }
+    cancelImportNotes()
+    getList()
+  }).catch(() => {
+    proxy.$modal.msgError(t('platformOrders.importNotesFailed'))
+  }).finally(() => {
+    notesImportLoading.value = false
+  })
+}
+
 function handleApiError(error) {
   const status = error?.response?.status
   const code = error?.response?.data?.code
@@ -1294,8 +1530,10 @@ function loadStatusMap() {
   getOrderStatusMap().then(response => {
     const data = response.data || response
     orderStatusMap.value = data || {}
-    // NOT_STARTED 合并到 CANCELLED，下拉框只保留 CANCELLED 代表"已取消"
-    orderStatusOptions.value = Object.keys(orderStatusMap.value).filter(k => k !== 'NOT_STARTED')
+    // 过滤下拉选项：NOT_STARTED 合并到 CANCELLED；PAID/PAYMENT_FAILED 为 eBay 计算值不可直接筛选
+    orderStatusOptions.value = Object.keys(orderStatusMap.value).filter(k =>
+      k !== 'NOT_STARTED' && k !== 'PAID' && k !== 'PAYMENT_FAILED'
+    )
   }).catch(() => {})
 }
 
@@ -1303,12 +1541,21 @@ onMounted(() => {
   loadShops()
   loadStatusMap()
   getList()
+  if (canManageAutoCreateConfig.value) {
+    fetchAutoCreateConfig()
+  }
 })
 </script>
 
 <style lang="scss">
 .platform-orders-page {
   background: transparent;
+}
+
+// ==================== Page Hint ====================
+.platform-orders-page .page-hint {
+  margin-bottom: 12px;
+  border-radius: 8px;
 }
 
 // ==================== Filter Card ====================
@@ -1413,6 +1660,41 @@ onMounted(() => {
 // ==================== Order Card ====================
 .orders-list {
   min-height: 160px;
+}
+
+// 横向滚动容器：小屏时订单卡片保持完整列宽，通过拖拽滚动查看
+.orders-scroll {
+  @media (max-width: 1440px) {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: #c0c6d0 transparent;
+
+    &::-webkit-scrollbar {
+      height: 6px;
+    }
+    &::-webkit-scrollbar-thumb {
+      border-radius: 3px;
+      background: #c0c6d0;
+      &:hover {
+        background: #98a2b3;
+      }
+    }
+    &::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .order-card {
+      min-width: 1400px;
+      overflow: visible;
+    }
+
+    // 为防止展开详情溢出圆角，给 detail-area 单独裁剪
+    .detail-area {
+      overflow: hidden;
+      border-radius: 0 0 10px 10px;
+    }
+  }
 }
 
 .order-card {
@@ -1532,10 +1814,20 @@ onMounted(() => {
   color: #175cd3;
   font-weight: 600;
   font-size: 13px;
+}
+
+.shipment-order-no.with-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+}
+
+.shipment-order-text {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  display: block;
 }
 
 .skip-reason-text {
@@ -1804,6 +2096,26 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 4px;
+  min-width: 0;
+}
+
+.sku-cell-problem {
+  padding: 6px 8px;
+  border: 1px solid #f04438;
+  border-radius: 6px;
+  background: #fff1f3;
+}
+
+.sku-value-problem {
+  color: #b42318;
+  font-weight: 700;
+}
+
+.sku-problem-tag {
+  flex-shrink: 0;
+  height: 18px;
+  line-height: 16px;
+  padding: 0 5px;
 }
 
 .sku-edit-btn {
@@ -1903,8 +2215,46 @@ onMounted(() => {
     width: calc(50% - 8px);
   }
 
+  // 筛选框标签宽度缩减
+  .platform-orders-page .filter-form {
+    :deep(.el-form-item__label) {
+      width: 84px !important;
+    }
+  }
+
+  // 筛选按钮行：允许换行
+  .platform-orders-page .filter-item-actions {
+    :deep(.el-form-item__content) {
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+  }
+  .platform-orders-page .action-btn {
+    min-width: 68px;
+    height: 32px;
+    font-size: 12px;
+    padding: 0 8px;
+  }
+
+  // 小屏保留与全屏一致的列宽，通过 .orders-scroll 横向拖拽查看
   .summary-row {
-    grid-template-columns: repeat(3, minmax(0, 1fr)) 36px;
+    gap: 10px;
+  }
+
+  .cell-label {
+    font-size: 10px;
+    margin-bottom: 2px;
+  }
+  .primary-value {
+    font-size: 13px;
+  }
+  .secondary-value {
+    font-size: 12px;
+  }
+
+  // 隐藏仅大屏展示的平台列
+  .platform-cell {
+    display: none;
   }
 
   .detail-grid {
@@ -1919,36 +2269,134 @@ onMounted(() => {
     width: 100%;
   }
 
-  .orders-header {
-    align-items: flex-start;
-    gap: 8px;
-    flex-direction: column;
+  // 筛选卡片紧凑化
+  .platform-orders-page .filter-card {
+    border-radius: 8px;
+    :deep(.el-card__body) {
+      padding: 8px 10px 0;
+    }
   }
 
-  .summary-row,
-  .detail-grid,
-  .notes-grid {
-    grid-template-columns: 1fr;
+  .platform-orders-page .filter-form {
+    column-gap: 6px;
+    :deep(.el-form-item) {
+      margin-bottom: 8px;
+    }
+    :deep(.el-form-item__label) {
+      width: 64px !important;
+      font-size: 11px;
+      line-height: 30px;
+    }
+  }
+
+  .platform-orders-page .action-btn {
+    min-width: 56px;
+    height: 28px;
+    font-size: 11px;
+    padding: 0 6px;
+    border-radius: 6px;
+  }
+
+  .platform-orders-page .filter-item-actions {
+    padding-top: 0;
+    :deep(.el-form-item__content) {
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+  }
+
+  .orders-header {
+    align-items: flex-start;
+    gap: 6px;
+    flex-direction: column;
+    margin-bottom: 6px;
+
+    h2 { font-size: 17px; }
+  }
+
+  // 手机端取消横向滚动，切换为单列堆叠布局
+  .orders-scroll {
+    overflow-x: visible;
+    -webkit-overflow-scrolling: auto;
+
+    .order-card {
+      min-width: 0;
+    }
+  }
+
+  .order-card {
+    margin-bottom: 8px;
+    border-radius: 8px;
   }
 
   .summary-row {
-    gap: 10px;
-    padding-right: 52px;
+    grid-template-columns: 1fr;
+    gap: 6px;
+    padding: 8px 44px 8px 12px;
+    min-height: auto;
     position: relative;
   }
 
+  // 单列布局：每列改为水平排列（label 在左，值在右）
+  .summary-cell {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .cell-label {
+    min-width: 56px;
+    max-width: 56px;
+    margin-bottom: 0;
+    font-size: 10px;
+    flex-shrink: 0;
+  }
+  .primary-value { font-size: 13px; }
+  .secondary-value { font-size: 12px; }
+
+  // 恢复所有列
+  .sku-cell,
+  .shipment-cell,
+  .platform-cell {
+    display: flex;
+  }
+
+  // 展开按钮绝对定位
   .expand-btn {
     position: absolute;
-    right: 12px;
-    top: 14px;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 30px;
+    height: 30px;
+  }
+
+  .detail-grid,
+  .notes-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
   }
 
   .detail-area {
-    padding: 14px;
+    padding: 10px;
   }
 
   .detail-panel {
-    padding: 14px;
+    padding: 10px;
   }
+}
+
+// ==================== 自动创建出库单开关 ====================
+.auto-create-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  padding: 0 4px;
+}
+
+.auto-create-label {
+  font-size: 12px;
+  color: #667085;
+  white-space: nowrap;
 }
 </style>

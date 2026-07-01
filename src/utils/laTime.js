@@ -1,11 +1,32 @@
 const LA_TIME_ZONE = 'America/Los_Angeles'
+const PLAIN_DATE_TIME_RE = /^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:[ T](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/
+const HAS_EXPLICIT_ZONE_RE = /(?:Z|[+-]\d{2}:?\d{2})$/i
 
 function pad2(value) {
   return String(value).padStart(2, '0')
 }
 
+function getPlainDateParts(value) {
+  if (typeof value !== 'string' || HAS_EXPLICIT_ZONE_RE.test(value.trim())) {
+    return null
+  }
+  const match = value.trim().match(PLAIN_DATE_TIME_RE)
+  if (!match) return null
+  return {
+    year: match[1],
+    month: pad2(match[2]),
+    day: pad2(match[3]),
+    hour: pad2(match[4] || '0'),
+    minute: pad2(match[5] || '0'),
+    second: pad2(match[6] || '0')
+  }
+}
+
 function getDateParts(time, withTime = true) {
   if (!time) return null
+  const plainParts = getPlainDateParts(time)
+  if (plainParts) return plainParts
+
   let value = time
   if (typeof value === 'string') {
     value = value.replace(/-/g, '/').replace('T', ' ').replace(/\.\d{3}.*/, '')
