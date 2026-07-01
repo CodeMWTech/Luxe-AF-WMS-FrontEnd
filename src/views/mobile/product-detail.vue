@@ -18,7 +18,7 @@
               class="mobile-detail-gallery__image"
               alt=""
               draggable="false"
-              @click="openImagePreview(index)"
+              @click="openImagePreview()"
             >
           </div>
         </div>
@@ -169,8 +169,8 @@ const gallerySlides = computed(() => {
   return [list[list.length - 1], ...list, list[0]]
 })
 
-function openImagePreview(index) {
-  previewIndex.value = index
+function openImagePreview() {
+  previewIndex.value = currentImageIndex.value
   previewVisible.value = true
 }
 
