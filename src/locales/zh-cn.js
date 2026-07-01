@@ -144,7 +144,7 @@
     product: '商品',
     sku: '品牌/SKU',
     salePrice: '售价',
-    cost: '成本',
+    cost: '商品成本',
     grossProfit: '毛利',
     status: '状态',
     buyerNote: '买家备注',
@@ -169,6 +169,8 @@
     labelShipment: '出库单',
     labelEditSku: '编辑',
     labelUncreated: '未创建',
+    skuIssue: 'SKU异常',
+    skuIssueBrushOrder: '刷单',
     // 订单信息栏
     orderInfoId: '订单ID',
     orderInfoCreateTime: '创建时间',
@@ -194,7 +196,7 @@
     itemShippingProviderName: '物流商名称',
     itemStatus: '状态',
     itemTaxes: '税费',
-    itemSubtotal: '单品小计(预估) 售价-成本-售价×5%提成-售价×1%运费',
+    itemSubtotal: '单品预估利润（售价-成本-售价×5%平台费-售价×1%运费）',
     // 客户信息
     buyerUserId: '用户ID',
     buyerNickname: '买家昵称',
@@ -230,8 +232,8 @@
     paymentMarketplaceFee: '平台交易费',
     paymentMarketplaceFeeRate: '平台收费率',
     paymentDueSeller: '卖家实收',
-    paymentGrossProfit: '毛利',
-    paymentEbayNetProfit: '毛利(售价-平台交易费-成本)',
+    paymentGrossProfit: '毛利（未扣平台费）',
+    paymentEbayNetProfit: '净毛利（售价-平台交易费-成本）',
     // 跳过原因
     skipReasonCancelled: '订单已取消',
     skipReasonBlankSku: '商家SKU为空',
@@ -243,7 +245,7 @@
     endTime: '结束时间',
     internalNotePlaceholder: '内部备注预留，后续接入接口',
     syncTitle: '同步平台订单',
-    syncHelp: '默认全选所有已授权店铺。不选择开始时间时，后端自动按各店铺 lastSyncTime 增量同步，首次同步默认最近 7 天。',
+    syncHelp: '默认全选所有已授权店铺。同步窗口按平台订单更新时间拉取；不选择开始时间时，后端自动按各店铺 lastSyncTime 增量同步，首次同步默认最近 7 天。',
     selectShops: '选择店铺',
     selectAll: '全选',
     selectedPrefix: '已选',
@@ -251,6 +253,10 @@
     selectedSuffix: '个可同步（总计',
     selectedShopSummary: '已选 {selected} 个，共 {eligible} 个可同步（总计 {total}）',
     authorized: '已授权',
+    syncStartTime: '更新时间开始',
+    syncEndTime: '更新时间结束',
+    syncStartTimePlaceholder: '请选择订单更新时间开始',
+    syncEndTimePlaceholder: '请选择订单更新时间结束',
     startTimePlaceholder: '请选择开始时间',
     endTimePlaceholder: '请选择结束时间',
     syncSelectedShops: '同步所选店铺',
@@ -264,6 +270,7 @@
     shipmentCreateSuccess: '出库暂存单创建完成',
     shipmentCreateSubmitted: '出库暂存单创建任务已提交，请稍后刷新查看',
     shipmentCreateFailed: '创建出库暂存单失败',
+    createShipmentConfirm: '创建出库单前，请确认已经提前导入所有刷单的 Note。未导入 Note 可能导致 SKU 未匹配或出库单遗漏。确定继续创建出库单吗？',
     shipmentDisabled: '出库暂存单功能已临时禁用，如有需要请联系管理员',
     autoCreateLabel: '自动创建出库单',
     autoCreateEnabledMsg: '自动创建出库单已启用',
@@ -271,7 +278,9 @@
     autoCreateConfigFailed: '更新配置失败',
     selectAtLeastOneShop: '请至少选择一个店铺',
     btnExport: '导出',
+    btnWeeklyReportExport: '周报导出',
     exportConfirm: '确认导出当前筛选条件下的全部平台订单吗？',
+    weeklyReportExportConfirm: '确认按当前筛选条件导出财务周报吗？',
     exportSuccess: '导出成功',
     exportFailed: '导出失败',
     syncStarted: '后台同步已启动（{count} 个店铺），数据将在几秒后刷新',
@@ -287,13 +296,13 @@
     goToFirstPage: '返回首页',
     btnImportNotes: '导入 Note',
     importNotesTitle: '从 CSV 导入 Note',
-    importNotesHelp: '支持 TikTok（ALL 开头）和 eBay（eBay 开头）导出的 CSV 文件。Note 字段用英文分号分割，前半部分为 SKU，后半部分为备注。已匹配 SKU 的订单将整个 Note 放入备注。',
+    importNotesHelp: '支持 TikTok（ALL 开头）和 eBay（eBay 开头）导出的 CSV 文件。Note 字段用分号分割，常见分号均可，前半部分为 SKU，后半部分为备注。若分号前为 empty（大小写不敏感），则识别为刷单工单，不写入 SKU，整条 Note 放入备注。已匹配 SKU 的订单将整个 Note 放入备注。',
     importNotesSelectFile: '选择 CSV 文件',
     importNotesFileHint: 'CSV 文件（.csv），支持 TikTok 和 eBay 格式',
     importNotesStart: '开始导入',
     importNotesSuccess: '导入完成',
     importNotesFailed: '导入失败',
-    importNoteResult: '{platform} 导入完成：上传 {total} 条，更新 {updated} 条，匹配SKU {skuMatched} 条（其中无库存 {noStock} 条），预计出库 {expectShip} 条，未匹配SKU {unmatched} 条，未找到订单 {notFound} 条',
+    importNoteResult: '{platform} 导入完成：上传 {total} 条，更新 {updated} 条，匹配SKU {skuMatched} 条（其中无库存 {noStock} 条），刷单 {brushOrder} 条，预计出库 {expectShip} 条，未匹配SKU {unmatched} 条，未找到订单 {notFound} 条',
     importNotesUnmatchedHint: '有 {count} 条未匹配SKU，请检查导入文件中 Note 列的 SKU 数据是否正确',
     // 未创建出库单原因
     skipReason: {
@@ -302,7 +311,8 @@
       'Seller SKU is empty': '商家SKU为空',
       'SKU not matched': 'SKU未匹配',
       'No stock': '无库存',
-      'Manually removed from shipment': '人工从出库单中清除'
+      'Manually removed from shipment': '人工从出库单中清除',
+      'Brush order': '刷单工单'
     },
     // 订单状态
     orderStatus: {
@@ -657,6 +667,3 @@
     switchToDesktop: '桌面版',
   },
 }
-
-
-
