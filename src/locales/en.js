@@ -144,7 +144,7 @@
     product: 'Product',
     sku: 'Brand/SKU',
     salePrice: 'Price',
-    cost: 'Cost',
+    cost: 'Item Cost',
     grossProfit: 'Profit',
     status: 'Status',
     buyerNote: 'Buyer Note',
@@ -169,6 +169,8 @@
     labelShipment: 'Shipment',
     labelEditSku: 'Edit',
     labelUncreated: 'Not created',
+    skuIssue: 'SKU Issue',
+    skuIssueBrushOrder: 'Brush',
     // Order info bar
     orderInfoId: 'Order ID',
     orderInfoCreateTime: 'Created',
@@ -194,7 +196,7 @@
     itemShippingProviderName: 'Carrier Name',
     itemStatus: 'Status',
     itemTaxes: 'Taxes',
-    itemSubtotal: 'Item Subtotal (Est.) Price-Cost-Price×5%-Price×1%',
+    itemSubtotal: 'Estimated Item Profit (Price - Cost - 5% fee - 1% shipping)',
     // Customer
     buyerUserId: 'User ID',
     buyerNickname: 'Nickname',
@@ -230,8 +232,8 @@
     paymentMarketplaceFee: 'Marketplace Fee',
     paymentMarketplaceFeeRate: 'Platform Fee Rate',
     paymentDueSeller: 'Due Seller',
-    paymentGrossProfit: 'Gross Profit',
-    paymentEbayNetProfit: 'Net Profit (Price-Fee-Cost)',
+    paymentGrossProfit: 'Gross Profit (Before Marketplace Fees)',
+    paymentEbayNetProfit: 'Net Profit (Sale - Marketplace Fee - Cost)',
     // Skip reasons
     skipReasonCancelled: 'Order cancelled',
     skipReasonBlankSku: 'Seller SKU is empty',
@@ -276,7 +278,9 @@
     autoCreateConfigFailed: 'Failed to update config',
     selectAtLeastOneShop: 'Please select at least one shop',
     btnExport: 'Export',
+    btnWeeklyReportExport: 'Weekly Report',
     exportConfirm: 'Confirm to export all platform orders under current filters?',
+    weeklyReportExportConfirm: 'Confirm to export the weekly financial report under current filters?',
     exportSuccess: 'Export successful',
     exportFailed: 'Export failed',
     syncStarted: 'Background sync started ({count} shops). Data will refresh in a few seconds',
@@ -292,13 +296,13 @@
     goToFirstPage: 'Back to first page',
     btnImportNotes: 'Import Notes',
     importNotesTitle: 'Import Notes from CSV',
-    importNotesHelp: 'Supports CSV files exported from TikTok (ALL prefix) and eBay (eBay prefix). Note field uses semicolon to separate SKU (first part) and remark (second part). For orders with matched SKU, the entire note is placed in remarks.',
+    importNotesHelp: 'Supports CSV files exported from TikTok (ALL prefix) and eBay (eBay prefix). Note uses a semicolon to separate SKU (first part) and remark (second part), and common semicolon variants are accepted. If the first part is the literal value empty (case-insensitive), it is treated as a brush order, the SKU is not updated, and the full Note is saved to remarks. For orders with matched SKU, the entire note is placed in remarks.',
     importNotesSelectFile: 'Select CSV file',
     importNotesFileHint: 'CSV file (.csv), supports TikTok and eBay format',
     importNotesStart: 'Start Import',
     importNotesSuccess: 'Import complete',
     importNotesFailed: 'Import failed',
-    importNoteResult: '{platform} import: {total} uploaded, {updated} updated, {skuMatched} SKU matched ({noStock} no stock), {expectShip} expect ship, {unmatched} SKU unmatched, {notFound} orders not found',
+    importNoteResult: '{platform} import: {total} uploaded, {updated} updated, {skuMatched} SKU matched ({noStock} no stock), {brushOrder} brush orders, {expectShip} expect ship, {unmatched} SKU unmatched, {notFound} orders not found',
     importNotesUnmatchedHint: '{count} SKU unmatched, please check the Note column data in the imported file',
     // Skip reason for auto-shipment
     skipReason: {
@@ -307,7 +311,8 @@
       'Seller SKU is empty': 'Seller SKU is empty',
       'SKU not matched': 'SKU not matched',
       'No stock': 'No stock',
-      'Manually removed from shipment': 'Manually removed from shipment'
+      'Manually removed from shipment': 'Manually removed from shipment',
+      'Brush order': 'Brush order'
     },
     // Order status
     orderStatus: {
@@ -592,6 +597,3 @@
     save: 'Save',
   },
 }
-
-
-

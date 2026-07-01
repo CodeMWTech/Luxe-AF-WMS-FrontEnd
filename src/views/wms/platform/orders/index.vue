@@ -120,6 +120,7 @@
           <el-button icon="Refresh" class="action-btn" @click="resetQuery">{{ t('platformOrders.btnReset') }}</el-button>
           <el-button type="success" icon="RefreshRight" class="action-btn" @click="openSyncDialog" v-hasPermi="['wms:platform:sync']">{{ t('platformOrders.btnSync') }}</el-button>
           <el-button type="info" icon="Download" class="action-btn" :loading="exporting" @click="handleExport" v-hasPermi="['wms:platform:list']">{{ t('platformOrders.btnExport') }}</el-button>
+          <el-button type="info" icon="Document" class="action-btn" :loading="weeklyReportExporting" @click="handleWeeklyReportExport" v-hasPermi="['wms:platform:list']">{{ t('platformOrders.btnWeeklyReportExport') }}</el-button>
           <el-button type="primary" icon="Upload" class="action-btn" @click="openImportNotesDialog" v-hasPermi="['wms:platform:edit']">{{ t('platformOrders.btnImportNotes') }}</el-button>
           <span v-if="canManageAutoCreateConfig" class="auto-create-toggle">
             <el-switch
@@ -207,10 +208,11 @@
               <span class="primary-value ellipsis">{{ displayValue(getFirstItem(order).productName) }}</span>
             </div>
 
-            <div class="summary-cell sku-cell">
+            <div class="summary-cell sku-cell" :class="{ 'sku-cell-problem': hasSkuIssue(order, index) }">
               <span class="cell-label">{{ t('platformOrders.sku') }}</span>
               <div class="sku-row">
-                <span class="secondary-value ellipsis">{{ displayValue(getSkuText(getFirstItem(order))) }}</span>
+                <span :class="['secondary-value', 'ellipsis', { 'sku-value-problem': hasSkuIssue(order, index) }]">{{ displayValue(getSkuText(getFirstItem(order))) }}</span>
+                <el-tag v-if="hasSkuIssue(order, index)" type="danger" effect="dark" size="small" class="sku-problem-tag">{{ getSkuIssueText(order, index) }}</el-tag>
                 <el-button v-if="canEditSku(order, index)" link size="small" class="sku-edit-btn" :icon="Edit" @click.stop="startSkuEdit(order, index, getFirstItem(order))" v-hasPermi="['wms:platform:edit']">{{ t('platformOrders.labelEditSku') }}</el-button>
               </div>
             </div>
@@ -218,7 +220,16 @@
             <div class="summary-cell shipment-cell">
               <span class="cell-label">{{ t('platformOrders.labelShipment') }}</span>
               <template v-if="order.shipmentOrderId">
-                <span class="primary-value shipment-order-no">{{ order.shipmentOrderNo || order.shipmentOrderId }}</span>
+                <span class="primary-value shipment-order-no with-copy" @click.stop>
+                  <span class="shipment-order-text">{{ order.shipmentOrderNo || order.shipmentOrderId }}</span>
+                  <el-button
+                    link
+                    class="copy-btn"
+                    :icon="CopyDocument"
+                    v-copyText="String(order.shipmentOrderNo || order.shipmentOrderId)"
+                    v-copyText:callback="copyTextSuccess"
+                  />
+                </span>
               </template>
               <template v-else>
                 <span v-if="order.skipReason" class="skip-reason-text">{{ formatSkipReason(order.skipReason) }}</span>
@@ -653,7 +664,7 @@
 import { computed, defineComponent, getCurrentInstance, h, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ArrowDown, ArrowRight, CopyDocument, Edit } from '@element-plus/icons-vue'
-import { listPlatformOrders, getOrderStatusMap, updateOrderSku, createShipments, exportPlatformOrders, importNotes, getAutoCreateConfig, updateAutoCreateConfig } from '@/api/wms/platformOrder'
+import { listPlatformOrders, getOrderStatusMap, updateOrderSku, createShipments, exportPlatformOrders, exportPlatformOrderWeeklyReport, importNotes, getAutoCreateConfig, updateAutoCreateConfig } from '@/api/wms/platformOrder'
 import { listAllPlatformShops, batchSyncOrders } from '@/api/wms/platformShop'
 import SkuSelect from '@/views/components/SkuSelect.vue'
 
@@ -691,6 +702,7 @@ const autoCreateEnabled = ref(true)
 const configLoading = ref(false)
 const canManageAutoCreateConfig = computed(() => proxy?.$auth?.hasPermi('wms:platform:config'))
 const exporting = ref(false)
+const weeklyReportExporting = ref(false)
 const shopLoading = ref(false)
 const total = ref(0)
 const orderList = ref([])
@@ -962,6 +974,27 @@ function handleExport() {
   }).catch(() => {})
 }
 
+function handleWeeklyReportExport() {
+  proxy.$modal.confirm(t('platformOrders.weeklyReportExportConfirm')).then(() => {
+    weeklyReportExporting.value = true
+    const params = normalizeQuery()
+    delete params.pageNum
+    delete params.pageSize
+    exportPlatformOrderWeeklyReport(params).then((blob) => {
+      const link = document.createElement('a')
+      link.href = URL.createObjectURL(blob)
+      link.download = `财务周报_${new Date().toISOString().slice(0, 10)}.xlsx`
+      link.click()
+      URL.revokeObjectURL(link.href)
+      proxy.$modal.msgSuccess(t('platformOrders.exportSuccess'))
+    }).catch(() => {
+      proxy.$modal.msgError(t('platformOrders.exportFailed'))
+    }).finally(() => {
+      weeklyReportExporting.value = false
+    })
+  }).catch(() => {})
+}
+
 function openSyncDialog() {
   syncForm.value.startTime = undefined
   syncForm.value.endTime = undefined
@@ -1105,6 +1138,25 @@ function getFirstItem(order) {
 
 function getSkuText(item) {
   return item?.sellerSku || item?.skuName || item?.skuId
+}
+
+function isBrushOrder(order) {
+  return Number(order?.brushOrder || order?.isBrushOrder || 0) === 1
+}
+
+function hasSkuIssue(order, index) {
+  const ord = getDisplayOrder(order, index)
+  if (isBrushOrder(ord)) return true
+  const sku = String(getSkuText(getFirstItem(ord)) || '').trim()
+  if (!sku || sku === '-' || sku.toLowerCase() === 'empty') return true
+  const reason = String(ord?.skipReason || '')
+  return /SKU not matched|Seller SKU is empty|SKU未匹配|商家SKU为空/i.test(reason)
+}
+
+function getSkuIssueText(order, index) {
+  const ord = getDisplayOrder(order, index)
+  if (isBrushOrder(ord)) return t('platformOrders.skuIssueBrushOrder')
+  return t('platformOrders.skuIssue')
 }
 
 function getCurrency(order) {
@@ -1430,6 +1482,7 @@ function submitImportNotes() {
         skuMatched: matched + noStock,
         noStock: noStock,
         expectShip: matched,
+        brushOrder: data.brushOrder ?? 0,
         unmatched: data.unmatched ?? 0,
         notFound: data.notFound ?? 0
       }),
@@ -1761,10 +1814,20 @@ onMounted(() => {
   color: #175cd3;
   font-weight: 600;
   font-size: 13px;
+}
+
+.shipment-order-no.with-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+}
+
+.shipment-order-text {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  display: block;
 }
 
 .skip-reason-text {
@@ -2033,6 +2096,26 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 4px;
+  min-width: 0;
+}
+
+.sku-cell-problem {
+  padding: 6px 8px;
+  border: 1px solid #f04438;
+  border-radius: 6px;
+  background: #fff1f3;
+}
+
+.sku-value-problem {
+  color: #b42318;
+  font-weight: 700;
+}
+
+.sku-problem-tag {
+  flex-shrink: 0;
+  height: 18px;
+  line-height: 16px;
+  padding: 0 5px;
 }
 
 .sku-edit-btn {

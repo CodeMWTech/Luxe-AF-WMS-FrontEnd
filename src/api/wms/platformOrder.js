@@ -66,6 +66,16 @@ export function exportPlatformOrders(query) {
   })
 }
 
+// 导出平台订单财务周报 Excel
+export function exportPlatformOrderWeeklyReport(query) {
+  return request({
+    url: '/wms/platform/orders/weekly-report',
+    method: 'post',
+    params: query,
+    responseType: 'blob'
+  })
+}
+
 // 获取自动创建出库单开关配置
 export function getAutoCreateConfig() {
   return request({
