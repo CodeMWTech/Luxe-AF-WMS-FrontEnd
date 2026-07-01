@@ -5,6 +5,11 @@ html.mobile-app #app {
   overflow-x: hidden;
 }
 
+html.mobile-app {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 .mobile-layout {
   min-height: 100vh;
   display: flex;
@@ -17,7 +22,7 @@ html.mobile-app #app {
   top: 0;
   z-index: 20;
   display: grid;
-  grid-template-columns: 72px 1fr 72px;
+  grid-template-columns: 56px 1fr auto;
   align-items: center;
   min-height: 48px;
   padding: 0 8px;
@@ -34,6 +39,18 @@ html.mobile-app #app {
 
 .mobile-header__side--right {
   justify-content: flex-end;
+  gap: 2px;
+}
+
+.mobile-header__lang-btn {
+  padding: 0 6px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.mobile-header__logout-btn {
+  padding: 0 4px;
+  font-size: 13px;
 }
 
 .mobile-header__title {
@@ -49,9 +66,10 @@ html.mobile-app #app {
 .mobile-main {
   flex: 1;
   width: 100%;
-  max-width: 640px;
+  max-width: min(640px, 100%);
   margin: 0 auto;
-  padding: 12px 12px calc(12px + env(safe-area-inset-bottom));
+  padding: 12px max(12px, env(safe-area-inset-right)) calc(12px + env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  box-sizing: border-box;
 }
 
 .mobile-page {
@@ -113,6 +131,13 @@ html.mobile-app #app {
   align-items: start;
 }
 
+.mobile-layout.is-en,
+.mobile-login.is-en {
+  .mobile-field-row {
+    grid-template-columns: 118px 1fr;
+  }
+}
+
 .mobile-field-row__label {
   color: #909399;
   font-size: 13px;
@@ -155,8 +180,9 @@ html.mobile-app #app {
   max-width: 400px;
   border-radius: 6px;
   background: #ffffff;
-  padding: 22px 22px 8px;
+  padding: 18px 22px 8px;
   box-shadow: 0 8px 24px rgba(31, 45, 61, 0.12);
+  box-sizing: border-box;
 
   .el-input {
     height: 40px;
@@ -167,12 +193,26 @@ html.mobile-app #app {
   }
 }
 
+.mobile-login__form-top {
+  display: flex;
+  justify-content: flex-end;
+  margin: -4px 0 4px;
+}
+
+.mobile-login__lang-btn {
+  padding: 0;
+  font-size: 14px;
+  font-weight: 500;
+}
+
 .mobile-login__title {
   margin: 0 auto 8px;
   text-align: center;
   color: #707070;
-  font-size: 20px;
+  font-size: clamp(17px, 4.5vw, 20px);
+  line-height: 1.35;
   font-weight: 600;
+  word-break: break-word;
 }
 
 .mobile-login__subtitle {
@@ -182,21 +222,36 @@ html.mobile-app #app {
   font-size: 13px;
 }
 
+.mobile-login__captcha-item {
+  .el-form-item__content {
+    display: block;
+  }
+}
+
+.mobile-login__captcha-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
 .mobile-login__code-input {
-  width: 63%;
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto !important;
 }
 
 .mobile-login__code-img {
-  width: 33%;
+  flex: 0 0 auto;
+  width: clamp(96px, 28vw, 120px);
   height: 40px;
-  float: right;
 
   img {
+    display: block;
     width: 100%;
     height: 40px;
     cursor: pointer;
-    vertical-align: middle;
-    padding-left: 12px;
+    object-fit: contain;
     box-sizing: border-box;
   }
 }
@@ -213,6 +268,34 @@ html.mobile-app #app {
 .mobile-login__submit {
   width: 100%;
   height: 40px;
+}
+
+@media (max-width: 768px) {
+  .mobile-login {
+    padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+  }
+
+  .mobile-login__form {
+    width: min(100%, 420px);
+  }
+}
+
+@media (max-width: 390px) {
+  .mobile-header {
+    grid-template-columns: 44px 1fr auto;
+  }
+
+  .mobile-header__title {
+    font-size: 15px;
+  }
+
+  .mobile-search-bar {
+    flex-wrap: wrap;
+  }
+
+  .mobile-search-bar .el-button {
+    width: 100%;
+  }
 }
 
 @media (orientation: landscape) and (max-height: 500px) {

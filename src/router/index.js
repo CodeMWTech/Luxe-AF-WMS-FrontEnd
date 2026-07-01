@@ -39,33 +39,46 @@ export const constantRoutes = [
   },
   {
     path: '/login',
-    component: () => import('@/views/login'),
+    component: () => import('@/views/login/index.vue'),
     hidden: true
   },
   {
     path: '/m/login',
-    component: () => import('@/views/mobile/login.vue'),
-    hidden: true,
-    meta: { title: '手机登录', titleEn: 'Mobile Login', mobile: true }
+    redirect: '/login',
+    hidden: true
+  },
+  {
+    path: '/m/sku-search',
+    redirect: '/sku-search',
+    hidden: true
+  },
+  {
+    path: '/m/product/:skuId',
+    redirect: to => `/product/${to.params.skuId}`,
+    hidden: true
   },
   {
     path: '/m',
+    redirect: '/sku-search',
+    hidden: true
+  },
+  {
+    path: '/mobile-shell',
     component: () => import('@/layout/MobileLayout.vue'),
     hidden: true,
-    redirect: '/m/sku-search',
-    meta: { mobile: true },
+    meta: { skuLookup: true },
     children: [
       {
-        path: 'sku-search',
+        path: '/sku-search',
         name: 'MobileSkuSearch',
         component: () => import('@/views/mobile/sku-search.vue'),
-        meta: { title: 'SKU搜索', titleEn: 'SKU Search', mobile: true }
+        meta: { title: 'SKU搜索', titleEn: 'SKU Search', skuLookup: true }
       },
       {
-        path: 'product/:skuId',
+        path: '/product/:skuId',
         name: 'MobileProductDetail',
         component: () => import('@/views/mobile/product-detail.vue'),
-        meta: { title: '商品详情', titleEn: 'Product Detail', mobile: true }
+        meta: { title: '商品详情', titleEn: 'Product Detail', skuLookup: true }
       }
     ]
   },

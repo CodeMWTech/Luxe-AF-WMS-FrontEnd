@@ -1,8 +1,19 @@
 <template>
-  <div class="mobile-login">
+  <div class="mobile-login" :class="{ 'is-en': isEn }">
     <el-form ref="loginRef" :model="loginForm" :rules="loginRules" class="mobile-login__form" @submit.prevent="handleLogin">
+      <div class="mobile-login__form-top">
+        <el-button
+          link
+          type="primary"
+          class="mobile-login__lang-btn"
+          data-runtime-i18n-ignore="true"
+          @click="toggleLanguage"
+        >
+          {{ languageButtonText }}
+        </el-button>
+      </div>
       <h3 class="mobile-login__title">{{ $t('login.title') }}</h3>
-      <p class="mobile-login__subtitle">手机端 SKU 查询</p>
+      <p class="mobile-login__subtitle">{{ loginSubtitle }}</p>
       <el-form-item prop="username">
         <el-input
           v-model="loginForm.username"
@@ -25,18 +36,20 @@
           <template #prefix><svg-icon icon-class="password" class="input-icon" /></template>
         </el-input>
       </el-form-item>
-      <el-form-item v-if="captchaEnabled" prop="code">
-        <el-input
-          v-model="loginForm.code"
-          auto-complete="off"
-          :placeholder="$t('login.codePlaceholder')"
-          class="mobile-login__code-input"
-          @keyup.enter="handleLogin"
-        >
-          <template #prefix><svg-icon icon-class="validCode" class="input-icon" /></template>
-        </el-input>
-        <div class="mobile-login__code-img">
-          <img :src="codeUrl" alt="captcha" @click="getCode">
+      <el-form-item v-if="captchaEnabled" prop="code" class="mobile-login__captcha-item">
+        <div class="mobile-login__captcha-row">
+          <el-input
+            v-model="loginForm.code"
+            auto-complete="off"
+            :placeholder="$t('login.codePlaceholder')"
+            class="mobile-login__code-input"
+            @keyup.enter="handleLogin"
+          >
+            <template #prefix><svg-icon icon-class="validCode" class="input-icon" /></template>
+          </el-input>
+          <div class="mobile-login__code-img">
+            <img :src="codeUrl" alt="captcha" @click="getCode">
+          </div>
         </div>
       </el-form-item>
       <el-checkbox v-model="loginForm.rememberMe" class="mobile-login__remember">
@@ -57,18 +70,21 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import Cookies from 'js-cookie'
 import { useI18n } from 'vue-i18n'
 import { getCodeImg } from '@/api/login'
 import { decrypt, encrypt } from '@/utils/jsencrypt'
 import useUserStore from '@/store/modules/user'
+import { useMobileLanguage } from '@/composables/useMobileLanguage'
+import { resolvePostLoginRedirect } from '@/utils/mobileDevice'
 
 const router = useRouter()
 const route = useRoute()
 const userStore = useUserStore()
 const { t } = useI18n()
+const { isEn, languageButtonText, toggleLanguage, syncLanguageFromStore } = useMobileLanguage()
 
 const loginRef = ref(null)
 const loading = ref(false)
@@ -89,6 +105,11 @@ const loginRules = computed(() => ({
   code: [{ required: true, trigger: 'change', message: t('login.ruleCodeRequired') }]
 }))
 
+const loginSubtitle = computed(() => {
+  const text = t('mobile.loginSubtitle')
+  return text !== 'mobile.loginSubtitle' ? text : (isEn.value ? 'Mobile SKU Lookup' : '手机端 SKU 查询')
+})
+
 function handleLogin() {
   loginRef.value?.validate(valid => {
     if (!valid) return
@@ -103,8 +124,7 @@ function handleLogin() {
       Cookies.remove('rememberMe')
     }
     userStore.login(loginForm.value).then(() => {
-      const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/m/sku-search'
-      router.push(redirect)
+      router.push(resolvePostLoginRedirect(route.query.redirect))
     }).catch(() => {
       loading.value = false
       if (captchaEnabled.value) {
@@ -139,6 +159,10 @@ function getCookie() {
 
 getCode()
 getCookie()
+
+onMounted(() => {
+  syncLanguageFromStore()
+})
 </script>
 
 <style scoped lang="scss">

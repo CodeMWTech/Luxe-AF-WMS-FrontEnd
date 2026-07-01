@@ -1,3 +1,5 @@
+import { listShipmentOrder } from '@/api/wms/shipmentOrder'
+
 export function displayValue(value) {
   if (value === null || value === undefined || value === '') return '--'
   return value
@@ -56,7 +58,7 @@ export function normalizeInventorySearchRow(row = {}) {
 export function normalizeSkuSearchRow(raw = {}) {
   const item = raw.item || {}
   const itemSku = raw.itemSku || {}
-  const skuId = raw.skuId ?? raw.id ?? itemSku.id
+  const skuId = raw.skuId ?? raw.id ?? raw.itemSkuId ?? itemSku.id
   return {
     skuId,
     itemId: item.id ?? raw.itemId,
@@ -65,6 +67,8 @@ export function normalizeSkuSearchRow(raw = {}) {
     brandName: pickField(item, 'brandName') || pickField(raw, 'brandName'),
     modelName: pickField(item, 'modelName') || pickField(raw, 'modelName'),
     itemCondition: pickField(item, 'itemCondition') || pickField(raw, 'itemCondition'),
+    costPrice: pickField(itemSku, 'costPrice') ?? pickField(raw, 'costPrice'),
+    sellingPrice: pickField(itemSku, 'sellingPrice') ?? pickField(raw, 'sellingPrice'),
     quantity: 0,
     itemImage: pickField(item, 'mainThumbUrl', 'itemImage'),
     warehouseName: undefined,
@@ -169,6 +173,65 @@ export function mergeInventoryIntoDetail(detail, inventoryRow = {}) {
     detail.sellingPrice = inventoryRow.sellingPrice
   }
   return detail
+}
+
+export const INVENTORY_HISTORY_ORDER_TYPE = {
+  RECEIPT: '1',
+  SHIPMENT: '2'
+}
+
+function resolveWarehouseName(warehouseId, warehouseMap) {
+  if (warehouseId === null || warehouseId === undefined || !warehouseMap) return undefined
+  return warehouseMap.get?.(warehouseId)?.warehouseName
+}
+
+function sortByCreateTimeDesc(rows = []) {
+  return [...rows].sort((a, b) => new Date(b.createTime || 0) - new Date(a.createTime || 0))
+}
+
+/** 从库存记录汇总入库/出库/当前库存（与桌面端「库存记录」同源） */
+export function summarizeInventoryHistoryRows(rows = [], warehouseMap) {
+  if (!Array.isArray(rows) || !rows.length) return null
+
+  const receiptRows = sortByCreateTimeDesc(
+    rows.filter(row => String(row.orderType) === INVENTORY_HISTORY_ORDER_TYPE.RECEIPT)
+  )
+  const shipmentRows = sortByCreateTimeDesc(
+    rows.filter(row => String(row.orderType) === INVENTORY_HISTORY_ORDER_TYPE.SHIPMENT)
+  )
+  const latestRow = sortByCreateTimeDesc(rows)[0]
+  const quantity = latestRow?.afterQuantity ?? latestRow?.beforeQuantity
+
+  return {
+    quantity,
+    warehouseName: resolveWarehouseName(latestRow?.warehouseId, warehouseMap),
+    receiptTime: receiptRows[0]?.createTime,
+    shipmentTime: shipmentRows[0]?.createTime,
+    shipmentOrderNo: shipmentRows[0]?.orderNo,
+    outboundPlatform: undefined
+  }
+}
+
+/** 出库平台：从出库单关联商户解析，不依赖 platform 订单表 */
+export async function enrichOutboundPlatform(summary, merchantMap) {
+  if (!summary?.shipmentOrderNo || !merchantMap) return summary
+
+  try {
+    const res = await listShipmentOrder({
+      orderNo: summary.shipmentOrderNo,
+      pageNum: 1,
+      pageSize: 1
+    })
+    const order = res?.rows?.[0]
+    if (order?.merchantId) {
+      summary.outboundPlatform = merchantMap.get(order.merchantId)?.merchantName
+    }
+  } catch (_) {
+    // ignore
+  }
+
+  const { shipmentOrderNo, ...rest } = summary
+  return rest
 }
 
 export function summarizeInventoryRows(rows = []) {
