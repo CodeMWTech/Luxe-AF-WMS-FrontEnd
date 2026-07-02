@@ -580,6 +580,9 @@
                         支持拖拽调整顺序，点击图片预览原图
                       </div>
                     </el-upload>
+                    <div class="image-rule-tip">
+                      图片上传规则：主图必须清晰展示商品正面，不得包含水印、拼图、无关背景或遮挡；如商品包含 COA 证书，必须上传清晰完整的 COA 图片且把 COA 图片放置为最后一张。
+                    </div>
                     <div v-if="form.id && hasUploadingImages" class="upload-state-tip">
                       当前有 {{ uploadingImageCount }} 张图片上传中，上传完成后才可保存。
                     </div>
@@ -935,6 +938,28 @@ const initCategoryFormData = {
   orderNum: 0,
   status: undefined,
 }
+
+function hasRequiredItemImage() {
+  if (form.value?.id) {
+    return Array.isArray(form.value.imageList) && form.value.imageList.some((img) => img?.uploadStatus !== 'failed')
+  }
+  return pendingImageFiles.value.length > 0
+}
+
+function validateItemImages(rule, value, callback) {
+  if (hasRequiredItemImage()) {
+    callback()
+    return
+  }
+  callback(new Error('商品图片不能为空'))
+}
+
+function validateItemImagesOnNextTick() {
+  nextTick(() => {
+    itemFormRef.value?.validateField?.('imageList')
+  })
+}
+
 const data = reactive({
   form: {...initFormData},
   queryParams: {
@@ -973,6 +998,9 @@ const data = reactive({
     ],
     skuCode: [
       {required: true, message: "SKU编码不能为空", trigger: "blur"}
+    ],
+    imageList: [
+      { required: true, validator: validateItemImages, trigger: "change" }
     ],
   }
 });
@@ -1268,6 +1296,7 @@ async function customUpload(options) {
     if (localImage.errorMessage) delete localImage.errorMessage
   }
   normalizeUploadedImageMeta()
+  validateItemImagesOnNextTick()
   startImagePolling()
   ElMessage({ type: 'success', message: '图片已加入上传队列，正在后台处理', duration: 3000 })
   try {
@@ -1284,15 +1313,18 @@ async function customUpload(options) {
       }
       localImage.itemId = form.value.id
       localImage.uploadStatus = localImage.imageId != null && (localImage.url || localImage.thumbUrl) ? 'done' : 'uploading'
+      validateItemImagesOnNextTick()
       startImagePolling()
       nextTick(() => itemImageUploadRef.value?.clearFiles?.())
     } else {
       localImage.uploadStatus = 'failed'
+      validateItemImagesOnNextTick()
       localImage.errorMessage = res.msg || '上传失败'
       proxy?.$modal.msgError(localImage.errorMessage)
     }
   } catch (e) {
     localImage.uploadStatus = 'failed'
+    validateItemImagesOnNextTick()
     localImage.errorMessage = '上传失败'
     proxy?.$modal.msgError('上传失败')
   }
@@ -1344,6 +1376,7 @@ function handleSelectedImageFiles(files) {
     const url = URL.createObjectURL(file)
     pendingImageFiles.value.push({ file, url })
   })
+  validateItemImagesOnNextTick()
 }
 
 /** el-upload 变更事件：点击选择文件也走统一入口 */
@@ -1357,6 +1390,7 @@ function removePendingImage(index) {
   const item = pendingImageFiles.value[index]
   if (item?.url) URL.revokeObjectURL(item.url)
   pendingImageFiles.value.splice(index, 1)
+  validateItemImagesOnNextTick()
 }
 
 /** 删除已上传的商品图片：调用后端删除接口并从列表中移除 */
@@ -1369,6 +1403,7 @@ async function removeItemImage(index) {
     if (img.url && String(img.url).startsWith('blob:')) URL.revokeObjectURL(img.url)
     list.splice(index, 1)
     normalizeUploadedImageMeta()
+    validateItemImagesOnNextTick()
     return
   }
   await proxy?.$modal.confirm('确认删除该图片吗？')
@@ -1377,6 +1412,7 @@ async function removeItemImage(index) {
     if (img.url && String(img.url).startsWith('blob:')) URL.revokeObjectURL(img.url)
     list.splice(index, 1)
     normalizeUploadedImageMeta()
+    validateItemImagesOnNextTick()
     proxy?.$modal.msgSuccess('删除成功')
   } catch (e) {
     proxy?.$modal.msgError(e?.message || '删除失败')
@@ -1541,6 +1577,11 @@ const handleQueryType = (node, data) => {
 }
 /** 提交按钮 */
 const submitForm = async () => {
+  if (!hasRequiredItemImage()) {
+    proxy?.$modal.msgError('商品图片不能为空')
+    validateItemImagesOnNextTick()
+    return
+  }
   // 先校验商品主表（含商品名称、分类、品牌、成色、年份、SKU编码等）
   try {
     await itemFormRef.value.validate();
@@ -1594,6 +1635,7 @@ const submitForm = async () => {
       await updateItem(payload);
     } else {
       const payload = { ...form.value };
+      payload.pendingImageCount = pendingImageFiles.value.length;
       if (!canEditCostPrice.value) {
         delete payload.costPrice;
       }
@@ -2014,6 +2056,13 @@ onMounted(async () => {
   margin-top: 6px;
   color: #e6a23c;
   font-size: 12px;
+}
+.item-image-upload .image-rule-tip {
+  width: 100%;
+  margin-top: 8px;
+  color: #f56c6c;
+  font-size: 13px;
+  line-height: 20px;
 }
 
 .mt8 { margin-top: 8px; }
