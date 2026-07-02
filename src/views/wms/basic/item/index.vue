@@ -161,10 +161,21 @@
             <span class="mr10" style="font-size: 18px;">{{ tr('商品列表') }}</span>
             <div class="item-toolbar-actions">
               <el-button type="primary" plain icon="Download" @click="handleExport" class="mb10" v-hasPermi="['wms:item:list']">{{ tr('导出Excel') }}</el-button>
+              <el-button
+                v-if="!isSupplierUser"
+                type="success"
+                plain
+                icon="ShoppingCart"
+                :disabled="multiple"
+                @click="handleSelectPurchase"
+                class="mb10"
+                v-hasPermi="['wms:item:purchase']"
+              >{{ tr('选购') }}</el-button>
               <el-button type="primary" plain icon="Plus" @click="handleAdd" class="mb10" v-hasPermi="['wms:item:edit']">{{ tr('新增商品') }}</el-button>
             </div>
           </div>
           <el-table :data="itemList" @selection-change="handleSelectionChange" :span-method="spanMethod" border :empty-text="tr('暂无商品')" v-loading="loading" cell-class-name="my-cell">
+            <el-table-column v-if="!isSupplierUser" type="selection" width="48" :selectable="isPurchaseSelectable" />
             <el-table-column :label="tr('商品信息')" prop="itemId">
               <template #default="{ row }">
                 <div>{{ row.item.itemName }}</div>
@@ -194,6 +205,13 @@
             <el-table-column :label="tr('供应商')" prop="item.supplierName" align="center" width="140">
               <template #default="{ row }">
                 <span>{{ row.item.supplierName || tr('Luxeaf 自有') }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column :label="tr('选购状态')" prop="item.purchaseStatus" align="center" width="110">
+              <template #default="{ row }">
+                <el-tag :type="purchaseStatusType(row.item.purchaseStatus)" size="small">
+                  {{ purchaseStatusLabel(row.item.purchaseStatus) }}
+                </el-tag>
               </template>
             </el-table-column>
             <el-table-column :label="tr('SKU编码')" prop="skuName" align="left">
@@ -660,7 +678,7 @@
 </template>
 
 <script setup name="Item">
-import { getItem, delItem, addItem, updateItem, uploadItemImage, deleteItemImage, getItemImages } from '@/api/wms/item';
+import { getItem, delItem, addItem, updateItem, uploadItemImage, deleteItemImage, getItemImages, selectItemsForPurchase } from '@/api/wms/item';
 import { listSupplierNoPage, getCurrentSupplier } from '@/api/wms/supplier';
 import { computed, getCurrentInstance, nextTick, onBeforeUnmount, onMounted, reactive, ref, toRefs, watch } from 'vue';
 import { ElForm, ElTree, ElTreeSelect, ElMessage } from 'element-plus';
@@ -716,6 +734,24 @@ async function initSupplierData() {
 }
 const amountColumnLabel = computed(() => isEn.value ? 'Amount($)' : '金额($)')
 const fieldLabel = (text) => `${tr(text)}${isEn.value ? ': ' : '：'}`
+const PURCHASE_STATUS_LABELS = {
+  0: '未选购',
+  1: '待审核',
+  2: '已选购',
+  3: '已拒绝'
+}
+const purchaseStatusLabel = (status) => tr(PURCHASE_STATUS_LABELS[Number(status ?? 0)] || '未选购')
+const purchaseStatusType = (status) => {
+  const value = Number(status ?? 0)
+  if (value === 1) return 'warning'
+  if (value === 2) return 'success'
+  if (value === 3) return 'danger'
+  return 'info'
+}
+const isPurchaseSelectable = (row) => {
+  const status = Number(row?.item?.purchaseStatus ?? 0)
+  return !!row?.item?.supplierId && status !== 1 && status !== 2
+}
 const canViewSellingPrice = computed(() => proxy?.$auth?.hasPermi('wms:itemSellingPrice:view'));
 const canEditSellingPrice = computed(() => proxy?.$auth?.hasPermi('wms:itemSellingPrice:edit'));
 const canViewCostPrice = computed(() => proxy?.$auth?.hasPermi('wms:itemCostPrice:view'));
@@ -1519,9 +1555,28 @@ const resetQuery = () => {
 
 /** 多选框选中数据 */
 const handleSelectionChange = (selection) => {
-  ids.value = selection.map(item => item.id);
+  ids.value = Array.from(new Set(selection.map(item => item.itemId).filter(Boolean)));
   single.value = selection.length != 1;
-  multiple.value = !selection.length;
+  multiple.value = !ids.value.length;
+}
+
+const handleSelectPurchase = async () => {
+  if (!ids.value.length) {
+    proxy?.$modal.msgWarning(tr('请选择商品'))
+    return
+  }
+  await proxy?.$modal.confirm(tr('确认将选中的商品提交选购审核？'))
+  loading.value = true
+  try {
+    await selectItemsForPurchase(ids.value)
+    proxy?.$modal.msgSuccess(tr('提交成功'))
+    ids.value = []
+    single.value = true
+    multiple.value = true
+    getList()
+  } finally {
+    loading.value = false
+  }
 }
 
 /** 新增按钮操作 */

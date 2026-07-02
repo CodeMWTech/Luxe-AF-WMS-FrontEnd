@@ -82,6 +82,33 @@ export function delItem(id) {
   });
 };
 
+// 批量提交商品选购审核
+export function selectItemsForPurchase(ids) {
+  return request({
+    url: '/wms/item/purchase/select',
+    method: 'post',
+    data: { ids }
+  });
+}
+
+// 查询商品选购待审核列表
+export function listItemPurchaseReview(query) {
+  return request({
+    url: '/wms/item/purchase/review/list',
+    method: 'get',
+    params: query
+  });
+}
+
+// 审核商品选购
+export function reviewItemPurchase(data) {
+  return request({
+    url: '/wms/item/purchase/review',
+    method: 'put',
+    data
+  });
+}
+
 /**
  * 上传商品图片（方案B：按商品维度上传）
  * @param itemId 商品ID
