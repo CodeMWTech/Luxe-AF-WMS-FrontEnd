@@ -14,7 +14,7 @@ export const useWmsStore = defineStore('wms', () => {
   const warehouseMap = ref(new Map());
 
   const getWarehouseList = () => {
-    listWarehouseNoPage({}).then((res) => {
+    return listWarehouseNoPage({}).then((res) => {
       warehouseList.value = res.data;
       const map = new Map();
       warehouseList.value.forEach((supplier) => {
@@ -29,7 +29,7 @@ export const useWmsStore = defineStore('wms', () => {
   const merchantMap = ref(new Map());
 
   const getMerchantList = () => {
-    listMerchantNoPage({}).then((res) => {
+    return listMerchantNoPage({}).then((res) => {
       merchantList.value = res.data;
       const map = new Map();
       merchantList.value.forEach((supplier) => {

@@ -38,19 +38,21 @@ export function exportUnstockedSkus(data, config = {}) {
 }
 
 // 查询库存列表
-export function listInventory(query) {
+export function listInventory(query, config = {}) {
   return request({
     url: '/wms/inventory/boardList/warehouse',
     method: 'get',
-    params: query
+    params: query,
+    ...config
   })
 }
 
-export function listInventoryNoPage(query) {
+export function listInventoryNoPage(query, config = {}) {
   return request({
     url: '/wms/inventory/listNoPage',
     method: 'get',
-    params: query
+    params: query,
+    ...config
   })
 }
 
@@ -98,7 +100,8 @@ export function batchExportInventoryBoardExcel(data, config = {}) {
 export function getInventoryItemBoardDetail(skuId) {
   return request({
     url: '/wms/inventory/boardList/item/' + skuId + '/detail',
-    method: 'get'
+    method: 'get',
+    silentError: true
   })
 }
 
