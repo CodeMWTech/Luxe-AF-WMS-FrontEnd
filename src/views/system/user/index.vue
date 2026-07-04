@@ -564,11 +564,16 @@ function cancel() {
   reset();
 };
 /** 新增按钮操作 */
+function normalizeUserPayload(response) {
+  return response?.data || response || {};
+}
+
 function handleAdd() {
   reset();
   getUser().then(response => {
-    postOptions.value = response.data.posts;
-    roleOptions.value = response.data.roles;
+    const data = normalizeUserPayload(response);
+    postOptions.value = data.posts || [];
+    roleOptions.value = data.roles || [];
     open.value = true;
     title.value = isEn.value ? "Add User" : "添加用户";
     form.value.password = initPassword.value;
@@ -579,14 +584,15 @@ function handleUpdate(row) {
   reset();
   const userId = row.userId || ids.value;
   getUser(userId).then(response => {
-    form.value = response.data.user;
-    postOptions.value = response.data.posts;
-    roleOptions.value = response.data.roles;
-    form.value.postIds = response.data.postIds;
-    form.value.roleIds = response.data.roleIds;
+    const data = normalizeUserPayload(response);
+    form.value = data.user || {};
+    postOptions.value = data.posts || [];
+    roleOptions.value = data.roles || [];
+    form.value.postIds = data.postIds || [];
+    form.value.roleIds = data.roleIds || [];
     open.value = true;
     title.value = isEn.value ? "Edit User" : "修改用户";
-    form.password = "";
+    form.value.password = "";
   });
 };
 /** 提交按钮 */
