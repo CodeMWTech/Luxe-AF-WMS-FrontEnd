@@ -587,6 +587,8 @@
     productDetails: '商品详情',
     salesInformation: '销售信息',
     warehousePlaceholder: '仓库',
+    returnWarehouseUnsupported: 'RETURN_WAREHOUSE 类型的仓库无法用于上架，请选择发货仓库。',
+    returnWarehouseOptionDisabled: '不支持上架',
     stock: '库存',
     retailPrice: '零售价',
     packageWeight: '包裹重量',

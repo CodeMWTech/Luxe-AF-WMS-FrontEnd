@@ -127,7 +127,6 @@
             <section class="ebay-section">
               <div class="ebay-section-title-row">
                 <h3>{{ t('platformListings.ebayItemCategory') }}</h3>
-                <el-button size="small" text icon="Edit" @click="handleSyncCategories('EBAY')" :loading="syncingEbay">{{ t('platformListings.sync') }}</el-button>
               </div>
               <div class="category-summary">
                 <div>
@@ -256,7 +255,6 @@
                       style="width:100%"
                       @change="onTiktokCategoryChange"
                     />
-                    <el-button link type="primary" size="small" @click="handleSyncCategories('TIKTOK')" :loading="syncingTiktok">{{ t('platformListings.syncLatestCategories') }}</el-button>
                   </div>
 
                   <div v-if="showTiktokBrandField" class="tiktok-field-block">
@@ -285,9 +283,10 @@
                   <h3>{{ t('platformListings.salesInformation') }}</h3>
                   <div class="stock-toolbar editable-stock-toolbar">
                     <el-select v-model="form.tiktokWarehouseId" :placeholder="t('platformListings.warehousePlaceholder')" clearable filterable :disabled="!form.shopId" :loading="warehouseLoading" style="width:100%">
-                      <el-option v-for="w in warehouseList" :key="w.id" :label="warehouseOptionLabel(w)" :value="w.id" />
+                      <el-option v-for="w in warehouseList" :key="w.id" :label="warehouseOptionLabel(w)" :value="w.id" :disabled="isReturnWarehouse(w)" />
                     </el-select>
                   </div>
+                  <div class="tiktok-tip warehouse-warning-tip">{{ t('platformListings.returnWarehouseUnsupported') }}</div>
                   <div class="tiktok-stock-grid editable-stock-grid">
                     <div><label>{{ t('platformListings.stock') }}</label><el-input-number v-model="form.tiktokQuantity" :min="1" :max="999" style="width:100%" /></div>
                     <div><label>{{ t('platformListings.retailPrice') }}</label><div style="display:flex;align-items:center;gap:6px"><el-input-number v-model="form.defaultPrice" :min="0" :precision="2" :step="10" :placeholder="t('platformListings.priceDefaultHint')" style="flex:1" /><el-button v-if="form.defaultPrice != null" link type="warning" size="small" @click="form.defaultPrice = null">{{ t('platformListings.priceResetDefault') }}</el-button></div><div class="tiktok-tip">{{ t('platformListings.priceDefaultHint') }}</div></div>
@@ -348,7 +347,7 @@
 <script setup>
 import { ref, reactive, computed, nextTick, onMounted, getCurrentInstance, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { listTemplates, addTemplate, updateTemplate, delTemplate, getTemplate, getCategories, getCategoryById, syncCategories, getEbayPolicies, getTiktokWarehouses } from '@/api/wms/platformListing'
+import { listTemplates, addTemplate, updateTemplate, delTemplate, getTemplate, getCategories, getCategoryById, getEbayPolicies, getTiktokWarehouses } from '@/api/wms/platformListing'
 import { listAllPlatformShops } from '@/api/wms/platformShop'
 
 const { proxy } = getCurrentInstance()
@@ -359,12 +358,10 @@ const loading = ref(false), total = ref(0), templateList = ref([]), submitting =
 const queryRef = ref(null), formRef = ref(null)
 const ebayCategoryTree = ref([])
 const tiktokCategoryTree = ref([])
-const syncingEbay = ref(false)
 const loadingPolicies = ref(false)
 const fulfillmentPolicies = ref([])
 const paymentPolicies = ref([])
 const returnPolicies = ref([])
-const syncingTiktok = ref(false)
 const shopList = ref([])
 const filteredShopList = ref([])
 
@@ -600,7 +597,12 @@ function loadWarehouses() {
 
 function warehouseOptionLabel(warehouse) {
   const meta = [warehouse.type, warehouse.status].filter(Boolean).join(' / ')
-  return `${warehouse.name || warehouse.id} (${warehouse.id})${meta ? ' - ' + meta : ''}`
+  const warning = isReturnWarehouse(warehouse) ? ` - ${t('platformListings.returnWarehouseOptionDisabled')}` : ''
+  return `${warehouse.name || warehouse.id} (${warehouse.id})${meta ? ' - ' + meta : ''}${warning}`
+}
+
+function isReturnWarehouse(warehouse) {
+  return [warehouse?.type, warehouse?.subType].some(v => String(v || '').toUpperCase() === 'RETURN_WAREHOUSE')
 }
 
 function getList() {
@@ -812,19 +814,6 @@ function validateLeafCategory() {
     return false
   }
   return true
-}
-
-function handleSyncCategories(platform) {
-  const isEbay = platform === 'EBAY'
-  if (isEbay) syncingEbay.value = true; else syncingTiktok.value = true
-  syncCategories(platform).then(res => {
-    const count = res.data?.count || 0
-    proxy.$modal.msgSuccess(t('platformListings.categoriesSyncDone', { platform, count }))
-  }).catch(() => {
-    proxy.$modal.msgError(t('platformListings.categoriesSyncFailed', { platform }))
-  }).finally(() => {
-    if (isEbay) syncingEbay.value = false; else syncingTiktok.value = false
-  })
 }
 
 onMounted(() => { loadShops(); getList() })
@@ -1316,6 +1305,7 @@ onMounted(() => { loadShops(); getList() })
   line-height: 1.45;
 }
 .tiktok-tip { color: #6b7280; margin-bottom: 8px; }
+.warehouse-warning-tip { color: #b45309; margin-top: -2px; }
 .tiktok-warning { margin-top: 6px; }
 .tiktok-image-grid {
   display: grid;
@@ -1569,9 +1559,6 @@ onMounted(() => { loadShops(); getList() })
   padding-left: 6px;
 }
 </style>
-
-
-
 
 
 
