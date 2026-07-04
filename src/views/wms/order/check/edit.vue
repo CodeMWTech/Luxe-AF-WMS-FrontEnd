@@ -159,6 +159,7 @@ import SkuSelect from "@/views/components/SkuSelect.vue";
 import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
 import useTagsViewStore from '@/store/modules/tagsView'
+import { useOrderEditLeaveGuard } from '@/composables/useOrderEditLeaveGuard'
 
 const {proxy} = getCurrentInstance();
 const route = useRoute();
@@ -202,6 +203,7 @@ const getClosePath = (fallbackPath) => {
   return latestView?.fullPath || fallbackPath
 }
 const close = () => {
+  markAllowLeave()
   const obj = {path: getClosePath("/wms/order/checkOrder")};
   proxy?.$tab.closeOpenPage(obj);
 }
@@ -368,6 +370,50 @@ const doSave = (orderStatus = 0) => {
   })
 }
 
+const initialFormSnapshot = ref('')
+
+function getFormSnapshot() {
+  return JSON.stringify(getParams(0))
+}
+
+function captureFormSnapshot() {
+  initialFormSnapshot.value = getFormSnapshot()
+}
+
+function isFormDirty() {
+  return getFormSnapshot() !== initialFormSnapshot.value
+}
+
+function persistDraft() {
+  return new Promise((resolve) => {
+    checkForm.value?.validate((valid) => {
+      if (!valid) {
+        ElMessage.error('请填写必填项')
+        resolve(false)
+        return
+      }
+      const params = getParams(0)
+      loading.value = true
+      const request = params.id ? updateCheckOrder(params) : addCheckOrder(params)
+      request.then((res) => {
+        if (res.code === 200) {
+          ElMessage.success('盘库单已暂存')
+          resolve(true)
+        } else {
+          ElMessage.error(res.msg)
+          resolve(false)
+        }
+      }).catch(() => resolve(false)).finally(() => {
+        loading.value = false
+      })
+    })
+  })
+}
+
+const { markAllowLeave } = useOrderEditLeaveGuard({
+  isDirty: isFormDirty,
+  saveDraft: persistDraft
+})
 
 const updateToInvalid = async () => {
   await proxy?.$modal.confirm('确认作废盘库单吗？');
@@ -411,6 +457,7 @@ onMounted(() => {
     loadDetail(id)
   } else {
     form.value.orderNo = 'PK' + generateNo()
+    captureFormSnapshot()
   }
 })
 
@@ -439,6 +486,7 @@ const loadDetail = (id) => {
     handleChangeQuantity()
     Promise.resolve();
   }).then(() => {
+    captureFormSnapshot()
   }).finally(() => {
     loading.value = false
   })

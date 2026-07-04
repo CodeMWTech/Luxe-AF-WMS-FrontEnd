@@ -205,6 +205,7 @@ import {getWarehouseAndSkuKey} from "@/utils/wmsUtil"
 import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
 import useTagsViewStore from '@/store/modules/tagsView'
+import { useOrderEditLeaveGuard } from '@/composables/useOrderEditLeaveGuard'
 
 const {proxy} = getCurrentInstance();
 const route = useRoute();
@@ -263,6 +264,7 @@ const getClosePath = (fallbackPath) => {
   return latestView?.fullPath || fallbackPath
 }
 const close = () => {
+  markAllowLeave()
   const obj = {path: getClosePath("/wms/order/shipmentOrder")};
   proxy?.$tab.closeOpenPage(obj);
 }
@@ -433,6 +435,51 @@ const doSave = (orderStatus = 0) => {
   })
 }
 
+const initialFormSnapshot = ref('')
+
+function getFormSnapshot() {
+  return JSON.stringify(getParamsBeforeSave(0))
+}
+
+function captureFormSnapshot() {
+  initialFormSnapshot.value = getFormSnapshot()
+}
+
+function isFormDirty() {
+  return getFormSnapshot() !== initialFormSnapshot.value
+}
+
+function persistDraft() {
+  return new Promise((resolve) => {
+    shipmentForm.value?.validate((valid) => {
+      if (!valid) {
+        ElMessage.error('请填写必填项')
+        resolve(false)
+        return
+      }
+      const params = getParamsBeforeSave(0)
+      loading.value = true
+      const request = params.id ? updateShipmentOrder(params) : addShipmentOrder(params)
+      request.then((res) => {
+        if (res.code === 200) {
+          ElMessage.success(res.msg)
+          resolve(true)
+        } else {
+          ElMessage.error(res.msg)
+          resolve(false)
+        }
+      }).catch(() => resolve(false)).finally(() => {
+        loading.value = false
+      })
+    })
+  })
+}
+
+const { markAllowLeave } = useOrderEditLeaveGuard({
+  isDirty: isFormDirty,
+  saveDraft: persistDraft
+})
+
 const doShipment = async () => {
   await proxy?.$modal.confirm('确认出库吗？<br><span style="color: #f56c6c;">一旦确认，永久保存不可撤销</span>', {
     dangerouslyUseHTMLString: true
@@ -491,6 +538,7 @@ onMounted(() => {
     loadDetail(id)
   } else {
     form.value.orderNo = 'CK' + generateNo()
+    captureFormSnapshot()
   }
 })
 
@@ -513,6 +561,7 @@ const loadDetail = (id) => {
     updateTotals()
     Promise.resolve();
   }).then(() => {
+    captureFormSnapshot()
   }).finally(() => {
     loading.value = false
   })

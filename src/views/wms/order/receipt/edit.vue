@@ -195,6 +195,7 @@ import {getWarehouseAndSkuKey} from "@/utils/wmsUtil";
 import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
 import useTagsViewStore from '@/store/modules/tagsView'
+import { useOrderEditLeaveGuard } from '@/composables/useOrderEditLeaveGuard'
 
 const {proxy} = getCurrentInstance();
 const route = useRoute();
@@ -247,7 +248,52 @@ const data = reactive({
     ]
   }
 });
-const { form, rules} = toRefs(data);
+const {form, rules} = toRefs(data);
+const initialFormSnapshot = ref('')
+
+function getFormSnapshot() {
+  return JSON.stringify(getParamsBeforeSave(0))
+}
+
+function captureFormSnapshot() {
+  initialFormSnapshot.value = getFormSnapshot()
+}
+
+function isFormDirty() {
+  return getFormSnapshot() !== initialFormSnapshot.value
+}
+
+function persistDraft() {
+  return new Promise((resolve) => {
+    receiptForm.value?.validate((valid) => {
+      if (!valid) {
+        ElMessage.error('请填写必填项')
+        resolve(false)
+        return
+      }
+      const params = getParamsBeforeSave(0)
+      loading.value = true
+      const request = params.id ? updateReceiptOrder(params) : addReceiptOrder(params)
+      request.then((res) => {
+        if (res.code === 200) {
+          ElMessage.success(res.msg)
+          resolve(true)
+        } else {
+          ElMessage.error(res.msg)
+          resolve(false)
+        }
+      }).catch(() => resolve(false)).finally(() => {
+        loading.value = false
+      })
+    })
+  })
+}
+
+const { markAllowLeave } = useOrderEditLeaveGuard({
+  isDirty: isFormDirty,
+  saveDraft: persistDraft
+})
+
 const returnInboundLabel = '\u9000\u8d27\u5165\u5e93'
 const returnInboundLabels = [returnInboundLabel, 'Return Inbound']
 const isReturnInbound = computed(() => {
@@ -266,6 +312,7 @@ const getClosePath = (fallbackPath) => {
   return latestView?.fullPath || fallbackPath
 }
 const close = () => {
+  markAllowLeave()
   const obj = {path: getClosePath("/wms/order/receiptOrder")};
   proxy?.$tab.closeOpenPage(obj);
 }
@@ -476,6 +523,7 @@ onMounted(() => {
     loadDetail(id)
   } else {
     form.value.orderNo = 'RK' + generateNo()
+    captureFormSnapshot()
   }
 })
 
@@ -501,6 +549,7 @@ const loadDetail = (id) => {
     }
     Promise.resolve();
   }).then(() => {
+    captureFormSnapshot()
   }).finally(() => {
     loading.value = false
   })
