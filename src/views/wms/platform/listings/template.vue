@@ -283,9 +283,10 @@
                   <h3>{{ t('platformListings.salesInformation') }}</h3>
                   <div class="stock-toolbar editable-stock-toolbar">
                     <el-select v-model="form.tiktokWarehouseId" :placeholder="t('platformListings.warehousePlaceholder')" clearable filterable :disabled="!form.shopId" :loading="warehouseLoading" style="width:100%">
-                      <el-option v-for="w in warehouseList" :key="w.id" :label="warehouseOptionLabel(w)" :value="w.id" />
+                      <el-option v-for="w in warehouseList" :key="w.id" :label="warehouseOptionLabel(w)" :value="w.id" :disabled="isReturnWarehouse(w)" />
                     </el-select>
                   </div>
+                  <div class="tiktok-tip warehouse-warning-tip">{{ t('platformListings.returnWarehouseUnsupported') }}</div>
                   <div class="tiktok-stock-grid editable-stock-grid">
                     <div><label>{{ t('platformListings.stock') }}</label><el-input-number v-model="form.tiktokQuantity" :min="1" :max="999" style="width:100%" /></div>
                     <div><label>{{ t('platformListings.retailPrice') }}</label><div style="display:flex;align-items:center;gap:6px"><el-input-number v-model="form.defaultPrice" :min="0" :precision="2" :step="10" :placeholder="t('platformListings.priceDefaultHint')" style="flex:1" /><el-button v-if="form.defaultPrice != null" link type="warning" size="small" @click="form.defaultPrice = null">{{ t('platformListings.priceResetDefault') }}</el-button></div><div class="tiktok-tip">{{ t('platformListings.priceDefaultHint') }}</div></div>
@@ -596,7 +597,12 @@ function loadWarehouses() {
 
 function warehouseOptionLabel(warehouse) {
   const meta = [warehouse.type, warehouse.status].filter(Boolean).join(' / ')
-  return `${warehouse.name || warehouse.id} (${warehouse.id})${meta ? ' - ' + meta : ''}`
+  const warning = isReturnWarehouse(warehouse) ? ` - ${t('platformListings.returnWarehouseOptionDisabled')}` : ''
+  return `${warehouse.name || warehouse.id} (${warehouse.id})${meta ? ' - ' + meta : ''}${warning}`
+}
+
+function isReturnWarehouse(warehouse) {
+  return [warehouse?.type, warehouse?.subType].some(v => String(v || '').toUpperCase() === 'RETURN_WAREHOUSE')
 }
 
 function getList() {
@@ -1299,6 +1305,7 @@ onMounted(() => { loadShops(); getList() })
   line-height: 1.45;
 }
 .tiktok-tip { color: #6b7280; margin-bottom: 8px; }
+.warehouse-warning-tip { color: #b45309; margin-top: -2px; }
 .tiktok-warning { margin-top: 6px; }
 .tiktok-image-grid {
   display: grid;
@@ -1552,8 +1559,6 @@ onMounted(() => { loadShops(); getList() })
   padding-left: 6px;
 }
 </style>
-
-
 
 
 

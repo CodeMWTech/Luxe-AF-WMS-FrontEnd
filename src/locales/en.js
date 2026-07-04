@@ -575,6 +575,8 @@
     productDetails: 'Product details',
     salesInformation: 'Sales information',
     warehousePlaceholder: 'Warehouse',
+    returnWarehouseUnsupported: 'RETURN_WAREHOUSE warehouses cannot be used for listing. Please select a shipping warehouse.',
+    returnWarehouseOptionDisabled: 'Listing not supported',
     stock: 'Stock',
     retailPrice: 'Retail price',
     packageWeight: 'Package weight',
