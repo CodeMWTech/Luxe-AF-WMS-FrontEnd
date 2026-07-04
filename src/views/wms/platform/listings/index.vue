@@ -71,7 +71,9 @@
         </el-table-column>
       </el-table>
 
-      <pagination v-show="total > 0" :total="total" v-model:page="queryParams.pageNum" v-model:limit="queryParams.pageSize" @pagination="getList" />
+      <div class="listings-pagination">
+        <pagination v-show="total > 0" :total="total" v-model:page="queryParams.pageNum" v-model:limit="queryParams.pageSize" @pagination="getList" />
+      </div>
     </el-card>
 
     <!-- 上架对话框 -->
@@ -208,5 +210,31 @@ onMounted(() => {
 .platform-listings .filter-card { margin-bottom: 0; }
 .table-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
 .table-title { font-size: 16px; font-weight: 600; }
-</style>
+.listings-pagination {
+  display: flex;
+  justify-content: flex-end;
+  width: 100%;
+  overflow-x: auto;
+  padding: 14px 40px 0 0;
+  box-sizing: border-box;
+}
+.listings-pagination :deep(.pagination-container) {
+  flex: 0 0 auto;
+  height: auto;
+  margin: 0;
+  padding: 0 !important;
+  background: transparent;
+  position: static;
+}
+.listings-pagination :deep(.el-pagination) {
+  position: static !important;
+  right: auto !important;
+}
 
+@media (max-width: 768px) {
+  .listings-pagination {
+    justify-content: flex-start;
+    padding-right: 0;
+  }
+}
+</style>

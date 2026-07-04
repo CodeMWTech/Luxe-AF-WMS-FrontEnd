@@ -123,23 +123,25 @@
           <el-button type="info" icon="Download" class="action-btn" :loading="exporting" @click="handleExport" v-hasPermi="['wms:platform:list']">{{ t('platformOrders.btnExport') }}</el-button>
           <el-button type="info" icon="Document" class="action-btn" :loading="weeklyReportExporting" @click="handleWeeklyReportExport" v-hasPermi="['wms:platform:list']">{{ t('platformOrders.btnWeeklyReportExport') }}</el-button>
           <el-button type="primary" icon="Upload" class="action-btn" @click="openImportNotesDialog" v-hasPermi="['wms:platform:edit']">{{ t('platformOrders.btnImportNotes') }}</el-button>
-          <span v-if="canManageAutoCreateConfig" class="auto-create-toggle">
-            <el-switch
-              v-model="autoCreateEnabled"
-              :loading="configLoading"
-              @change="handleAutoCreateToggle"
-              size="small"
-            />
-            <span class="auto-create-label">{{ t('platformOrders.autoCreateLabel') }}</span>
+          <span class="shipment-actions">
+            <span v-if="canManageAutoCreateConfig" class="auto-create-toggle">
+              <el-switch
+                v-model="autoCreateEnabled"
+                :loading="configLoading"
+                @change="handleAutoCreateToggle"
+                size="small"
+              />
+              <span class="auto-create-label">{{ t('platformOrders.autoCreateLabel') }}</span>
+            </span>
+            <el-button
+              type="warning"
+              icon="Box"
+              class="action-btn"
+              :loading="shipmentCreating"
+              @click="handleCreateShipments"
+              v-hasPermi="['wms:platform:edit']"
+            >{{ t('platformOrders.btnCreateShipment') }}</el-button>
           </span>
-          <el-button
-            type="warning"
-            icon="Box"
-            class="action-btn"
-            :loading="shipmentCreating"
-            @click="handleCreateShipments"
-            v-hasPermi="['wms:platform:edit']"
-          >{{ t('platformOrders.btnCreateShipment') }}</el-button>
         </el-form-item>
       </el-form>
     </el-card>
@@ -1612,7 +1614,11 @@ onMounted(() => {
     width: 100%;
     max-width: 100%;
     margin-left: 0 !important;
-    gap: 8px;
+    gap: 12px 22px;
+  }
+
+  :deep(.el-button + .el-button) {
+    margin-left: 0;
   }
 }
 
@@ -1624,8 +1630,12 @@ onMounted(() => {
   height: 36px;
   border-radius: 8px;
   font-weight: 500;
-  margin-left: 0 !important;
+  margin: 0 0 0 0 !important;
   white-space: nowrap;
+}
+
+.platform-orders-page .filter-item-actions .action-btn:not(:last-child) {
+  margin-right: 10px !important;
 }
 
 // ==================== Orders Shell ====================
@@ -2290,7 +2300,7 @@ onMounted(() => {
       width: 100%;
       margin-left: 0 !important;
       flex-wrap: wrap;
-      gap: 6px;
+      gap: 8px 12px;
     }
   }
   .platform-orders-page .action-btn {
@@ -2298,6 +2308,7 @@ onMounted(() => {
     height: 32px;
     font-size: 12px;
     padding: 0 8px;
+    margin-right: 4px !important;
   }
 
   .summary-row {
@@ -2368,6 +2379,7 @@ onMounted(() => {
     font-size: 11px;
     padding: 0 6px;
     border-radius: 6px;
+    margin-right: 2px !important;
   }
 
   .platform-orders-page .filter-item-actions {
@@ -2376,7 +2388,7 @@ onMounted(() => {
       width: 100%;
       margin-left: 0 !important;
       flex-wrap: wrap;
-      gap: 4px;
+      gap: 6px 10px;
     }
   }
 
@@ -2466,13 +2478,20 @@ onMounted(() => {
 }
 
 // ==================== 自动创建出库单开关 ====================
+.shipment-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  margin-left: auto;
+}
+
 .auto-create-toggle {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   height: 36px;
-  margin-left: 0;
-  padding: 0 4px;
+  margin: 0;
+  padding: 0 6px;
   white-space: nowrap;
 }
 
