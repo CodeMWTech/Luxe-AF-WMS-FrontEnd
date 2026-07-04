@@ -72,7 +72,7 @@
           </el-col>
           <el-col :span="6">
             <div class="field-label required">{{ t('platformListings.filterShop') }}</div>
-            <el-select v-model="form.shopId" filterable style="width:100%" :placeholder="t('platformListings.templateSelectShop')" @change="loadWarehouses">
+            <el-select v-model="form.shopId" filterable style="width:100%" :placeholder="t('platformListings.templateSelectShop')" @change="onShopChange">
               <el-option v-for="s in filteredShopList" :key="s.id" :label="s.shopName + ' (' + s.platform + ')'" :value="s.id" />
             </el-select>
           </el-col>
@@ -383,9 +383,16 @@ function onPlatformChange() {
   form.shopId = null
   warehouseList.value = []
   form.tiktokWarehouseId = ''
+  clearEbayPolicies()
+}
+
+function clearEbayPolicies() {
   fulfillmentPolicies.value = []
   paymentPolicies.value = []
   returnPolicies.value = []
+  form.ebayFulfillmentPolicyId = ''
+  form.ebayPaymentPolicyId = ''
+  form.ebayReturnPolicyId = ''
 }
 
 // 懒加载：根据层级获取对应类目，始终使用英文名
@@ -575,6 +582,17 @@ function insertParam(placeholder) {
         inputEl.setSelectionRange(newCursor, newCursor)
       })
     }
+  }
+}
+
+function onShopChange() {
+  warehouseList.value = []
+  form.tiktokWarehouseId = ''
+  clearEbayPolicies()
+  if (form.platform === 'TIKTOK') {
+    loadWarehouses()
+  } else if (form.platform === 'EBAY' && form.shopId) {
+    loadEbayPolicies({ silent: true, refresh: true })
   }
 }
 
@@ -776,17 +794,29 @@ function handleDelete(row) {
   }).catch(() => {})
 }
 
-function loadEbayPolicies() {
+function loadEbayPolicies(options = {}) {
+  const silent = !!options.silent
+  const refresh = !!options.refresh
+  if (!form.shopId) {
+    fulfillmentPolicies.value = []
+    paymentPolicies.value = []
+    returnPolicies.value = []
+    return
+  }
   loadingPolicies.value = true
-  getEbayPolicies(form.shopId).then(res => {
+  getEbayPolicies(form.shopId, refresh).then(res => {
     const data = res.data || {}
     fulfillmentPolicies.value = data.fulfillmentPolicies || []
     paymentPolicies.value = data.paymentPolicies || []
     returnPolicies.value = data.returnPolicies || []
     const total = fulfillmentPolicies.value.length + paymentPolicies.value.length + returnPolicies.value.length
-    proxy.$modal.msgSuccess(t('platformListings.policiesLoaded', { count: total }))
+    if (!silent) {
+      proxy.$modal.msgSuccess(t('platformListings.policiesLoaded', { count: total }))
+    }
   }).catch(() => {
-    proxy.$modal.msgError(t('platformListings.policiesLoadFailed'))
+    if (!silent) {
+      proxy.$modal.msgError(t('platformListings.policiesLoadFailed'))
+    }
   }).finally(() => {
     loadingPolicies.value = false
   })
@@ -1559,7 +1589,6 @@ onMounted(() => { loadShops(); getList() })
   padding-left: 6px;
 }
 </style>
-
 
 
 
