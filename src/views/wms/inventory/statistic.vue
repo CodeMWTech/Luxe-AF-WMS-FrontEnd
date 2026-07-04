@@ -238,6 +238,7 @@
       <el-table
         ref="tableRef"
         :data="inventoryList"
+        :row-key="getInventorySelectionKey"
         border
         :span-method="spanMethod"
         cell-class-name="vertical-top-cell"
@@ -248,7 +249,7 @@
         @sort-change="handleColumnSortChange"
         @selection-change="handleSelectionChange"
       >
-        <el-table-column v-if="batchMode" type="selection" width="50" align="center" fixed="left" />
+        <el-table-column v-if="batchMode" type="selection" width="50" align="center" fixed="left" reserve-selection />
         <el-table-column :label="tr('操作')" :width="isEn ? 132 : 110" align="center" fixed="left">
           <template #default="{ row }">
             <el-button
@@ -609,8 +610,10 @@ const exportLoading = ref(false)
 const batchExportExcelLoading = ref(false)
 const batchExportPdfLoading = ref(false)
 const selectedRows = ref([])
+const selectedRowMap = ref(new Map())
 const total = ref(0)
 const tableRef = ref(null)
+let suppressInventorySelectionChange = false
 const rowSpanArray = ref(['itemGroupKey', 'skuGroupKey', 'skuWarehouseGroupKey'])
 const warehouseSummaryMap = ref(new Map())
 const detailDrawer = ref({
@@ -1442,8 +1445,10 @@ const getList = async () => {
       it.skuWarehouseGroupKey = `${skuKey}-${warehouseKey}`
     })
 
+    suppressInventorySelectionChange = true
     inventoryList.value = rows
     total.value = res.total ?? 0
+    await restoreInventorySelection()
   } finally {
     loading.value = false
   }
@@ -1490,8 +1495,46 @@ const handleExportExcel = async () => {
   }
 }
 
+const getInventorySelectionKey = (row) => row?.skuId && row?.warehouseId ? `${row.skuId}_${row.warehouseId}` : ''
+
+function syncSelectedRows() {
+  selectedRows.value = Array.from(selectedRowMap.value.values())
+}
+
+async function restoreInventorySelection() {
+  await nextTick()
+  tableRef.value?.clearSelection()
+  if (batchMode.value) {
+    inventoryList.value.forEach(row => {
+      const key = getInventorySelectionKey(row)
+      if (key && selectedRowMap.value.has(key)) {
+        tableRef.value?.toggleRowSelection(row, true)
+      }
+    })
+  }
+  await nextTick()
+  suppressInventorySelectionChange = false
+}
+
+function clearInventorySelection() {
+  selectedRowMap.value.clear()
+  selectedRows.value = []
+  tableRef.value?.clearSelection()
+}
+
 function handleSelectionChange(selection) {
-  selectedRows.value = selection
+  if (suppressInventorySelectionChange) return
+  const selectedKeySet = new Set(selection.map(getInventorySelectionKey))
+  inventoryList.value.forEach(row => {
+    const key = getInventorySelectionKey(row)
+    if (!key) return
+    if (selectedKeySet.has(key)) {
+      selectedRowMap.value.set(key, row)
+    } else {
+      selectedRowMap.value.delete(key)
+    }
+  })
+  syncSelectedRows()
 }
 
 async function handleBatchExportExcel() {
@@ -1653,6 +1696,7 @@ function handleBatchExportPdf() {
 }
 
 const handleQuery = () => {
+  clearInventorySelection()
   queryParams.value.pageNum = 1
   getList()
 }
@@ -1665,6 +1709,7 @@ const applyDefaultInventorySort = () => {
 }
 
 const resetQuery = () => {
+  clearInventorySelection()
   filterable.value = true
   proxy.resetForm('queryRef')
   applyDefaultInventorySort()
@@ -1681,6 +1726,7 @@ const handleColumnSortChange = ({ prop, order }) => {
   queryParams.value.orderByColumn = prop || undefined
   queryParams.value.isAsc = order === 'ascending' ? 'ascending' : order === 'descending' ? 'descending' : undefined
   if (suppressSortChangeQuery) return
+  clearInventorySelection()
   queryParams.value.pageNum = 1
   getList()
 }
@@ -1691,11 +1737,13 @@ const handleSortTypeChange = (e) => {
   } else if (e === 'item') {
     rowSpanArray.value = ['itemGroupKey', 'skuGroupKey', 'skuWarehouseGroupKey']
   }
+  clearInventorySelection()
   queryParams.value.pageNum = 1
   getList()
 }
 
 const handleChangeFilterZero = () => {
+  clearInventorySelection()
   queryParams.value.pageNum = 1
   getList()
 }
@@ -1703,8 +1751,10 @@ const handleChangeFilterZero = () => {
 const toggleBatchMode = () => {
   batchMode.value = !batchMode.value
   if (!batchMode.value) {
-    selectedRows.value = []
-    tableRef.value?.clearSelection()
+    clearInventorySelection()
+  } else {
+    suppressInventorySelectionChange = true
+    restoreInventorySelection()
   }
 }
 
@@ -1713,7 +1763,16 @@ const handleBatchPublish = () => {
     proxy.$modal.msgWarning(tr('请先勾选商品'))
     return
   }
-  const skuIds = [...new Set(selectedRows.value.map(r => r.skuId).filter(Boolean))]
+  const publishableRows = selectedRows.value.filter(row => getItemImage(row))
+  const noImageCount = selectedRows.value.length - publishableRows.length
+  if (noImageCount > 0) {
+    proxy.$modal.msgWarning(tr('{count} 个商品没有图片，无法上架').replace('{count}', noImageCount))
+  }
+  const skuIds = [...new Set(publishableRows.map(r => r.skuId).filter(Boolean))]
+  if (skuIds.length === 0) {
+    proxy.$modal.msgWarning(tr('勾选的商品都没有图片，无法上架'))
+    return
+  }
   publishDialogRef.value?.openWithSkus(skuIds)
 }
 
