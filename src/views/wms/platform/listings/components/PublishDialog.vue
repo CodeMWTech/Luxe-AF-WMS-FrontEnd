@@ -10,17 +10,35 @@
     <div v-if="step === 0">
       <el-form :inline="true">
         <el-form-item :label="t('platformListings.sku')">
-          <el-input v-model="invQuery.skuCode" clearable :placeholder="t('platformListings.searchSkuPlaceholder')" @keyup.enter="loadInventory" />
+          <el-input v-model="invQuery.skuCode" clearable :placeholder="t('platformListings.searchSkuPlaceholder')" @keyup.enter="handleInventoryQuery" />
         </el-form-item>
         <el-form-item :label="t('platformListings.productName')">
-          <el-input v-model="invQuery.itemName" clearable :placeholder="t('platformListings.searchProductPlaceholder')" @keyup.enter="loadInventory" />
+          <el-input v-model="invQuery.itemName" clearable :placeholder="t('platformListings.searchProductPlaceholder')" @keyup.enter="handleInventoryQuery" />
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" icon="Search" @click="loadInventory">{{ t('platformListings.btnQuery') }}</el-button>
+          <el-button type="primary" icon="Search" @click="handleInventoryQuery">{{ t('platformListings.btnQuery') }}</el-button>
         </el-form-item>
       </el-form>
-      <el-table ref="invTableRef" :data="invList" v-loading="invLoading" border stripe max-height="400" @selection-change="onSelectionChange">
-        <el-table-column type="selection" width="50" />
+      <el-alert :title="t('platformListings.noImageCannotPublish')" type="warning" show-icon :closable="false" class="publish-image-alert" />
+      <el-table
+        ref="invTableRef"
+        :data="invList"
+        :row-key="getPublishRowKey"
+        v-loading="invLoading"
+        border
+        stripe
+        max-height="400"
+        @selection-change="onSelectionChange"
+      >
+        <el-table-column type="selection" width="50" reserve-selection :selectable="isPublishRowSelectable" />
+        <el-table-column :label="t('platformListings.image')" width="86" align="center">
+          <template #default="{ row }">
+            <el-tag v-if="hasPublishImage(row)" type="success" effect="plain">{{ t('platformListings.hasImage') }}</el-tag>
+            <el-tooltip v-else :content="t('platformListings.noImageCannotPublish')" placement="top">
+              <el-tag type="danger" effect="plain">{{ t('platformListings.noImage') }}</el-tag>
+            </el-tooltip>
+          </template>
+        </el-table-column>
         <el-table-column :label="t('platformListings.sku')" prop="skuCode" min-width="120" />
         <el-table-column :label="t('platformListings.productName')" prop="itemName" min-width="150" show-overflow-tooltip />
         <el-table-column :label="t('platformListings.warehouse')" prop="warehouseName" width="100" />
@@ -139,17 +157,100 @@ const invTableRef = ref(null)
 const invQuery = reactive({ skuCode: '', itemName: '' })
 const invParams = reactive({ pageNum: 1, pageSize: 10 })
 const selectedSkus = ref([])
+const selectedSkuMap = ref(new Map())
+let suppressPublishSelectionChange = false
 
-function loadInventory() {
+const getPublishRowKey = (row) => row?.skuId ? String(row.skuId) : ''
+
+function hasPublishImage(row) {
+  return Boolean(
+    row?.itemImage ||
+    row?.mainImage ||
+    row?.imageUrl ||
+    row?.thumbUrl ||
+    row?.mainImageUrl ||
+    row?.mainThumbUrl ||
+    (Array.isArray(row?.images) && row.images.length > 0) ||
+    (Array.isArray(row?.imageList) && row.imageList.length > 0)
+  )
+}
+
+const isPublishRowSelectable = (row) => hasPublishImage(row)
+
+function syncSelectedSkus() {
+  selectedSkus.value = Array.from(selectedSkuMap.value.values())
+}
+
+async function restorePublishSelection() {
+  await nextTick()
+  invTableRef.value?.clearSelection()
+  invList.value.forEach(row => {
+    const key = getPublishRowKey(row)
+    if (key && selectedSkuMap.value.has(key) && isPublishRowSelectable(row)) {
+      selectedSkuMap.value.set(key, row)
+      invTableRef.value?.toggleRowSelection(row, true)
+    } else if (key && selectedSkuMap.value.has(key) && !isPublishRowSelectable(row)) {
+      selectedSkuMap.value.delete(key)
+    }
+  })
+  syncSelectedSkus()
+  await nextTick()
+  suppressPublishSelectionChange = false
+}
+
+function resetPublishSelection() {
+  selectedSkuMap.value.clear()
+  selectedSkus.value = []
+  invTableRef.value?.clearSelection()
+}
+
+function seedPreselectedSkus(skuIds) {
+  selectedSkuMap.value.clear()
+  const uniqueSkuIds = [...new Set(skuIds || [])]
+  uniqueSkuIds.forEach(skuId => {
+    if (skuId) {
+      selectedSkuMap.value.set(String(skuId), { skuId })
+    }
+  })
+  syncSelectedSkus()
+}
+
+function handleInventoryQuery() {
+  resetPublishSelection()
+  invParams.pageNum = 1
+  loadInventory()
+}
+
+async function loadInventory() {
   invLoading.value = true
-  listInventoryBoard({ ...invParams, ...invQuery, minQuantity: 1 }, 'item').then(res => {
+  try {
+    const res = await listInventoryBoard({ ...invParams, ...invQuery, minQuantity: 1 }, 'item')
+    suppressPublishSelectionChange = true
     invList.value = res.rows || []
     invTotal.value = res.total || 0
-  }).finally(() => { invLoading.value = false })
+    await restorePublishSelection()
+  } finally {
+    invLoading.value = false
+  }
 }
 
 function onSelectionChange(rows) {
-  selectedSkus.value = rows
+  if (suppressPublishSelectionChange) return
+  const selectedKeySet = new Set(rows.map(getPublishRowKey))
+  invList.value.forEach(row => {
+    const key = getPublishRowKey(row)
+    if (!key) return
+    if (!isPublishRowSelectable(row)) {
+      selectedSkuMap.value.delete(key)
+      return
+    }
+    if (selectedKeySet.has(key)) {
+      selectedSkuMap.value.set(key, row)
+    } else {
+      selectedSkuMap.value.delete(key)
+    }
+  })
+  syncSelectedSkus()
 }
 
 // ==================== Step 2: Shop & Template ====================
@@ -216,9 +317,18 @@ async function loadPreviews() {
 }
 
 // ==================== Navigation ====================
-function onOpen() {
+async function onOpen() {
   step.value = 0
-  loadInventory()
+  invParams.pageNum = 1
+  if (preSelectedSkuIds.value?.length) {
+    seedPreselectedSkus(preSelectedSkuIds.value)
+  } else {
+    resetPublishSelection()
+  }
+  await loadInventory()
+  if (preSelectedSkuIds.value?.length && selectedSkus.value.length > 0) {
+    step.value = 1
+  }
   listAllPlatformShops().then(res => {
     shopList.value = res.rows || res.data || []
   })
@@ -273,43 +383,22 @@ function open() {
   visible.value = true
 }
 
-async function openWithSkus(skuIds) {
+function openWithSkus(skuIds) {
   if (!skuIds || skuIds.length === 0) {
     proxy.$modal.msgWarning(t('platformListings.selectSkuRequired'))
     return
   }
   preSelectedSkuIds.value = [...new Set(skuIds)]
   visible.value = true
-  // 加载店铺列表
-  listAllPlatformShops().then(res => {
-    shopList.value = res.rows || res.data || []
-  })
-  // 加载库存列表，完成后自动勾选预选SKU并跳转到Step2
-  invLoading.value = true
-  try {
-    const res = await listInventoryBoard({ ...invParams, ...invQuery, minQuantity: 1 }, 'item')
-    invList.value = res.rows || []
-    invTotal.value = res.total || 0
-    // 自动勾选匹配的SKU
-    const targetIds = new Set(preSelectedSkuIds.value)
-    await nextTick()
-    invList.value.forEach(row => {
-      if (targetIds.has(row.skuId)) {
-        invTableRef.value?.toggleRowSelection(row, true)
-      }
-    })
-    // 跳到 Step 2
-    if (selectedSkus.value.length > 0) {
-      step.value = 1
-    }
-  } finally {
-    invLoading.value = false
-  }
 }
 
 defineExpose({ open, openWithSkus })
 </script>
 <style scoped>
+.publish-image-alert {
+  margin-bottom: 10px;
+}
+
 .channel-preview {
   display: grid;
   grid-template-columns: 180px 1fr;
@@ -332,4 +421,3 @@ defineExpose({ open, openWithSkus })
 .ebay-preview { border-top: 4px solid #3665f3; }
 .tiktok-preview { border-top: 4px solid #111827; }
 </style>
-

@@ -259,7 +259,7 @@
                     <el-button link type="primary" size="small" @click="handleSyncCategories('TIKTOK')" :loading="syncingTiktok">{{ t('platformListings.syncLatestCategories') }}</el-button>
                   </div>
 
-                  <div class="tiktok-field-block">
+                  <div v-if="showTiktokBrandField" class="tiktok-field-block">
                     <label class="tiktok-required-label">{{ t('platformListings.brand') }}</label>
                     <el-input v-model="form.tiktokBrandId" :placeholder="t('platformListings.tiktokBrandPlaceholder')" disabled />
                   </div>
@@ -284,8 +284,8 @@
                 <section class="tiktok-form-section">
                   <h3>{{ t('platformListings.salesInformation') }}</h3>
                   <div class="stock-toolbar editable-stock-toolbar">
-                    <el-select v-model="form.tiktokWarehouseId" :placeholder="t('platformListings.warehousePlaceholder')" clearable filterable allow-create :disabled="!form.shopId" :loading="warehouseLoading" style="width:100%">
-                      <el-option v-for="w in warehouseList" :key="w.id" :label="w.name + ' (' + w.id + ')'" :value="w.id" />
+                    <el-select v-model="form.tiktokWarehouseId" :placeholder="t('platformListings.warehousePlaceholder')" clearable filterable :disabled="!form.shopId" :loading="warehouseLoading" style="width:100%">
+                      <el-option v-for="w in warehouseList" :key="w.id" :label="warehouseOptionLabel(w)" :value="w.id" />
                     </el-select>
                   </div>
                   <div class="tiktok-stock-grid editable-stock-grid">
@@ -514,6 +514,7 @@ const rules = {
 }
 const dialog = reactive({ visible: false, title: '', isEdit: false })
 
+const showTiktokBrandField = false
 const shopNameMap = ref({})
 const warehouseList = ref([])
 const warehouseLoading = ref(false)
@@ -595,6 +596,11 @@ function loadWarehouses() {
     }
   }).catch(() => { warehouseList.value = [] })
     .finally(() => { warehouseLoading.value = false })
+}
+
+function warehouseOptionLabel(warehouse) {
+  const meta = [warehouse.type, warehouse.status].filter(Boolean).join(' / ')
+  return `${warehouse.name || warehouse.id} (${warehouse.id})${meta ? ' - ' + meta : ''}`
 }
 
 function getList() {
@@ -1563,9 +1569,6 @@ onMounted(() => { loadShops(); getList() })
   padding-left: 6px;
 }
 </style>
-
-
-
 
 
 
