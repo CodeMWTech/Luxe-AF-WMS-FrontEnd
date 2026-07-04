@@ -17,7 +17,11 @@ export const HIDDEN_FRONTEND_ROUTE_PATHS = [
   // 系统工具：代码生成
   'gen',
   '/tool/gen',
-  'tool/gen'
+  'tool/gen',
+  // 旧 AI Agent Studio 前端入口已下线
+  'agents',
+  '/ai/agents',
+  'ai/agents'
 ]
 
 /** 前端 router 里需拦截注册的动态路由 path */
@@ -39,7 +43,9 @@ const HIDDEN_MENU_COMPONENT_MATCHERS = [
   { exact: 'system/oss' },
   { prefix: 'system/oss/' },
   { exact: 'tool/gen' },
-  { prefix: 'tool/gen/' }
+  { prefix: 'tool/gen/' },
+  { exact: 'ai/agents/index' },
+  { prefix: 'ai/agents/' }
 ]
 
 const HIDDEN_PERMS_PREFIXES = [
@@ -48,7 +54,8 @@ const HIDDEN_PERMS_PREFIXES = [
   'system:config:',
   'system:notice:',
   'system:oss:',
-  'tool:gen:'
+  'tool:gen:',
+  'wms:ai:agent'
 ]
 
 function pathVariants(p) {

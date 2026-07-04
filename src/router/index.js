@@ -123,6 +123,20 @@ export const constantRoutes = [
         meta: { title: '个人中心', icon: 'user' }
       }
     ]
+  },
+  {
+    path: '/ai/chatkit',
+    component: Layout,
+    hidden: true,
+    permissions: ['wms:ai:chat'],
+    children: [
+      {
+        path: '',
+        component: () => import('@/views/chatkit/index.vue'),
+        name: 'AiChatKit',
+        meta: { title: 'AI ChatKit', titleEn: 'AI ChatKit', icon: 'message' }
+      }
+    ]
   }
 ]
 
@@ -255,4 +269,3 @@ const router = createRouter({
 });
 
 export default router;
-

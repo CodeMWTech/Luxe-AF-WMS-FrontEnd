@@ -8,6 +8,7 @@
         <tags-view v-if="needTagsView" />
       </div>
       <app-main />
+      <ChatKitFloating />
       <settings ref="settingRef" />
     </div>
   </div>
@@ -17,6 +18,7 @@
 import { useWindowSize } from '@vueuse/core'
 import Sidebar from './components/Sidebar/index.vue'
 import { AppMain, Navbar, Settings, TagsView } from './components'
+import ChatKitFloating from '@/components/Ai/ChatKitFloating.vue'
 import defaultSettings from '@/settings'
 
 import useAppStore from '@/store/modules/app'
