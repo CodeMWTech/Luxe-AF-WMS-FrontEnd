@@ -83,11 +83,20 @@ export function delItem(id) {
 };
 
 // 批量提交商品选购审核
-export function selectItemsForPurchase(ids) {
+export function selectItemsForPurchase(ids, purchaseQuantityMap) {
   return request({
     url: '/wms/item/purchase/select',
     method: 'post',
-    data: { ids }
+    data: { ids, purchaseQuantityMap }
+  });
+}
+
+// 供应商批量直发，跳过选购审批
+export function supplierShipItems(ids, purchaseQuantityMap) {
+  return request({
+    url: '/wms/item/purchase/supplier-ship',
+    method: 'post',
+    data: { ids, purchaseQuantityMap }
   });
 }
 

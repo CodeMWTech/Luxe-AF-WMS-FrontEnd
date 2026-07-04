@@ -162,20 +162,38 @@
             <div class="item-toolbar-actions">
               <el-button type="primary" plain icon="Download" @click="handleExport" class="mb10" v-hasPermi="['wms:item:list']">{{ tr('导出Excel') }}</el-button>
               <el-button
-                v-if="!isSupplierUser"
+                v-if="canSelectPurchase"
                 type="success"
                 plain
                 icon="ShoppingCart"
-                :disabled="multiple"
-                @click="handleSelectPurchase"
+                :disabled="!selectedItemIds.length"
+                @click="openQuantityDialog('purchase')"
                 class="mb10"
                 v-hasPermi="['wms:item:purchase']"
               >{{ tr('选购') }}</el-button>
+              <el-button
+                v-if="canSupplierShip"
+                type="warning"
+                plain
+                icon="Promotion"
+                :disabled="!selectedItemIds.length"
+                @click="openQuantityDialog('supplierShip')"
+                class="mb10"
+                v-hasPermi="['wms:item:supplierShip']"
+              >{{ tr('批量发货') }}</el-button>
               <el-button type="primary" plain icon="Plus" @click="handleAdd" class="mb10" v-hasPermi="['wms:item:edit']">{{ tr('新增商品') }}</el-button>
             </div>
           </div>
-          <el-table :data="itemList" @selection-change="handleSelectionChange" :span-method="spanMethod" border :empty-text="tr('暂无商品')" v-loading="loading" cell-class-name="my-cell">
-            <el-table-column v-if="!isSupplierUser" type="selection" width="48" :selectable="isPurchaseSelectable" />
+          <el-alert
+            v-if="canSelectPurchase"
+            :title="tr('您仅能选购供应商上架的商品。')"
+            type="info"
+            show-icon
+            :closable="false"
+            class="purchase-tip"
+          />
+          <el-table ref="itemTableRef" :data="itemList" row-key="id" @selection-change="handleSelectionChange" :span-method="spanMethod" border :empty-text="tr('暂无商品')" v-loading="loading" cell-class-name="my-cell">
+            <el-table-column v-if="canShowSelectionColumn" type="selection" width="48" :selectable="isRowSelectable" reserve-selection />
             <el-table-column :label="tr('商品信息')" prop="itemId">
               <template #default="{ row }">
                 <div>{{ row.item.itemName }}</div>
@@ -670,6 +688,22 @@
         </div>
       </div>
     </el-drawer>
+    <el-dialog v-model="quantityDialog.visible" :title="quantityDialog.title" width="720px" append-to-body>
+      <el-table :data="quantityDialog.rows" border max-height="420">
+        <el-table-column :label="tr('商品名称')" prop="itemName" min-width="220" show-overflow-tooltip />
+        <el-table-column label="SKU" prop="skuCode" min-width="140" show-overflow-tooltip />
+        <el-table-column :label="tr('可用数量')" prop="availableQty" width="100" align="right" />
+        <el-table-column :label="tr('操作数量')" width="150" align="center">
+          <template #default="{ row }">
+            <el-input-number v-model="row.quantity" :min="1" :max="row.availableQty" :step="1" :precision="0" controls-position="right" style="width: 120px" />
+          </template>
+        </el-table-column>
+      </el-table>
+      <template #footer>
+        <el-button @click="quantityDialog.visible = false">{{ tr('取消') }}</el-button>
+        <el-button type="primary" :loading="quantityDialog.loading" @click="submitQuantityDialog">{{ tr('确认') }}</el-button>
+      </template>
+    </el-dialog>
     <div id="outSkuIdBox" style="display: none">
       <img :src="qrcode"/>
       <canvas ref="barcode"></canvas>
@@ -678,7 +712,7 @@
 </template>
 
 <script setup name="Item">
-import { getItem, delItem, addItem, updateItem, uploadItemImage, deleteItemImage, getItemImages, selectItemsForPurchase } from '@/api/wms/item';
+import { getItem, delItem, addItem, updateItem, uploadItemImage, deleteItemImage, getItemImages, selectItemsForPurchase, supplierShipItems } from '@/api/wms/item';
 import { listSupplierNoPage, getCurrentSupplier } from '@/api/wms/supplier';
 import { computed, getCurrentInstance, nextTick, onBeforeUnmount, onMounted, reactive, ref, toRefs, watch } from 'vue';
 import { ElForm, ElTree, ElTreeSelect, ElMessage } from 'element-plus';
@@ -748,14 +782,13 @@ const purchaseStatusType = (status) => {
   if (value === 3) return 'danger'
   return 'info'
 }
-const isPurchaseSelectable = (row) => {
-  const status = Number(row?.item?.purchaseStatus ?? 0)
-  return !!row?.item?.supplierId && status !== 1 && status !== 2
-}
 const canViewSellingPrice = computed(() => proxy?.$auth?.hasPermi('wms:itemSellingPrice:view'));
 const canEditSellingPrice = computed(() => proxy?.$auth?.hasPermi('wms:itemSellingPrice:edit'));
 const canViewCostPrice = computed(() => proxy?.$auth?.hasPermi('wms:itemCostPrice:view'));
 const canEditCostPrice = computed(() => proxy?.$auth?.hasPermi('wms:itemCostPrice:edit'));
+const canSelectPurchase = computed(() => !isSupplierUser.value && !!proxy?.$auth?.hasPermi('wms:item:purchase'))
+const canSupplierShip = computed(() => isSupplierUser.value && !!proxy?.$auth?.hasPermi('wms:item:supplierShip'))
+const canShowSelectionColumn = computed(() => canSelectPurchase.value || canSupplierShip.value)
 /** 成本价变更时，销售价 = 成本价 × 该系数（保留两位小数） */
 const SELLING_PRICE_FROM_COST_MULTIPLIER = 1.8
 /**
@@ -781,6 +814,16 @@ function handleMaterialChange(id) {
   form.value.material = material?.materialName || undefined
 }
 const itemList = ref([]);
+const itemTableRef = ref(null)
+const selectedItemsMap = ref(new Map())
+const selectedItemIds = computed(() => Array.from(selectedItemsMap.value.keys()))
+const quantityDialog = reactive({
+  visible: false,
+  title: '',
+  action: '',
+  rows: [],
+  loading: false
+})
 const itemCategoryTreeSelectList = computed(() => useWmsStore().itemCategoryTreeList);
 const itemCategoryTreeOptionsList = computed(() => {
   let data = [...itemCategoryTreeSelectList.value];
@@ -1173,15 +1216,20 @@ const getList = async () => {
     query.endTime = formatDateTimeForQuery(query.createTimeRange[1]);
   }
   loading.value = true;
-  const res = await listItemSkuPage(query);
-  const content = [...res.rows];
-  itemList.value = content.map((it) => ({...it, id: it.skuId,itemId: it?.item?.id}));
-  listMainImageLoadingSet.value.clear()
-  listMainImageNoImageSet.value.clear()
-  listMainImageErrorAtMap.value.clear()
-  preloadMainImages(itemList.value)
-  total.value = res.total;
-  loading.value = false;
+  try {
+    const res = await listItemSkuPage(query);
+    const content = [...res.rows];
+    itemList.value = content.map((it) => ({...it, id: it.skuId,itemId: it?.item?.id}));
+    listMainImageLoadingSet.value.clear()
+    listMainImageNoImageSet.value.clear()
+    listMainImageErrorAtMap.value.clear()
+    preloadMainImages(itemList.value)
+    total.value = res.total;
+    await nextTick()
+    restoreCurrentPageSelection()
+  } finally {
+    loading.value = false;
+  }
 }
 const handleAddType = (show) => {
   categoryDialog.title = isEn.value ? 'Add Item Category' : "新增商品分类";
@@ -1553,29 +1601,117 @@ const resetQuery = () => {
   handleQuery();
 }
 
-/** 多选框选中数据 */
-const handleSelectionChange = (selection) => {
-  ids.value = Array.from(new Set(selection.map(item => item.itemId).filter(Boolean)));
-  single.value = selection.length != 1;
-  multiple.value = !ids.value.length;
+function getRowAvailableQty(row) {
+  const qty = Number(row?.item?.defaultQty ?? 0)
+  return Number.isFinite(qty) ? Math.max(0, qty) : 0
 }
 
-const handleSelectPurchase = async () => {
-  if (!ids.value.length) {
+function toSelectedItem(row) {
+  return {
+    itemId: row.itemId,
+    itemName: row?.item?.itemName || '',
+    skuCode: row?.itemSku?.skuCode || '',
+    availableQty: getRowAvailableQty(row),
+    quantity: 1
+  }
+}
+
+function refreshSelectedState() {
+  ids.value = selectedItemIds.value
+  single.value = ids.value.length !== 1
+  multiple.value = !ids.value.length
+}
+
+function isPurchaseSelectable(row) {
+  const status = Number(row?.item?.purchaseStatus ?? 0)
+  return !!row?.item?.supplierId && status !== 1 && status !== 2 && getRowAvailableQty(row) > 0
+}
+
+function isSupplierShipSelectable(row) {
+  const status = Number(row?.item?.purchaseStatus ?? 0)
+  return !!row?.item?.supplierId && status !== 1 && status !== 2 && getRowAvailableQty(row) > 0
+}
+
+function isRowSelectable(row) {
+  if (canSupplierShip.value) return isSupplierShipSelectable(row)
+  return isPurchaseSelectable(row)
+}
+
+function restoreCurrentPageSelection() {
+  if (!itemTableRef.value) return
+  itemList.value.forEach(row => {
+    itemTableRef.value.toggleRowSelection(row, selectedItemsMap.value.has(row.itemId))
+  })
+}
+
+/** 多选框选中数据，保留跨页勾选结果 */
+const handleSelectionChange = (selection) => {
+  const currentPageIds = new Set(itemList.value.map(row => row.itemId).filter(Boolean))
+  const nextMap = new Map(selectedItemsMap.value)
+  currentPageIds.forEach(id => nextMap.delete(id))
+  selection.forEach(row => {
+    if (!row?.itemId || !isRowSelectable(row)) return
+    if (!nextMap.has(row.itemId)) {
+      nextMap.set(row.itemId, toSelectedItem(row))
+    }
+  })
+  selectedItemsMap.value = nextMap
+  refreshSelectedState()
+}
+
+function clearSelectedItems() {
+  selectedItemsMap.value = new Map()
+  itemTableRef.value?.clearSelection?.()
+  refreshSelectedState()
+}
+
+function openQuantityDialog(action) {
+  if (!selectedItemIds.value.length) {
     proxy?.$modal.msgWarning(tr('请选择商品'))
     return
   }
-  await proxy?.$modal.confirm(tr('确认将选中的商品提交选购审核？'))
-  loading.value = true
+  quantityDialog.action = action
+  quantityDialog.title = action === 'supplierShip' ? tr('确认批量发货数量') : tr('确认选购数量')
+  quantityDialog.rows = Array.from(selectedItemsMap.value.values()).map(item => ({
+    ...item,
+    quantity: Math.min(Math.max(Number(item.quantity || 1), 1), item.availableQty)
+  }))
+  quantityDialog.visible = true
+}
+
+async function submitQuantityDialog() {
+  const rows = quantityDialog.rows
+  if (!rows.length) {
+    proxy?.$modal.msgWarning(tr('请选择商品'))
+    return
+  }
+  const invalid = rows.find(row => !row.quantity || row.quantity < 1 || row.quantity > row.availableQty)
+  if (invalid) {
+    proxy?.$modal.msgWarning(tr('操作数量不能超过可用数量'))
+    return
+  }
+  const selectedIds = rows.map(row => row.itemId)
+  const quantityMap = rows.reduce((acc, row) => {
+    acc[row.itemId] = Number(row.quantity)
+    return acc
+  }, {})
+  const confirmText = quantityDialog.action === 'supplierShip'
+    ? tr('确认将选中的商品批量发货？')
+    : tr('确认将选中的商品提交选购审核？')
+  await proxy?.$modal.confirm(confirmText)
+  quantityDialog.loading = true
   try {
-    await selectItemsForPurchase(ids.value)
+    if (quantityDialog.action === 'supplierShip') {
+      await supplierShipItems(selectedIds, quantityMap)
+    } else {
+      await selectItemsForPurchase(selectedIds, quantityMap)
+    }
     proxy?.$modal.msgSuccess(tr('提交成功'))
-    ids.value = []
-    single.value = true
-    multiple.value = true
+    quantityDialog.visible = false
+    clearSelectedItems()
     getList()
   } finally {
-    loading.value = false
+    quantityDialog.loading = false
   }
 }
 
@@ -1967,7 +2103,7 @@ onMounted(async () => {
   } catch (_) {
     // 分类数据加载失败不阻断列表渲染
   }
-  initSupplierData();
+  await initSupplierData();
   nextTick(() => {
     getList();
     if (route.query.openDrawer) {
@@ -2309,6 +2445,10 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.purchase-tip {
+  margin-bottom: 10px;
 }
 
 .item-page .action-btn {

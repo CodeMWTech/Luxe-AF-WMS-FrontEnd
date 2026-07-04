@@ -4,6 +4,9 @@
       <el-form-item :label="tr('商品名称')" prop="itemName">
         <el-input v-model="queryParams.itemName" :placeholder="tr('请输入商品名称')" clearable @keyup.enter="handleQuery" />
       </el-form-item>
+      <el-form-item label="SKU" prop="skuCode">
+        <el-input v-model="queryParams.skuCode" :placeholder="tr('请输入SKU编号')" clearable @keyup.enter="handleQuery" />
+      </el-form-item>
       <el-form-item :label="tr('供应商')" prop="supplierId">
         <el-select v-model="queryParams.supplierId" :placeholder="tr('请选择供应商')" clearable filterable>
           <el-option v-for="item in supplierOptions" :key="item.id" :label="item.supplierName" :value="item.id" />
@@ -95,6 +98,7 @@ const queryParams = reactive({
   pageNum: 1,
   pageSize: 10,
   itemName: undefined,
+  skuCode: undefined,
   supplierId: undefined
 })
 
