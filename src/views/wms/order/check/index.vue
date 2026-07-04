@@ -197,7 +197,7 @@
           </div>
         </div>
         <el-table
-          :data="smartCheckReport?.details || []"
+          :data="smartReportRows"
           class="smart-report-table"
           height="520"
           border
@@ -222,6 +222,16 @@
             <template #default="{ row }">{{ getSmartReportStatusText(row) }}</template>
           </el-table-column>
         </el-table>
+        <el-row>
+          <pagination
+            v-show="smartReportTotal>0"
+            :total="smartReportTotal"
+            v-model:limit="smartReportQuery.pageSize"
+            v-model:page="smartReportQuery.pageNum"
+            @pagination="loadSmartReportDetails"
+            class="mr10"
+          />
+        </el-row>
       </div>
       <template #footer>
         <div class="smart-dialog-footer">
@@ -240,7 +250,7 @@
 </template>
 
 <script setup name="CheckOrder">
-import {listCheckOrder, delCheckOrder, exportCheckOrder, getCheckOrder, smartCheckPreview, smartCheckConfirm} from "@/api/wms/checkOrder";
+import {listCheckOrder, delCheckOrder, exportCheckOrder, getCheckOrder, smartCheckPreview, smartCheckPreviewDetails, smartCheckConfirm} from "@/api/wms/checkOrder";
 import {listByCheckOrderId} from "@/api/wms/checkOrderDetail";
 import {computed, getCurrentInstance, nextTick, onMounted, reactive, ref, toRefs} from "vue";
 import {useWmsStore} from "../../../../store/modules/wms";
@@ -283,6 +293,12 @@ const smartConfirmLoading = ref(false)
 const smartReportVisible = ref(false)
 const smartCheckReport = ref(null)
 const smartReportSource = ref(null)
+const smartReportRows = ref([])
+const smartReportTotal = ref(0)
+const smartReportQuery = ref({
+  pageNum: 1,
+  pageSize: 20
+})
 const { queryParams } = toRefs(data);
 const tr = (text) => translateByMap(text, settingsStore.language || 'zh-cn')
 const isEn = computed(() => (settingsStore.language || 'zh-cn') === 'en')
@@ -468,6 +484,8 @@ async function handleStartSmartCheck() {
     const res = await smartCheckPreview({ sourceOrderIds: selectedSmartRows.value.map(row => row.id) })
     smartCheckReport.value = res.data
     smartReportSource.value = 'preview'
+    resetSmartReportPagination()
+    await loadSmartReportDetails()
     smartReportVisible.value = true
   } finally {
     smartCheckLoading.value = false
@@ -481,7 +499,10 @@ async function handleConfirmSmartCheck() {
   await proxy.$modal.confirm(isEn.value ? 'Confirm stocktake and create an AUDIT order?' : '确认盘库并生成核查单吗？')
   smartConfirmLoading.value = true
   try {
-    const res = await smartCheckConfirm({ sourceOrderIds: selectedSmartRows.value.map(row => row.id) })
+    const res = await smartCheckConfirm({
+      sourceOrderIds: selectedSmartRows.value.map(row => row.id),
+      previewToken: smartCheckReport.value?.previewToken
+    })
     smartCheckReport.value = res.data
     smartReportSource.value = 'audit'
     proxy.$modal.msgSuccess(isEn.value ? 'AUDIT order created' : '核查盘库单已生成')
@@ -496,64 +517,105 @@ async function handleConfirmSmartCheck() {
 async function handleViewSmartReport(row) {
   smartCheckLoading.value = true
   try {
-    const [orderRes, detailRes] = await Promise.all([
-      getCheckOrder(row.id),
-      listByCheckOrderId(row.id, {
-        pageNum: 1,
-        pageSize: 10000,
-        haveProfitAndLoss: false
-      })
-    ])
-    smartCheckReport.value = buildSmartReportFromOrder(orderRes.data || row, getResponseRows(detailRes))
+    const orderRes = await getCheckOrder(row.id)
+    smartCheckReport.value = buildSmartReportFromOrder(orderRes.data || row)
     smartReportSource.value = 'audit'
+    resetSmartReportPagination()
+    await loadSmartReportDetails()
     smartReportVisible.value = true
   } finally {
     smartCheckLoading.value = false
   }
 }
 
-function buildSmartReportFromOrder(order, details) {
-  const rows = (details || []).map(detail => {
-    const systemQuantity = Number(getActualQuantity(detail))
-    const countedQuantity = Number(getCountedQuantity(detail))
-    const difference = countedQuantity - systemQuantity
-    const status = difference < 0 ? 'SHORTAGE' : difference > 0 ? 'SURPLUS' : 'MATCHED'
-    return {
-      skuId: detail.skuId,
-      warehouseId: detail.warehouseId,
-      inventoryId: detail.inventoryId,
-      skuCode: getDetailSkuCode(detail),
-      itemName: getDetailItemName(detail),
-      systemQuantity,
-      countedQuantity,
-      difference,
-      differenceDisplay: getDifferenceDisplay({ difference }),
-      status,
-      statusText: getSmartReportStatusText({ status }),
-      remark: detail.memo || detail.remark
+async function loadSmartReportDetails() {
+  const report = smartCheckReport.value
+  if (!report || (smartReportSource.value === 'preview' && !report.previewToken)) {
+    smartReportRows.value = []
+    smartReportTotal.value = 0
+    return
+  }
+  smartCheckLoading.value = true
+  try {
+    const query = {
+      pageNum: smartReportQuery.value.pageNum,
+      pageSize: smartReportQuery.value.pageSize,
+      haveProfitAndLoss: false
     }
-  })
+    const response = smartReportSource.value === 'preview'
+      ? await smartCheckPreviewDetails(report.previewToken, query)
+      : await listByCheckOrderId(report.orderId, query)
+    const rows = getResponseRows(response).map(buildSmartReportRow).filter(row => !isZeroQuantityMatched(row))
+    smartReportRows.value = rows
+    smartReportTotal.value = Number(response?.total ?? response?.data?.total ?? rows.length)
+  } finally {
+    smartCheckLoading.value = false
+  }
+}
+
+function resetSmartReportPagination() {
+  smartReportQuery.value.pageNum = 1
+  smartReportRows.value = []
+  smartReportTotal.value = 0
+}
+
+function buildSmartReportRow(detail) {
+  const systemQuantity = Number(detail.systemQuantity ?? getActualQuantity(detail))
+  const countedQuantity = Number(detail.countedQuantity ?? getCountedQuantity(detail))
+  const difference = Number(detail.difference ?? (countedQuantity - systemQuantity))
+  const status = detail.status || (difference < 0 ? 'SHORTAGE' : difference > 0 ? 'SURPLUS' : 'MATCHED')
+  return {
+    skuId: detail.skuId,
+    warehouseId: detail.warehouseId,
+    inventoryId: detail.inventoryId,
+    skuCode: detail.skuCode || getDetailSkuCode(detail),
+    itemName: detail.itemName || getDetailItemName(detail),
+    systemQuantity,
+    countedQuantity,
+    difference,
+    differenceDisplay: detail.differenceDisplay || getDifferenceDisplay({ difference }),
+    status,
+    statusText: detail.statusText || getSmartReportStatusText({ status }),
+    remark: detail.memo || detail.remark
+  }
+}
+
+function buildSmartReportFromOrder(order) {
+  const summary = parseSmartSummary(order?.remark)
   const sourceOrderCount = parseSourceOrderCount(order?.remark)
-  const shortageCount = rows.filter(row => row.status === 'SHORTAGE').length
-  const surplusCount = rows.filter(row => row.status === 'SURPLUS').length
-  const matchedCount = rows.filter(row => row.status === 'MATCHED').length
   return {
     orderId: order?.id,
     orderNo: order?.orderNo,
     sourceOrderCount,
-    systemSkuCount: rows.length,
-    shortageCount,
-    surplusCount,
-    matchedCount,
-    totalDifference: rows.reduce((sum, row) => sum + Number(row.difference || 0), 0),
+    systemSkuCount: summary ? summary.shortageCount + summary.surplusCount + summary.matchedCount : 0,
+    shortageCount: summary?.shortageCount || 0,
+    surplusCount: summary?.surplusCount || 0,
+    matchedCount: summary?.matchedCount || 0,
+    totalDifference: Number(order?.totalQuantity || 0),
     remark: order?.remark,
-    details: rows
+    details: []
   }
+}
+
+function isZeroQuantityMatched(row) {
+  return Number(row?.systemQuantity || 0) === 0 && Number(row?.countedQuantity || 0) === 0
 }
 
 function parseSourceOrderCount(remark) {
   const match = String(remark || '').match(/含\s*(\d+)\s*单/)
   return match ? Number(match[1]) : '-'
+}
+
+function parseSmartSummary(remark) {
+  const match = String(remark || '').match(/缺\s*(\d+)\s*多\s*(\d+)\s*一致\s*(\d+)/)
+  if (!match) {
+    return null
+  }
+  return {
+    shortageCount: Number(match[1] || 0),
+    surplusCount: Number(match[2] || 0),
+    matchedCount: Number(match[3] || 0)
+  }
 }
 
 /** 鎵撳嵃鎸夐挳鎿嶄綔 */
