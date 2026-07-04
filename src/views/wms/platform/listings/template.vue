@@ -127,7 +127,6 @@
             <section class="ebay-section">
               <div class="ebay-section-title-row">
                 <h3>{{ t('platformListings.ebayItemCategory') }}</h3>
-                <el-button size="small" text icon="Edit" @click="handleSyncCategories('EBAY')" :loading="syncingEbay">{{ t('platformListings.sync') }}</el-button>
               </div>
               <div class="category-summary">
                 <div>
@@ -256,7 +255,6 @@
                       style="width:100%"
                       @change="onTiktokCategoryChange"
                     />
-                    <el-button link type="primary" size="small" @click="handleSyncCategories('TIKTOK')" :loading="syncingTiktok">{{ t('platformListings.syncLatestCategories') }}</el-button>
                   </div>
 
                   <div v-if="showTiktokBrandField" class="tiktok-field-block">
@@ -348,7 +346,7 @@
 <script setup>
 import { ref, reactive, computed, nextTick, onMounted, getCurrentInstance, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { listTemplates, addTemplate, updateTemplate, delTemplate, getTemplate, getCategories, getCategoryById, syncCategories, getEbayPolicies, getTiktokWarehouses } from '@/api/wms/platformListing'
+import { listTemplates, addTemplate, updateTemplate, delTemplate, getTemplate, getCategories, getCategoryById, getEbayPolicies, getTiktokWarehouses } from '@/api/wms/platformListing'
 import { listAllPlatformShops } from '@/api/wms/platformShop'
 
 const { proxy } = getCurrentInstance()
@@ -359,12 +357,10 @@ const loading = ref(false), total = ref(0), templateList = ref([]), submitting =
 const queryRef = ref(null), formRef = ref(null)
 const ebayCategoryTree = ref([])
 const tiktokCategoryTree = ref([])
-const syncingEbay = ref(false)
 const loadingPolicies = ref(false)
 const fulfillmentPolicies = ref([])
 const paymentPolicies = ref([])
 const returnPolicies = ref([])
-const syncingTiktok = ref(false)
 const shopList = ref([])
 const filteredShopList = ref([])
 
@@ -812,19 +808,6 @@ function validateLeafCategory() {
     return false
   }
   return true
-}
-
-function handleSyncCategories(platform) {
-  const isEbay = platform === 'EBAY'
-  if (isEbay) syncingEbay.value = true; else syncingTiktok.value = true
-  syncCategories(platform).then(res => {
-    const count = res.data?.count || 0
-    proxy.$modal.msgSuccess(t('platformListings.categoriesSyncDone', { platform, count }))
-  }).catch(() => {
-    proxy.$modal.msgError(t('platformListings.categoriesSyncFailed', { platform }))
-  }).finally(() => {
-    if (isEbay) syncingEbay.value = false; else syncingTiktok.value = false
-  })
 }
 
 onMounted(() => { loadShops(); getList() })
@@ -1569,7 +1552,6 @@ onMounted(() => { loadShops(); getList() })
   padding-left: 6px;
 }
 </style>
-
 
 
 
