@@ -384,6 +384,7 @@
     listingStatus: 'Status',
     listingError: 'Error',
     listingTime: 'Listing Time',
+    platformPublishFailed: '{platform} publish failed',
     statusPending: 'Pending',
     statusListing: 'Listing',
     statusListed: 'Listed',
