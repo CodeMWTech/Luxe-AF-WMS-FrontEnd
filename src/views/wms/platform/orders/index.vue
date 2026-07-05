@@ -639,10 +639,11 @@
         :closable="false"
         class="mb20"
       />
-      <el-form label-width="130px">
+      <el-form label-width="130px" class="notes-import-form">
         <el-form-item :label="t('platformOrders.importNotesSelectFile')">
           <el-upload
             ref="importUploadRef"
+            class="notes-import-upload"
             :auto-upload="false"
             :limit="1"
             accept=".csv"
@@ -1643,6 +1644,47 @@ onMounted(() => {
   font-weight: 500;
   margin: 0 0 0 0 !important;
   white-space: nowrap;
+}
+
+.platform-orders-page .notes-import-form .el-form-item__content {
+  min-width: 0;
+}
+
+.platform-orders-page .notes-import-upload {
+  width: 100%;
+  min-width: 0;
+}
+
+.platform-orders-page .notes-import-upload .el-upload-list {
+  width: 100%;
+  min-width: 0;
+}
+
+.platform-orders-page .notes-import-upload .el-upload-list__item {
+  max-width: 100%;
+  min-width: 0;
+  padding-right: 28px;
+  box-sizing: border-box;
+}
+
+.platform-orders-page .notes-import-upload .el-upload-list__item-info,
+.platform-orders-page .notes-import-upload .el-upload-list__item-name {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.platform-orders-page .notes-import-upload .el-upload-list__item-name {
+  display: inline-flex;
+}
+
+.platform-orders-page .notes-import-upload .el-upload-list__item-file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.platform-orders-page .notes-import-upload .el-upload-list__item .el-icon--close {
+  right: 6px;
 }
 
 .platform-orders-page .filter-item-actions .action-btn:not(:last-child) {
