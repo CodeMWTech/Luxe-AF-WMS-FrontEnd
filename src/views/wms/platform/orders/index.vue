@@ -190,7 +190,7 @@
 
             <div class="summary-cell meta-cell">
               <span class="cell-label">{{ t('platformOrders.labelTime') }}</span>
-              <span class="meta-time">{{ displayValue(getCreateTime(order)) }}</span>
+              <span class="meta-time">{{ formatPlatformOrderTime(getCreateTime(order)) }}</span>
               <span class="meta-shop">{{ displayValue(getShopName(order)) }} · {{ getPlatform(order) === 'TIKTOK' ? 'TikTok' : 'eBay' }}</span>
             </div>
 
@@ -275,15 +275,15 @@
                 </div>
                 <div class="order-info-item">
                   <span class="order-info-label">{{ t('platformOrders.orderInfoCreateTime') }}</span>
-                  <span class="order-info-value">{{ displayValue(getCreateTime(getDisplayOrder(order, index))) }}</span>
+                  <span class="order-info-value">{{ formatPlatformOrderTime(getCreateTime(getDisplayOrder(order, index))) }}</span>
                 </div>
                 <div class="order-info-item">
                   <span class="order-info-label">{{ t('platformOrders.orderInfoPaidTime') }}</span>
-                  <span class="order-info-value">{{ displayValue(getDisplayOrder(order, index).paidTime || formatUnixTime(rawField(getDisplayOrder(order, index), 'paid_time')) || formatIsoTime(rawField(getDisplayOrder(order, index), null, 'creationDate'))) }}</span>
+                  <span class="order-info-value">{{ formatPlatformOrderTime(getPaidTime(getDisplayOrder(order, index))) }}</span>
                 </div>
                 <div class="order-info-item">
                   <span class="order-info-label">{{ t('platformOrders.orderInfoUpdateTime') }}</span>
-                  <span class="order-info-value">{{ displayValue(getDisplayOrder(order, index).updateTime) }}</span>
+                  <span class="order-info-value">{{ formatPlatformOrderTime(getUpdateTime(getDisplayOrder(order, index))) }}</span>
                 </div>
               </div>
               <div class="detail-grid">
@@ -673,6 +673,7 @@ import { ElMessage } from 'element-plus'
 import { ArrowDown, ArrowRight, CopyDocument, Edit } from '@element-plus/icons-vue'
 import { listPlatformOrders, getOrderStatusMap, updateOrderSku, createShipments, exportPlatformOrders, exportPlatformOrderWeeklyReport, importNotes, getAutoCreateConfig, updateAutoCreateConfig } from '@/api/wms/platformOrder'
 import { listAllPlatformShops, batchSyncOrders } from '@/api/wms/platformShop'
+import { formatDateTimeForQuery, formatLosAngelesTime } from '@/utils/laTime'
 import SkuSelect from '@/views/components/SkuSelect.vue'
 
 const InfoLine = defineComponent({
@@ -758,20 +759,17 @@ function rawField(order, tiktokPath, ebayPath) {
   return null
 }
 
-/** 格式化 Unix 时间戳（秒） */
+/** 转换 Unix 时间戳（秒），最终由 formatPlatformOrderTime 统一格式化为业务时区 */
 function formatUnixTime(seconds) {
   if (seconds == null) return null
   const ms = Number(seconds) * 1000
   if (!Number.isFinite(ms)) return null
-  return new Date(ms).toLocaleString('zh-CN', { hour12: false })
+  return new Date(ms)
 }
 
-/** 格式化 ISO 时间字符串 */
+/** 保留 ISO 时间字符串，最终由 formatPlatformOrderTime 统一格式化为业务时区 */
 function formatIsoTime(str) {
-  if (!str) return null
-  try {
-    return new Date(str).toLocaleString('zh-CN', { hour12: false })
-  } catch { return str }
+  return str || null
 }
 
 const syncOpen = ref(false)
@@ -843,8 +841,8 @@ function normalizeQuery() {
   if (!query.platform) delete query.platform
 
   if (query.orderCreateTimeRange?.length === 2) {
-    query.beginOrderCreateTime = query.orderCreateTimeRange[0]
-    query.endOrderCreateTime = query.orderCreateTimeRange[1]
+    query.beginOrderCreateTime = formatDateTimeForQuery(query.orderCreateTimeRange[0])
+    query.endOrderCreateTime = formatDateTimeForQuery(query.orderCreateTimeRange[1])
   }
   delete query.orderCreateTimeRange
 
@@ -1093,6 +1091,19 @@ function getStatus(order) {
 
 function getCreateTime(order) {
   return order?.createTime || order?.orderCreateTime
+}
+
+function getPaidTime(order) {
+  return order?.paidTime || formatUnixTime(rawField(order, 'paid_time')) || formatIsoTime(rawField(order, null, 'creationDate'))
+}
+
+function getUpdateTime(order) {
+  return order?.updateTime || order?.orderUpdateTime
+}
+
+function formatPlatformOrderTime(value) {
+  if (!value) return '-'
+  return formatLosAngelesTime(value)
 }
 
 function getShopName(order) {
