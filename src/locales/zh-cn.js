@@ -392,6 +392,7 @@
     listingStatus: '状态',
     listingError: '错误信息',
     listingTime: '上架时间',
+    platformPublishFailed: '{platform}上架失败',
     // 状态
     statusPending: '待上架',
     statusListing: '上架中',
