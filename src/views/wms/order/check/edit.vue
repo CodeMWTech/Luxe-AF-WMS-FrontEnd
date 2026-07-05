@@ -159,7 +159,7 @@ import SkuSelect from "@/views/components/SkuSelect.vue";
 import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
 import useTagsViewStore from '@/store/modules/tagsView'
-import { useOrderEditLeaveGuard } from '@/composables/useOrderEditLeaveGuard'
+import { useOrderEditLeaveGuard } from '@/views/wms/order/composables/useOrderEditLeaveGuard'
 
 const {proxy} = getCurrentInstance();
 const route = useRoute();
