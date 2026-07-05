@@ -411,6 +411,8 @@
     overridePrice: 'Override Price',
     ebayTitleTooLongSummary: '{count} eBay listing title(s) exceed 80 characters. Please edit before publishing.',
     ebayTitleTooLongDetail: 'eBay titles are limited to {max} characters. Current length: {length}.',
+    tiktokPriceRangeSummary: '{count} TikTok item price(s) are outside USD $0.01 to USD $50,000.00. Please edit before publishing.',
+    tiktokPriceRangeHint: 'TikTok item price must be between USD $0.01 and USD $50,000.00',
     startPublish: 'Start Publish',
     publishSuccess: 'Publish task submitted',
     publishFailed: 'Publish failed',
