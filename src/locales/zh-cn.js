@@ -381,7 +381,7 @@
     priceMarkupPercent: '百分比',
     // 标题
     titleFormat: '标题格式',
-    titleFormatHelp: '可用变量：{brand} {material} {year} {itemName} {skuCode}',
+    titleFormatHelp: '可用变量：{brand} {brandEn} {material} {year} {itemName} {skuCode}',
     // 上架记录
     listingPlatform: '平台',
     listingShop: '店铺',
@@ -392,6 +392,7 @@
     listingStatus: '状态',
     listingError: '错误信息',
     listingTime: '上架时间',
+    platformPublishFailed: '{platform}上架失败',
     // 状态
     statusPending: '待上架',
     statusListing: '上架中',
@@ -420,6 +421,11 @@
     resolvedTitle: '上架标题',
     resolvedPrice: '渠道价',
     overridePrice: '覆盖价格',
+    ebayTitleTooLongSummary: '有 {count} 个 eBay 上架标题超过 80 个字符，请修改后再上架',
+    ebayTitleTooLongDetail: 'eBay 标题最多 {max} 个字符，当前 {length} 个字符',
+    tiktokPriceRangeSummary: '有 {count} 个 TikTok 商品价格不在 USD $0.01 到 USD $50,000.00 之间，请修改后再上架',
+    tiktokPriceRangeHint: 'TikTok 商品价格必须在 USD $0.01 到 USD $50,000.00 之间',
+    auctionImmediatePaymentBuyItNowRequired: '拍卖商品使用立即支付政策时，一口价不能为空且必须大于 0',
     startPublish: '开始上架',
     publishSuccess: '上架任务已提交',
     publishFailed: '上架失败',
@@ -440,7 +446,7 @@
     // 模板参数
     availableParams: '可用参数',
     paramItemName: '商品名称',
-    paramBrand: '品牌',
+    paramBrand: '品牌(中)',
     paramBrandEn: '品牌(英)',
     paramMaterial: '材质',
     paramCategory: '分类',
@@ -554,7 +560,7 @@
     conditionDescription: '成色说明',
     ebayDescription: '描述',
     ebayDescriptionToolbar: '添加 HTML 内容、格式化文案、尺码表、政策和可复用变量。',
-    ebayDescriptionNote: '留空时后端会根据商品属性自动生成描述；支持 {itemName}、{brand}、{material}、{condition} 等变量。',
+    ebayDescriptionNote: '留空时后端会根据商品属性自动生成描述；支持 {itemName}、{brand}、{brandEn}、{material}、{condition} 等变量。',
     pricing: '定价',
     format: '销售形式',
     buyItNowPrice: '立即购买价',

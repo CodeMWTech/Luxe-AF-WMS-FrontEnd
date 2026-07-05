@@ -19,6 +19,7 @@
           type="password"
           size="large"
           auto-complete="off"
+          show-password
           :placeholder="$t('login.passwordPlaceholder')"
           @keyup.enter="handleLogin"
         >

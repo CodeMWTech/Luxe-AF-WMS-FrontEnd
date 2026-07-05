@@ -59,7 +59,9 @@
             <el-tag :type="statusTagType(row.listingStatus)" size="small">{{ statusLabel(row.listingStatus) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column :label="t('platformListings.listingError')" prop="listingError" min-width="140" show-overflow-tooltip />
+        <el-table-column :label="t('platformListings.listingError')" prop="listingError" min-width="140" show-overflow-tooltip>
+          <template #default="{ row }">{{ formatListingError(row.listingError) }}</template>
+        </el-table-column>
         <el-table-column :label="t('platformListings.listingTime')" prop="createTime" width="160" align="center" />
         <el-table-column :label="t('platformListings.operation')" width="260" align="center" fixed="right">
           <template #default="{ row }">
@@ -71,7 +73,9 @@
         </el-table-column>
       </el-table>
 
-      <pagination v-show="total > 0" :total="total" v-model:page="queryParams.pageNum" v-model:limit="queryParams.pageSize" @pagination="getList" />
+      <div class="listings-pagination">
+        <pagination v-show="total > 0" :total="total" v-model:page="queryParams.pageNum" v-model:limit="queryParams.pageSize" @pagination="getList" />
+      </div>
     </el-card>
 
     <!-- 上架对话框 -->
@@ -120,6 +124,17 @@ function statusLabel(status) {
     AUDITING: t('platformListings.statusAuditing')
   }
   return map[status] || status
+}
+
+function formatListingError(error) {
+  if (!error) return ''
+  const text = String(error).trim()
+  const failedMatch = text.match(/^(eBay|EBAY|TikTok|TIKTOK)\s*上架失败$/i)
+  if (failedMatch) {
+    const platform = failedMatch[1].toLowerCase() === 'ebay' ? 'eBay' : 'TikTok'
+    return t('platformListings.platformPublishFailed', { platform })
+  }
+  return text
 }
 
 function getList() {
@@ -208,5 +223,31 @@ onMounted(() => {
 .platform-listings .filter-card { margin-bottom: 0; }
 .table-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
 .table-title { font-size: 16px; font-weight: 600; }
-</style>
+.listings-pagination {
+  display: flex;
+  justify-content: flex-end;
+  width: 100%;
+  overflow-x: auto;
+  padding: 14px 40px 0 0;
+  box-sizing: border-box;
+}
+.listings-pagination :deep(.pagination-container) {
+  flex: 0 0 auto;
+  height: auto;
+  margin: 0;
+  padding: 0 !important;
+  background: transparent;
+  position: static;
+}
+.listings-pagination :deep(.el-pagination) {
+  position: static !important;
+  right: auto !important;
+}
 
+@media (max-width: 768px) {
+  .listings-pagination {
+    justify-content: flex-start;
+    padding-right: 0;
+  }
+}
+</style>

@@ -41,7 +41,7 @@ import useUserStore from '@/store/modules/user'
 import useSettingsStore from '@/store/modules/settings'
 import { useMobileSkuSearchStore } from '@/store/modules/mobileSkuSearch'
 import { getRouteTitle } from '@/utils/routeTitle'
-import { useMobileLanguage } from '@/composables/useMobileLanguage'
+import { useMobileLanguage } from '@/views/mobile/composables/useMobileLanguage'
 
 const route = useRoute()
 const router = useRouter()

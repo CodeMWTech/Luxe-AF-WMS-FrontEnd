@@ -1,5 +1,5 @@
 ﻿<template>
-  <el-dialog v-model="visible" :title="t('platformListings.publishTitle')" width="900px" :close-on-click-modal="false" destroy-on-close @open="onOpen">
+  <el-dialog v-model="visible" :title="t('platformListings.publishTitle')" width="900px" :close-on-click-modal="false" destroy-on-close @open="onOpen" @closed="onClosed">
     <el-steps :active="step" align-center finish-status="success" style="margin-bottom:24px">
       <el-step :title="t('platformListings.stepSelectProducts')" />
       <el-step :title="t('platformListings.stepSelectShop')" />
@@ -80,6 +80,14 @@
     <!-- Step 3: 预览确认 -->
     <div v-if="step === 2">
       <el-alert :title="t('platformListings.previewSelectedSummary', { count: selectedSkus.length, template: chosenTemplate?.templateName || '-' })" type="info" :closable="false" style="margin-bottom:12px" />
+      <el-alert
+        v-if="hasEbayTitleTooLong"
+        :title="t('platformListings.ebayTitleTooLongSummary', { count: ebayTitleTooLongRows.length })"
+        type="error"
+        show-icon
+        :closable="false"
+        style="margin-bottom:12px"
+      />
       <div v-if="previewList.length" class="channel-preview" :class="chosenPlatform === 'EBAY' ? 'ebay-preview' : 'tiktok-preview'">
         <div class="preview-media">
           <el-image v-if="previewList[0].images && previewList[0].images.length" :src="previewList[0].images[0]" fit="cover" />
@@ -101,13 +109,35 @@
       <el-table :data="previewList" v-loading="previewLoading" border stripe max-height="320">
         <el-table-column :label="t('platformListings.sku')" prop="skuCode" width="120" />
         <el-table-column :label="t('platformListings.resolvedTitle')" min-width="200">
-          <template #default="{ row, $index }">
-            <el-input v-model="row.overrideTitle" size="small" />
+          <template #default="{ row }">
+            <el-input
+              v-model="row.overrideTitle"
+              size="small"
+              :maxlength="isEbayPublish ? EBAY_TITLE_MAX_LENGTH : undefined"
+              :show-word-limit="isEbayPublish"
+              :class="{ 'title-input-error': isEbayTitleTooLong(row) }"
+            />
+            <div v-if="isEbayTitleTooLong(row)" class="title-error">
+              {{ t('platformListings.ebayTitleTooLongDetail', { max: EBAY_TITLE_MAX_LENGTH, length: getTitleLength(row.overrideTitle) }) }}
+            </div>
           </template>
         </el-table-column>
-        <el-table-column :label="t('platformListings.resolvedPrice')" width="110" align="right">
-          <template #default="{ row, $index }">
-            <el-input-number v-model="row.overridePrice" :precision="2" :min="0.01" size="small" controls-position="right" style="width:100%" />
+        <el-table-column :label="t('platformListings.resolvedPrice')" width="160" align="right">
+          <template #default="{ row }">
+            <el-input-number
+              v-model="row.overridePrice"
+              :precision="2"
+              :min="TIKTOK_PRICE_MIN"
+              :max="isTiktokPublish ? TIKTOK_PRICE_MAX : undefined"
+              size="small"
+              controls-position="right"
+              style="width:100%"
+              :class="{ 'price-input-error': isTiktokPriceInvalid(row) }"
+              @change="normalizeOverridePrice(row)"
+            />
+            <div v-if="isTiktokPriceInvalid(row)" class="price-error">
+              {{ t('platformListings.tiktokPriceRangeHint') }}
+            </div>
           </template>
         </el-table-column>
         <el-table-column :label="t('platformListings.image')" width="70" align="center">
@@ -126,7 +156,7 @@
         {{ t('platformListings.nextStep') }} ({{ selectedSkus.length }})
       </el-button>
       <el-button v-if="step === 1" type="primary" @click="goStep3" :disabled="!chosenTemplateId">{{ t('platformListings.nextStep') }}</el-button>
-      <el-button v-if="step === 2" type="primary" @click="doPublish" :loading="publishing">
+      <el-button v-if="step === 2" type="primary" @click="doPublish" :loading="publishing" :disabled="hasEbayTitleTooLong || hasTiktokPriceInvalid">
         {{ t('platformListings.startPublish') }} ({{ previewList.length }})
       </el-button>
     </template>
@@ -148,6 +178,9 @@ const emit = defineEmits(['success'])
 const visible = ref(false)
 const step = ref(0)
 const publishing = ref(false)
+const EBAY_TITLE_MAX_LENGTH = 80
+const TIKTOK_PRICE_MIN = 0.01
+const TIKTOK_PRICE_MAX = 50000
 
 // ==================== Step 1: Inventory ====================
 const invLoading = ref(false)
@@ -216,7 +249,6 @@ function seedPreselectedSkus(skuIds) {
 }
 
 function handleInventoryQuery() {
-  resetPublishSelection()
   invParams.pageNum = 1
   loadInventory()
 }
@@ -284,6 +316,42 @@ function onShopChange() {
 // ==================== Step 3: Preview ====================
 const previewLoading = ref(false)
 const previewList = ref([])
+const isEbayPublish = computed(() => chosenPlatform.value === 'EBAY')
+const isTiktokPublish = computed(() => chosenPlatform.value === 'TIKTOK')
+const ebayTitleTooLongRows = computed(() => isEbayPublish.value
+  ? previewList.value.filter(row => isEbayTitleTooLong(row))
+  : [])
+const hasEbayTitleTooLong = computed(() => ebayTitleTooLongRows.value.length > 0)
+const tiktokPriceInvalidRows = computed(() => isTiktokPublish.value
+  ? previewList.value.filter(row => isTiktokPriceInvalid(row))
+  : [])
+const hasTiktokPriceInvalid = computed(() => tiktokPriceInvalidRows.value.length > 0)
+
+function getTitleLength(title) {
+  return Array.from(title || '').length
+}
+
+function isEbayTitleTooLong(row) {
+  return getTitleLength(row?.overrideTitle) > EBAY_TITLE_MAX_LENGTH
+}
+
+function isTiktokPriceInvalid(row) {
+  if (!isTiktokPublish.value) return false
+  const price = Number(row?.overridePrice)
+  return !Number.isFinite(price) || price < TIKTOK_PRICE_MIN || price > TIKTOK_PRICE_MAX
+}
+
+function normalizePreviewPrice(price) {
+  const nextPrice = Number(price)
+  if (!Number.isFinite(nextPrice)) return price
+  if (isTiktokPublish.value && nextPrice > TIKTOK_PRICE_MAX) return TIKTOK_PRICE_MAX
+  return nextPrice
+}
+
+function normalizeOverridePrice(row) {
+  if (!row || !isTiktokPublish.value) return
+  row.overridePrice = normalizePreviewPrice(row.overridePrice)
+}
 
 async function loadPreviews() {
   previewLoading.value = true
@@ -298,7 +366,7 @@ async function loadPreviews() {
           skuId: sku.skuId || sku.id,
           skuCode: data.skuCode || sku.skuCode,
           overrideTitle: data.title || '',
-          overridePrice: data.price || 0,
+          overridePrice: normalizePreviewPrice(data.price ?? 0),
           images: data.images || []
         })
       } catch (e) {
@@ -334,6 +402,15 @@ async function onOpen() {
   })
 }
 
+function onClosed() {
+  resetPublishSelection()
+  preSelectedSkuIds.value = null
+  previewList.value = []
+  chosenShopId.value = null
+  chosenTemplateId.value = null
+  templateList.value = []
+}
+
 function goStep2() {
   if (selectedSkus.value.length === 0) {
     proxy.$modal.msgWarning(t('platformListings.selectSkuRequired'))
@@ -352,9 +429,23 @@ async function goStep3() {
   }
   step.value = 2
   await loadPreviews()
+  if (hasEbayTitleTooLong.value) {
+    proxy.$modal.msgWarning(t('platformListings.ebayTitleTooLongSummary', { count: ebayTitleTooLongRows.value.length }))
+  }
+  if (hasTiktokPriceInvalid.value) {
+    proxy.$modal.msgWarning(t('platformListings.tiktokPriceRangeSummary', { count: tiktokPriceInvalidRows.value.length }))
+  }
 }
 
 async function doPublish() {
+  if (hasEbayTitleTooLong.value) {
+    proxy.$modal.msgWarning(t('platformListings.ebayTitleTooLongSummary', { count: ebayTitleTooLongRows.value.length }))
+    return
+  }
+  if (hasTiktokPriceInvalid.value) {
+    proxy.$modal.msgWarning(t('platformListings.tiktokPriceRangeSummary', { count: tiktokPriceInvalidRows.value.length }))
+    return
+  }
   const skuIds = previewList.value.map(p => p.skuId)
   const customTitles = {}
   const customPrices = {}
@@ -420,4 +511,25 @@ defineExpose({ open, openWithSkus })
 .preview-desc { max-height: 110px; overflow: auto; font-size: 12px; color: #606266; border-top: 1px solid #ebeef5; padding-top: 8px; }
 .ebay-preview { border-top: 4px solid #3665f3; }
 .tiktok-preview { border-top: 4px solid #111827; }
+.title-input-error :deep(.el-input__wrapper) {
+  box-shadow: 0 0 0 1px var(--el-color-danger) inset;
+}
+.title-error {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--el-color-danger);
+}
+.price-input-error :deep(.el-input-number__decrease),
+.price-input-error :deep(.el-input-number__increase),
+.price-input-error :deep(.el-input__wrapper) {
+  box-shadow: 0 0 0 1px var(--el-color-danger) inset;
+}
+.price-error {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--el-color-danger);
+  text-align: left;
+}
 </style>
