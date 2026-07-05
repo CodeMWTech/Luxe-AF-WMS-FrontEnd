@@ -488,6 +488,8 @@
     templateNameRequired: '模板名称不能为空',
     platformRequired: '请选择平台',
     shopRequired: '请选择店铺',
+    warehouseRequired: '请选择仓库',
+    requiredPositiveNumber: '请填写大于 0 的数值',
     // 操作提示
     confirmDeleteTemplate: '确认删除该模板？',
     templateDeleteSuccess: '删除成功',

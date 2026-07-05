@@ -476,6 +476,8 @@
     templateNameRequired: 'Template name is required',
     platformRequired: 'Please select a platform',
     shopRequired: 'Please select a shop',
+    warehouseRequired: 'Please select a warehouse',
+    requiredPositiveNumber: 'Please enter a value greater than 0',
     // Actions
     confirmDeleteTemplate: 'Confirm to delete this template?',
     templateDeleteSuccess: 'Deleted successfully',
