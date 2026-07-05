@@ -123,23 +123,25 @@
           <el-button type="info" icon="Download" class="action-btn" :loading="exporting" @click="handleExport" v-hasPermi="['wms:platform:list']">{{ t('platformOrders.btnExport') }}</el-button>
           <el-button type="info" icon="Document" class="action-btn" :loading="weeklyReportExporting" @click="handleWeeklyReportExport" v-hasPermi="['wms:platform:list']">{{ t('platformOrders.btnWeeklyReportExport') }}</el-button>
           <el-button type="primary" icon="Upload" class="action-btn" @click="openImportNotesDialog" v-hasPermi="['wms:platform:edit']">{{ t('platformOrders.btnImportNotes') }}</el-button>
-          <span v-if="canManageAutoCreateConfig" class="auto-create-toggle">
-            <el-switch
-              v-model="autoCreateEnabled"
-              :loading="configLoading"
-              @change="handleAutoCreateToggle"
-              size="small"
-            />
-            <span class="auto-create-label">{{ t('platformOrders.autoCreateLabel') }}</span>
+          <span class="shipment-actions">
+            <span v-if="canManageAutoCreateConfig" class="auto-create-toggle">
+              <el-switch
+                v-model="autoCreateEnabled"
+                :loading="configLoading"
+                @change="handleAutoCreateToggle"
+                size="small"
+              />
+              <span class="auto-create-label">{{ t('platformOrders.autoCreateLabel') }}</span>
+            </span>
+            <el-button
+              type="warning"
+              icon="Box"
+              class="action-btn"
+              :loading="shipmentCreating"
+              @click="handleCreateShipments"
+              v-hasPermi="['wms:platform:edit']"
+            >{{ t('platformOrders.btnCreateShipment') }}</el-button>
           </span>
-          <el-button
-            type="warning"
-            icon="Box"
-            class="action-btn"
-            :loading="shipmentCreating"
-            @click="handleCreateShipments"
-            v-hasPermi="['wms:platform:edit']"
-          >{{ t('platformOrders.btnCreateShipment') }}</el-button>
         </el-form-item>
       </el-form>
     </el-card>
@@ -188,7 +190,7 @@
 
             <div class="summary-cell meta-cell">
               <span class="cell-label">{{ t('platformOrders.labelTime') }}</span>
-              <span class="meta-time">{{ displayValue(getCreateTime(order)) }}</span>
+              <span class="meta-time">{{ formatPlatformOrderTime(getCreateTime(order)) }}</span>
               <span class="meta-shop">{{ displayValue(getShopName(order)) }} · {{ getPlatform(order) === 'TIKTOK' ? 'TikTok' : 'eBay' }}</span>
             </div>
 
@@ -273,15 +275,15 @@
                 </div>
                 <div class="order-info-item">
                   <span class="order-info-label">{{ t('platformOrders.orderInfoCreateTime') }}</span>
-                  <span class="order-info-value">{{ displayValue(getCreateTime(getDisplayOrder(order, index))) }}</span>
+                  <span class="order-info-value">{{ formatPlatformOrderTime(getCreateTime(getDisplayOrder(order, index))) }}</span>
                 </div>
                 <div class="order-info-item">
                   <span class="order-info-label">{{ t('platformOrders.orderInfoPaidTime') }}</span>
-                  <span class="order-info-value">{{ displayValue(getDisplayOrder(order, index).paidTime || formatUnixTime(rawField(getDisplayOrder(order, index), 'paid_time')) || formatIsoTime(rawField(getDisplayOrder(order, index), null, 'creationDate'))) }}</span>
+                  <span class="order-info-value">{{ formatPlatformOrderTime(getPaidTime(getDisplayOrder(order, index))) }}</span>
                 </div>
                 <div class="order-info-item">
                   <span class="order-info-label">{{ t('platformOrders.orderInfoUpdateTime') }}</span>
-                  <span class="order-info-value">{{ displayValue(getDisplayOrder(order, index).updateTime) }}</span>
+                  <span class="order-info-value">{{ formatPlatformOrderTime(getUpdateTime(getDisplayOrder(order, index))) }}</span>
                 </div>
               </div>
               <div class="detail-grid">
@@ -637,10 +639,11 @@
         :closable="false"
         class="mb20"
       />
-      <el-form label-width="130px">
+      <el-form label-width="130px" class="notes-import-form">
         <el-form-item :label="t('platformOrders.importNotesSelectFile')">
           <el-upload
             ref="importUploadRef"
+            class="notes-import-upload"
             :auto-upload="false"
             :limit="1"
             accept=".csv"
@@ -671,6 +674,7 @@ import { ElMessage } from 'element-plus'
 import { ArrowDown, ArrowRight, CopyDocument, Edit } from '@element-plus/icons-vue'
 import { listPlatformOrders, getOrderStatusMap, updateOrderSku, createShipments, exportPlatformOrders, exportPlatformOrderWeeklyReport, importNotes, getAutoCreateConfig, updateAutoCreateConfig } from '@/api/wms/platformOrder'
 import { listAllPlatformShops, batchSyncOrders } from '@/api/wms/platformShop'
+import { formatDateTimeForQuery, formatLosAngelesTime } from '@/utils/laTime'
 import SkuSelect from '@/views/components/SkuSelect.vue'
 
 const InfoLine = defineComponent({
@@ -756,20 +760,17 @@ function rawField(order, tiktokPath, ebayPath) {
   return null
 }
 
-/** 格式化 Unix 时间戳（秒） */
+/** 转换 Unix 时间戳（秒），最终由 formatPlatformOrderTime 统一格式化为业务时区 */
 function formatUnixTime(seconds) {
   if (seconds == null) return null
   const ms = Number(seconds) * 1000
   if (!Number.isFinite(ms)) return null
-  return new Date(ms).toLocaleString('zh-CN', { hour12: false })
+  return new Date(ms)
 }
 
-/** 格式化 ISO 时间字符串 */
+/** 保留 ISO 时间字符串，最终由 formatPlatformOrderTime 统一格式化为业务时区 */
 function formatIsoTime(str) {
-  if (!str) return null
-  try {
-    return new Date(str).toLocaleString('zh-CN', { hour12: false })
-  } catch { return str }
+  return str || null
 }
 
 const syncOpen = ref(false)
@@ -841,8 +842,8 @@ function normalizeQuery() {
   if (!query.platform) delete query.platform
 
   if (query.orderCreateTimeRange?.length === 2) {
-    query.beginOrderCreateTime = query.orderCreateTimeRange[0]
-    query.endOrderCreateTime = query.orderCreateTimeRange[1]
+    query.beginOrderCreateTime = formatDateTimeForQuery(query.orderCreateTimeRange[0])
+    query.endOrderCreateTime = formatDateTimeForQuery(query.orderCreateTimeRange[1])
   }
   delete query.orderCreateTimeRange
 
@@ -1091,6 +1092,19 @@ function getStatus(order) {
 
 function getCreateTime(order) {
   return order?.createTime || order?.orderCreateTime
+}
+
+function getPaidTime(order) {
+  return order?.paidTime || formatUnixTime(rawField(order, 'paid_time')) || formatIsoTime(rawField(order, null, 'creationDate'))
+}
+
+function getUpdateTime(order) {
+  return order?.updateTime || order?.orderUpdateTime
+}
+
+function formatPlatformOrderTime(value) {
+  if (!value) return '-'
+  return formatLosAngelesTime(value)
 }
 
 function getShopName(order) {
@@ -1612,7 +1626,11 @@ onMounted(() => {
     width: 100%;
     max-width: 100%;
     margin-left: 0 !important;
-    gap: 8px;
+    gap: 12px 22px;
+  }
+
+  :deep(.el-button + .el-button) {
+    margin-left: 0;
   }
 }
 
@@ -1624,8 +1642,53 @@ onMounted(() => {
   height: 36px;
   border-radius: 8px;
   font-weight: 500;
-  margin-left: 0 !important;
+  margin: 0 0 0 0 !important;
   white-space: nowrap;
+}
+
+.platform-orders-page .notes-import-form .el-form-item__content {
+  min-width: 0;
+}
+
+.platform-orders-page .notes-import-upload {
+  width: 100%;
+  min-width: 0;
+}
+
+.platform-orders-page .notes-import-upload .el-upload-list {
+  width: 100%;
+  min-width: 0;
+}
+
+.platform-orders-page .notes-import-upload .el-upload-list__item {
+  max-width: 100%;
+  min-width: 0;
+  padding-right: 28px;
+  box-sizing: border-box;
+}
+
+.platform-orders-page .notes-import-upload .el-upload-list__item-info,
+.platform-orders-page .notes-import-upload .el-upload-list__item-name {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.platform-orders-page .notes-import-upload .el-upload-list__item-name {
+  display: inline-flex;
+}
+
+.platform-orders-page .notes-import-upload .el-upload-list__item-file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.platform-orders-page .notes-import-upload .el-upload-list__item .el-icon--close {
+  right: 6px;
+}
+
+.platform-orders-page .filter-item-actions .action-btn:not(:last-child) {
+  margin-right: 10px !important;
 }
 
 // ==================== Orders Shell ====================
@@ -2290,7 +2353,7 @@ onMounted(() => {
       width: 100%;
       margin-left: 0 !important;
       flex-wrap: wrap;
-      gap: 6px;
+      gap: 8px 12px;
     }
   }
   .platform-orders-page .action-btn {
@@ -2298,6 +2361,7 @@ onMounted(() => {
     height: 32px;
     font-size: 12px;
     padding: 0 8px;
+    margin-right: 4px !important;
   }
 
   .summary-row {
@@ -2368,6 +2432,7 @@ onMounted(() => {
     font-size: 11px;
     padding: 0 6px;
     border-radius: 6px;
+    margin-right: 2px !important;
   }
 
   .platform-orders-page .filter-item-actions {
@@ -2376,7 +2441,7 @@ onMounted(() => {
       width: 100%;
       margin-left: 0 !important;
       flex-wrap: wrap;
-      gap: 4px;
+      gap: 6px 10px;
     }
   }
 
@@ -2466,13 +2531,20 @@ onMounted(() => {
 }
 
 // ==================== 自动创建出库单开关 ====================
+.shipment-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  margin-left: auto;
+}
+
 .auto-create-toggle {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   height: 36px;
-  margin-left: 0;
-  padding: 0 4px;
+  margin: 0;
+  padding: 0 6px;
   white-space: nowrap;
 }
 

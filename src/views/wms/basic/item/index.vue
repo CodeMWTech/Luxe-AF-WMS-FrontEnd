@@ -194,8 +194,8 @@
             :closable="false"
             class="purchase-tip"
           />
-          <el-table ref="itemTableRef" :data="itemList" row-key="id" @selection-change="handleSelectionChange" :span-method="spanMethod" border :empty-text="tr('暂无商品')" v-loading="loading" cell-class-name="my-cell">
-            <el-table-column v-if="canShowSelectionColumn" type="selection" width="48" :selectable="isRowSelectable" reserve-selection />
+          <el-table ref="itemTableRef" :data="itemList" :row-key="getItemRowKey" @selection-change="handleSelectionChange" :span-method="spanMethod" border :empty-text="tr('暂无商品')" v-loading="loading" cell-class-name="my-cell">
+            <el-table-column v-if="canShowSelectionColumn" type="selection" width="48" :selectable="isRowSelectable" />
             <el-table-column :label="tr('商品信息')" prop="itemId">
               <template #default="{ row }">
                 <div>{{ row.item.itemName }}</div>
@@ -1761,6 +1761,61 @@ function getRowAvailableQty(row) {
   return Number.isFinite(qty) ? Math.max(0, qty) : 0
 }
 
+/** 多选框选中数据 */
+let suppressItemSelectionChange = false
+
+const getItemSelectionKey = (row) => {
+  const key = row?.itemId || row?.item?.id
+  return key || null
+}
+
+const getItemRowKey = (row) => row?.skuId ? String(row.skuId) : String(getItemSelectionKey(row) || '')
+
+function syncSelectedItemIds() {
+  ids.value = selectedItemIds.value
+  single.value = ids.value.length !== 1
+  multiple.value = ids.value.length === 0
+}
+
+function restoreCurrentPageSelection() {
+  if (!itemTableRef.value) return
+  suppressItemSelectionChange = true
+  itemTableRef.value?.clearSelection()
+  const restoredKeySet = new Set()
+  itemList.value.forEach(row => {
+    const key = getItemSelectionKey(row)
+    if (key && selectedItemsMap.value.has(key) && !restoredKeySet.has(key) && isRowSelectable(row)) {
+      itemTableRef.value?.toggleRowSelection(row, true)
+      restoredKeySet.add(key)
+    }
+  })
+  nextTick(() => {
+    suppressItemSelectionChange = false
+    syncSelectedItemIds()
+  })
+}
+
+const handleSelectionChange = (selection) => {
+  if (suppressItemSelectionChange) return
+  const selectedKeySet = new Set(selection.map(getItemSelectionKey).filter(Boolean))
+  const selectedRowMap = new Map()
+  selection.forEach(row => {
+    const key = getItemSelectionKey(row)
+    if (key && !selectedRowMap.has(key)) {
+      selectedRowMap.set(key, row)
+    }
+  })
+  const currentKeySet = new Set(itemList.value.map(getItemSelectionKey).filter(Boolean))
+  currentKeySet.forEach(key => {
+    if (selectedKeySet.has(key)) {
+      selectedItemsMap.value.set(key, toSelectedItem(selectedRowMap.get(key)))
+    } else {
+      selectedItemsMap.value.delete(key)
+    }
+  })
+  syncSelectedItemIds()
+}
+
 function getPurchaseSelectedQty(row) {
   const value = row?.item?.purchaseSelectedQuantity
   if (value !== null && value !== undefined) {
@@ -1798,12 +1853,6 @@ function toSelectedItem(row) {
   }
 }
 
-function refreshSelectedState() {
-  ids.value = selectedItemIds.value
-  single.value = ids.value.length !== 1
-  multiple.value = !ids.value.length
-}
-
 function isPurchaseSelectable(row) {
   return !!row?.item?.supplierId && getPurchaseAvailableQty(row) > 0
 }
@@ -1818,32 +1867,10 @@ function isRowSelectable(row) {
   return isPurchaseSelectable(row)
 }
 
-function restoreCurrentPageSelection() {
-  if (!itemTableRef.value) return
-  itemList.value.forEach(row => {
-    itemTableRef.value.toggleRowSelection(row, selectedItemsMap.value.has(row.itemId))
-  })
-}
-
-/** 多选框选中数据，保留跨页勾选结果 */
-const handleSelectionChange = (selection) => {
-  const currentPageIds = new Set(itemList.value.map(row => row.itemId).filter(Boolean))
-  const nextMap = new Map(selectedItemsMap.value)
-  currentPageIds.forEach(id => nextMap.delete(id))
-  selection.forEach(row => {
-    if (!row?.itemId || !isRowSelectable(row)) return
-    if (!nextMap.has(row.itemId)) {
-      nextMap.set(row.itemId, toSelectedItem(row))
-    }
-  })
-  selectedItemsMap.value = nextMap
-  refreshSelectedState()
-}
-
 function clearSelectedItems() {
   selectedItemsMap.value = new Map()
   itemTableRef.value?.clearSelection?.()
-  refreshSelectedState()
+  syncSelectedItemIds()
 }
 
 function openQuantityDialog(action) {

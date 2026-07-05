@@ -701,6 +701,7 @@
   '确认取消编辑移库单吗？': 'Confirm cancel editing transfer order?',
   '确认取消编辑盘库单吗？': 'Confirm cancel editing stocktake order?',
   确认暂存: 'Confirm save draft',
+  '是否暂存表单？': 'Save the form as draft before leaving?',
   '确认入库吗？': 'Confirm inbound?',
   '确认出库吗？': 'Confirm outbound?',
   '确认移库吗？': 'Confirm transfer?',

@@ -79,6 +79,15 @@ export function smartCheckPreview(data) {
 }
 
 // 确认库存智能核查并生成核查盘库单
+export function smartCheckPreviewDetails(previewToken, query) {
+  return request({
+    url: '/wms/checkOrder/smart-check/preview/' + previewToken + '/details',
+    method: 'get',
+    params: query,
+    timeout: CHECK_ORDER_LONG_TIMEOUT
+  })
+}
+
 export function smartCheckConfirm(data) {
   return request({
     url: '/wms/checkOrder/smart-check/confirm',
