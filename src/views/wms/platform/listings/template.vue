@@ -55,7 +55,7 @@
 
     <!-- 新建/编辑弹窗 -->
     <el-dialog v-model="dialog.visible" :title="dialog.title" width="1180px" :close-on-click-modal="false" destroy-on-close top="20px">
-      <div class="template-dialog-body">
+      <el-form ref="formRef" :model="form" :rules="rules" label-position="top" class="template-dialog-body">
 
         <!-- ============ 公共头部 ============ -->
         <el-row :gutter="16" style="margin-bottom:16px">
@@ -198,16 +198,16 @@
             <section class="ebay-section shipping-section">
               <h3>{{ t('platformListings.shipping') }}</h3>
               <div class="policy-card-list">
-                <div class="policy-card"><div class="policy-title">{{ t('platformListings.domesticShipping') }}</div><el-select v-model="form.ebayFulfillmentPolicyId" :placeholder="t('platformListings.selectShippingPolicy')" clearable filterable style="width:100%"><el-option v-for="p in fulfillmentPolicies" :key="p.id" :label="p.name" :value="p.id" /></el-select></div>
-                <div class="policy-card"><div class="policy-title">{{ t('platformListings.returnPolicy') }}</div><el-select v-model="form.ebayReturnPolicyId" :placeholder="t('platformListings.selectReturnPolicy')" clearable filterable style="width:100%"><el-option v-for="p in returnPolicies" :key="p.id" :label="p.name" :value="p.id" /></el-select></div>
-                <div class="policy-card"><div class="policy-title">{{ t('platformListings.paymentPolicy') }}</div><el-select v-model="form.ebayPaymentPolicyId" :placeholder="t('platformListings.selectPaymentPolicy')" clearable filterable style="width:100%"><el-option v-for="p in paymentPolicies" :key="p.id" :label="p.name" :value="p.id" /></el-select></div>
+                <div class="policy-card"><div class="policy-title">{{ t('platformListings.domesticShipping') }}</div><el-form-item prop="ebayFulfillmentPolicyId" class="template-required-form-item"><el-select v-model="form.ebayFulfillmentPolicyId" :placeholder="t('platformListings.selectShippingPolicy')" clearable filterable style="width:100%"><el-option v-for="p in fulfillmentPolicies" :key="p.id" :label="p.name" :value="p.id" /></el-select></el-form-item></div>
+                <div class="policy-card"><div class="policy-title">{{ t('platformListings.returnPolicy') }}</div><el-form-item prop="ebayReturnPolicyId" class="template-required-form-item"><el-select v-model="form.ebayReturnPolicyId" :placeholder="t('platformListings.selectReturnPolicy')" clearable filterable style="width:100%"><el-option v-for="p in returnPolicies" :key="p.id" :label="p.name" :value="p.id" /></el-select></el-form-item></div>
+                <div class="policy-card"><div class="policy-title">{{ t('platformListings.paymentPolicy') }}</div><el-form-item prop="ebayPaymentPolicyId" class="template-required-form-item"><el-select v-model="form.ebayPaymentPolicyId" :placeholder="t('platformListings.selectPaymentPolicy')" clearable filterable style="width:100%"><el-option v-for="p in paymentPolicies" :key="p.id" :label="p.name" :value="p.id" /></el-select></el-form-item></div>
               </div>
               <el-button size="small" type="primary" plain icon="Download" @click="loadEbayPolicies" :loading="loadingPolicies">{{ t('platformListings.loadEbayPolicies') }}</el-button>
               <div class="ebay-field-row four-col compact-row shipping-metrics">
-                <div><label class="ebay-field-label">{{ t('platformListings.length') }} ({{ dimensionUnitShort }})</label><el-input-number v-model="form.packageLength" :min="0" :precision="1" style="width:100%" /></div>
-                <div><label class="ebay-field-label">{{ t('platformListings.width') }} ({{ dimensionUnitShort }})</label><el-input-number v-model="form.packageWidth" :min="0" :precision="1" style="width:100%" /></div>
-                <div><label class="ebay-field-label">{{ t('platformListings.height') }} ({{ dimensionUnitShort }})</label><el-input-number v-model="form.packageHeight" :min="0" :precision="1" style="width:100%" /></div>
-                <div><label class="ebay-field-label">{{ t('platformListings.weight') }} ({{ weightUnitShort }})</label><el-input-number v-model="form.packageWeightValue" :min="0" :precision="weightPrecision" :step="weightStep" style="width:100%" /></div>
+                <div><el-form-item prop="packageLength" class="template-required-form-item" :label="t('platformListings.length') + ' (' + dimensionUnitShort + ')'"><el-input-number v-model="form.packageLength" :min="0" :precision="1" style="width:100%" /></el-form-item></div>
+                <div><el-form-item prop="packageWidth" class="template-required-form-item" :label="t('platformListings.width') + ' (' + dimensionUnitShort + ')'"><el-input-number v-model="form.packageWidth" :min="0" :precision="1" style="width:100%" /></el-form-item></div>
+                <div><el-form-item prop="packageHeight" class="template-required-form-item" :label="t('platformListings.height') + ' (' + dimensionUnitShort + ')'"><el-input-number v-model="form.packageHeight" :min="0" :precision="1" style="width:100%" /></el-form-item></div>
+                <div><el-form-item prop="packageWeightValue" class="template-required-form-item" :label="t('platformListings.weight') + ' (' + weightUnitShort + ')'"><el-input-number v-model="form.packageWeightValue" :min="0" :precision="weightPrecision" :step="weightStep" style="width:100%" /></el-form-item></div>
               </div>
               <div class="unit-row">
                 <el-select v-model="form.packageWeightUnit" style="width:190px"><el-option v-for="u in weightUnitOptions" :key="u.value" :label="u.label" :value="u.value" /></el-select>
@@ -286,9 +286,11 @@
                 <section class="tiktok-form-section">
                   <h3>{{ t('platformListings.salesInformation') }}</h3>
                   <div class="stock-toolbar editable-stock-toolbar">
-                    <el-select v-model="form.tiktokWarehouseId" :placeholder="t('platformListings.warehousePlaceholder')" clearable filterable :disabled="!form.shopId" :loading="warehouseLoading" style="width:100%">
-                      <el-option v-for="w in warehouseList" :key="w.id" :label="warehouseOptionLabel(w)" :value="w.id" :disabled="isReturnWarehouse(w)" />
-                    </el-select>
+                    <el-form-item prop="tiktokWarehouseId" class="template-required-form-item">
+                      <el-select v-model="form.tiktokWarehouseId" :placeholder="t('platformListings.warehousePlaceholder')" clearable filterable :disabled="!form.shopId" :loading="warehouseLoading" style="width:100%">
+                        <el-option v-for="w in warehouseList" :key="w.id" :label="warehouseOptionLabel(w)" :value="w.id" :disabled="isReturnWarehouse(w)" />
+                      </el-select>
+                    </el-form-item>
                   </div>
                   <div class="tiktok-tip warehouse-warning-tip">{{ t('platformListings.returnWarehouseUnsupported') }}</div>
                   <div class="tiktok-stock-grid editable-stock-grid">
@@ -303,7 +305,7 @@
                   <label class="tiktok-required-label">{{ t('platformListings.packageWeight') }}</label>
                   <div class="unit-input-row">
                     <el-select v-model="form.packageWeightUnit" class="unit-select"><el-option v-for="u in weightUnitOptions" :key="u.value" :label="u.label" :value="u.value" /></el-select>
-                    <el-input-number v-model="form.packageWeightValue" :min="0" :precision="weightPrecision" :step="weightStep" controls-position="right" style="width:100%" />
+                    <el-form-item prop="packageWeightValue" class="template-required-form-item"><el-input-number v-model="form.packageWeightValue" :min="0" :precision="weightPrecision" :step="weightStep" controls-position="right" style="width:100%" /></el-form-item>
                   </div>
                   <div class="tiktok-tip">{{ t('platformListings.packageWeightHint') }}</div>
                   <label class="tiktok-required-label">{{ t('platformListings.packageDimensionsLabel') }}</label>
@@ -313,9 +315,9 @@
                     <span>{{ t('platformListings.height') }}</span>
                   </div>
                   <div class="dimension-row three with-unit-suffix">
-                    <el-input-number v-model="form.packageLength" :min="0" :precision="1" style="width:100%" />
-                    <el-input-number v-model="form.packageWidth" :min="0" :precision="1" style="width:100%" />
-                    <el-input-number v-model="form.packageHeight" :min="0" :precision="1" style="width:100%" />
+                    <el-form-item prop="packageLength" class="template-required-form-item"><el-input-number v-model="form.packageLength" :min="0" :precision="1" style="width:100%" /></el-form-item>
+                    <el-form-item prop="packageWidth" class="template-required-form-item"><el-input-number v-model="form.packageWidth" :min="0" :precision="1" style="width:100%" /></el-form-item>
+                    <el-form-item prop="packageHeight" class="template-required-form-item"><el-input-number v-model="form.packageHeight" :min="0" :precision="1" style="width:100%" /></el-form-item>
                   </div>
                   <div class="unit-row compact">
                     <span class="unit-hint">{{ t('platformListings.dimensionUnit') }}</span>
@@ -339,7 +341,7 @@
             </div>
           </div>
         </template>
-      </div>
+      </el-form>
       <template #footer>
         <el-button @click="dialog.visible = false">{{ t('platformListings.cancel') }}</el-button>
         <el-button type="primary" @click="submitForm" :loading="submitting">{{ t('platformListings.save') }}</el-button>
@@ -528,10 +530,37 @@ const isAuctionImmediatePayment = computed(() => {
   ].filter(Boolean).join(' ').toLowerCase()
   return !/\bno\b/.test(policyText)
 })
+function isEmptyValue(value) {
+  return value === null || value === undefined || value === ''
+}
+function validateRequiredWhen(platform, messageKey) {
+  return (_rule, value, callback) => {
+    if (form.platform !== platform || !isEmptyValue(value)) {
+      callback()
+      return
+    }
+    callback(new Error(t(messageKey)))
+  }
+}
+function validatePositiveNumber(_rule, value, callback) {
+  if (!isEmptyValue(value) && Number(value) > 0) {
+    callback()
+    return
+  }
+  callback(new Error(t('platformListings.requiredPositiveNumber')))
+}
 const rules = {
   templateName: [{ required: true, message: t('platformListings.templateNameRequired'), trigger: 'blur' }],
   platform: [{ required: true, message: t('platformListings.platformRequired'), trigger: 'change' }],
-  shopId: [{ required: true, message: t('platformListings.shopRequired'), trigger: 'change' }]
+  shopId: [{ required: true, message: t('platformListings.shopRequired'), trigger: 'change' }],
+  ebayFulfillmentPolicyId: [{ validator: validateRequiredWhen('EBAY', 'platformListings.selectShippingPolicy'), trigger: 'change' }],
+  ebayPaymentPolicyId: [{ validator: validateRequiredWhen('EBAY', 'platformListings.selectPaymentPolicy'), trigger: 'change' }],
+  ebayReturnPolicyId: [{ validator: validateRequiredWhen('EBAY', 'platformListings.selectReturnPolicy'), trigger: 'change' }],
+  tiktokWarehouseId: [{ validator: validateRequiredWhen('TIKTOK', 'platformListings.warehouseRequired'), trigger: 'change' }],
+  packageWeightValue: [{ validator: validatePositiveNumber, trigger: 'change' }],
+  packageLength: [{ validator: validatePositiveNumber, trigger: 'change' }],
+  packageWidth: [{ validator: validatePositiveNumber, trigger: 'change' }],
+  packageHeight: [{ validator: validatePositiveNumber, trigger: 'change' }]
 }
 const dialog = reactive({ visible: false, title: '', isEdit: false })
 
@@ -655,7 +684,11 @@ function handleQuery() { queryParams.pageNum = 1; getList() }
 function resetQuery() { queryRef.value?.resetFields(); handleQuery() }
 function resetForm() { Object.assign(form, initForm); form.enabled = true }
 
-function handleAdd() { resetForm(); filterShops(); dialog.title = t('platformListings.templateCreateTitle'); dialog.isEdit = false; dialog.visible = true }
+function clearFormValidate() {
+  nextTick(() => formRef.value?.clearValidate?.())
+}
+
+function handleAdd() { resetForm(); filterShops(); dialog.title = t('platformListings.templateCreateTitle'); dialog.isEdit = false; dialog.visible = true; clearFormValidate() }
 function handleEdit(row) {
   resetForm(); dialog.title = t('platformListings.templateEditTitle'); dialog.isEdit = true
   getTemplate(row.id).then(res => {
@@ -725,9 +758,21 @@ function handleEdit(row) {
     }
   })
   dialog.visible = true
+  clearFormValidate()
 }
 
 function submitForm() {
+  if (!formRef.value) {
+    submitValidatedForm()
+    return
+  }
+  formRef.value.validate((valid) => {
+    if (!valid) return
+    submitValidatedForm()
+  })
+}
+
+function submitValidatedForm() {
   if (!form.templateName) { proxy.$modal.msgWarning(t('platformListings.templateNameRequired')); return }
   if (!form.platform) { proxy.$modal.msgWarning(t('platformListings.platformRequired')); return }
   if (!form.shopId) { proxy.$modal.msgWarning(t('platformListings.shopRequired')); return }
@@ -935,6 +980,13 @@ onMounted(() => { loadShops(); getList() })
 .ebay-field-label.required::after { content: ' *'; color: #F56C6C; }
 .required-hint { color: #F56C6C; }
 .token-row { display: flex; flex-wrap: wrap; gap: 6px; min-height: 32px; align-items: center; }
+.template-required-form-item {
+  width: 100%;
+  margin-bottom: 0;
+}
+.template-required-form-item :deep(.el-form-item__content) {
+  width: 100%;
+}
 
 .ebay-listing-builder {
   max-width: 900px;
