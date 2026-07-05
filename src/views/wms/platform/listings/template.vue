@@ -185,7 +185,11 @@
               </div>
               <div class="ebay-field-row three-col compact-row" v-if="form.listingType === 'AUCTION'">
                 <div><label class="ebay-field-label">{{ t('platformListings.duration') }}</label><el-select v-model="form.listingDuration" style="width:100%"><el-option label="3 Days" value="Days_3" /><el-option label="5 Days" value="Days_5" /><el-option label="7 Days" value="Days_7" /><el-option label="10 Days" value="Days_10" /></el-select></div>
-                <div><label class="ebay-field-label">{{ t('platformListings.buyItNowPrice') }}</label><el-input-number v-model="form.buyItNowPrice" :min="0" :precision="2" style="width:100%" /></div>
+                <div>
+                  <label class="ebay-field-label" :class="{ required: isAuctionImmediatePayment }">{{ t('platformListings.buyItNowPrice') }}</label>
+                  <el-input-number v-model="form.buyItNowPrice" :min="0" :precision="2" style="width:100%" />
+                  <div v-if="isAuctionImmediatePayment" class="field-hint required-hint">{{ t('platformListings.auctionImmediatePaymentBuyItNowRequired') }}</div>
+                </div>
                 <div><label class="ebay-field-label">{{ t('platformListings.currency') }}</label><el-select v-model="form.ebayCurrency" style="width:100%"><el-option label="USD" value="USD" /><el-option label="GBP" value="GBP" /><el-option label="EUR" value="EUR" /><el-option label="AUD" value="AUD" /></el-select></div>
               </div>
               <el-switch v-model="form.ebayBestOfferEnabled" :active-text="t('platformListings.bestOffer')" :inactive-text="t('platformListings.bestOfferOff')" />
@@ -513,6 +517,17 @@ const ebayPaymentPolicyName = computed(() => {
   const selected = paymentPolicies.value.find(p => p.id === form.ebayPaymentPolicyId)
   return selected?.name || 'Immediate Payment'
 })
+const isAuctionImmediatePayment = computed(() => {
+  if (form.platform !== 'EBAY' || form.listingType !== 'AUCTION') return false
+  const selected = paymentPolicies.value.find(p => p.id === form.ebayPaymentPolicyId)
+  if (!selected) return false
+  const policyText = [
+    selected?.name,
+    selected?.description,
+    form.ebayPaymentPolicyId
+  ].filter(Boolean).join(' ').toLowerCase()
+  return !/\bno\b/.test(policyText)
+})
 const rules = {
   templateName: [{ required: true, message: t('platformListings.templateNameRequired'), trigger: 'blur' }],
   platform: [{ required: true, message: t('platformListings.platformRequired'), trigger: 'change' }],
@@ -723,6 +738,10 @@ function submitForm() {
     proxy.$modal.msgWarning(t('platformListings.tiktokPriceRangeHint'))
     return
   }
+  if (isAuctionImmediatePayment.value && !hasPositivePrice(form.buyItNowPrice)) {
+    proxy.$modal.msgWarning(t('platformListings.auctionImmediatePaymentBuyItNowRequired'))
+    return
+  }
   const missing = []
   if (!form.packageLength || !form.packageWidth || !form.packageHeight) {
     missing.push(t('platformListings.packageDimensionsLabel'))
@@ -758,6 +777,11 @@ function isTiktokDefaultPriceInvalid() {
   if (form.defaultPrice == null || form.defaultPrice === '') return false
   const price = Number(form.defaultPrice)
   return !Number.isFinite(price) || price < TIKTOK_PRICE_MIN || price > TIKTOK_PRICE_MAX
+}
+
+function hasPositivePrice(value) {
+  const price = Number(value)
+  return Number.isFinite(price) && price > 0
 }
 
 function doSubmit(isEbay) {
@@ -908,6 +932,8 @@ onMounted(() => { loadShops(); getList() })
 .field-label { font-size: 13px; font-weight: 500; color: #303133; margin-bottom: 4px; margin-top: 4px; }
 .field-label.required::after { content: ' *'; color: #F56C6C; }
 .field-hint { font-size: 12px; color: #909399; margin-top: 2px; }
+.ebay-field-label.required::after { content: ' *'; color: #F56C6C; }
+.required-hint { color: #F56C6C; }
 .token-row { display: flex; flex-wrap: wrap; gap: 6px; min-height: 32px; align-items: center; }
 
 .ebay-listing-builder {
@@ -1601,4 +1627,3 @@ onMounted(() => { loadShops(); getList() })
   padding-left: 6px;
 }
 </style>
-
