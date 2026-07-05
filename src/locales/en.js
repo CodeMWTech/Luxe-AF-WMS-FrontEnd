@@ -409,6 +409,8 @@
     resolvedTitle: 'Listing Title',
     resolvedPrice: 'Channel Price',
     overridePrice: 'Override Price',
+    ebayTitleTooLongSummary: '{count} eBay listing title(s) exceed 80 characters. Please edit before publishing.',
+    ebayTitleTooLongDetail: 'eBay titles are limited to {max} characters. Current length: {length}.',
     startPublish: 'Start Publish',
     publishSuccess: 'Publish task submitted',
     publishFailed: 'Publish failed',

@@ -72,7 +72,7 @@
           </el-col>
           <el-col :span="6">
             <div class="field-label required">{{ t('platformListings.filterShop') }}</div>
-            <el-select v-model="form.shopId" filterable style="width:100%" :placeholder="t('platformListings.templateSelectShop')" @change="onShopChange">
+            <el-select v-model="form.shopId" filterable style="width:100%" :placeholder="t('platformListings.templateSelectShop')" :disabled="dialog.isEdit" @change="onShopChange">
               <el-option v-for="s in filteredShopList" :key="s.id" :label="s.shopName + ' (' + s.platform + ')'" :value="s.id" />
             </el-select>
           </el-col>
@@ -1589,6 +1589,5 @@ onMounted(() => { loadShops(); getList() })
   padding-left: 6px;
 }
 </style>
-
 
 

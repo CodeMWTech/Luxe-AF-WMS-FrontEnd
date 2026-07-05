@@ -80,6 +80,14 @@
     <!-- Step 3: 预览确认 -->
     <div v-if="step === 2">
       <el-alert :title="t('platformListings.previewSelectedSummary', { count: selectedSkus.length, template: chosenTemplate?.templateName || '-' })" type="info" :closable="false" style="margin-bottom:12px" />
+      <el-alert
+        v-if="hasEbayTitleTooLong"
+        :title="t('platformListings.ebayTitleTooLongSummary', { count: ebayTitleTooLongRows.length })"
+        type="error"
+        show-icon
+        :closable="false"
+        style="margin-bottom:12px"
+      />
       <div v-if="previewList.length" class="channel-preview" :class="chosenPlatform === 'EBAY' ? 'ebay-preview' : 'tiktok-preview'">
         <div class="preview-media">
           <el-image v-if="previewList[0].images && previewList[0].images.length" :src="previewList[0].images[0]" fit="cover" />
@@ -101,8 +109,17 @@
       <el-table :data="previewList" v-loading="previewLoading" border stripe max-height="320">
         <el-table-column :label="t('platformListings.sku')" prop="skuCode" width="120" />
         <el-table-column :label="t('platformListings.resolvedTitle')" min-width="200">
-          <template #default="{ row, $index }">
-            <el-input v-model="row.overrideTitle" size="small" />
+          <template #default="{ row }">
+            <el-input
+              v-model="row.overrideTitle"
+              size="small"
+              :maxlength="isEbayPublish ? EBAY_TITLE_MAX_LENGTH : undefined"
+              :show-word-limit="isEbayPublish"
+              :class="{ 'title-input-error': isEbayTitleTooLong(row) }"
+            />
+            <div v-if="isEbayTitleTooLong(row)" class="title-error">
+              {{ t('platformListings.ebayTitleTooLongDetail', { max: EBAY_TITLE_MAX_LENGTH, length: getTitleLength(row.overrideTitle) }) }}
+            </div>
           </template>
         </el-table-column>
         <el-table-column :label="t('platformListings.resolvedPrice')" width="110" align="right">
@@ -126,7 +143,7 @@
         {{ t('platformListings.nextStep') }} ({{ selectedSkus.length }})
       </el-button>
       <el-button v-if="step === 1" type="primary" @click="goStep3" :disabled="!chosenTemplateId">{{ t('platformListings.nextStep') }}</el-button>
-      <el-button v-if="step === 2" type="primary" @click="doPublish" :loading="publishing">
+      <el-button v-if="step === 2" type="primary" @click="doPublish" :loading="publishing" :disabled="hasEbayTitleTooLong">
         {{ t('platformListings.startPublish') }} ({{ previewList.length }})
       </el-button>
     </template>
@@ -148,6 +165,7 @@ const emit = defineEmits(['success'])
 const visible = ref(false)
 const step = ref(0)
 const publishing = ref(false)
+const EBAY_TITLE_MAX_LENGTH = 80
 
 // ==================== Step 1: Inventory ====================
 const invLoading = ref(false)
@@ -284,6 +302,19 @@ function onShopChange() {
 // ==================== Step 3: Preview ====================
 const previewLoading = ref(false)
 const previewList = ref([])
+const isEbayPublish = computed(() => chosenPlatform.value === 'EBAY')
+const ebayTitleTooLongRows = computed(() => isEbayPublish.value
+  ? previewList.value.filter(row => isEbayTitleTooLong(row))
+  : [])
+const hasEbayTitleTooLong = computed(() => ebayTitleTooLongRows.value.length > 0)
+
+function getTitleLength(title) {
+  return Array.from(title || '').length
+}
+
+function isEbayTitleTooLong(row) {
+  return getTitleLength(row?.overrideTitle) > EBAY_TITLE_MAX_LENGTH
+}
 
 async function loadPreviews() {
   previewLoading.value = true
@@ -352,9 +383,16 @@ async function goStep3() {
   }
   step.value = 2
   await loadPreviews()
+  if (hasEbayTitleTooLong.value) {
+    proxy.$modal.msgWarning(t('platformListings.ebayTitleTooLongSummary', { count: ebayTitleTooLongRows.value.length }))
+  }
 }
 
 async function doPublish() {
+  if (hasEbayTitleTooLong.value) {
+    proxy.$modal.msgWarning(t('platformListings.ebayTitleTooLongSummary', { count: ebayTitleTooLongRows.value.length }))
+    return
+  }
   const skuIds = previewList.value.map(p => p.skuId)
   const customTitles = {}
   const customPrices = {}
@@ -420,4 +458,13 @@ defineExpose({ open, openWithSkus })
 .preview-desc { max-height: 110px; overflow: auto; font-size: 12px; color: #606266; border-top: 1px solid #ebeef5; padding-top: 8px; }
 .ebay-preview { border-top: 4px solid #3665f3; }
 .tiktok-preview { border-top: 4px solid #111827; }
+.title-input-error :deep(.el-input__wrapper) {
+  box-shadow: 0 0 0 1px var(--el-color-danger) inset;
+}
+.title-error {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--el-color-danger);
+}
 </style>
