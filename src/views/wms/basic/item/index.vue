@@ -174,7 +174,7 @@
               <el-button type="primary" plain icon="Plus" @click="handleAdd" class="mb10" v-hasPermi="['wms:item:edit']">{{ tr('新增商品') }}</el-button>
             </div>
           </div>
-          <el-table :data="itemList" @selection-change="handleSelectionChange" :span-method="spanMethod" border :empty-text="tr('暂无商品')" v-loading="loading" cell-class-name="my-cell">
+          <el-table ref="itemTableRef" :data="itemList" :row-key="getItemRowKey" @selection-change="handleSelectionChange" :span-method="spanMethod" border :empty-text="tr('暂无商品')" v-loading="loading" cell-class-name="my-cell">
             <el-table-column v-if="!isSupplierUser" type="selection" width="48" :selectable="isPurchaseSelectable" />
             <el-table-column :label="tr('商品信息')" prop="itemId">
               <template #default="{ row }">
@@ -781,6 +781,8 @@ function handleMaterialChange(id) {
   form.value.material = material?.materialName || undefined
 }
 const itemList = ref([]);
+const itemTableRef = ref(null);
+const selectedItemMap = ref(new Map());
 const itemCategoryTreeSelectList = computed(() => useWmsStore().itemCategoryTreeList);
 const itemCategoryTreeOptionsList = computed(() => {
   let data = [...itemCategoryTreeSelectList.value];
@@ -1181,6 +1183,7 @@ const getList = async () => {
   listMainImageErrorAtMap.value.clear()
   preloadMainImages(itemList.value)
   total.value = res.total;
+  await restoreItemSelection()
   loading.value = false;
 }
 const handleAddType = (show) => {
@@ -1554,10 +1557,63 @@ const resetQuery = () => {
 }
 
 /** 多选框选中数据 */
+let suppressItemSelectionChange = false
+
+const getItemSelectionKey = (row) => {
+  const key = row?.itemId || row?.item?.id
+  return key ? String(key) : ''
+}
+
+const getItemRowKey = (row) => row?.skuId ? String(row.skuId) : getItemSelectionKey(row)
+
+function syncSelectedItemIds() {
+  ids.value = Array.from(selectedItemMap.value.keys())
+  single.value = ids.value.length !== 1
+  multiple.value = ids.value.length === 0
+}
+
+async function restoreItemSelection() {
+  await nextTick()
+  suppressItemSelectionChange = true
+  itemTableRef.value?.clearSelection()
+  const restoredKeySet = new Set()
+  itemList.value.forEach(row => {
+    const key = getItemSelectionKey(row)
+    if (key && selectedItemMap.value.has(key) && !restoredKeySet.has(key) && isPurchaseSelectable(row)) {
+      itemTableRef.value?.toggleRowSelection(row, true)
+      restoredKeySet.add(key)
+    }
+  })
+  await nextTick()
+  suppressItemSelectionChange = false
+  syncSelectedItemIds()
+}
+
+function clearItemSelection() {
+  selectedItemMap.value.clear()
+  syncSelectedItemIds()
+  itemTableRef.value?.clearSelection()
+}
+
 const handleSelectionChange = (selection) => {
-  ids.value = Array.from(new Set(selection.map(item => item.itemId).filter(Boolean)));
-  single.value = selection.length != 1;
-  multiple.value = !ids.value.length;
+  if (suppressItemSelectionChange) return
+  const selectedKeySet = new Set(selection.map(getItemSelectionKey).filter(Boolean))
+  const selectedRowMap = new Map()
+  selection.forEach(row => {
+    const key = getItemSelectionKey(row)
+    if (key && !selectedRowMap.has(key)) {
+      selectedRowMap.set(key, row)
+    }
+  })
+  const currentKeySet = new Set(itemList.value.map(getItemSelectionKey).filter(Boolean))
+  currentKeySet.forEach(key => {
+    if (selectedKeySet.has(key)) {
+      selectedItemMap.value.set(key, selectedRowMap.get(key))
+    } else {
+      selectedItemMap.value.delete(key)
+    }
+  })
+  syncSelectedItemIds()
 }
 
 const handleSelectPurchase = async () => {
@@ -1570,9 +1626,7 @@ const handleSelectPurchase = async () => {
   try {
     await selectItemsForPurchase(ids.value)
     proxy?.$modal.msgSuccess(tr('提交成功'))
-    ids.value = []
-    single.value = true
-    multiple.value = true
+    clearItemSelection()
     getList()
   } finally {
     loading.value = false

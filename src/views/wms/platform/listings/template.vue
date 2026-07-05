@@ -289,7 +289,7 @@
                   <div class="tiktok-tip warehouse-warning-tip">{{ t('platformListings.returnWarehouseUnsupported') }}</div>
                   <div class="tiktok-stock-grid editable-stock-grid">
                     <div><label>{{ t('platformListings.stock') }}</label><el-input-number v-model="form.tiktokQuantity" :min="1" :max="999" style="width:100%" /></div>
-                    <div><label>{{ t('platformListings.retailPrice') }}</label><div style="display:flex;align-items:center;gap:6px"><el-input-number v-model="form.defaultPrice" :min="0" :precision="2" :step="10" :placeholder="t('platformListings.priceDefaultHint')" style="flex:1" /><el-button v-if="form.defaultPrice != null" link type="warning" size="small" @click="form.defaultPrice = null">{{ t('platformListings.priceResetDefault') }}</el-button></div><div class="tiktok-tip">{{ t('platformListings.priceDefaultHint') }}</div></div>
+                    <div><label>{{ t('platformListings.retailPrice') }}</label><div style="display:flex;align-items:center;gap:6px"><el-input-number v-model="form.defaultPrice" :min="TIKTOK_PRICE_MIN" :max="TIKTOK_PRICE_MAX" :precision="2" :step="10" :placeholder="t('platformListings.priceDefaultHint')" style="flex:1" /><el-button v-if="form.defaultPrice != null" link type="warning" size="small" @click="form.defaultPrice = null">{{ t('platformListings.priceResetDefault') }}</el-button></div><div class="tiktok-tip">{{ t('platformListings.tiktokPriceRangeHint') }}；{{ t('platformListings.priceDefaultHint') }}</div></div>
                     <div><label>{{ t('platformListings.currency') }}</label><el-select v-model="form.tiktokCurrency" style="width:100%"><el-option label="USD" value="USD" /><el-option label="GBP" value="GBP" /></el-select></div>
                   </div>
                 </section>
@@ -353,6 +353,8 @@ import { listAllPlatformShops } from '@/api/wms/platformShop'
 const { proxy } = getCurrentInstance()
 const { locale } = useI18n()
 const t = (key, values) => proxy?.$t?.(key, values) || key
+const TIKTOK_PRICE_MIN = 0.01
+const TIKTOK_PRICE_MAX = 50000
 
 const loading = ref(false), total = ref(0), templateList = ref([]), submitting = ref(false)
 const queryRef = ref(null), formRef = ref(null)
@@ -717,6 +719,10 @@ function submitForm() {
 
   // 收集缺失的关键信息
   const isEbay = form.platform === 'EBAY'
+  if (!isEbay && isTiktokDefaultPriceInvalid()) {
+    proxy.$modal.msgWarning(t('platformListings.tiktokPriceRangeHint'))
+    return
+  }
   const missing = []
   if (!form.packageLength || !form.packageWidth || !form.packageHeight) {
     missing.push(t('platformListings.packageDimensionsLabel'))
@@ -746,6 +752,12 @@ function submitForm() {
   }
 
   doSubmit(isEbay)
+}
+
+function isTiktokDefaultPriceInvalid() {
+  if (form.defaultPrice == null || form.defaultPrice === '') return false
+  const price = Number(form.defaultPrice)
+  return !Number.isFinite(price) || price < TIKTOK_PRICE_MIN || price > TIKTOK_PRICE_MAX
 }
 
 function doSubmit(isEbay) {
@@ -1589,5 +1601,4 @@ onMounted(() => { loadShops(); getList() })
   padding-left: 6px;
 }
 </style>
-
 

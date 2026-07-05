@@ -422,6 +422,8 @@
     overridePrice: '覆盖价格',
     ebayTitleTooLongSummary: '有 {count} 个 eBay 上架标题超过 80 个字符，请修改后再上架',
     ebayTitleTooLongDetail: 'eBay 标题最多 {max} 个字符，当前 {length} 个字符',
+    tiktokPriceRangeSummary: '有 {count} 个 TikTok 商品价格不在 USD $0.01 到 USD $50,000.00 之间，请修改后再上架',
+    tiktokPriceRangeHint: 'TikTok 商品价格必须在 USD $0.01 到 USD $50,000.00 之间',
     startPublish: '开始上架',
     publishSuccess: '上架任务已提交',
     publishFailed: '上架失败',
