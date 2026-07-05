@@ -420,6 +420,8 @@
     resolvedTitle: '上架标题',
     resolvedPrice: '渠道价',
     overridePrice: '覆盖价格',
+    ebayTitleTooLongSummary: '有 {count} 个 eBay 上架标题超过 80 个字符，请修改后再上架',
+    ebayTitleTooLongDetail: 'eBay 标题最多 {max} 个字符，当前 {length} 个字符',
     startPublish: '开始上架',
     publishSuccess: '上架任务已提交',
     publishFailed: '上架失败',
