@@ -5,23 +5,23 @@
     <div class="vendor-summary">
       <div class="summary-item">
         <span>{{ tr('已选购') }}</span>
-        <strong>{{ tr('商品数量') }} {{ formatQty(summary.selectedQuantity) }}</strong>
-        <small>{{ tr('商品种类') }} {{ summary.selectedSkuCount || 0 }}</small>
+        <strong>{{ tr('商品种类') }} {{ summary.selectedSkuCount || 0 }}</strong>
+        <small>{{ tr('商品数量') }} {{ formatQty(summary.selectedQuantity) }}</small>
       </div>
       <div class="summary-item">
         <span>{{ tr('未收货') }}</span>
-        <strong>{{ tr('商品数量') }} {{ formatQty(summary.unreceivedQuantity) }}</strong>
-        <small>{{ tr('商品种类') }} {{ summary.unreceivedSkuCount || 0 }}</small>
+        <strong>{{ tr('商品种类') }} {{ summary.unreceivedSkuCount || 0 }}</strong>
+        <small>{{ tr('商品数量') }} {{ formatQty(summary.unreceivedQuantity) }}</small>
       </div>
       <div class="summary-item">
         <span>{{ tr('未结款') }}</span>
-        <strong>{{ tr('商品数量') }} {{ formatQty(summary.unsettledQuantity) }}</strong>
-        <small>{{ tr('商品种类') }} {{ summary.unsettledSkuCount || 0 }}</small>
+        <strong>{{ tr('商品种类') }} {{ summary.unsettledSkuCount || 0 }}</strong>
+        <small>{{ tr('商品数量') }} {{ formatQty(summary.unsettledQuantity) }}</small>
       </div>
       <div class="summary-item">
         <span>{{ tr('已结款') }}</span>
-        <strong>{{ tr('商品数量') }} {{ formatQty(summary.settledQuantity) }}</strong>
-        <small>{{ tr('商品种类') }} {{ summary.settledSkuCount || 0 }}</small>
+        <strong>{{ tr('商品种类') }} {{ summary.settledSkuCount || 0 }}</strong>
+        <small>{{ tr('商品数量') }} {{ formatQty(summary.settledQuantity) }}</small>
       </div>
     </div>
 
@@ -125,8 +125,11 @@
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column :label="tr('发出数量')" prop="defaultQuantity" width="110" align="right">
-        <template #default="{ row }">{{ formatQty(row.defaultQuantity) }}</template>
+      <el-table-column :label="tr('选购数量')" prop="selectedQuantity" width="110" align="right">
+        <template #default="{ row }">{{ formatQty(row.selectedQuantity ?? row.defaultQuantity) }}</template>
+      </el-table-column>
+      <el-table-column :label="tr('发出数量')" prop="sentQuantity" width="110" align="right">
+        <template #default="{ row }">{{ formatQty(row.sentQuantity) }}</template>
       </el-table-column>
       <el-table-column :label="tr('已收数量')" prop="receivedQuantity" width="110" align="right">
         <template #default="{ row }">{{ formatQty(row.receivedQuantity) }}</template>
