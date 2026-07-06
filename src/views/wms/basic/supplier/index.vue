@@ -108,8 +108,8 @@
         </el-form-item>
         <el-form-item :label="tr('状态')" prop="status">
           <el-radio-group v-model="form.status">
-            <el-radio :value="0">{{ tr('正常') }}</el-radio>
-            <el-radio :value="1">{{ tr('停用') }}</el-radio>
+            <el-radio :label="0">{{ tr('正常') }}</el-radio>
+            <el-radio :label="1">{{ tr('停用') }}</el-radio>
           </el-radio-group>
         </el-form-item>
         <el-form-item :label="tr('备注')" prop="remark">
@@ -162,6 +162,9 @@ const data = reactive({
     ],
     roleId: [
       { required: true, message: () => tr('关联角色不能为空'), trigger: "change" }
+    ],
+    contactPhone: [
+      { pattern: /^1[3-9]\d{9}$/, message: () => tr('请输入正确的手机号码'), trigger: "blur" }
     ],
   }
 });
@@ -249,6 +252,7 @@ function handleUpdate(row) {
   const _id = row.id || ids.value
   getSupplier(_id).then(response => {
     form.value = response.data;
+    form.value.status = Number(form.value.status ?? 0);
     open.value = true;
     title.value = tr("修改") + tr("供应商");
   });
