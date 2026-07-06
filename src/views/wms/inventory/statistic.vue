@@ -1522,6 +1522,12 @@ function clearInventorySelection() {
   tableRef.value?.clearSelection()
 }
 
+function clearInventorySelectionWhenNotBatching() {
+  if (!batchMode.value) {
+    clearInventorySelection()
+  }
+}
+
 function handleSelectionChange(selection) {
   if (suppressInventorySelectionChange) return
   const selectedKeySet = new Set(selection.map(getInventorySelectionKey))
@@ -1696,7 +1702,7 @@ function handleBatchExportPdf() {
 }
 
 const handleQuery = () => {
-  clearInventorySelection()
+  clearInventorySelectionWhenNotBatching()
   queryParams.value.pageNum = 1
   getList()
 }
@@ -1709,7 +1715,7 @@ const applyDefaultInventorySort = () => {
 }
 
 const resetQuery = () => {
-  clearInventorySelection()
+  clearInventorySelectionWhenNotBatching()
   filterable.value = true
   proxy.resetForm('queryRef')
   applyDefaultInventorySort()
@@ -1726,7 +1732,7 @@ const handleColumnSortChange = ({ prop, order }) => {
   queryParams.value.orderByColumn = prop || undefined
   queryParams.value.isAsc = order === 'ascending' ? 'ascending' : order === 'descending' ? 'descending' : undefined
   if (suppressSortChangeQuery) return
-  clearInventorySelection()
+  clearInventorySelectionWhenNotBatching()
   queryParams.value.pageNum = 1
   getList()
 }
@@ -1737,13 +1743,13 @@ const handleSortTypeChange = (e) => {
   } else if (e === 'item') {
     rowSpanArray.value = ['itemGroupKey', 'skuGroupKey', 'skuWarehouseGroupKey']
   }
-  clearInventorySelection()
+  clearInventorySelectionWhenNotBatching()
   queryParams.value.pageNum = 1
   getList()
 }
 
 const handleChangeFilterZero = () => {
-  clearInventorySelection()
+  clearInventorySelectionWhenNotBatching()
   queryParams.value.pageNum = 1
   getList()
 }

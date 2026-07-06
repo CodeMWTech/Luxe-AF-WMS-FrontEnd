@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="app-container ai-chat-page">
     <el-row :gutter="12">
       <el-col :span="6">
@@ -57,7 +57,7 @@
 <script setup name="AiChat">
 import { ElMessage } from 'element-plus'
 import { chat } from '@/api/ai'
-import { useAiSessionLocal } from '@/composables/useAiSessionLocal'
+import { useAiSessionLocal } from '@/views/mobile/composables/useAiSessionLocal'
 import SessionList from '@/components/Ai/SessionList.vue'
 import ParamPanel from '@/components/Ai/ParamPanel.vue'
 import ChatInput from '@/components/Ai/ChatInput.vue'

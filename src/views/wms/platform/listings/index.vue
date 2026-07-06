@@ -59,7 +59,9 @@
             <el-tag :type="statusTagType(row.listingStatus)" size="small">{{ statusLabel(row.listingStatus) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column :label="t('platformListings.listingError')" prop="listingError" min-width="140" show-overflow-tooltip />
+        <el-table-column :label="t('platformListings.listingError')" prop="listingError" min-width="140" show-overflow-tooltip>
+          <template #default="{ row }">{{ formatListingError(row.listingError) }}</template>
+        </el-table-column>
         <el-table-column :label="t('platformListings.listingTime')" prop="createTime" width="160" align="center" />
         <el-table-column :label="t('platformListings.operation')" width="260" align="center" fixed="right">
           <template #default="{ row }">
@@ -122,6 +124,17 @@ function statusLabel(status) {
     AUDITING: t('platformListings.statusAuditing')
   }
   return map[status] || status
+}
+
+function formatListingError(error) {
+  if (!error) return ''
+  const text = String(error).trim()
+  const failedMatch = text.match(/^(eBay|EBAY|TikTok|TIKTOK)\s*上架失败$/i)
+  if (failedMatch) {
+    const platform = failedMatch[1].toLowerCase() === 'ebay' ? 'eBay' : 'TikTok'
+    return t('platformListings.platformPublishFailed', { platform })
+  }
+  return text
 }
 
 function getList() {

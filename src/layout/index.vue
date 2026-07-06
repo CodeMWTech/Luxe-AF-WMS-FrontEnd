@@ -39,20 +39,17 @@ const classObj = computed(() => ({
   mobile: device.value === 'mobile'
 }))
 
-const { width, height } = useWindowSize();
+const { width } = useWindowSize();
 const WIDTH = 992; // refer to Bootstrap's responsive design
 
-watchEffect(() => {
-  if (device.value === 'mobile' && sidebar.value.opened) {
-    useAppStore().closeSideBar({ withoutAnimation: false })
-  }
-  if (width.value - 1 < WIDTH) {
+watch(width, (value) => {
+  if (value - 1 < WIDTH) {
     useAppStore().toggleDevice('mobile')
     useAppStore().closeSideBar({ withoutAnimation: true })
   } else {
     useAppStore().toggleDevice('desktop')
   }
-})
+}, { immediate: true })
 
 function handleClickOutside() {
   useAppStore().closeSideBar({ withoutAnimation: false })

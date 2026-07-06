@@ -77,7 +77,7 @@ import { useI18n } from 'vue-i18n'
 import { getCodeImg } from '@/api/login'
 import { decrypt, encrypt } from '@/utils/jsencrypt'
 import useUserStore from '@/store/modules/user'
-import { useMobileLanguage } from '@/composables/useMobileLanguage'
+import { useMobileLanguage } from '@/views/mobile/composables/useMobileLanguage'
 import { resolvePostLoginRedirect } from '@/utils/mobileDevice'
 
 const router = useRouter()

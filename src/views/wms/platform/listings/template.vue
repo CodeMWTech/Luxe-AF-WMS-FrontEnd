@@ -55,7 +55,7 @@
 
     <!-- 新建/编辑弹窗 -->
     <el-dialog v-model="dialog.visible" :title="dialog.title" width="1180px" :close-on-click-modal="false" destroy-on-close top="20px">
-      <div class="template-dialog-body">
+      <el-form ref="formRef" :model="form" :rules="rules" label-position="top" class="template-dialog-body">
 
         <!-- ============ 公共头部 ============ -->
         <el-row :gutter="16" style="margin-bottom:16px">
@@ -72,7 +72,7 @@
           </el-col>
           <el-col :span="6">
             <div class="field-label required">{{ t('platformListings.filterShop') }}</div>
-            <el-select v-model="form.shopId" filterable style="width:100%" :placeholder="t('platformListings.templateSelectShop')" @change="onShopChange">
+            <el-select v-model="form.shopId" filterable style="width:100%" :placeholder="t('platformListings.templateSelectShop')" :disabled="dialog.isEdit" @change="onShopChange">
               <el-option v-for="s in filteredShopList" :key="s.id" :label="s.shopName + ' (' + s.platform + ')'" :value="s.id" />
             </el-select>
           </el-col>
@@ -181,11 +181,15 @@
               <div class="ebay-field-row three-col compact-row">
                 <div><label class="ebay-field-label">{{ t('platformListings.format') }}</label><el-select v-model="form.listingType" style="width:100%"><el-option label="Buy It Now" value="FIXED_PRICE" /><el-option label="Auction" value="AUCTION" /></el-select></div>
                 <div><label class="ebay-field-label">{{ form.listingType === 'AUCTION' ? t('platformListings.startPrice') : t('platformListings.buyItNowPrice') }}</label><div style="display:flex;align-items:center;gap:6px"><el-input-number v-model="form.defaultPrice" :min="0" :precision="2" :step="10" :placeholder="t('platformListings.priceDefaultHint')" style="flex:1" /><el-button v-if="form.defaultPrice != null" link type="warning" size="small" @click="form.defaultPrice = null">{{ t('platformListings.priceResetDefault') }}</el-button></div><div class="field-hint">{{ t('platformListings.priceDefaultHint') }}</div></div>
-                <div><label class="ebay-field-label">{{ t('platformListings.quantity') }}</label><el-input-number v-model="form.ebayQuantity" :min="1" :max="100" style="width:100%" /></div>
+                <div><label class="ebay-field-label">{{ t('platformListings.quantity') }}</label><el-input-number v-model="form.ebayQuantity" :min="1" :max="1" disabled style="width:100%" /></div>
               </div>
               <div class="ebay-field-row three-col compact-row" v-if="form.listingType === 'AUCTION'">
                 <div><label class="ebay-field-label">{{ t('platformListings.duration') }}</label><el-select v-model="form.listingDuration" style="width:100%"><el-option label="3 Days" value="Days_3" /><el-option label="5 Days" value="Days_5" /><el-option label="7 Days" value="Days_7" /><el-option label="10 Days" value="Days_10" /></el-select></div>
-                <div><label class="ebay-field-label">{{ t('platformListings.buyItNowPrice') }}</label><el-input-number v-model="form.buyItNowPrice" :min="0" :precision="2" style="width:100%" /></div>
+                <div>
+                  <label class="ebay-field-label" :class="{ required: isAuctionImmediatePayment }">{{ t('platformListings.buyItNowPrice') }}</label>
+                  <el-input-number v-model="form.buyItNowPrice" :min="0" :precision="2" style="width:100%" />
+                  <div v-if="isAuctionImmediatePayment" class="field-hint required-hint">{{ t('platformListings.auctionImmediatePaymentBuyItNowRequired') }}</div>
+                </div>
                 <div><label class="ebay-field-label">{{ t('platformListings.currency') }}</label><el-select v-model="form.ebayCurrency" style="width:100%"><el-option label="USD" value="USD" /><el-option label="GBP" value="GBP" /><el-option label="EUR" value="EUR" /><el-option label="AUD" value="AUD" /></el-select></div>
               </div>
               <el-switch v-model="form.ebayBestOfferEnabled" :active-text="t('platformListings.bestOffer')" :inactive-text="t('platformListings.bestOfferOff')" />
@@ -194,16 +198,16 @@
             <section class="ebay-section shipping-section">
               <h3>{{ t('platformListings.shipping') }}</h3>
               <div class="policy-card-list">
-                <div class="policy-card"><div class="policy-title">{{ t('platformListings.domesticShipping') }}</div><el-select v-model="form.ebayFulfillmentPolicyId" :placeholder="t('platformListings.selectShippingPolicy')" clearable filterable style="width:100%"><el-option v-for="p in fulfillmentPolicies" :key="p.id" :label="p.name" :value="p.id" /></el-select></div>
-                <div class="policy-card"><div class="policy-title">{{ t('platformListings.returnPolicy') }}</div><el-select v-model="form.ebayReturnPolicyId" :placeholder="t('platformListings.selectReturnPolicy')" clearable filterable style="width:100%"><el-option v-for="p in returnPolicies" :key="p.id" :label="p.name" :value="p.id" /></el-select></div>
-                <div class="policy-card"><div class="policy-title">{{ t('platformListings.paymentPolicy') }}</div><el-select v-model="form.ebayPaymentPolicyId" :placeholder="t('platformListings.selectPaymentPolicy')" clearable filterable style="width:100%"><el-option v-for="p in paymentPolicies" :key="p.id" :label="p.name" :value="p.id" /></el-select></div>
+                <div class="policy-card"><div class="policy-title">{{ t('platformListings.domesticShipping') }}</div><el-form-item prop="ebayFulfillmentPolicyId" class="template-required-form-item"><el-select v-model="form.ebayFulfillmentPolicyId" :placeholder="t('platformListings.selectShippingPolicy')" clearable filterable style="width:100%"><el-option v-for="p in fulfillmentPolicies" :key="p.id" :label="p.name" :value="p.id" /></el-select></el-form-item></div>
+                <div class="policy-card"><div class="policy-title">{{ t('platformListings.returnPolicy') }}</div><el-form-item prop="ebayReturnPolicyId" class="template-required-form-item"><el-select v-model="form.ebayReturnPolicyId" :placeholder="t('platformListings.selectReturnPolicy')" clearable filterable style="width:100%"><el-option v-for="p in returnPolicies" :key="p.id" :label="p.name" :value="p.id" /></el-select></el-form-item></div>
+                <div class="policy-card"><div class="policy-title">{{ t('platformListings.paymentPolicy') }}</div><el-form-item prop="ebayPaymentPolicyId" class="template-required-form-item"><el-select v-model="form.ebayPaymentPolicyId" :placeholder="t('platformListings.selectPaymentPolicy')" clearable filterable style="width:100%"><el-option v-for="p in paymentPolicies" :key="p.id" :label="p.name" :value="p.id" /></el-select></el-form-item></div>
               </div>
               <el-button size="small" type="primary" plain icon="Download" @click="loadEbayPolicies" :loading="loadingPolicies">{{ t('platformListings.loadEbayPolicies') }}</el-button>
               <div class="ebay-field-row four-col compact-row shipping-metrics">
-                <div><label class="ebay-field-label">{{ t('platformListings.length') }} ({{ dimensionUnitShort }})</label><el-input-number v-model="form.packageLength" :min="0" :precision="1" style="width:100%" /></div>
-                <div><label class="ebay-field-label">{{ t('platformListings.width') }} ({{ dimensionUnitShort }})</label><el-input-number v-model="form.packageWidth" :min="0" :precision="1" style="width:100%" /></div>
-                <div><label class="ebay-field-label">{{ t('platformListings.height') }} ({{ dimensionUnitShort }})</label><el-input-number v-model="form.packageHeight" :min="0" :precision="1" style="width:100%" /></div>
-                <div><label class="ebay-field-label">{{ t('platformListings.weight') }} ({{ weightUnitShort }})</label><el-input-number v-model="form.packageWeightValue" :min="0" :precision="weightPrecision" :step="weightStep" style="width:100%" /></div>
+                <div><el-form-item prop="packageLength" class="template-required-form-item" :label="t('platformListings.length') + ' (' + dimensionUnitShort + ')'"><el-input-number v-model="form.packageLength" :min="0" :precision="1" style="width:100%" /></el-form-item></div>
+                <div><el-form-item prop="packageWidth" class="template-required-form-item" :label="t('platformListings.width') + ' (' + dimensionUnitShort + ')'"><el-input-number v-model="form.packageWidth" :min="0" :precision="1" style="width:100%" /></el-form-item></div>
+                <div><el-form-item prop="packageHeight" class="template-required-form-item" :label="t('platformListings.height') + ' (' + dimensionUnitShort + ')'"><el-input-number v-model="form.packageHeight" :min="0" :precision="1" style="width:100%" /></el-form-item></div>
+                <div><el-form-item prop="packageWeightValue" class="template-required-form-item" :label="t('platformListings.weight') + ' (' + weightUnitShort + ')'"><el-input-number v-model="form.packageWeightValue" :min="0" :precision="weightPrecision" :step="weightStep" style="width:100%" /></el-form-item></div>
               </div>
               <div class="unit-row">
                 <el-select v-model="form.packageWeightUnit" style="width:190px"><el-option v-for="u in weightUnitOptions" :key="u.value" :label="u.label" :value="u.value" /></el-select>
@@ -282,14 +286,16 @@
                 <section class="tiktok-form-section">
                   <h3>{{ t('platformListings.salesInformation') }}</h3>
                   <div class="stock-toolbar editable-stock-toolbar">
-                    <el-select v-model="form.tiktokWarehouseId" :placeholder="t('platformListings.warehousePlaceholder')" clearable filterable :disabled="!form.shopId" :loading="warehouseLoading" style="width:100%">
-                      <el-option v-for="w in warehouseList" :key="w.id" :label="warehouseOptionLabel(w)" :value="w.id" :disabled="isReturnWarehouse(w)" />
-                    </el-select>
+                    <el-form-item prop="tiktokWarehouseId" class="template-required-form-item">
+                      <el-select v-model="form.tiktokWarehouseId" :placeholder="t('platformListings.warehousePlaceholder')" clearable filterable :disabled="!form.shopId" :loading="warehouseLoading" style="width:100%">
+                        <el-option v-for="w in warehouseList" :key="w.id" :label="warehouseOptionLabel(w)" :value="w.id" :disabled="isReturnWarehouse(w)" />
+                      </el-select>
+                    </el-form-item>
                   </div>
                   <div class="tiktok-tip warehouse-warning-tip">{{ t('platformListings.returnWarehouseUnsupported') }}</div>
                   <div class="tiktok-stock-grid editable-stock-grid">
-                    <div><label>{{ t('platformListings.stock') }}</label><el-input-number v-model="form.tiktokQuantity" :min="1" :max="999" style="width:100%" /></div>
-                    <div><label>{{ t('platformListings.retailPrice') }}</label><div style="display:flex;align-items:center;gap:6px"><el-input-number v-model="form.defaultPrice" :min="0" :precision="2" :step="10" :placeholder="t('platformListings.priceDefaultHint')" style="flex:1" /><el-button v-if="form.defaultPrice != null" link type="warning" size="small" @click="form.defaultPrice = null">{{ t('platformListings.priceResetDefault') }}</el-button></div><div class="tiktok-tip">{{ t('platformListings.priceDefaultHint') }}</div></div>
+                    <div><label>{{ t('platformListings.stock') }}</label><el-input-number v-model="form.tiktokQuantity" :min="1" :max="1" disabled style="width:100%" /></div>
+                    <div><label>{{ t('platformListings.retailPrice') }}</label><div style="display:flex;align-items:center;gap:6px"><el-input-number v-model="form.defaultPrice" :min="TIKTOK_PRICE_MIN" :max="TIKTOK_PRICE_MAX" :precision="2" :step="10" :placeholder="t('platformListings.priceDefaultHint')" style="flex:1" /><el-button v-if="form.defaultPrice != null" link type="warning" size="small" @click="form.defaultPrice = null">{{ t('platformListings.priceResetDefault') }}</el-button></div><div class="tiktok-tip">{{ t('platformListings.tiktokPriceRangeHint') }}；{{ t('platformListings.priceDefaultHint') }}</div></div>
                     <div><label>{{ t('platformListings.currency') }}</label><el-select v-model="form.tiktokCurrency" style="width:100%"><el-option label="USD" value="USD" /><el-option label="GBP" value="GBP" /></el-select></div>
                   </div>
                 </section>
@@ -299,7 +305,7 @@
                   <label class="tiktok-required-label">{{ t('platformListings.packageWeight') }}</label>
                   <div class="unit-input-row">
                     <el-select v-model="form.packageWeightUnit" class="unit-select"><el-option v-for="u in weightUnitOptions" :key="u.value" :label="u.label" :value="u.value" /></el-select>
-                    <el-input-number v-model="form.packageWeightValue" :min="0" :precision="weightPrecision" :step="weightStep" controls-position="right" style="width:100%" />
+                    <el-form-item prop="packageWeightValue" class="template-required-form-item"><el-input-number v-model="form.packageWeightValue" :min="0" :precision="weightPrecision" :step="weightStep" controls-position="right" style="width:100%" /></el-form-item>
                   </div>
                   <div class="tiktok-tip">{{ t('platformListings.packageWeightHint') }}</div>
                   <label class="tiktok-required-label">{{ t('platformListings.packageDimensionsLabel') }}</label>
@@ -309,9 +315,9 @@
                     <span>{{ t('platformListings.height') }}</span>
                   </div>
                   <div class="dimension-row three with-unit-suffix">
-                    <el-input-number v-model="form.packageLength" :min="0" :precision="1" style="width:100%" />
-                    <el-input-number v-model="form.packageWidth" :min="0" :precision="1" style="width:100%" />
-                    <el-input-number v-model="form.packageHeight" :min="0" :precision="1" style="width:100%" />
+                    <el-form-item prop="packageLength" class="template-required-form-item"><el-input-number v-model="form.packageLength" :min="0" :precision="1" style="width:100%" /></el-form-item>
+                    <el-form-item prop="packageWidth" class="template-required-form-item"><el-input-number v-model="form.packageWidth" :min="0" :precision="1" style="width:100%" /></el-form-item>
+                    <el-form-item prop="packageHeight" class="template-required-form-item"><el-input-number v-model="form.packageHeight" :min="0" :precision="1" style="width:100%" /></el-form-item>
                   </div>
                   <div class="unit-row compact">
                     <span class="unit-hint">{{ t('platformListings.dimensionUnit') }}</span>
@@ -335,7 +341,7 @@
             </div>
           </div>
         </template>
-      </div>
+      </el-form>
       <template #footer>
         <el-button @click="dialog.visible = false">{{ t('platformListings.cancel') }}</el-button>
         <el-button type="primary" @click="submitForm" :loading="submitting">{{ t('platformListings.save') }}</el-button>
@@ -353,6 +359,8 @@ import { listAllPlatformShops } from '@/api/wms/platformShop'
 const { proxy } = getCurrentInstance()
 const { locale } = useI18n()
 const t = (key, values) => proxy?.$t?.(key, values) || key
+const TIKTOK_PRICE_MIN = 0.01
+const TIKTOK_PRICE_MAX = 50000
 
 const loading = ref(false), total = ref(0), templateList = ref([]), submitting = ref(false)
 const queryRef = ref(null), formRef = ref(null)
@@ -511,10 +519,48 @@ const ebayPaymentPolicyName = computed(() => {
   const selected = paymentPolicies.value.find(p => p.id === form.ebayPaymentPolicyId)
   return selected?.name || 'Immediate Payment'
 })
+const isAuctionImmediatePayment = computed(() => {
+  if (form.platform !== 'EBAY' || form.listingType !== 'AUCTION') return false
+  const selected = paymentPolicies.value.find(p => p.id === form.ebayPaymentPolicyId)
+  if (!selected) return false
+  const policyText = [
+    selected?.name,
+    selected?.description,
+    form.ebayPaymentPolicyId
+  ].filter(Boolean).join(' ').toLowerCase()
+  return !/\bno\b/.test(policyText)
+})
+function isEmptyValue(value) {
+  return value === null || value === undefined || value === ''
+}
+function validateRequiredWhen(platform, messageKey) {
+  return (_rule, value, callback) => {
+    if (form.platform !== platform || !isEmptyValue(value)) {
+      callback()
+      return
+    }
+    callback(new Error(t(messageKey)))
+  }
+}
+function validatePositiveNumber(_rule, value, callback) {
+  if (!isEmptyValue(value) && Number(value) > 0) {
+    callback()
+    return
+  }
+  callback(new Error(t('platformListings.requiredPositiveNumber')))
+}
 const rules = {
   templateName: [{ required: true, message: t('platformListings.templateNameRequired'), trigger: 'blur' }],
   platform: [{ required: true, message: t('platformListings.platformRequired'), trigger: 'change' }],
-  shopId: [{ required: true, message: t('platformListings.shopRequired'), trigger: 'change' }]
+  shopId: [{ required: true, message: t('platformListings.shopRequired'), trigger: 'change' }],
+  ebayFulfillmentPolicyId: [{ validator: validateRequiredWhen('EBAY', 'platformListings.selectShippingPolicy'), trigger: 'change' }],
+  ebayPaymentPolicyId: [{ validator: validateRequiredWhen('EBAY', 'platformListings.selectPaymentPolicy'), trigger: 'change' }],
+  ebayReturnPolicyId: [{ validator: validateRequiredWhen('EBAY', 'platformListings.selectReturnPolicy'), trigger: 'change' }],
+  tiktokWarehouseId: [{ validator: validateRequiredWhen('TIKTOK', 'platformListings.warehouseRequired'), trigger: 'change' }],
+  packageWeightValue: [{ validator: validatePositiveNumber, trigger: 'change' }],
+  packageLength: [{ validator: validatePositiveNumber, trigger: 'change' }],
+  packageWidth: [{ validator: validatePositiveNumber, trigger: 'change' }],
+  packageHeight: [{ validator: validatePositiveNumber, trigger: 'change' }]
 }
 const dialog = reactive({ visible: false, title: '', isEdit: false })
 
@@ -638,7 +684,11 @@ function handleQuery() { queryParams.pageNum = 1; getList() }
 function resetQuery() { queryRef.value?.resetFields(); handleQuery() }
 function resetForm() { Object.assign(form, initForm); form.enabled = true }
 
-function handleAdd() { resetForm(); filterShops(); dialog.title = t('platformListings.templateCreateTitle'); dialog.isEdit = false; dialog.visible = true }
+function clearFormValidate() {
+  nextTick(() => formRef.value?.clearValidate?.())
+}
+
+function handleAdd() { resetForm(); filterShops(); dialog.title = t('platformListings.templateCreateTitle'); dialog.isEdit = false; dialog.visible = true; clearFormValidate() }
 function handleEdit(row) {
   resetForm(); dialog.title = t('platformListings.templateEditTitle'); dialog.isEdit = true
   getTemplate(row.id).then(res => {
@@ -651,7 +701,7 @@ function handleEdit(row) {
       descriptionFormat: d.descriptionFormat || '',
       ebayCategoryId: d.ebayCategoryId || '', ebayCondition: d.ebayCondition || 'USED_GOOD',
       ebayConditionId: d.ebayConditionId || '3000', ebayConditionDescription: d.ebayConditionDescription || '',
-      ebaySubtitle: d.ebaySubtitle || '', ebayQuantity: d.ebayQuantity || 1, ebayMarketplaceId: d.ebayMarketplaceId || 'EBAY_US',
+      ebaySubtitle: d.ebaySubtitle || '', ebayQuantity: 1, ebayMarketplaceId: d.ebayMarketplaceId || 'EBAY_US',
       ebayCurrency: d.ebayCurrency || 'USD', ebayDepartment: d.ebayDepartment || 'Women', ebayExteriorColor: d.ebayExteriorColor || 'N/A',
       ebaySize: d.ebaySize || 'N/A', ebayProductLine: d.ebayProductLine || 'N/A', ebayCountry: d.ebayCountry || 'US',
       ebayLocation: d.ebayLocation || 'Los Angeles, California', ebayPostalCode: d.ebayPostalCode || '90048', ebayDispatchTimeMax: d.ebayDispatchTimeMax || 3,
@@ -662,7 +712,7 @@ function handleEdit(row) {
       ebayReturnPolicyId: d.ebayReturnPolicyId || '',
       tiktokCategoryId: d.tiktokCategoryId || '', tiktokCategoryVersion: d.tiktokCategoryVersion || 'v2', tiktokSaveMode: d.tiktokSaveMode || 'LISTING',
       tiktokBrandId: d.tiktokBrandId || '', tiktokConditionValue: d.tiktokConditionValue || 'Pre-owned',
-      tiktokWarehouseId: d.tiktokWarehouseId || '', tiktokQuantity: d.tiktokQuantity || 1, tiktokCurrency: d.tiktokCurrency || 'USD', tiktokCodAllowed: !!d.tiktokCodAllowed,
+      tiktokWarehouseId: d.tiktokWarehouseId || '', tiktokQuantity: 1, tiktokCurrency: d.tiktokCurrency || 'USD', tiktokCodAllowed: !!d.tiktokCodAllowed,
       packageWeightValue: d.packageWeightValue, packageWeightUnit: d.packageWeightUnit || 'POUND', packageLength: d.packageLength,
       packageWidth: d.packageWidth, packageHeight: d.packageHeight, packageDimensionUnit: d.packageDimensionUnit || 'INCH'
     })
@@ -708,15 +758,35 @@ function handleEdit(row) {
     }
   })
   dialog.visible = true
+  clearFormValidate()
 }
 
 function submitForm() {
+  if (!formRef.value) {
+    submitValidatedForm()
+    return
+  }
+  formRef.value.validate((valid) => {
+    if (!valid) return
+    submitValidatedForm()
+  })
+}
+
+function submitValidatedForm() {
   if (!form.templateName) { proxy.$modal.msgWarning(t('platformListings.templateNameRequired')); return }
   if (!form.platform) { proxy.$modal.msgWarning(t('platformListings.platformRequired')); return }
   if (!form.shopId) { proxy.$modal.msgWarning(t('platformListings.shopRequired')); return }
 
   // 收集缺失的关键信息
   const isEbay = form.platform === 'EBAY'
+  if (!isEbay && isTiktokDefaultPriceInvalid()) {
+    proxy.$modal.msgWarning(t('platformListings.tiktokPriceRangeHint'))
+    return
+  }
+  if (isAuctionImmediatePayment.value && !hasPositivePrice(form.buyItNowPrice)) {
+    proxy.$modal.msgWarning(t('platformListings.auctionImmediatePaymentBuyItNowRequired'))
+    return
+  }
   const missing = []
   if (!form.packageLength || !form.packageWidth || !form.packageHeight) {
     missing.push(t('platformListings.packageDimensionsLabel'))
@@ -748,6 +818,17 @@ function submitForm() {
   doSubmit(isEbay)
 }
 
+function isTiktokDefaultPriceInvalid() {
+  if (form.defaultPrice == null || form.defaultPrice === '') return false
+  const price = Number(form.defaultPrice)
+  return !Number.isFinite(price) || price < TIKTOK_PRICE_MIN || price > TIKTOK_PRICE_MAX
+}
+
+function hasPositivePrice(value) {
+  const price = Number(value)
+  return Number.isFinite(price) && price > 0
+}
+
 function doSubmit(isEbay) {
   if (!validateLeafCategory()) return
   submitting.value = true
@@ -762,7 +843,7 @@ function doSubmit(isEbay) {
     descriptionFormat: form.descriptionFormat || null,
     ebayCategoryId: form.ebayCategoryId || null, ebayCondition: form.ebayCondition || null,
     ebayConditionId: form.ebayConditionId || null, ebayConditionDescription: form.ebayConditionDescription || null, ebaySubtitle: form.ebaySubtitle || null,
-    ebayQuantity: form.ebayQuantity, ebayMarketplaceId: form.ebayMarketplaceId || null, ebayCurrency: form.ebayCurrency || null,
+    ebayQuantity: 1, ebayMarketplaceId: form.ebayMarketplaceId || null, ebayCurrency: form.ebayCurrency || null,
     ebayDepartment: form.ebayDepartment || null, ebayExteriorColor: form.ebayExteriorColor || null, ebaySize: form.ebaySize || null,
     ebayProductLine: form.ebayProductLine || null, ebayCountry: form.ebayCountry || null, ebayLocation: form.ebayLocation || null,
     ebayPostalCode: form.ebayPostalCode || null, ebayDispatchTimeMax: form.ebayDispatchTimeMax,
@@ -773,7 +854,7 @@ function doSubmit(isEbay) {
     ebayReturnPolicyId: form.ebayReturnPolicyId || null,
     tiktokCategoryId: form.tiktokCategoryId || null, tiktokCategoryVersion: form.tiktokCategoryVersion || null, tiktokSaveMode: form.tiktokSaveMode || null,
     tiktokBrandId: form.tiktokBrandId || null, tiktokConditionValue: form.tiktokConditionValue || null,
-    tiktokWarehouseId: form.tiktokWarehouseId || null, tiktokQuantity: form.tiktokQuantity, tiktokCurrency: form.tiktokCurrency || null, tiktokCodAllowed: form.tiktokCodAllowed,
+    tiktokWarehouseId: form.tiktokWarehouseId || null, tiktokQuantity: 1, tiktokCurrency: form.tiktokCurrency || null, tiktokCodAllowed: form.tiktokCodAllowed,
     packageWeightValue: form.packageWeightValue,
     packageWeightUnit: form.packageWeightUnit,
     packageLength: form.packageLength, packageWidth: form.packageWidth, packageHeight: form.packageHeight,
@@ -896,7 +977,16 @@ onMounted(() => { loadShops(); getList() })
 .field-label { font-size: 13px; font-weight: 500; color: #303133; margin-bottom: 4px; margin-top: 4px; }
 .field-label.required::after { content: ' *'; color: #F56C6C; }
 .field-hint { font-size: 12px; color: #909399; margin-top: 2px; }
+.ebay-field-label.required::after { content: ' *'; color: #F56C6C; }
+.required-hint { color: #F56C6C; }
 .token-row { display: flex; flex-wrap: wrap; gap: 6px; min-height: 32px; align-items: center; }
+.template-required-form-item {
+  width: 100%;
+  margin-bottom: 0;
+}
+.template-required-form-item :deep(.el-form-item__content) {
+  width: 100%;
+}
 
 .ebay-listing-builder {
   max-width: 900px;
@@ -1589,6 +1679,3 @@ onMounted(() => { loadShops(); getList() })
   padding-left: 6px;
 }
 </style>
-
-
-
