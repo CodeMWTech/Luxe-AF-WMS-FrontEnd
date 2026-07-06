@@ -10,11 +10,12 @@
           v-for="message in messages"
           :key="message.id"
           class="spring-chat-message"
-          :class="`is-${message.role}`"
+          :class="[`is-${message.role}`, { 'is-typing': message.typing }]"
         >
           <div class="spring-chat-bubble">
             <div v-if="message.status" class="spring-chat-status">{{ message.status }}</div>
-            <span>{{ message.content }}</span>
+            <span>{{ formatMessageContent(message) }}</span>
+            <span v-if="message.typing" class="spring-chat-cursor"></span>
           </div>
         </div>
       </div>
@@ -36,7 +37,12 @@
 </template>
 
 <script setup>
+import { reactive } from 'vue'
 import { chatStream } from '@/api/ai'
+
+const TYPE_INTERVAL_MS = 16
+const TYPE_MIN_CHUNK = 1
+const TYPE_MAX_CHUNK = 5
 
 const messageListRef = ref(null)
 const messages = ref([])
@@ -54,12 +60,16 @@ async function sendMessage() {
     content: question
   }
   messages.value.push(userMessage)
-  const assistantMessage = {
+  const assistantMessage = reactive({
     id: `assistant-${Date.now()}`,
     role: 'assistant',
     content: '',
-    status: '正在连接 AI'
-  }
+    status: '正在连接 AI',
+    receivedDelta: false,
+    pendingText: '',
+    typeTimer: null,
+    typing: false
+  })
   messages.value.push(assistantMessage)
   draft.value = ''
   sending.value = true
@@ -79,10 +89,11 @@ async function sendMessage() {
     })
     sessionId.value = donePayload?.sessionId || sessionId.value
     assistantMessage.status = ''
-    if (!assistantMessage.content.trim()) {
-      assistantMessage.content = donePayload?.answer || 'No answer returned.'
+    if (!assistantMessage.content.trim() && !assistantMessage.pendingText) {
+      enqueueAssistantText(assistantMessage, donePayload?.answer || 'No answer returned.')
     }
   } catch (error) {
+    stopTypewriter(assistantMessage)
     assistantMessage.status = ''
     assistantMessage.content = error?.message || 'AI stream failed.'
   } finally {
@@ -102,15 +113,89 @@ function handleStreamEvent(event, assistantMessage) {
     assistantMessage.status = 'WMS 数据已返回，正在组织回答'
   } else if (event.event === 'delta') {
     assistantMessage.status = ''
-    assistantMessage.content += data.text || ''
+    assistantMessage.receivedDelta = true
+    enqueueAssistantText(assistantMessage, data.text || '')
+  } else if (event.event === 'answer_delta') {
+    assistantMessage.status = ''
+    if (!assistantMessage.receivedDelta) {
+      enqueueAssistantText(assistantMessage, data.content || '')
+    }
+  } else if (event.event === 'policy_reject') {
+    stopTypewriter(assistantMessage)
+    assistantMessage.status = ''
+    assistantMessage.content = data.display || assistantMessage.content
+  } else if (event.event === 'answer_replace') {
+    stopTypewriter(assistantMessage)
+    assistantMessage.status = ''
+    assistantMessage.content = data.content || assistantMessage.content
   } else if (event.event === 'done') {
     assistantMessage.status = ''
     sessionId.value = data.sessionId || sessionId.value
-    if (!assistantMessage.content.trim()) {
-      assistantMessage.content = data.answer || ''
+    if (!assistantMessage.content.trim() && !assistantMessage.pendingText) {
+      enqueueAssistantText(assistantMessage, data.answer || '')
     }
   }
   scrollToBottom()
+}
+
+function enqueueAssistantText(message, text) {
+  if (!text) return
+  message.pendingText = `${message.pendingText || ''}${text}`
+  if (!message.typeTimer) {
+    message.typing = true
+    scheduleTypewriter(message)
+  }
+}
+
+function scheduleTypewriter(message) {
+  message.typeTimer = window.setTimeout(() => {
+    const pending = message.pendingText || ''
+    if (!pending.length) {
+      message.typeTimer = null
+      message.typing = false
+      scrollToBottom()
+      return
+    }
+
+    const chars = Array.from(pending)
+    const chunkSize = chooseTypeChunkSize(chars.length)
+    message.content += chars.slice(0, chunkSize).join('')
+    message.pendingText = chars.slice(chunkSize).join('')
+    scrollToBottom()
+    scheduleTypewriter(message)
+  }, TYPE_INTERVAL_MS)
+}
+
+function chooseTypeChunkSize(length) {
+  if (length > 480) return TYPE_MAX_CHUNK
+  if (length > 180) return 4
+  if (length > 60) return 2
+  return TYPE_MIN_CHUNK
+}
+
+function stopTypewriter(message) {
+  if (message?.typeTimer) {
+    window.clearTimeout(message.typeTimer)
+    message.typeTimer = null
+  }
+  message.pendingText = ''
+  message.typing = false
+}
+
+function formatMessageContent(message) {
+  if (message.role !== 'assistant') {
+    return message.content
+  }
+  return normalizeAssistantListBreaks(message.content)
+}
+
+function normalizeAssistantListBreaks(content) {
+  if (!content) return ''
+  return content
+    .replace(/([：:])\s*(\d{1,2}[.．、]\s*)/g, '$1\n\n$2')
+    .replace(/([^\n\s\d])(\d{1,2}[.．、]\s*)/g, '$1\n$2')
+    .replace(/(\d{1,2}[.．、][^\n。！？!?]*?)(如果你|如果您|如需|若有|如果有|有具体)/g, '$1\n\n$2')
+    .replace(/\n{3,}/g, '\n\n')
 }
 
 function scrollToBottom() {
@@ -193,10 +278,37 @@ function scrollToBottom() {
   background: #f3f4f6;
 }
 
+.spring-chat-message.is-assistant.is-typing .spring-chat-bubble {
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+}
+
 .spring-chat-status {
+  display: inline-flex;
+  align-items: center;
   margin-bottom: 4px;
   color: #6b7280;
   font-size: 12px;
+}
+
+.spring-chat-status::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  border-radius: 999px;
+  background: #60a5fa;
+  animation: spring-chat-pulse 1.2s ease-in-out infinite;
+}
+
+.spring-chat-cursor {
+  display: inline-block;
+  width: 6px;
+  height: 1em;
+  margin-left: 2px;
+  border-radius: 999px;
+  background: #4b5563;
+  vertical-align: -2px;
+  animation: spring-chat-cursor-blink 1s steps(2, start) infinite;
 }
 
 .spring-chat-composer {
@@ -211,5 +323,29 @@ function scrollToBottom() {
 .spring-chat-composer :deep(.el-textarea__inner) {
   min-height: 36px !important;
 }
-</style>
 
+@keyframes spring-chat-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.85);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes spring-chat-cursor-blink {
+  0%,
+  45% {
+    opacity: 1;
+  }
+
+  46%,
+  100% {
+    opacity: 0;
+  }
+}
+</style>

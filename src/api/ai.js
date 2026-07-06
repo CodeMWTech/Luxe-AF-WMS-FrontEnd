@@ -11,68 +11,86 @@ export function chat(data) {
 }
 
 export async function chatStream(data, handlers = {}) {
-  const response = await fetch(`${import.meta.env.VITE_APP_BASE_API}/ai/chat/stream`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json;charset=utf-8',
-      'Authorization': `Bearer ${getToken()}`
-    },
-    body: JSON.stringify(data),
-    signal: handlers.signal
-  })
+  const controller = handlers.signal ? null : new AbortController()
+  const timeoutMs = handlers.timeoutMs || 90000
+  const timeoutId = controller
+    ? window.setTimeout(() => controller.abort(), timeoutMs)
+    : null
 
-  if (!response.ok || !response.body) {
-    const text = await response.text().catch(() => '')
-    throw new Error(text || `Stream request failed with status ${response.status}`)
-  }
+  try {
+    const response = await fetch(`${import.meta.env.VITE_APP_BASE_API}/ai/chat/stream`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json;charset=utf-8',
+        'Accept': 'text/event-stream',
+        'Authorization': `Bearer ${getToken()}`
+      },
+      body: JSON.stringify(data),
+      signal: handlers.signal || controller.signal
+    })
 
-  const reader = response.body.getReader()
-  const decoder = new TextDecoder('utf-8')
-  let buffer = ''
-  let donePayload = null
-  let terminalEvent = false
+    if (!response.ok || !response.body) {
+      const text = await response.text().catch(() => '')
+      throw new Error(text || `Stream request failed with status ${response.status}`)
+    }
 
-  while (true) {
-    const { value, done } = await reader.read()
-    if (done) break
-    buffer += decoder.decode(value, { stream: true })
-    const parts = buffer.split(/\r?\n\r?\n/)
-    buffer = parts.pop() || ''
-    for (const part of parts) {
-      const event = parseSseEvent(part)
-      if (!event) continue
-      handlers.onEvent?.(event)
-      if (event.event === 'done') {
-        donePayload = event.data
-        terminalEvent = true
-      }
-      if (event.event === 'error') {
-        terminalEvent = true
-        throw new Error(event.data?.message || 'AI stream failed.')
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder('utf-8')
+    let buffer = ''
+    let donePayload = null
+    let terminalEvent = false
+
+    while (true) {
+      const { value, done } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const parts = buffer.split(/\r?\n\r?\n/)
+      buffer = parts.pop() || ''
+      for (const part of parts) {
+        const event = parseSseEvent(part)
+        if (!event) continue
+        handlers.onEvent?.(event)
+        if (event.event === 'done') {
+          donePayload = event.data
+          terminalEvent = true
+        }
+        if (event.event === 'error') {
+          terminalEvent = true
+          throw new Error(event.data?.message || 'AI stream failed.')
+        }
       }
     }
-  }
 
-  if (buffer.trim()) {
-    const event = parseSseEvent(buffer)
-    if (event) {
-      handlers.onEvent?.(event)
-      if (event.event === 'done') {
-        donePayload = event.data
-        terminalEvent = true
-      }
-      if (event.event === 'error') {
-        terminalEvent = true
-        throw new Error(event.data?.message || 'AI stream failed.')
+    if (buffer.trim()) {
+      const event = parseSseEvent(buffer)
+      if (event) {
+        handlers.onEvent?.(event)
+        if (event.event === 'done') {
+          donePayload = event.data
+          terminalEvent = true
+        }
+        if (event.event === 'error') {
+          terminalEvent = true
+          throw new Error(event.data?.message || 'AI stream failed.')
+        }
       }
     }
-  }
 
-  if (!terminalEvent) {
-    throw new Error('AI stream ended before completion.')
-  }
+    if (!terminalEvent) {
+      throw new Error('AI stream ended before completion.')
+    }
 
-  return donePayload
+    return donePayload
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      throw new Error('AI 响应超时，请稍后重试或换成库存、入库、出库、盘点等具体查询。')
+    }
+    throw error
+  } finally {
+    if (timeoutId) {
+      window.clearTimeout(timeoutId)
+    }
+  }
 }
 
 function parseSseEvent(raw) {
