@@ -5,19 +5,23 @@
     <div class="vendor-summary">
       <div class="summary-item">
         <span>{{ tr('已选购') }}</span>
-        <strong>{{ formatQty(summary.selectedQuantity) }}</strong>
+        <strong>{{ tr('商品种类') }} {{ summary.selectedSkuCount || 0 }}</strong>
+        <small>{{ tr('商品数量') }} {{ formatQty(summary.selectedQuantity) }}</small>
       </div>
       <div class="summary-item">
         <span>{{ tr('未收货') }}</span>
-        <strong>{{ formatQty(summary.unreceivedQuantity) }}</strong>
+        <strong>{{ tr('商品种类') }} {{ summary.unreceivedSkuCount || 0 }}</strong>
+        <small>{{ tr('商品数量') }} {{ formatQty(summary.unreceivedQuantity) }}</small>
       </div>
       <div class="summary-item">
         <span>{{ tr('未结款') }}</span>
-        <strong>{{ formatQty(summary.unsettledQuantity) }}</strong>
+        <strong>{{ tr('商品种类') }} {{ summary.unsettledSkuCount || 0 }}</strong>
+        <small>{{ tr('商品数量') }} {{ formatQty(summary.unsettledQuantity) }}</small>
       </div>
       <div class="summary-item">
         <span>{{ tr('已结款') }}</span>
-        <strong>{{ formatQty(summary.settledQuantity) }}</strong>
+        <strong>{{ tr('商品种类') }} {{ summary.settledSkuCount || 0 }}</strong>
+        <small>{{ tr('商品数量') }} {{ formatQty(summary.settledQuantity) }}</small>
       </div>
     </div>
 
@@ -106,11 +110,11 @@
         <template #default="{ row }">
           <div v-if="canViewCostPrice && (row.costPrice || row.costPrice === 0)" class="flex-space-between">
             <span>{{ tr('成本价：') }}</span>
-            <div>{{ row.costPrice }}</div>
+            <div>{{ formatMoney(row.costPrice) }}</div>
           </div>
           <div v-if="canViewSellingPrice && (row.sellingPrice || row.sellingPrice === 0)" class="flex-space-between">
             <span>{{ tr('销售价：') }}</span>
-            <div>{{ row.sellingPrice }}</div>
+            <div>{{ formatMoney(row.sellingPrice) }}</div>
           </div>
         </template>
       </el-table-column>
@@ -121,8 +125,11 @@
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column :label="tr('发出数量')" prop="defaultQuantity" width="110" align="right">
-        <template #default="{ row }">{{ formatQty(row.defaultQuantity) }}</template>
+      <el-table-column :label="tr('选购数量')" prop="selectedQuantity" width="110" align="right">
+        <template #default="{ row }">{{ formatQty(row.selectedQuantity ?? row.defaultQuantity) }}</template>
+      </el-table-column>
+      <el-table-column :label="tr('发出数量')" prop="sentQuantity" width="110" align="right">
+        <template #default="{ row }">{{ formatQty(row.sentQuantity) }}</template>
       </el-table-column>
       <el-table-column :label="tr('已收数量')" prop="receivedQuantity" width="110" align="right">
         <template #default="{ row }">{{ formatQty(row.receivedQuantity) }}</template>
@@ -207,9 +214,13 @@ const queryRef = ref()
 const selectedItemIds = ref([])
 const summary = reactive({
   selectedQuantity: 0,
+  selectedSkuCount: 0,
   unreceivedQuantity: 0,
+  unreceivedSkuCount: 0,
   unsettledQuantity: 0,
-  settledQuantity: 0
+  unsettledSkuCount: 0,
+  settledQuantity: 0,
+  settledSkuCount: 0
 })
 const queryParams = reactive({
   pageNum: 1,
@@ -253,6 +264,11 @@ const purchaseStatusLabels = {
 function formatQty(value) {
   const num = Number(value || 0)
   return Number.isInteger(num) ? String(num) : num.toFixed(2)
+}
+
+function formatMoney(value) {
+  const text = formatQty(value)
+  return ['unsettled', 'settled'].includes(props.status) ? `$${text}` : text
 }
 
 function fieldLabel(text) {
@@ -398,6 +414,13 @@ onMounted(async () => {
   margin-top: 8px;
   color: #303133;
   font-size: 24px;
+}
+
+.summary-item small {
+  display: block;
+  margin-top: 4px;
+  color: #909399;
+  font-size: 12px;
 }
 
 .vendor-title {

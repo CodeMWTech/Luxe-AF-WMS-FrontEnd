@@ -4,6 +4,9 @@
       <el-form-item :label="tr('商品名称')" prop="itemName">
         <el-input v-model="queryParams.itemName" :placeholder="tr('请输入商品名称')" clearable @keyup.enter="handleQuery" />
       </el-form-item>
+      <el-form-item label="SKU" prop="skuCode">
+        <el-input v-model="queryParams.skuCode" :placeholder="tr('请输入SKU编号')" clearable @keyup.enter="handleQuery" />
+      </el-form-item>
       <el-form-item :label="tr('供应商')" prop="supplierId">
         <el-select v-model="queryParams.supplierId" :placeholder="tr('请选择供应商')" clearable filterable>
           <el-option v-for="item in supplierOptions" :key="item.id" :label="item.supplierName" :value="item.id" />
@@ -26,7 +29,25 @@
     <el-table v-loading="loading" :data="itemList" border @selection-change="handleSelectionChange">
       <el-table-column type="selection" width="48" />
       <el-table-column :label="tr('商品名称')" prop="itemName" min-width="180" show-overflow-tooltip />
+      <el-table-column :label="tr('商品图片')" width="110" align="center">
+        <template #default="{ row }">
+          <el-image
+            v-if="getMainImageUrl(row)"
+            :src="getMainImageUrl(row)"
+            fit="cover"
+            class="review-item-image"
+            :preview-src-list="[getMainImageUrl(row)]"
+            preview-teleported
+          />
+          <span v-else>-</span>
+        </template>
+      </el-table-column>
       <el-table-column :label="tr('供应商')" prop="supplierName" min-width="140" show-overflow-tooltip />
+      <el-table-column :label="tr('选购数量')" width="110" align="right">
+        <template #default="{ row }">
+          {{ purchaseReviewQuantity(row) }}
+        </template>
+      </el-table-column>
       <el-table-column :label="tr('品牌')" min-width="120">
         <template #default="{ row }">
           {{ brandName(row.itemBrand) }}
@@ -95,11 +116,32 @@ const queryParams = reactive({
   pageNum: 1,
   pageSize: 10,
   itemName: undefined,
+  skuCode: undefined,
   supplierId: undefined
 })
 
 function brandName(id) {
   return id ? (wmsStore.itemBrandMap.get(id)?.brandName || id) : ''
+}
+
+function purchaseReviewQuantity(row) {
+  const pendingQty = Number(row?.purchasePendingQuantity ?? 0)
+  if (Number.isFinite(pendingQty) && pendingQty > 0) {
+    return pendingQty
+  }
+  const status = Number(row?.purchaseStatus ?? 0)
+  const purchaseQty = Number(row?.purchaseQuantity ?? 0)
+  if (status === 1 && Number.isFinite(purchaseQty) && purchaseQty > 0) {
+    return purchaseQty
+  }
+  return 0
+}
+
+function getMainImageUrl(row) {
+  if (row?.mainThumbUrl) return row.mainThumbUrl
+  const images = row?.imageList || row?.images || []
+  const main = images.find(item => item?.isMain)
+  return main?.thumbUrl || main?.url || images[0]?.thumbUrl || images[0]?.url || ''
 }
 
 async function getList() {
@@ -177,5 +219,12 @@ onMounted(async () => {
 .review-title {
   font-size: 18px;
   font-weight: 600;
+}
+
+.review-item-image {
+  width: 72px;
+  height: 72px;
+  border-radius: 6px;
+  display: inline-block;
 }
 </style>

@@ -83,11 +83,20 @@ export function delItem(id) {
 };
 
 // 批量提交商品选购审核
-export function selectItemsForPurchase(ids) {
+export function selectItemsForPurchase(ids, purchaseQuantityMap) {
   return request({
     url: '/wms/item/purchase/select',
     method: 'post',
-    data: { ids }
+    data: { ids, purchaseQuantityMap }
+  });
+}
+
+// 供应商批量直发，跳过选购审批
+export function supplierShipItems(ids, purchaseQuantityMap) {
+  return request({
+    url: '/wms/item/purchase/supplier-ship',
+    method: 'post',
+    data: { ids, purchaseQuantityMap }
   });
 }
 
@@ -164,4 +173,46 @@ export function deleteItemImage(imageId) {
     url: `/wms/item/image/${imageId}`,
     method: 'delete'
   });
+}
+
+// 下载商品导入模板
+export function downloadItemImportTemplate() {
+  return request({
+    url: '/wms/item/import/template',
+    method: 'get',
+    responseType: 'blob',
+    timeout: 0
+  })
+}
+
+// 提交商品 Excel 异步导入
+export function importItemsByExcel(excel, images) {
+  const formData = new FormData()
+  formData.append('excel', excel)
+  formData.append('images', images)
+  return request({
+    url: '/wms/item/import',
+    method: 'post',
+    data: formData,
+    headers: { 'Content-Type': 'multipart/form-data', repeatSubmit: false },
+    timeout: 0
+  })
+}
+
+// 查询商品导入任务
+export function listItemImportTasks(query) {
+  return request({
+    url: '/wms/item/import/tasks',
+    method: 'get',
+    params: query
+  })
+}
+
+// 查询商品导入明细
+export function listItemImportDetails(taskId, query) {
+  return request({
+    url: `/wms/item/import/tasks/${taskId}/details`,
+    method: 'get',
+    params: query
+  })
 }
