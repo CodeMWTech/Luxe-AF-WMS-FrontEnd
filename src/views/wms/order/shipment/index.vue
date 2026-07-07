@@ -28,11 +28,17 @@
               {{ tr('全部') }}
             </el-radio-button>
             <el-radio-button
-              v-for="item in translatedShipmentTypeOptions"
+              v-for="item in translatedShipmentTypeFilterOptions"
               :key="item.value"
               :label="item.value"
             >
               {{ item.label }}
+            </el-radio-button>
+            <el-radio-button
+              v-if="!hasBackendSampleShipmentType"
+              :label="SAMPLE_SHIPMENT_TYPE_OPTION.value"
+            >
+              {{ tr(SAMPLE_SHIPMENT_TYPE_OPTION.label) }}
             </el-radio-button>
           </el-radio-group>
         </el-form-item>
@@ -248,8 +254,19 @@ const { queryParams } = toRefs(data);
 const tr = (text) => translateByMap(text, settingsStore.language || 'zh-cn')
 const isEn = computed(() => (settingsStore.language || 'zh-cn') === 'en')
 const formLabelWidth = computed(() => '80px')
+const SAMPLE_SHIPMENT_TYPE_OPTION = { label: 'Sample样品', value: '4', elTagType: 'warning', elTagClass: '' }
+function withSampleShipmentType(options = []) {
+  const list = [...options]
+  if (!list.some(item => String(item.value) === SAMPLE_SHIPMENT_TYPE_OPTION.value)) {
+    list.push({ ...SAMPLE_SHIPMENT_TYPE_OPTION })
+  }
+  return list
+}
 const translatedShipmentStatusOptions = computed(() => (wms_shipment_status.value || []).map(it => ({ ...it, label: tr(it.label) })))
-const translatedShipmentTypeOptions = computed(() => (wms_shipment_type.value || []).map(it => ({ ...it, label: tr(it.label) })))
+const backendShipmentTypeOptions = computed(() => wms_shipment_type.value || [])
+const hasBackendSampleShipmentType = computed(() => backendShipmentTypeOptions.value.some(item => String(item.value) === SAMPLE_SHIPMENT_TYPE_OPTION.value))
+const translatedShipmentTypeFilterOptions = computed(() => backendShipmentTypeOptions.value.map(it => ({ ...it, label: tr(it.label) })))
+const translatedShipmentTypeOptions = computed(() => withSampleShipmentType(backendShipmentTypeOptions.value).map(it => ({ ...it, label: tr(it.label) })))
 const wmsStore = useWmsStore()
 
 function getShipmentOrderStateLabel(row) {
