@@ -2,7 +2,7 @@
         <div class="item-list-panel">
           <div class="item-list-panel__header">
             <div class="item-list-title-wrap">
-              <el-tooltip v-if="isCategoryPanelCollapsed" :content="tr('展开商品分类')" placement="top">
+              <el-tooltip v-if="collapsed" :content="tr('展开商品分类')" placement="top">
                 <el-button class="item-list-expand-btn" circle plain @click="emit('toggle-category')">
                   <el-icon><Expand /></el-icon>
                 </el-button>
