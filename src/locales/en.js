@@ -170,7 +170,7 @@
     labelEditSku: 'Edit',
     labelUncreated: 'Not created',
     skuIssue: 'SKU Issue',
-    skuIssueBrushOrder: 'Brush',
+    skuIssueBrushOrder: 'Sample',
     // Order info bar
     orderInfoId: 'Order ID',
     orderInfoCreateTime: 'Created',
@@ -270,7 +270,7 @@
     shipmentCreateSuccess: 'Shipment draft orders created',
     shipmentCreateSubmitted: 'Shipment creation task submitted. Please refresh later.',
     shipmentCreateFailed: 'Failed to create shipment draft orders',
-    createShipmentConfirm: 'Before creating shipment orders, please confirm that all brush-order Notes have been imported. Missing Notes may leave SKUs unmatched or shipment orders omitted. Continue creating shipment orders?',
+    createShipmentConfirm: 'Before creating shipment orders, please confirm that all Sample Notes have been imported. Missing Notes may leave SKUs unmatched or shipment orders omitted. Continue creating shipment orders?',
     shipmentDisabled: 'Shipment order creation is temporarily disabled. Please contact administrator if needed.',
     autoCreateLabel: 'Auto-create Shipments',
     autoCreateEnabledMsg: 'Auto-create shipments enabled',
@@ -296,13 +296,13 @@
     goToFirstPage: 'Back to first page',
     btnImportNotes: 'Import Notes',
     importNotesTitle: 'Import Notes from CSV',
-    importNotesHelp: 'Supports CSV files exported from TikTok (ALL prefix) and eBay (eBay prefix). Note uses a semicolon to separate SKU (first part) and remark (second part), and common semicolon variants are accepted. If the first part is the literal value empty (case-insensitive), it is treated as a brush order, the SKU is not updated, and the full Note is saved to remarks. For orders with matched SKU, the entire note is placed in remarks.',
+    importNotesHelp: 'Supports CSV files exported from TikTok (ALL prefix) and eBay (eBay prefix). Note uses a semicolon to separate SKU (first part) and remark (second part), and common semicolon variants are accepted. If the first part is the literal value empty (case-insensitive), it is treated as a Sample order, the SKU is not updated, and the full Note is saved to remarks. For orders with matched SKU, the entire note is placed in remarks.',
     importNotesSelectFile: 'Select CSV file',
     importNotesFileHint: 'CSV file (.csv), supports TikTok and eBay format',
     importNotesStart: 'Start Import',
     importNotesSuccess: 'Import complete',
     importNotesFailed: 'Import failed',
-    importNoteResult: '{platform} import: {total} uploaded, {updated} updated, {skuMatched} SKU matched ({noStock} no stock), {brushOrder} brush orders, {expectShip} expect ship, {unmatched} SKU unmatched, {notFound} orders not found',
+    importNoteResult: '{platform} import: {total} uploaded, {updated} updated, {skuMatched} SKU matched ({noStock} no stock), {brushOrder} Sample orders, {expectShip} expect ship, {unmatched} SKU unmatched, {notFound} orders not found',
     importNotesUnmatchedHint: '{count} SKU unmatched, please check the Note column data in the imported file',
     // Skip reason for auto-shipment
     skipReason: {
@@ -312,7 +312,11 @@
       'SKU not matched': 'SKU not matched',
       'No stock': 'No stock',
       'Manually removed from shipment': 'Manually removed from shipment',
-      'Brush order': 'Brush order'
+      'Brush order': 'Sample order',
+      'Sample order': 'Sample order',
+      'Sample order: Seller SKU is empty': 'Sample: Seller SKU is empty',
+      'Sample order: SKU not matched': 'Sample: SKU not matched',
+      'Sample order: No warehouse': 'Sample: No SKU warehouse found'
     },
     // Order status
     orderStatus: {
@@ -521,6 +525,8 @@
     templateMarkupLabel: 'Markup',
     templateTitleFormatLabel: 'Title Format',
     previewSelectedSummary: '{count} SKU(s) selected, template: {template}',
+    selectedSkuTitle: '{count} SKU(s) selected',
+    clearSelected: 'Clear selected',
     ebayPreviewLabel: 'eBay listing preview',
     tiktokPreviewLabel: 'TikTok Shop product preview',
     quantityShort: 'Qty',

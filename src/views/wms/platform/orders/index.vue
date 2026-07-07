@@ -1354,6 +1354,11 @@ function formatTaxes(taxes, currency) {
 
 function formatSkipReason(reason) {
   if (!reason) return ''
+  const exactKey = `platformOrders.skipReason['${reason}']`
+  const exactText = t(exactKey)
+  if (exactText && exactText !== exactKey) {
+    return exactText
+  }
   // 处理 "Order status not allowed: XXX" 格式：翻译前半部分，保留状态值
   const colonIdx = reason.indexOf(':')
   if (colonIdx > 0) {
@@ -1496,6 +1501,7 @@ function submitImportNotes() {
     const data = response.data || response
     const matched = data.matched ?? 0
     const noStock = data.noStock ?? 0
+    const sampleOrder = data.brushOrder ?? 0
     ElMessage({
       message: t('platformOrders.importNoteResult', {
         platform: data.platform || '-',
@@ -1504,8 +1510,8 @@ function submitImportNotes() {
         skipped: data.skipped ?? 0,
         skuMatched: matched + noStock,
         noStock: noStock,
-        expectShip: matched,
-        brushOrder: data.brushOrder ?? 0,
+        expectShip: matched + sampleOrder,
+        brushOrder: sampleOrder,
         unmatched: data.unmatched ?? 0,
         notFound: data.notFound ?? 0
       }),
