@@ -240,7 +240,7 @@ function handleMaterialChange(id) {
 const itemList = ref([]);
 const itemTableRef = ref(null);
 const selectedItemMap = ref(new Map());
-const isCategoryPanelCollapsed = ref(false);
+const isCategoryPanelCollapsed = ref(true);
 const layoutItemTable = () => itemTableRef.value?.doLayout?.();
 const toggleCategoryPanel = () => {
   isCategoryPanelCollapsed.value = !isCategoryPanelCollapsed.value;
