@@ -411,7 +411,7 @@ const importDetailQuery = reactive({
   pageNum: 1,
   pageSize: 10
 })
-const isCategoryPanelCollapsed = ref(false);
+const isCategoryPanelCollapsed = ref(true);
 const layoutItemTable = () => itemTableRef.value?.doLayout?.();
 const toggleCategoryPanel = () => {
   isCategoryPanelCollapsed.value = !isCategoryPanelCollapsed.value;
