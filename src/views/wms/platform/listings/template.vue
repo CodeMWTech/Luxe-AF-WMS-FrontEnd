@@ -180,7 +180,7 @@
               <div class="ebay-section-title-row"><h3>{{ t('platformListings.pricing') }}</h3></div>
               <div class="ebay-field-row three-col compact-row">
                 <div><label class="ebay-field-label">{{ t('platformListings.format') }}</label><el-select v-model="form.listingType" style="width:100%"><el-option label="Buy It Now" value="FIXED_PRICE" /><el-option label="Auction" value="AUCTION" /></el-select></div>
-                <div><label class="ebay-field-label">{{ form.listingType === 'AUCTION' ? t('platformListings.startPrice') : t('platformListings.buyItNowPrice') }}</label><div style="display:flex;align-items:center;gap:6px"><el-input-number v-model="form.defaultPrice" :min="0" :precision="2" :step="10" :placeholder="t('platformListings.priceDefaultHint')" style="flex:1" /><el-button v-if="form.defaultPrice != null" link type="warning" size="small" @click="form.defaultPrice = null">{{ t('platformListings.priceResetDefault') }}</el-button></div><div class="field-hint">{{ t('platformListings.priceDefaultHint') }}</div></div>
+                <div><label class="ebay-field-label">{{ form.listingType === 'AUCTION' ? t('platformListings.startPrice') : t('platformListings.buyItNowPrice') }}</label><div style="display:flex;align-items:center;gap:6px"><el-input-number v-model="form.defaultPrice" :precision="2" :step="10" :placeholder="t('platformListings.priceDefaultHint')" style="flex:1" /><el-button v-if="form.defaultPrice != null" link type="warning" size="small" @click="form.defaultPrice = null">{{ t('platformListings.priceResetDefault') }}</el-button></div><div class="field-hint">{{ t('platformListings.priceDefaultHint') }}</div></div>
                 <div><label class="ebay-field-label">{{ t('platformListings.quantity') }}</label><el-input-number v-model="form.ebayQuantity" :min="1" :max="1" disabled style="width:100%" /></div>
               </div>
               <div class="ebay-field-row three-col compact-row" v-if="form.listingType === 'AUCTION'">
@@ -295,7 +295,7 @@
                   <div class="tiktok-tip warehouse-warning-tip">{{ t('platformListings.returnWarehouseUnsupported') }}</div>
                   <div class="tiktok-stock-grid editable-stock-grid">
                     <div><label>{{ t('platformListings.stock') }}</label><el-input-number v-model="form.tiktokQuantity" :min="1" :max="1" disabled style="width:100%" /></div>
-                    <div><label>{{ t('platformListings.retailPrice') }}</label><div style="display:flex;align-items:center;gap:6px"><el-input-number v-model="form.defaultPrice" :min="TIKTOK_PRICE_MIN" :max="TIKTOK_PRICE_MAX" :precision="2" :step="10" :placeholder="t('platformListings.priceDefaultHint')" style="flex:1" /><el-button v-if="form.defaultPrice != null" link type="warning" size="small" @click="form.defaultPrice = null">{{ t('platformListings.priceResetDefault') }}</el-button></div><div class="tiktok-tip">{{ t('platformListings.tiktokPriceRangeHint') }}；{{ t('platformListings.priceDefaultHint') }}</div></div>
+                    <div><label>{{ t('platformListings.retailPrice') }}</label><div style="display:flex;align-items:center;gap:6px"><el-input-number v-model="form.defaultPrice" :max="TIKTOK_PRICE_MAX" :precision="2" :step="10" :placeholder="t('platformListings.priceDefaultHint')" style="flex:1" /><el-button v-if="form.defaultPrice != null" link type="warning" size="small" @click="form.defaultPrice = null">{{ t('platformListings.priceResetDefault') }}</el-button></div><div class="tiktok-tip">{{ t('platformListings.tiktokPriceRangeHint') }}；{{ t('platformListings.priceDefaultHint') }}</div></div>
                     <div><label>{{ t('platformListings.currency') }}</label><el-select v-model="form.tiktokCurrency" style="width:100%"><el-option label="USD" value="USD" /><el-option label="GBP" value="GBP" /></el-select></div>
                   </div>
                 </section>
@@ -696,8 +696,8 @@ function handleEdit(row) {
     Object.assign(form, {
       id: d.id, templateName: d.templateName, platform: d.platform, shopId: d.shopId,
       listingType: d.listingType || 'FIXED_PRICE', listingDuration: d.listingDuration || 'Days_7',
-      enabled: d.status === 'ENABLED', buyItNowPrice: d.buyItNowPrice || null,
-      defaultTitle: d.titleFormat || '', defaultPrice: d.priceMarkupValue || null,
+      enabled: d.status === 'ENABLED', buyItNowPrice: d.buyItNowPrice ?? null,
+      defaultTitle: d.titleFormat || '', defaultPrice: d.priceMarkupValue ?? null,
       descriptionFormat: d.descriptionFormat || '',
       ebayCategoryId: d.ebayCategoryId || '', ebayCondition: d.ebayCondition || 'USED_GOOD',
       ebayConditionId: d.ebayConditionId || '3000', ebayConditionDescription: d.ebayConditionDescription || '',
@@ -829,16 +829,20 @@ function hasPositivePrice(value) {
   return Number.isFinite(price) && price > 0
 }
 
+function optionalNumber(value) {
+  return value === '' || value == null ? null : value
+}
+
 function doSubmit(isEbay) {
   if (!validateLeafCategory()) return
   submitting.value = true
   const data = {
     id: form.id, templateName: form.templateName, platform: form.platform,
     shopId: form.shopId, listingType: form.listingType, listingDuration: form.listingDuration,
-    status: form.enabled ? 'ENABLED' : 'DISABLED', buyItNowPrice: form.buyItNowPrice || null,
+    status: form.enabled ? 'ENABLED' : 'DISABLED', buyItNowPrice: optionalNumber(form.buyItNowPrice),
     titleFormat: form.defaultTitle,          // 复用此字段存标题
     priceSource: 'CUSTOM',                   // 始终自定义价格
-    priceMarkupValue: form.defaultPrice,     // FIXED_PRICE=立即购买价，AUCTION=起拍价
+    priceMarkupValue: optionalNumber(form.defaultPrice),     // FIXED_PRICE=立即购买价，AUCTION=起拍价
     priceMarkupType: 'FIXED',
     descriptionFormat: form.descriptionFormat || null,
     ebayCategoryId: form.ebayCategoryId || null, ebayCondition: form.ebayCondition || null,

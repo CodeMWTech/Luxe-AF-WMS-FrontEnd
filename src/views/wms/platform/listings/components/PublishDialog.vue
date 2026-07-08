@@ -98,7 +98,7 @@
           <el-descriptions :column="2" border size="small">
             <el-descriptions-item :label="t('platformListings.templatePlatformLabel')">{{ chosenPlatform === 'EBAY' ? 'eBay' : 'TikTok Shop' }}</el-descriptions-item>
             <el-descriptions-item :label="t('platformListings.templatePriceSourceLabel')">{{ chosenTemplate.priceSource === 'CUSTOM' ? t('platformListings.priceSourceCustom') : t('platformListings.priceSourceSelling') }}</el-descriptions-item>
-            <el-descriptions-item :label="t('platformListings.templateMarkupLabel')">{{ (chosenTemplate.priceMarkupValue || 0) + (chosenTemplate.priceMarkupType === 'PERCENT' ? '%' : '') }}</el-descriptions-item>
+            <el-descriptions-item :label="t('platformListings.templateMarkupLabel')">{{ chosenTemplate.priceMarkupValue != null ? chosenTemplate.priceMarkupValue + (chosenTemplate.priceMarkupType === 'PERCENT' ? '%' : '') : '-' }}</el-descriptions-item>
             <el-descriptions-item :label="t('platformListings.templateTitleFormatLabel')" :span="2">{{ chosenTemplate.titleFormat || '{brand} {material} {year} {itemName}' }}</el-descriptions-item>
           </el-descriptions>
         </el-form-item>
@@ -112,6 +112,14 @@
         v-if="hasEbayTitleTooLong"
         :title="t('platformListings.ebayTitleTooLongSummary', { count: ebayTitleTooLongRows.length })"
         type="error"
+        show-icon
+        :closable="false"
+        style="margin-bottom:12px"
+      />
+      <el-alert
+        v-if="hasBelowSellingPrice"
+        :title="t('platformListings.lowPriceWarningSummary', { count: belowSellingPriceRows.length })"
+        type="warning"
         show-icon
         :closable="false"
         style="margin-bottom:12px"
@@ -150,6 +158,11 @@
             </div>
           </template>
         </el-table-column>
+        <el-table-column :label="t('platformListings.sellingPrice')" width="120" align="right">
+          <template #default="{ row }">
+            {{ formatMoney(row.sellingPrice, row.currency || 'USD') }}
+          </template>
+        </el-table-column>
         <el-table-column :label="t('platformListings.resolvedPrice')" width="160" align="right">
           <template #default="{ row }">
             <el-input-number
@@ -165,6 +178,9 @@
             />
             <div v-if="isTiktokPriceInvalid(row)" class="price-error">
               {{ t('platformListings.tiktokPriceRangeHint') }}
+            </div>
+            <div v-else-if="isBelowSellingPrice(row)" class="price-warning">
+              {{ t('platformListings.lowPriceRowHint') }}
             </div>
           </template>
         </el-table-column>
@@ -374,6 +390,8 @@ const tiktokPriceInvalidRows = computed(() => isTiktokPublish.value
   ? previewList.value.filter(row => isTiktokPriceInvalid(row))
   : [])
 const hasTiktokPriceInvalid = computed(() => tiktokPriceInvalidRows.value.length > 0)
+const belowSellingPriceRows = computed(() => previewList.value.filter(row => isBelowSellingPrice(row)))
+const hasBelowSellingPrice = computed(() => belowSellingPriceRows.value.length > 0)
 
 function getTitleLength(title) {
   return Array.from(title || '').length
@@ -387,6 +405,36 @@ function isTiktokPriceInvalid(row) {
   if (!isTiktokPublish.value) return false
   const price = Number(row?.overridePrice)
   return !Number.isFinite(price) || price < TIKTOK_PRICE_MIN || price > TIKTOK_PRICE_MAX
+}
+
+function validPositiveNumber(value) {
+  const num = Number(value)
+  return Number.isFinite(num) && num > 0 ? num : null
+}
+
+function isBelowSellingPrice(row) {
+  const channelPrice = validPositiveNumber(row?.overridePrice)
+  const sellingPrice = validPositiveNumber(row?.sellingPrice)
+  return channelPrice != null && sellingPrice != null && channelPrice < sellingPrice
+}
+
+function formatMoney(value, currency = 'USD') {
+  const amount = Number(value)
+  return Number.isFinite(amount) ? `${currency} ${amount.toFixed(2)}` : '-'
+}
+
+function buildLowPriceConfirmMessage() {
+  const details = belowSellingPriceRows.value.slice(0, 5).map(row => {
+    return t('platformListings.lowPriceConfirmDetail', {
+      sku: row.skuCode || row.skuId || '-',
+      listingPrice: formatMoney(row.overridePrice, row.currency || 'USD'),
+      sellingPrice: formatMoney(row.sellingPrice, row.currency || 'USD')
+    })
+  }).join('\n')
+  const more = belowSellingPriceRows.value.length > 5
+    ? '\n' + t('platformListings.lowPriceConfirmMore', { count: belowSellingPriceRows.value.length })
+    : ''
+  return t('platformListings.lowPriceConfirmMessage', { count: belowSellingPriceRows.value.length, details: details + more })
 }
 
 function normalizePreviewPrice(price) {
@@ -426,6 +474,7 @@ async function loadPreviews() {
           skuCode: data.skuCode || sku.skuCode,
           overrideTitle: data.title || '',
           overridePrice: normalizePreviewPrice(data.price ?? 0),
+          sellingPrice: data.sellingPrice ?? sku.sellingPrice,
           images: data.images || []
         })
       } catch (e) {
@@ -434,6 +483,7 @@ async function loadPreviews() {
           skuCode: sku.skuCode,
           overrideTitle: '',
           overridePrice: 0,
+          sellingPrice: sku.sellingPrice,
           images: []
         })
       }
@@ -505,6 +555,21 @@ async function doPublish() {
     proxy.$modal.msgWarning(t('platformListings.tiktokPriceRangeSummary', { count: tiktokPriceInvalidRows.value.length }))
     return
   }
+  if (hasBelowSellingPrice.value) {
+    try {
+      await proxy.$modal.confirm(
+        buildLowPriceConfirmMessage(),
+        t('platformListings.lowPriceConfirmTitle'),
+        {
+          type: 'warning',
+          confirmButtonText: t('platformListings.lowPriceConfirmButton'),
+          cancelButtonText: t('platformListings.lowPriceCancelButton')
+        }
+      )
+    } catch {
+      return
+    }
+  }
   const skuIds = previewList.value.map(p => p.skuId)
   const customTitles = {}
   const customPrices = {}
@@ -515,7 +580,14 @@ async function doPublish() {
   })
   publishing.value = true
   try {
-    await batchPublish({ templateId: chosenTemplateId.value, publishShopId: chosenShopId.value, skuIds, customTitles, customPrices })
+    await batchPublish({
+      templateId: chosenTemplateId.value,
+      publishShopId: chosenShopId.value,
+      skuIds,
+      customTitles,
+      customPrices,
+      confirmBelowSellingPrice: hasBelowSellingPrice.value
+    })
     proxy.$modal.msgSuccess(t('platformListings.publishSuccess'))
     visible.value = false
     emit('success')
@@ -637,6 +709,13 @@ defineExpose({ open, openWithSkus })
   font-size: 12px;
   line-height: 1.4;
   color: var(--el-color-danger);
+  text-align: left;
+}
+.price-warning {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--el-color-warning);
   text-align: left;
 }
 
