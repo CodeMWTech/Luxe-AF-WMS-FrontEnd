@@ -11,8 +11,10 @@
             </div>
             <div class="item-toolbar-actions">
               <el-button type="primary" plain icon="Download" @click="emit('export')" class="mb10" v-hasPermi="['wms:item:list']">{{ tr('导出Excel') }}</el-button>
+              <el-button type="primary" plain icon="Upload" @click="emit('import')" class="mb10" v-hasPermi="['wms:item:import']">{{ tr('导入Excel') }}</el-button>
+              <el-button plain icon="Tickets" @click="emit('import-log')" class="mb10" v-hasPermi="['wms:item:import']">{{ tr('上传日志') }}</el-button>
               <el-button
-                v-if="!isSupplierUser"
+                v-if="canSelectPurchase"
                 type="success"
                 plain
                 icon="ShoppingCart"
@@ -21,11 +23,21 @@
                 class="mb10"
                 v-hasPermi="['wms:item:purchase']"
               >{{ tr('选购') }}</el-button>
+              <el-button
+                v-if="canSupplierShip"
+                type="warning"
+                plain
+                icon="Promotion"
+                :disabled="multiple"
+                @click="emit('supplier-ship')"
+                class="mb10"
+                v-hasPermi="['wms:item:supplierShip']"
+              >{{ tr('批量发货') }}</el-button>
               <el-button type="primary" plain icon="Plus" @click="emit('add')" class="mb10" v-hasPermi="['wms:item:edit']">{{ tr('新增商品') }}</el-button>
             </div>
           </div>
           <el-table ref="itemTableRef" :data="itemList" :row-key="getItemRowKey" @selection-change="emit('selection-change', $event)" :span-method="spanMethod" border :empty-text="tr('暂无商品')" v-loading="loading" cell-class-name="my-cell">
-            <el-table-column v-if="!isSupplierUser" type="selection" width="48" :selectable="isPurchaseSelectable" />
+            <el-table-column v-if="canShowSelectionColumn" type="selection" width="48" :selectable="isRowSelectable" />
             <el-table-column :label="tr('商品信息')" prop="itemId">
               <template #default="{ row }">
                 <div>{{ row.item.itemName }}</div>
@@ -57,11 +69,16 @@
                 <span>{{ row.item.supplierName || tr('Luxeaf 自有') }}</span>
               </template>
             </el-table-column>
-            <el-table-column :label="tr('选购状态')" prop="item.purchaseStatus" align="center" width="110">
+            <el-table-column v-if="canSelectPurchase" :label="tr('选购状态')" prop="item.purchaseStatus" align="center" width="150">
               <template #default="{ row }">
-                <el-tag :type="purchaseStatusType(row.item.purchaseStatus)" size="small">
-                  {{ purchaseStatusLabel(row.item.purchaseStatus) }}
+                <el-tag :type="isPurchaseSelectable(row) ? 'success' : 'info'" size="small">
+                  {{ isPurchaseSelectable(row) ? tr('可选购') : tr('不可选购') }}
                 </el-tag>
+                <div class="purchase-status-counts">
+                  <div>{{ tr('已选购') }} {{ getPurchaseSelectedQty(row) }} {{ tr('件') }}</div>
+                  <div>{{ tr('审核中') }} {{ getPurchasePendingQty(row) }} {{ tr('件') }}</div>
+                  <div>{{ tr('可选购') }} {{ getPurchaseAvailableQty(row) }} {{ tr('件') }}</div>
+                </div>
               </template>
             </el-table-column>
             <el-table-column :label="tr('SKU编码')" prop="skuName" align="left">
@@ -119,12 +136,19 @@ defineProps({
   loading: { type: Boolean, default: false },
   multiple: { type: Boolean, default: true },
   isSupplierUser: { type: Boolean, default: false },
+  canSelectPurchase: { type: Boolean, default: false },
+  canSupplierShip: { type: Boolean, default: false },
+  canShowSelectionColumn: { type: Boolean, default: false },
   canViewCostPrice: { type: Boolean, default: false },
   canViewSellingPrice: { type: Boolean, default: false },
   amountColumnLabel: { type: String, default: '' },
   spanMethod: { type: Function, required: true },
   getItemRowKey: { type: Function, required: true },
   isPurchaseSelectable: { type: Function, required: true },
+  isRowSelectable: { type: Function, required: true },
+  getPurchaseSelectedQty: { type: Function, required: true },
+  getPurchasePendingQty: { type: Function, required: true },
+  getPurchaseAvailableQty: { type: Function, required: true },
   fieldLabel: { type: Function, required: true },
   purchaseStatusType: { type: Function, required: true },
   purchaseStatusLabel: { type: Function, required: true },
@@ -135,7 +159,10 @@ defineProps({
 const emit = defineEmits([
   'toggle-category',
   'export',
+  'import',
+  'import-log',
   'select-purchase',
+  'supplier-ship',
   'add',
   'selection-change',
   'delete',

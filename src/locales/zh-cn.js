@@ -170,7 +170,7 @@
     labelEditSku: '编辑',
     labelUncreated: '未创建',
     skuIssue: 'SKU异常',
-    skuIssueBrushOrder: '刷单',
+    skuIssueBrushOrder: 'Sample样品',
     // 订单信息栏
     orderInfoId: '订单ID',
     orderInfoCreateTime: '创建时间',
@@ -270,7 +270,7 @@
     shipmentCreateSuccess: '出库暂存单创建完成',
     shipmentCreateSubmitted: '出库暂存单创建任务已提交，请稍后刷新查看',
     shipmentCreateFailed: '创建出库暂存单失败',
-    createShipmentConfirm: '创建出库单前，请确认已经提前导入所有刷单的 Note。未导入 Note 可能导致 SKU 未匹配或出库单遗漏。确定继续创建出库单吗？',
+    createShipmentConfirm: '创建出库单前，请确认已经提前导入所有 Sample 样品的 Note。未导入 Note 可能导致 SKU 未匹配或出库单遗漏。确定继续创建出库单吗？',
     shipmentDisabled: '出库暂存单功能已临时禁用，如有需要请联系管理员',
     autoCreateLabel: '自动创建出库单',
     autoCreateEnabledMsg: '自动创建出库单已启用',
@@ -296,13 +296,13 @@
     goToFirstPage: '返回首页',
     btnImportNotes: '导入 Note',
     importNotesTitle: '从 CSV 导入 Note',
-    importNotesHelp: '支持 TikTok（ALL 开头）和 eBay（eBay 开头）导出的 CSV 文件。Note 字段用分号分割，常见分号均可，前半部分为 SKU，后半部分为备注。若分号前为 empty（大小写不敏感），则识别为刷单工单，不写入 SKU，整条 Note 放入备注。已匹配 SKU 的订单将整个 Note 放入备注。',
+    importNotesHelp: '支持 TikTok（ALL 开头）和 eBay（eBay 开头）导出的 CSV 文件。Note 字段用分号分割，常见分号均可，前半部分为 SKU，后半部分为备注。若分号前为 empty（大小写不敏感），则识别为 Sample 样品工单，不写入 SKU，整条 Note 放入备注。已匹配 SKU 的订单将整个 Note 放入备注。',
     importNotesSelectFile: '选择 CSV 文件',
     importNotesFileHint: 'CSV 文件（.csv），支持 TikTok 和 eBay 格式',
     importNotesStart: '开始导入',
     importNotesSuccess: '导入完成',
     importNotesFailed: '导入失败',
-    importNoteResult: '{platform} 导入完成：上传 {total} 条，更新 {updated} 条，匹配SKU {skuMatched} 条（其中无库存 {noStock} 条），刷单 {brushOrder} 条，预计出库 {expectShip} 条，未匹配SKU {unmatched} 条，未找到订单 {notFound} 条',
+    importNoteResult: '{platform} 导入完成：上传 {total} 条，更新 {updated} 条，匹配SKU {skuMatched} 条（其中无库存 {noStock} 条），Sample样品 {brushOrder} 条，预计出库 {expectShip} 条，未匹配SKU {unmatched} 条，未找到订单 {notFound} 条',
     importNotesUnmatchedHint: '有 {count} 条未匹配SKU，请检查导入文件中 Note 列的 SKU 数据是否正确',
     // 未创建出库单原因
     skipReason: {
@@ -312,7 +312,11 @@
       'SKU not matched': 'SKU未匹配',
       'No stock': '无库存',
       'Manually removed from shipment': '人工从出库单中清除',
-      'Brush order': '刷单工单'
+      'Brush order': 'Sample样品工单',
+      'Sample order': 'Sample样品工单',
+      'Sample order: Seller SKU is empty': 'Sample样品：商家SKU为空',
+      'Sample order: SKU not matched': 'Sample样品：SKU未匹配',
+      'Sample order: No warehouse': 'Sample样品：未找到SKU所在仓库'
     },
     // 订单状态
     orderStatus: {
@@ -546,6 +550,8 @@
     templateMarkupLabel: '加价',
     templateTitleFormatLabel: '标题格式',
     previewSelectedSummary: '已选择 {count} 个 SKU，模板：{template}',
+    selectedSkuTitle: '已选择 {count} 个 SKU',
+    clearSelected: '清空已选',
     ebayPreviewLabel: 'eBay 上架预览',
     tiktokPreviewLabel: 'TikTok Shop 商品预览',
     quantityShort: '数量',

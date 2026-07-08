@@ -38,12 +38,19 @@
           :loading="loading"
           :multiple="multiple"
           :is-supplier-user="isSupplierUser"
+          :can-select-purchase="canSelectPurchase"
+          :can-supplier-ship="canSupplierShip"
+          :can-show-selection-column="canShowSelectionColumn"
           :can-view-cost-price="canViewCostPrice"
           :can-view-selling-price="canViewSellingPrice"
           :amount-column-label="amountColumnLabel"
           :span-method="spanMethod"
           :get-item-row-key="getItemRowKey"
           :is-purchase-selectable="isPurchaseSelectable"
+          :is-row-selectable="isRowSelectable"
+          :get-purchase-selected-qty="getPurchaseSelectedQty"
+          :get-purchase-pending-qty="getPurchasePendingQty"
+          :get-purchase-available-qty="getPurchaseAvailableQty"
           :field-label="fieldLabel"
           :purchase-status-type="purchaseStatusType"
           :purchase-status-label="purchaseStatusLabel"
@@ -51,7 +58,10 @@
           :tr="tr"
           @toggle-category="toggleCategoryPanel"
           @export="handleExport"
-          @select-purchase="handleSelectPurchase"
+          @import="openImportDialog"
+          @import-log="openImportLogDialog"
+          @select-purchase="openQuantityDialog('purchase')"
+          @supplier-ship="openQuantityDialog('supplierShip')"
           @add="handleAdd"
           @selection-change="handleSelectionChange"
           @delete="handleDelete"
@@ -126,6 +136,110 @@
       @remove="removeNameTag"
       @insert="insertNameTag"
     />
+    <el-dialog v-model="quantityDialog.visible" :title="quantityDialog.title" width="980px" append-to-body>
+      <el-table :data="quantityDialog.rows" border max-height="420">
+        <el-table-column :label="tr('商品名称')" prop="itemName" min-width="220" show-overflow-tooltip />
+        <el-table-column label="SKU" prop="skuCode" min-width="140" show-overflow-tooltip />
+        <el-table-column :label="quantityColumnLabel('已选购')" prop="selectedQty" width="110" align="right" />
+        <el-table-column :label="quantityColumnLabel('审核中')" prop="pendingQty" width="110" align="right" />
+        <el-table-column :label="quantityColumnLabel('可选购')" prop="availableQty" width="110" align="right" />
+        <el-table-column :label="quantityColumnLabel('选购数量')" prop="quantity" width="160" align="center">
+          <template #default="{ row }">
+            <el-input-number v-model="row.quantity" :min="1" :max="row.availableQty" :controls="false" style="width: 120px" />
+          </template>
+        </el-table-column>
+      </el-table>
+      <template #footer>
+        <el-button @click="quantityDialog.visible = false">{{ tr('取消') }}</el-button>
+        <el-button type="primary" :loading="quantityDialog.loading" @click="submitQuantityDialog">{{ tr('确认') }}</el-button>
+      </template>
+    </el-dialog>
+    <el-dialog v-model="importDialog.visible" :title="tr('导入Excel')" width="640px" append-to-body :close-on-click-modal="false">
+      <el-alert
+        :title="tr('请上传商品Excel和图片Zip压缩包，系统会创建导入任务并在后台处理。')"
+        type="info"
+        show-icon
+        :closable="false"
+        class="mb10"
+      />
+      <el-button type="primary" plain icon="Download" @click="handleDownloadImportTemplate" class="mb10">{{ tr('下载模板') }}</el-button>
+      <el-form label-width="120px">
+        <el-form-item label="Excel">
+          <el-upload
+            action="#"
+            :auto-upload="false"
+            :limit="1"
+            accept=".xlsx"
+            :on-change="handleImportExcelChange"
+            :on-remove="handleImportExcelRemove"
+          >
+            <el-button icon="Upload">{{ tr('选择Excel') }}</el-button>
+          </el-upload>
+        </el-form-item>
+        <el-form-item label="Zip">
+          <el-upload
+            action="#"
+            :auto-upload="false"
+            :limit="1"
+            accept=".zip"
+            :on-change="handleImportZipChange"
+            :on-remove="handleImportZipRemove"
+          >
+            <el-button icon="Upload">{{ tr('选择图片Zip') }}</el-button>
+          </el-upload>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="importDialog.visible = false">{{ tr('取消') }}</el-button>
+        <el-button type="primary" :loading="importDialog.loading" @click="submitImportDialog">{{ tr('开始导入') }}</el-button>
+      </template>
+    </el-dialog>
+    <el-dialog v-model="importLogDialog.visible" :title="tr('上传日志')" width="980px" append-to-body>
+      <el-table :data="importTasks" border v-loading="importLogDialog.loading">
+        <el-table-column :label="tr('任务ID')" prop="id" width="100" />
+        <el-table-column :label="tr('文件名')" prop="fileName" min-width="220" show-overflow-tooltip />
+        <el-table-column :label="tr('状态')" prop="status" width="120" align="center">
+          <template #default="{ row }">
+            <el-tag :type="importStatusType(row.status)">{{ importStatusLabel(row.status) }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column :label="tr('成功')" prop="successCount" width="90" align="right" />
+        <el-table-column :label="tr('失败')" prop="failCount" width="90" align="right" />
+        <el-table-column :label="tr('创建时间')" prop="createTime" width="180" />
+        <el-table-column :label="tr('操作')" width="100" align="center">
+          <template #default="{ row }">
+            <el-button link type="primary" @click="openImportDetail(row)">{{ tr('明细') }}</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+      <pagination v-show="importTaskTotal > 0" :total="importTaskTotal" v-model:page="importLogQuery.pageNum" v-model:limit="importLogQuery.pageSize" @pagination="loadImportTasks" />
+      <template #footer>
+        <el-button icon="Refresh" @click="loadImportTasks">{{ tr('刷新') }}</el-button>
+        <el-button @click="importLogDialog.visible = false">{{ tr('关闭') }}</el-button>
+      </template>
+    </el-dialog>
+    <el-dialog v-model="importDetailDialog.visible" :title="tr('导入明细')" width="1080px" append-to-body>
+      <el-table :data="importDetails" border v-loading="importDetailDialog.loading">
+        <el-table-column :label="tr('Excel行号')" prop="rowNum" width="100" align="right" />
+        <el-table-column :label="tr('商品名称')" prop="itemName" min-width="180" show-overflow-tooltip />
+        <el-table-column label="SKU" prop="skuCode" min-width="140" show-overflow-tooltip />
+        <el-table-column :label="tr('状态')" prop="status" width="100" align="center">
+          <template #default="{ row }">
+            <el-tag :type="Number(row.status) === 1 ? 'success' : 'danger'">{{ Number(row.status) === 1 ? tr('成功') : tr('失败') }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column :label="tr('商品ID')" prop="itemId" width="150" />
+        <el-table-column :label="tr('失败原因')" prop="errorMsg" min-width="320">
+          <template #default="{ row }">
+            <el-tooltip v-if="row.errorMsg" effect="dark" placement="top" :content="row.errorMsg">
+              <span class="import-error-text">{{ shortImportError(row.errorMsg) }}</span>
+            </el-tooltip>
+            <span v-else>-</span>
+          </template>
+        </el-table-column>
+      </el-table>
+      <pagination v-show="importDetailTotal > 0" :total="importDetailTotal" v-model:page="importDetailQuery.pageNum" v-model:limit="importDetailQuery.pageSize" @pagination="loadImportDetails" />
+    </el-dialog>
     <div id="outSkuIdBox" style="display: none">
       <img :src="qrcode"/>
       <canvas ref="barcode"></canvas>
@@ -134,7 +248,21 @@
 </template>
 
 <script setup name="Item">
-import { getItem, delItem, addItem, updateItem, uploadItemImage, deleteItemImage, getItemImages, selectItemsForPurchase } from '@/api/wms/item';
+import {
+  getItem,
+  delItem,
+  addItem,
+  updateItem,
+  uploadItemImage,
+  deleteItemImage,
+  getItemImages,
+  selectItemsForPurchase,
+  supplierShipItems,
+  downloadItemImportTemplate,
+  importItemsByExcel,
+  listItemImportTasks,
+  listItemImportDetails
+} from '@/api/wms/item';
 import { listSupplierNoPage, getCurrentSupplier } from '@/api/wms/supplier';
 import { computed, getCurrentInstance, nextTick, onBeforeUnmount, onMounted, reactive, ref, toRefs, watch } from 'vue';
 import { ElForm, ElMessage } from 'element-plus';
@@ -150,6 +278,7 @@ import { formatDateTimeForQuery } from '@/utils/laTime'
 import { listItemModelMaterialOptions } from '@/api/wms/itemModel'
 import { blobValidate } from '@/utils/ruoyi'
 import { downloadXlsx, getExportLanguageHeaders, getExportLanguagePayload, prepareLanguageXlsx } from '@/utils/xlsxTranslate'
+import { saveAs } from 'file-saver'
 import ItemCategoryPanel from './components/ItemCategoryPanel.vue'
 import ItemSearchPanel from './components/ItemSearchPanel.vue'
 import ItemTablePanel from './components/ItemTablePanel.vue'
@@ -167,6 +296,7 @@ const tr = (text) => translateByMap(text, settingsStore.language || 'zh-cn')
 const isEn = computed(() => (settingsStore.language || 'zh-cn') === 'en')
 const supplierOptions = ref([]);
 const isSupplierUser = ref(false);
+const supplierResolved = ref(false);
 
 /** 初始化供应商相关数据 */
 async function initSupplierData() {
@@ -188,9 +318,17 @@ async function initSupplierData() {
       supplierOptions.value = [];
     }
   }
+  supplierResolved.value = true;
 }
 const amountColumnLabel = computed(() => isEn.value ? 'Amount($)' : '金额($)')
 const fieldLabel = (text) => `${tr(text)}${isEn.value ? ': ' : '：'}`
+const quantityDialogLabels = {
+  已选购: 'Selected',
+  审核中: 'In Review',
+  可选购: 'Available',
+  选购数量: 'Purchase Qty'
+}
+const quantityColumnLabel = (text) => isEn.value ? quantityDialogLabels[text] : tr(text)
 const PURCHASE_STATUS_LABELS = {
   0: '未选购',
   1: '待审核',
@@ -205,14 +343,13 @@ const purchaseStatusType = (status) => {
   if (value === 3) return 'danger'
   return 'info'
 }
-const isPurchaseSelectable = (row) => {
-  const status = Number(row?.item?.purchaseStatus ?? 0)
-  return !!row?.item?.supplierId && status !== 1 && status !== 2
-}
 const canViewSellingPrice = computed(() => proxy?.$auth?.hasPermi('wms:itemSellingPrice:view'));
 const canEditSellingPrice = computed(() => proxy?.$auth?.hasPermi('wms:itemSellingPrice:edit'));
 const canViewCostPrice = computed(() => proxy?.$auth?.hasPermi('wms:itemCostPrice:view'));
 const canEditCostPrice = computed(() => proxy?.$auth?.hasPermi('wms:itemCostPrice:edit'));
+const canSelectPurchase = computed(() => supplierResolved.value && !isSupplierUser.value && !!proxy?.$auth?.hasPermi('wms:item:purchase'))
+const canSupplierShip = computed(() => supplierResolved.value && isSupplierUser.value && !!proxy?.$auth?.hasPermi('wms:item:supplierShip'))
+const canShowSelectionColumn = computed(() => canSelectPurchase.value || canSupplierShip.value)
 /** 成本价变更时，销售价 = 成本价 × 该系数（保留两位小数） */
 const SELLING_PRICE_FROM_COST_MULTIPLIER = 1.8
 /**
@@ -240,6 +377,40 @@ function handleMaterialChange(id) {
 const itemList = ref([]);
 const itemTableRef = ref(null);
 const selectedItemMap = ref(new Map());
+const quantityDialog = reactive({
+  visible: false,
+  title: '',
+  action: '',
+  rows: [],
+  loading: false
+})
+const importDialog = reactive({
+  visible: false,
+  loading: false,
+  excelFile: null,
+  zipFile: null
+})
+const importLogDialog = reactive({
+  visible: false,
+  loading: false
+})
+const importDetailDialog = reactive({
+  visible: false,
+  loading: false,
+  taskId: null
+})
+const importTasks = ref([])
+const importTaskTotal = ref(0)
+const importDetails = ref([])
+const importDetailTotal = ref(0)
+const importLogQuery = reactive({
+  pageNum: 1,
+  pageSize: 10
+})
+const importDetailQuery = reactive({
+  pageNum: 1,
+  pageSize: 10
+})
 const isCategoryPanelCollapsed = ref(true);
 const layoutItemTable = () => itemTableRef.value?.doLayout?.();
 const toggleCategoryPanel = () => {
@@ -912,10 +1083,10 @@ let suppressItemSelectionChange = false
 
 const getItemSelectionKey = (row) => {
   const key = row?.itemId || row?.item?.id
-  return key ? String(key) : ''
+  return key || null
 }
 
-const getItemRowKey = (row) => row?.skuId ? String(row.skuId) : getItemSelectionKey(row)
+const getItemRowKey = (row) => row?.skuId ? String(row.skuId) : String(getItemSelectionKey(row) || '')
 
 function syncSelectedItemIds() {
   ids.value = Array.from(selectedItemMap.value.keys())
@@ -930,7 +1101,7 @@ async function restoreItemSelection() {
   const restoredKeySet = new Set()
   itemList.value.forEach(row => {
     const key = getItemSelectionKey(row)
-    if (key && selectedItemMap.value.has(key) && !restoredKeySet.has(key) && isPurchaseSelectable(row)) {
+    if (key && selectedItemMap.value.has(key) && !restoredKeySet.has(key) && isRowSelectable(row)) {
       itemTableRef.value?.toggleRowSelection(row, true)
       restoredKeySet.add(key)
     }
@@ -959,7 +1130,7 @@ const handleSelectionChange = (selection) => {
   const currentKeySet = new Set(itemList.value.map(getItemSelectionKey).filter(Boolean))
   currentKeySet.forEach(key => {
     if (selectedKeySet.has(key)) {
-      selectedItemMap.value.set(key, selectedRowMap.get(key))
+      selectedItemMap.value.set(key, toSelectedItem(selectedRowMap.get(key)))
     } else {
       selectedItemMap.value.delete(key)
     }
@@ -967,20 +1138,109 @@ const handleSelectionChange = (selection) => {
   syncSelectedItemIds()
 }
 
-const handleSelectPurchase = async () => {
+function getRowAvailableQty(row) {
+  const qty = Number(row?.item?.defaultQty ?? 0)
+  return Number.isFinite(qty) ? Math.max(0, qty) : 0
+}
+
+function getPurchaseSelectedQty(row) {
+  const value = row?.item?.purchaseSelectedQuantity
+  if (value !== null && value !== undefined) {
+    const qty = Number(value)
+    return Number.isFinite(qty) ? Math.max(0, qty) : 0
+  }
+  const status = Number(row?.item?.purchaseStatus ?? 0)
+  return status === 2 ? Math.max(0, Number(row?.item?.purchaseQuantity ?? 0) || 0) : 0
+}
+
+function getPurchasePendingQty(row) {
+  const value = row?.item?.purchasePendingQuantity
+  if (value !== null && value !== undefined) {
+    const qty = Number(value)
+    return Number.isFinite(qty) ? Math.max(0, qty) : 0
+  }
+  const status = Number(row?.item?.purchaseStatus ?? 0)
+  return status === 1 ? Math.max(0, Number(row?.item?.purchaseQuantity ?? 0) || 0) : 0
+}
+
+function getPurchaseAvailableQty(row) {
+  return Math.max(0, getRowAvailableQty(row) - getPurchasePendingQty(row))
+}
+
+function toSelectedItem(row) {
+  const isPurchaseAction = canSelectPurchase.value
+  return {
+    itemId: row.itemId,
+    itemName: row?.item?.itemName || '',
+    skuCode: row?.itemSku?.skuCode || '',
+    selectedQty: isPurchaseAction ? getPurchaseSelectedQty(row) : 0,
+    pendingQty: isPurchaseAction ? getPurchasePendingQty(row) : 0,
+    availableQty: isPurchaseAction ? getPurchaseAvailableQty(row) : getRowAvailableQty(row),
+    quantity: 1
+  }
+}
+
+function isPurchaseSelectable(row) {
+  return !!row?.item?.supplierId && getPurchaseAvailableQty(row) > 0
+}
+
+function isSupplierShipSelectable(row) {
+  const status = Number(row?.item?.purchaseStatus ?? 0)
+  return !!row?.item?.supplierId && status !== 1 && status !== 2 && getRowAvailableQty(row) > 0
+}
+
+function isRowSelectable(row) {
+  if (canSupplierShip.value) return isSupplierShipSelectable(row)
+  return isPurchaseSelectable(row)
+}
+
+function openQuantityDialog(action) {
   if (!ids.value.length) {
     proxy?.$modal.msgWarning(tr('请选择商品'))
     return
   }
-  await proxy?.$modal.confirm(tr('确认将选中的商品提交选购审核？'))
-  loading.value = true
+  quantityDialog.action = action
+  quantityDialog.title = action === 'supplierShip' ? tr('确认批量发货数量') : tr('确认选购数量')
+  quantityDialog.rows = Array.from(selectedItemMap.value.values()).map(item => ({
+    ...item,
+    quantity: Math.min(Math.max(Number(item.quantity || 1), 1), item.availableQty)
+  }))
+  quantityDialog.visible = true
+}
+
+async function submitQuantityDialog() {
+  const rows = quantityDialog.rows
+  if (!rows.length) {
+    proxy?.$modal.msgWarning(tr('请选择商品'))
+    return
+  }
+  const invalid = rows.find(row => !row.quantity || row.quantity < 1 || row.quantity > row.availableQty)
+  if (invalid) {
+    proxy?.$modal.msgWarning(tr('操作数量不能超过可用数量'))
+    return
+  }
+  const selectedIds = rows.map(row => row.itemId)
+  const quantityMap = rows.reduce((acc, row) => {
+    acc[row.itemId] = Number(row.quantity)
+    return acc
+  }, {})
+  const confirmText = quantityDialog.action === 'supplierShip'
+    ? tr('确认将选中的商品批量发货？')
+    : tr('确认将选中的商品提交选购审核？')
+  await proxy?.$modal.confirm(confirmText)
+  quantityDialog.loading = true
   try {
-    await selectItemsForPurchase(ids.value)
+    if (quantityDialog.action === 'supplierShip') {
+      await supplierShipItems(selectedIds, quantityMap)
+    } else {
+      await selectItemsForPurchase(selectedIds, quantityMap)
+    }
     proxy?.$modal.msgSuccess(tr('提交成功'))
     clearItemSelection()
+    quantityDialog.visible = false
     getList()
   } finally {
-    loading.value = false
+    quantityDialog.loading = false
   }
 }
 
@@ -1304,6 +1564,137 @@ const handleExport = async () => {
   }
   const excelData = await prepareLanguageXlsx(blobData, isEn.value)
   downloadXlsx(excelData, isEn.value ? 'MichaelStudioWMS-Item Management.xlsx' : 'MichaelStudioWMS-商品管理.xlsx')
+}
+
+const IMPORT_STATUS_LABELS = {
+  0: '待处理',
+  1: '处理中',
+  2: '成功',
+  3: '部分成功',
+  4: '失败'
+}
+
+function importStatusLabel(status) {
+  return tr(IMPORT_STATUS_LABELS[Number(status ?? 0)] || '待处理')
+}
+
+function importStatusType(status) {
+  const value = Number(status ?? 0)
+  if (value === 2) return 'success'
+  if (value === 3) return 'warning'
+  if (value === 4) return 'danger'
+  if (value === 1) return 'primary'
+  return 'info'
+}
+
+function shortImportError(message) {
+  if (!message) return '-'
+  const text = String(message)
+  return text.length > 120 ? `${text.slice(0, 120)}...` : text
+}
+
+function openImportDialog() {
+  importDialog.excelFile = null
+  importDialog.zipFile = null
+  importDialog.visible = true
+}
+
+async function handleDownloadImportTemplate() {
+  const data = await downloadItemImportTemplate()
+  const isBlob = blobValidate(data)
+  if (!isBlob) {
+    const resText = await data.text()
+    const rspObj = JSON.parse(resText)
+    proxy?.$modal.msgError(rspObj?.msg || tr('下载失败'))
+    return
+  }
+  saveAs(new Blob([data]), isEn.value ? 'Item Import Template.xlsx' : '商品导入模板.xlsx')
+}
+
+function handleImportExcelChange(uploadFile) {
+  const file = uploadFile?.raw
+  if (!file) return
+  if (!file.name.toLowerCase().endsWith('.xlsx')) {
+    proxy?.$modal.msgError(tr('请选择xlsx格式Excel文件'))
+    importDialog.excelFile = null
+    return
+  }
+  importDialog.excelFile = file
+}
+
+function handleImportExcelRemove() {
+  importDialog.excelFile = null
+}
+
+function handleImportZipChange(uploadFile) {
+  const file = uploadFile?.raw
+  if (!file) return
+  if (!file.name.toLowerCase().endsWith('.zip')) {
+    proxy?.$modal.msgError(tr('请选择zip压缩包'))
+    importDialog.zipFile = null
+    return
+  }
+  importDialog.zipFile = file
+}
+
+function handleImportZipRemove() {
+  importDialog.zipFile = null
+}
+
+async function submitImportDialog() {
+  if (!importDialog.excelFile) {
+    proxy?.$modal.msgWarning(tr('请选择Excel文件'))
+    return
+  }
+  if (!importDialog.zipFile) {
+    proxy?.$modal.msgWarning(tr('请选择图片Zip包'))
+    return
+  }
+  importDialog.loading = true
+  try {
+    await importItemsByExcel(importDialog.excelFile, importDialog.zipFile)
+    proxy?.$modal.msgSuccess(tr('导入任务已提交'))
+    importDialog.visible = false
+    openImportLogDialog()
+  } finally {
+    importDialog.loading = false
+  }
+}
+
+async function openImportLogDialog() {
+  importLogDialog.visible = true
+  importLogQuery.pageNum = 1
+  await loadImportTasks()
+}
+
+async function loadImportTasks() {
+  importLogDialog.loading = true
+  try {
+    const res = await listItemImportTasks(importLogQuery)
+    importTasks.value = res.rows || []
+    importTaskTotal.value = res.total || 0
+  } finally {
+    importLogDialog.loading = false
+  }
+}
+
+async function openImportDetail(row) {
+  importDetailDialog.taskId = row.id
+  importDetailDialog.visible = true
+  importDetailQuery.pageNum = 1
+  await loadImportDetails()
+}
+
+async function loadImportDetails() {
+  if (!importDetailDialog.taskId) return
+  importDetailDialog.loading = true
+  try {
+    const res = await listItemImportDetails(importDetailDialog.taskId, importDetailQuery)
+    importDetails.value = res.rows || []
+    importDetailTotal.value = res.total || 0
+  } finally {
+    importDetailDialog.loading = false
+  }
 }
 /** 下载条形码 */
 const downloadBarcode = (row) => {
