@@ -35,13 +35,29 @@
     <el-card class="mt20">
       <div class="table-header">
         <span class="table-title">{{ t('platformListings.subtitle') }}</span>
-        <div>
+        <div class="table-actions">
           <el-button type="primary" icon="Plus" @click="openPublishDialog" v-hasPermi="['wms:platform:listing:edit']">{{ t('platformListings.btnPublish') }}</el-button>
+          <el-button
+            type="danger"
+            icon="Delete"
+            :disabled="!selectedListings.length"
+            :loading="batchDeleting"
+            @click="handleBatchDelete"
+            v-hasPermi="['wms:platform:listing:edit']"
+          >{{ t('platformListings.btnBatchDelete') }}</el-button>
           <el-button icon="Setting" @click="goTemplates" v-hasPermi="['wms:platform:listing:edit']">{{ t('platformListings.btnTemplate') }}</el-button>
         </div>
       </div>
 
-      <el-table :data="listingList" v-loading="loading" border stripe style="width:100%">
+      <el-table
+        :data="listingList"
+        v-loading="loading"
+        border
+        stripe
+        style="width:100%"
+        @selection-change="handleSelectionChange"
+      >
+        <el-table-column type="selection" width="50" align="center" :selectable="isListingSelectable" />
         <el-table-column :label="t('platformListings.listingPlatform')" prop="platform" width="100" align="center">
           <template #default="{ row }">
             <el-tag :type="row.platform === 'EBAY' ? '' : 'danger'" size="small">{{ row.platform === 'EBAY' ? 'eBay' : 'TikTok' }}</el-tag>
@@ -100,6 +116,8 @@ const listingList = ref([])
 const shopList = ref([])
 const publishDialogRef = ref(null)
 const queryRef = ref(null)
+const selectedListings = ref([])
+const batchDeleting = ref(false)
 
 const queryParams = reactive({
   pageNum: 1,
@@ -142,6 +160,7 @@ function getList() {
   listListings(queryParams).then(res => {
     listingList.value = res.rows || []
     total.value = res.total || 0
+    selectedListings.value = []
   }).finally(() => { loading.value = false })
 }
 
@@ -167,6 +186,14 @@ function openPublishDialog() {
 
 function goTemplates() {
   router.push('/wms/platform/listings/template')
+}
+
+function isListingSelectable(row) {
+  return row.listingStatus === 'DELISTED'
+}
+
+function handleSelectionChange(selection) {
+  selectedListings.value = selection
 }
 
 function handleDelist(row) {
@@ -202,6 +229,33 @@ function handleRetry(row) {
   }).catch(() => {})
 }
 
+function handleBatchDelete() {
+  const rows = selectedListings.value.filter(isListingSelectable)
+  if (!rows.length) {
+    proxy.$modal.msgWarning(t('platformListings.selectDeleteListings'))
+    return
+  }
+  proxy.$modal.confirm(
+    t('platformListings.confirmBatchDeleteListing', { count: rows.length }),
+    t('platformListings.warningTitle'),
+    { type: 'error' }
+  ).then(() => {
+    batchDeleting.value = true
+    return Promise.allSettled(rows.map(row => deleteListing(row.id))).then(results => {
+      const successCount = results.filter(item => item.status === 'fulfilled').length
+      const failedCount = results.length - successCount
+      if (failedCount) {
+        proxy.$modal.msgError(t('platformListings.batchListingDeletePartial', { success: successCount, failed: failedCount }))
+      } else {
+        proxy.$modal.msgSuccess(t('platformListings.batchListingDeleteSuccess', { count: successCount }))
+      }
+      getList()
+    }).finally(() => {
+      batchDeleting.value = false
+    })
+  }).catch(() => {})
+}
+
 function handleDelete(row) {
   proxy.$modal.confirm(t('platformListings.confirmDeleteListing'), t('platformListings.warningTitle'), { type: 'error' }).then(() => {
     deleteListing(row.id).then(() => {
@@ -223,6 +277,7 @@ onMounted(() => {
 .platform-listings .filter-card { margin-bottom: 0; }
 .table-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
 .table-title { font-size: 16px; font-weight: 600; }
+.table-actions { display: flex; align-items: center; gap: 8px; }
 .listings-pagination {
   display: flex;
   justify-content: flex-end;
