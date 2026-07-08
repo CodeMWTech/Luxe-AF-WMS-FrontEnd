@@ -103,7 +103,7 @@
         </div>
         <div class="preview-content">
           <div class="preview-platform">{{ chosenPlatform === 'EBAY' ? t('platformListings.ebayPreviewLabel') : t('platformListings.tiktokPreviewLabel') }}</div>
-          <div class="preview-title">{{ previewList[0].overrideTitle || '-' }}</div>
+          <div class="preview-title">{{ getPreviewTitle(previewList[0]) }}</div>
           <div class="preview-price">{{ previewList[0].currency || 'USD' }} {{ Number(previewList[0].overridePrice || 0).toFixed(2) }}</div>
           <div class="preview-meta">
             <span>{{ t('platformListings.sku') }} {{ previewList[0].skuCode }}</span>
@@ -111,7 +111,7 @@
             <span>{{ previewList[0].condition || '-' }}</span>
             <span>{{ previewList[0].packageSummary || '-' }}</span>
           </div>
-          <div class="preview-desc" v-html="previewList[0].description"></div>
+          <div v-if="getPreviewDescription(previewList[0])" class="preview-desc" v-html="getPreviewDescription(previewList[0])"></div>
         </div>
       </div>
       <el-table :data="previewList" v-loading="previewLoading" border stripe max-height="320">
@@ -128,6 +128,7 @@
             <div v-if="isEbayTitleTooLong(row)" class="title-error">
               {{ t('platformListings.ebayTitleTooLongDetail', { max: EBAY_TITLE_MAX_LENGTH, length: getTitleLength(row.overrideTitle) }) }}
             </div>
+            <div class="title-preview">{{ getPreviewTitle(row) }}</div>
           </template>
         </el-table-column>
         <el-table-column :label="t('platformListings.sellingPrice')" width="120" align="right">
@@ -351,6 +352,17 @@ function getTitleLength(title) {
 
 function isEbayTitleTooLong(row) {
   return getTitleLength(row?.overrideTitle) > EBAY_TITLE_MAX_LENGTH
+}
+
+function getPreviewTitle(row) {
+  const title = (row?.overrideTitle || '').trim()
+  if (!title) return '-'
+  return /\bpre-owned\b/i.test(title) ? title : `Pre-owned ${title}`
+}
+
+function getPreviewDescription(row) {
+  const html = row?.description || ''
+  return html.replace(/<img\b[^>]*>/gi, '').trim()
 }
 
 function isTiktokPriceInvalid(row) {
@@ -591,6 +603,12 @@ defineExpose({ open, openWithSkus })
   font-size: 12px;
   line-height: 1.4;
   color: var(--el-color-danger);
+}
+.title-preview {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #606266;
 }
 .price-input-error :deep(.el-input-number__decrease),
 .price-input-error :deep(.el-input-number__increase),
