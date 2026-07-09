@@ -25,7 +25,7 @@ defineProps({
   }
 })
 
-const title = ref('Michael-wms');
+const title = ref('Luxe AF WMS');
 const settingsStore = useSettingsStore();
 const sideTheme = computed(() => settingsStore.sideTheme);
 </script>

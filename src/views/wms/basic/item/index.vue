@@ -1563,7 +1563,7 @@ const handleExport = async () => {
     return
   }
   const excelData = await prepareLanguageXlsx(blobData, isEn.value)
-  downloadXlsx(excelData, isEn.value ? 'MichaelStudioWMS-Item Management.xlsx' : 'MichaelStudioWMS-商品管理.xlsx')
+  downloadXlsx(excelData, isEn.value ? 'LuxeAFWMS-Item Management.xlsx' : 'LuxeAFWMS-商品管理.xlsx')
 }
 
 const IMPORT_STATUS_LABELS = {
