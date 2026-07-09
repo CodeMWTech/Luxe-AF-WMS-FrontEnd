@@ -221,7 +221,7 @@ async function handleExportExcel() {
     const url = window.URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = 'MichaelStudioWMS-\u5e93\u5b58\u8bb0\u5f55.xlsx'
+    a.download = 'LuxeAFWMS-\u5e93\u5b58\u8bb0\u5f55.xlsx'
     a.click()
     window.URL.revokeObjectURL(url)
     proxy.$modal.msgSuccess(tr('\u5bfc\u51fa\u6210\u529f'))

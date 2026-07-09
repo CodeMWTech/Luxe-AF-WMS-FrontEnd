@@ -10,7 +10,7 @@
     langSwitchLabelEn: 'English',
   },
   login: {
-    title: 'Michael warehouse management System',
+    title: 'Luxe AF Warehouse Management System',
     usernamePlaceholder: 'Username',
     passwordPlaceholder: 'Password',
     codePlaceholder: 'Verification code',
@@ -123,7 +123,7 @@
     enterWorkspace: 'Enter Workspace',
     browseFeatures: 'Browse Features',
     viewGuidelines: 'View Operation Notes',
-    aboutStudio: 'About Michael Studio',
+    aboutStudio: 'About Luxe AF',
     advantageTitle: 'Our advantages:',
     featureTagAutomation: 'End-to-end automation for orders, inbound, and outbound',
     featureTagEfficiency: 'Less repeated entry, much faster daily operations',
