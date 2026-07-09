@@ -123,7 +123,7 @@
     enterWorkspace: '进入工作台',
     browseFeatures: '浏览功能',
     viewGuidelines: '查看操作注意事项',
-    aboutStudio: '关于Luxe AF',
+    aboutStudio: '关于CODE MW',
     advantageTitle: '我们的优势有：',
     featureTagAutomation: '全流程自动化，订单入库出库自动流转',
     featureTagEfficiency: '减少重复录入，日常操作效率大幅提升',
