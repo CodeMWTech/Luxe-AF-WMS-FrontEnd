@@ -1026,7 +1026,7 @@ onBeforeUnmount(() => {
 <style scoped lang="scss">
 .dashboard-page {
   padding: 12px;
-  background: #f5f7fb;
+  background: transparent;
   min-height: calc(100vh - 84px);
 }
 
@@ -1041,9 +1041,10 @@ onBeforeUnmount(() => {
   margin-bottom: 12px;
 }
 
-.kpi-card {
+.kpi-card.el-card {
   border-radius: 10px;
   border: 1px solid #e8edf5;
+  box-shadow: 0 6px 18px rgba(16, 24, 40, 0.12);
 }
 
 .kpi-content {
