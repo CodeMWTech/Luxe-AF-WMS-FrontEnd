@@ -1,48 +1,44 @@
 <template>
-  <div ref="overviewPageRef" class="overview-page" :class="{ 'is-ready': pageReady }" data-runtime-i18n-ignore="true">
+  <div ref="overviewPageRef" class="overview-page" data-runtime-i18n-ignore="true">
     <div class="overview-shell">
       <!-- Hero -->
       <section class="hero-section section-panel">
-        <div class="hero-content anim-block">
-          <div class="hero-glow hero-glow--left" />
-          <div class="hero-glow hero-glow--right" />
-          <span class="version-badge anim-item anim-item--1">{{ t('overviewDashboard.versionLabel') }} · v{{ appVersion }}</span>
-          <h1 class="hero-title anim-item anim-item--2">
+        <div class="hero-content">
+          <span class="version-badge">{{ t('overviewDashboard.versionLabel') }} · v{{ appVersion }}</span>
+          <h1 class="hero-title">
             <span class="hero-title__prefix">{{ t('overviewDashboard.heroTitlePrefix') }}</span><span class="hero-title__highlight">{{ t('overviewDashboard.heroTitleHighlight') }}</span>
           </h1>
-          <p class="hero-subtitle anim-item anim-item--3">{{ t('overviewDashboard.heroSubtitle') }}</p>
-          <div class="hero-actions anim-item anim-item--4">
+          <p class="hero-subtitle">{{ t('overviewDashboard.heroSubtitle') }}</p>
+          <div class="hero-actions">
             <el-button
               type="primary"
               class="hero-btn hero-btn-primary"
-              :class="{ 'is-active': activeHeroAction === 'workspace' }"
-              @click="scrollTo('quick-start')"
+              @click="scrollTo('all-modules')"
             >
-              {{ t('overviewDashboard.enterWorkspace') }}
+              {{ t('overviewDashboard.browseFeatures') }}
               <el-icon class="btn-arrow"><ArrowRight /></el-icon>
             </el-button>
             <el-button
               class="hero-btn hero-btn-secondary"
-              :class="{ 'is-active': activeHeroAction === 'browse' }"
-              @click="scrollTo('all-modules')"
-            >
-              {{ t('overviewDashboard.browseFeatures') }}
-            </el-button>
-            <el-button
-              class="hero-btn hero-btn-secondary"
-              :class="{ 'is-active': activeHeroAction === 'guidelines' }"
               @click="scrollTo('guidelines')"
             >
               {{ t('overviewDashboard.viewGuidelines') }}
             </el-button>
+            <el-button
+              class="hero-btn hero-btn-secondary"
+              @click="openMichaelStudio"
+            >
+              {{ t('overviewDashboard.aboutStudio') }}
+              <el-icon class="btn-arrow"><ArrowRight /></el-icon>
+            </el-button>
           </div>
-          <div class="hero-tags anim-item anim-item--5">
+          <div class="hero-tags-title">{{ t('overviewDashboard.advantageTitle') }}</div>
+          <div class="hero-tags">
             <span
-              v-for="(tag, index) in featureTags"
+              v-for="tag in featureTags"
               :key="tag.key"
-              class="hero-tag anim-tag-pop"
+              class="hero-tag"
               :class="`hero-tag--${tag.tone}`"
-              :style="{ animationDelay: `${0.55 + index * 0.08}s` }"
             >
               <span class="hero-tag__icon">
                 <el-icon><component :is="tag.icon" /></el-icon>
@@ -52,145 +48,56 @@
           </div>
         </div>
 
-        <div class="lifecycle-card anim-block anim-block--delay">
+        <div class="lifecycle-card">
           <div class="lifecycle-toolbar">
             <div class="lifecycle-header">
               <span class="lifecycle-icon-wrap">
-                <span class="lifecycle-icon">◎</span>
+                <el-icon class="lifecycle-icon"><Connection /></el-icon>
               </span>
-              <span>{{ t('overviewDashboard.lifecycleTitle') }}</span>
+              <span>{{ t('overviewDashboard.workflowTitle') }}</span>
             </div>
             <div class="lifecycle-controls">
-              <span class="live-badge">
-                <el-icon><Promotion /></el-icon>
-                {{ t('overviewDashboard.timelineLive') }}
-              </span>
-              <button type="button" class="timeline-toggle" @click="toggleTimelineDemo">
-                {{ timelinePaused ? t('overviewDashboard.timelineResume') : t('overviewDashboard.timelinePause') }}
-              </button>
+              <span class="module-count">{{ t('overviewDashboard.workflowBadge') }}</span>
             </div>
           </div>
 
-          <div class="lifecycle-timeline">
-            <div class="timeline-track">
-              <div class="timeline-progress" :style="{ width: `${timelineProgressPercent}%` }" />
-            </div>
-            <div class="timeline-nodes">
-              <button
-                v-for="(step, index) in lifecycleTimeline"
+          <div class="workflow-map" :aria-label="t('overviewDashboard.workflowTitle')">
+            <div class="workflow-steps">
+              <div
+                v-for="(step, index) in workflowSteps"
                 :key="step.key"
-                type="button"
-                class="timeline-node"
-                :class="{
-                  active: activeTimelineIndex === index,
-                  passed: index < activeTimelineIndex
-                }"
-                @click="setTimelineIndex(index)"
+                class="workflow-step"
+                :class="`workflow-step--${step.tone}`"
               >
-                <span class="timeline-node__ring">
-                  <span class="timeline-node__icon">
-                    <el-icon><component :is="step.icon" /></el-icon>
-                  </span>
+                <span class="workflow-step__index">{{ index + 1 }}</span>
+                <span class="workflow-step__icon">
+                  <el-icon><component :is="step.icon" /></el-icon>
                 </span>
-                <span class="timeline-node__label">{{ step.label }}</span>
-              </button>
+                <span class="workflow-step__body">
+                  <strong>{{ step.title }}</strong>
+                  <small>{{ step.desc }}</small>
+                </span>
+              </div>
             </div>
           </div>
 
-          <div class="lifecycle-stats">
+          <div class="workflow-comparison-title">{{ t('overviewDashboard.workflowComparisonTitle') }}</div>
+          <div class="workflow-comparison">
             <div
-              v-for="(stat, index) in heroStats"
-              :key="stat.label"
-              class="stat-item anim-stat-pop"
-              :class="`stat-item--tone-${index}`"
-              :style="{ animationDelay: `${0.95 + index * 0.1}s` }"
+              v-for="metric in workflowMetrics"
+              :key="metric.key"
+              class="workflow-metric"
+              :class="`workflow-metric--${metric.tone}`"
             >
-              <div class="stat-value">{{ animatedStatDisplays[index] }}</div>
-              <div class="stat-label">{{ stat.label }}</div>
+              <div class="workflow-metric__label">{{ metric.label }}</div>
+              <div class="workflow-metric__values">
+                <span class="workflow-metric__old">{{ metric.oldValue }}</span>
+                <el-icon><ArrowRight /></el-icon>
+                <strong>{{ metric.newValue }}</strong>
+              </div>
+              <div class="workflow-metric__saving">{{ metric.saving }}</div>
             </div>
           </div>
-          <span class="mock-hint">{{ t('overviewDashboard.mockDataHint') }}</span>
-        </div>
-      </section>
-
-      <!-- Search -->
-      <section class="search-section section-panel reveal-section" data-reveal-section>
-        <el-input
-          v-model="searchKeyword"
-          :placeholder="t('overviewDashboard.searchPlaceholder')"
-          clearable
-          size="large"
-          class="search-input"
-        >
-          <template #prefix>
-            <el-icon><Search /></el-icon>
-          </template>
-        </el-input>
-        <div class="tag-cloud">
-          <button
-            v-for="tag in hashTags"
-            :key="tag.key"
-            type="button"
-            class="hash-tag"
-            @click="applyTagSearch(tag.keyword)"
-          >
-            {{ tag.label }}
-          </button>
-        </div>
-      </section>
-
-      <!-- Quick start -->
-      <section id="quick-start" class="quick-start-section section-panel reveal-section" data-reveal-section>
-        <div class="section-header">
-          <div class="section-title-wrap">
-            <span class="section-accent" />
-            <h2>{{ t('overviewDashboard.quickStartTitle') }}</h2>
-          </div>
-          <div class="progress-area">
-            <el-progress
-              :percentage="onboardingPercent"
-              :stroke-width="10"
-              :show-text="false"
-              class="progress-bar"
-              color="var(--overview-primary)"
-            />
-            <span class="progress-text">{{ completedSteps }}/{{ onboardingSteps.length }}</span>
-            <el-button link type="primary" @click="resetOnboarding">{{ t('overviewDashboard.resetProgress') }}</el-button>
-          </div>
-        </div>
-        <div class="onboarding-steps">
-          <button
-            v-for="(step, index) in onboardingSteps"
-            :key="step.id"
-            type="button"
-            class="onboarding-step"
-            :class="{ done: step.done, active: !step.done && completedSteps === index, 'step-pop': step.done }"
-            @click="handleStepClick(step)"
-          >
-            <span class="step-index">{{ index + 1 }}</span>
-            <div class="step-body">
-              <strong>{{ step.title }}</strong>
-              <span>{{ step.desc }}</span>
-            </div>
-            <el-icon v-if="step.done" class="step-check"><CircleCheck /></el-icon>
-          </button>
-        </div>
-        <div class="quick-cards">
-          <button
-            v-for="(card, index) in quickCards"
-            :key="card.id"
-            type="button"
-            class="quick-card"
-            :class="`quick-card--${index + 1}`"
-            @click="navigateToQuickCard(card.id)"
-          >
-            <span class="card-number">{{ String(index + 1).padStart(2, '0') }}</span>
-            <h3>{{ card.title }}</h3>
-            <p>{{ card.desc }}</p>
-            <span class="card-link-hint">
-              <el-icon><ArrowRight /></el-icon>
-            </span>
-          </button>
         </div>
       </section>
 
@@ -240,7 +147,7 @@
                 <div class="module-card-rich__head">
                   <span class="module-card-rich__icon">
                     <svg-icon v-if="item.icon" :icon-class="item.icon" class="module-icon" />
-                    <span v-else class="module-icon-fallback">◆</span>
+                    <el-icon v-else class="module-icon-fallback"><Box /></el-icon>
                   </span>
                   <div class="module-card-rich__meta">
                     <strong class="module-card-rich__title">
@@ -288,7 +195,7 @@
 </template>
 
 <script setup name="Index">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
@@ -300,8 +207,6 @@ import {
   DataLine,
   Goods,
   Iphone,
-  Promotion,
-  Search,
   ShoppingCart,
   SoldOut,
   Star,
@@ -314,8 +219,6 @@ import useSettingsStore from '@/store/modules/settings'
 import { getTitleByText } from '@/utils/routeTitle'
 import packageInfo from '../../package.json'
 
-const ONBOARDING_KEY = 'michael-wms-onboarding-v1'
-
 const MODULE_SECTIONS = [
   { key: 'insight', categories: ['overview', 'inventory'] },
   { key: 'order', categories: ['order'] },
@@ -325,32 +228,6 @@ const MODULE_SECTIONS = [
   { key: 'system', categories: ['system'] },
 ]
 
-const QUICK_CARD_RULES = {
-  product: [
-    (_, text) => /\/basic\/item/.test(text),
-    (_, text) => (text.includes('/item') || text.includes('商品')) && !/listing|上架|platform/.test(text),
-  ],
-  inbound: [
-    (_, text) => /receipt/.test(text),
-    (_, text) => text.includes('入库'),
-  ],
-  outbound: [
-    (_, text) => /platform\/.*order|tiktok\/.*order/.test(text),
-    (_, text) => /shipment/.test(text),
-    (_, text) => text.includes('出库') || text.includes('平台订单'),
-  ],
-  analysis: [
-    (_, text) => /chart|dashboard|statistic/.test(text),
-    (_, text) => text.includes('数据分析') || text.includes('统计'),
-  ],
-}
-
-const STEP_CARD_MAP = {
-  product: 'product',
-  inbound: 'inbound',
-  analysis: 'analysis',
-}
-
 const router = useRouter()
 const { t, tm, locale } = useI18n()
 const permissionStore = usePermissionStore()
@@ -358,37 +235,21 @@ const settingsStore = useSettingsStore()
 
 const appVersion = packageInfo.version
 const overviewPageRef = ref(null)
-const searchKeyword = ref('')
 const activeCategory = ref('all')
-const guidelinesOpen = ref([])
-const onboardingState = ref([false, false, false, false])
-const activeHeroAction = ref('workspace')
-const pageReady = ref(false)
-const animatedStatDisplays = ref(['0', '0', '$0'])
+const guidelinesOpen = ref(['guidelines'])
 const activeTimelineIndex = ref(0)
-const timelinePaused = ref(false)
-
-const STAT_TARGETS = [
-  { value: 128, format: (v) => String(Math.round(v)) },
-  { value: 3420, format: (v) => Math.round(v).toLocaleString() },
-  { value: 28640, format: (v) => `$${Math.round(v).toLocaleString()}` },
-]
-
-const HERO_SECTION_MAP = {
-  'quick-start': 'workspace',
-  'all-modules': 'browse',
-  guidelines: 'guidelines',
-}
 
 const language = computed(() => settingsStore.language || 'zh-cn')
 
 const featureTags = computed(() => {
   locale.value
   return [
-    { key: 'fast', label: t('overviewDashboard.featureTagFast'), icon: Timer, tone: 'rose' },
-    { key: 'sync', label: t('overviewDashboard.featureTagSync'), icon: Connection, tone: 'violet' },
-    { key: 'mobile', label: t('overviewDashboard.featureTagMobile'), icon: Iphone, tone: 'sky' },
-    { key: 'analysis', label: t('overviewDashboard.featureTagAnalysis'), icon: DataLine, tone: 'amber' },
+    { key: 'automation', label: t('overviewDashboard.featureTagAutomation'), icon: Connection, tone: 'violet' },
+    { key: 'efficiency', label: t('overviewDashboard.featureTagEfficiency'), icon: Timer, tone: 'rose' },
+    { key: 'labor', label: t('overviewDashboard.featureTagLabor'), icon: Wallet, tone: 'amber' },
+    { key: 'platform', label: t('overviewDashboard.featureTagPlatform'), icon: Iphone, tone: 'sky' },
+    { key: 'inventory', label: t('overviewDashboard.featureTagInventory'), icon: Goods, tone: 'green' },
+    { key: 'analysis', label: t('overviewDashboard.featureTagAnalysis'), icon: DataLine, tone: 'cyan' },
   ]
 })
 
@@ -409,79 +270,77 @@ const lifecycleTimeline = computed(() => {
   }))
 })
 
-const timelineProgressPercent = computed(() => {
-  const total = Math.max(lifecycleTimeline.value.length - 1, 1)
-  return (activeTimelineIndex.value / total) * 100
+const workflowSteps = computed(() => {
+  locale.value
+  const icons = [Goods, ShoppingCart, Iphone, DataLine, Box, Wallet]
+  const tones = ['supplier', 'purchase', 'listing', 'order', 'inventory', 'settlement']
+
+  return [
+    'supplierUpload',
+    'luxePurchase',
+    'platformListing',
+    'orderCapture',
+    'stockAutomation',
+    'supplierSettlement',
+  ].map((key, index) => ({
+    key,
+    title: t(`overviewDashboard.workflowSteps.${key}.title`),
+    desc: t(`overviewDashboard.workflowSteps.${key}.desc`),
+    icon: icons[index],
+    tone: tones[index],
+  }))
 })
 
-const hashTags = computed(() => [
-  { key: 'tiktok', label: t('overviewDashboard.tags.tiktok'), keyword: 'TikTok' },
-  { key: 'ebay', label: t('overviewDashboard.tags.ebay'), keyword: 'eBay' },
-  { key: 'listing', label: t('overviewDashboard.tags.listing'), keyword: '上架' },
-  { key: 'inventory', label: t('overviewDashboard.tags.inventory'), keyword: '库存' },
-  { key: 'vendor', label: t('overviewDashboard.tags.vendor'), keyword: '供应商' },
-  { key: 'mobile', label: t('overviewDashboard.tags.mobile'), keyword: 'SKU' },
-  { key: 'check', label: t('overviewDashboard.tags.check'), keyword: '盘库' },
-  { key: 'platform', label: t('overviewDashboard.tags.platform'), keyword: '平台订单' },
-])
-
-const quickCards = computed(() => [
+const workflowMetrics = computed(() => [
   {
-    id: 'product',
-    title: t('overviewDashboard.quickCard1Title'),
-    desc: t('overviewDashboard.quickCard1Desc'),
+    key: 'supplier',
+    label: t('overviewDashboard.workflowMetrics.supplier.label'),
+    oldValue: t('overviewDashboard.workflowMetrics.supplier.old'),
+    newValue: t('overviewDashboard.workflowMetrics.supplier.new'),
+    saving: t('overviewDashboard.workflowMetrics.supplier.saving'),
+    tone: 'blue',
   },
   {
-    id: 'inbound',
-    title: t('overviewDashboard.quickCard2Title'),
-    desc: t('overviewDashboard.quickCard2Desc'),
+    key: 'inbound',
+    label: t('overviewDashboard.workflowMetrics.inbound.label'),
+    oldValue: t('overviewDashboard.workflowMetrics.inbound.old'),
+    newValue: t('overviewDashboard.workflowMetrics.inbound.new'),
+    saving: t('overviewDashboard.workflowMetrics.inbound.saving'),
+    tone: 'violet',
   },
   {
-    id: 'outbound',
-    title: t('overviewDashboard.quickCard3Title'),
-    desc: t('overviewDashboard.quickCard3Desc'),
+    key: 'listing',
+    label: t('overviewDashboard.workflowMetrics.listing.label'),
+    oldValue: t('overviewDashboard.workflowMetrics.listing.old'),
+    newValue: t('overviewDashboard.workflowMetrics.listing.new'),
+    saving: t('overviewDashboard.workflowMetrics.listing.saving'),
+    tone: 'amber',
   },
   {
-    id: 'analysis',
-    title: t('overviewDashboard.quickCard4Title'),
-    desc: t('overviewDashboard.quickCard4Desc'),
-  },
-])
-
-const onboardingSteps = computed(() => [
-  {
-    id: 'browse',
-    title: t('overviewDashboard.step1Title'),
-    desc: t('overviewDashboard.step1Desc'),
-    done: onboardingState.value[0],
-    paths: [],
-    markOnly: true,
+    key: 'orders',
+    label: t('overviewDashboard.workflowMetrics.orders.label'),
+    oldValue: t('overviewDashboard.workflowMetrics.orders.old'),
+    newValue: t('overviewDashboard.workflowMetrics.orders.new'),
+    saving: t('overviewDashboard.workflowMetrics.orders.saving'),
+    tone: 'green',
   },
   {
-    id: 'product',
-    title: t('overviewDashboard.step2Title'),
-    desc: t('overviewDashboard.step2Desc'),
-    done: onboardingState.value[1],
-    routeKey: 'product',
+    key: 'labor',
+    label: t('overviewDashboard.workflowMetrics.labor.label'),
+    oldValue: t('overviewDashboard.workflowMetrics.labor.old'),
+    newValue: t('overviewDashboard.workflowMetrics.labor.new'),
+    saving: t('overviewDashboard.workflowMetrics.labor.saving'),
+    tone: 'red',
   },
   {
-    id: 'inbound',
-    title: t('overviewDashboard.step3Title'),
-    desc: t('overviewDashboard.step3Desc'),
-    done: onboardingState.value[2],
-    routeKey: 'inbound',
-  },
-  {
-    id: 'analysis',
-    title: t('overviewDashboard.step4Title'),
-    desc: t('overviewDashboard.step4Desc'),
-    done: onboardingState.value[3],
-    routeKey: 'analysis',
+    key: 'finance',
+    label: t('overviewDashboard.workflowMetrics.finance.label'),
+    oldValue: t('overviewDashboard.workflowMetrics.finance.old'),
+    newValue: t('overviewDashboard.workflowMetrics.finance.new'),
+    saving: t('overviewDashboard.workflowMetrics.finance.saving'),
+    tone: 'cyan',
   },
 ])
-
-const completedSteps = computed(() => onboardingState.value.filter(Boolean).length)
-const onboardingPercent = computed(() => (completedSteps.value / onboardingSteps.value.length) * 100)
 
 const categoryOptions = computed(() => [
   { key: 'all', label: t('overviewDashboard.categories.all') },
@@ -622,16 +481,8 @@ const allModules = computed(() => {
 })
 
 const filteredModules = computed(() => {
-  const keyword = searchKeyword.value.trim().toLowerCase()
   return allModules.value.filter((item) => {
-    const matchCategory = activeCategory.value === 'all' || item.category === activeCategory.value
-    if (!matchCategory) return false
-    if (!keyword) return true
-    return (
-      item.title.toLowerCase().includes(keyword) ||
-      item.path.toLowerCase().includes(keyword) ||
-      item.groupTitle.toLowerCase().includes(keyword)
-    )
+    return activeCategory.value === 'all' || item.category === activeCategory.value
   })
 })
 
@@ -653,10 +504,6 @@ const groupedModules = computed(() => {
 
 function getSectionEnLabel(sectionKey) {
   return t(`overviewDashboard.moduleSectionEn.${sectionKey}`) || t('overviewDashboard.moduleSectionEn.system')
-}
-
-function getCategoryEnLabel(category) {
-  return t(`overviewDashboard.categoryEn.${category}`) || t('overviewDashboard.categoryEn.system')
 }
 
 function resolveModuleContentKey(item) {
@@ -744,182 +591,41 @@ function setTimelineIndex(index) {
   activeTimelineIndex.value = index
 }
 
-function toggleTimelineDemo() {
-  timelinePaused.value = !timelinePaused.value
+function openMichaelStudio() {
+  window.open('https://www.codemw.com/', '_blank', 'noopener,noreferrer')
 }
 
-function loadOnboarding() {
-  try {
-    const raw = localStorage.getItem(ONBOARDING_KEY)
-    if (raw) {
-      const parsed = JSON.parse(raw)
-      if (Array.isArray(parsed) && parsed.length === 4) {
-        onboardingState.value = parsed
-        return
-      }
-    }
-  } catch (e) {
-    // ignore
+async function scrollTo(id) {
+  if (id === 'guidelines') {
+    guidelinesOpen.value = ['guidelines']
   }
-  onboardingState.value = [true, false, false, false]
-  saveOnboarding()
-}
-
-function saveOnboarding() {
-  localStorage.setItem(ONBOARDING_KEY, JSON.stringify(onboardingState.value))
-}
-
-function markStepDone(index) {
-  if (!onboardingState.value[index]) {
-    const next = [...onboardingState.value]
-    next[index] = true
-    onboardingState.value = next
-    saveOnboarding()
+  await nextTick()
+  const target = document.getElementById(id)
+  let scrollRoot = target?.parentElement || null
+  while (scrollRoot) {
+    const style = window.getComputedStyle(scrollRoot)
+    const canScroll = /(auto|scroll|overlay)/.test(style.overflowY)
+      && scrollRoot.scrollHeight > scrollRoot.clientHeight + 1
+    if (canScroll) break
+    scrollRoot = scrollRoot.parentElement
   }
-}
-
-function resetOnboarding() {
-  onboardingState.value = [false, false, false, false]
-  saveOnboarding()
-  markStepDone(0)
-}
-
-function scrollTo(id) {
-  const action = HERO_SECTION_MAP[id]
-  if (action) {
-    activeHeroAction.value = action
-  }
-  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-}
-
-let heroSectionObserver = null
-let revealSectionObserver = null
-let statAnimationFrame = 0
-let timelineTimer = null
-
-function easeOutCubic(value) {
-  return 1 - Math.pow(1 - value, 3)
-}
-
-function startStatCountUp(delay = 700) {
-  window.setTimeout(() => {
-    const duration = 1400
-    const startAt = performance.now()
-
-    const tick = (now) => {
-      const progress = Math.min((now - startAt) / duration, 1)
-      const eased = easeOutCubic(progress)
-      animatedStatDisplays.value = STAT_TARGETS.map(({ value, format }) => format(value * eased))
-      if (progress < 1) {
-        statAnimationFrame = requestAnimationFrame(tick)
-      }
-    }
-
-    statAnimationFrame = requestAnimationFrame(tick)
-  }, delay)
-}
-
-function setupTimelineDemo() {
-  timelineTimer = window.setInterval(() => {
-    if (timelinePaused.value || lifecycleTimeline.value.length < 2) return
-    activeTimelineIndex.value = (activeTimelineIndex.value + 1) % lifecycleTimeline.value.length
-  }, 2400)
-}
-
-function matchModulePath(...predicates) {
-  const routes = permissionStore.routes
-  for (const predicate of predicates) {
-    const found = allModules.value.find((item) => {
-      const text = `${item.title} ${item.path}`.toLowerCase()
-      return predicate(item, text) && hasAccessibleRoutePath(routes, item.path)
+  const scrollToTarget = (behavior = 'smooth') => {
+    if (!target || !scrollRoot?.contains(target)) return false
+    const rootRect = scrollRoot.getBoundingClientRect()
+    const targetRect = target.getBoundingClientRect()
+    scrollRoot.scrollTo({
+      top: scrollRoot.scrollTop + targetRect.top - rootRect.top - 12,
+      behavior,
     })
-    if (found) return found.path
+    return true
   }
-  return null
-}
-
-function resolveQuickCardPath(cardId) {
-  const rules = QUICK_CARD_RULES[cardId] || []
-  return matchModulePath(...rules)
-}
-
-function setupRevealSectionObserver() {
-  const scrollRoot = overviewPageRef.value
-  const sections = scrollRoot?.querySelectorAll('[data-reveal-section]')
-    || document.querySelectorAll('[data-reveal-section]')
-
-  const revealAll = () => {
-    sections.forEach((el) => el.classList.add('is-revealed'))
-  }
-
-  if (!sections.length) return
-
-  if (typeof IntersectionObserver === 'undefined') {
-    revealAll()
+  if (scrollToTarget()) {
+    if (id === 'guidelines') {
+      window.setTimeout(() => scrollToTarget(), 360)
+    }
     return
   }
-
-  revealSectionObserver = new IntersectionObserver(
-    (entries) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting) {
-          entry.target.classList.add('is-revealed')
-          revealSectionObserver?.unobserve(entry.target)
-        }
-      })
-    },
-    {
-      root: scrollRoot || null,
-      threshold: 0.01,
-      rootMargin: '0px',
-    }
-  )
-
-  sections.forEach((el) => revealSectionObserver.observe(el))
-  window.setTimeout(revealAll, 1000)
-}
-
-function setupHeroSectionObserver() {
-  if (typeof IntersectionObserver === 'undefined') return
-
-  heroSectionObserver = new IntersectionObserver(
-    (entries) => {
-      const visible = entries
-        .filter((entry) => entry.isIntersecting)
-        .sort((a, b) => b.intersectionRatio - a.intersectionRatio)
-
-      const topEntry = visible[0]
-      if (!topEntry) return
-
-      const action = HERO_SECTION_MAP[topEntry.target.id]
-      if (action) {
-        activeHeroAction.value = action
-      }
-    },
-    {
-      root: null,
-      threshold: [0.2, 0.35, 0.5],
-      rootMargin: '-120px 0px -55% 0px',
-    }
-  )
-
-  Object.keys(HERO_SECTION_MAP).forEach((sectionId) => {
-    const el = document.getElementById(sectionId)
-    if (el) heroSectionObserver.observe(el)
-  })
-}
-
-function applyTagSearch(keyword) {
-  searchKeyword.value = keyword
-  scrollTo('all-modules')
-}
-
-function resolveAccessiblePath(paths = []) {
-  const routes = permissionStore.routes
-  for (const path of paths) {
-    if (path && hasAccessibleRoutePath(routes, path)) return path
-  }
-  return null
+  target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
 function navigateTo(path) {
@@ -935,79 +641,31 @@ function navigateTo(path) {
   router.push(path).catch(() => {})
 }
 
-function navigateToPaths(paths = []) {
-  navigateTo(resolveAccessiblePath(paths))
-}
-
-function navigateToQuickCard(cardId) {
-  navigateTo(resolveQuickCardPath(cardId))
-}
-
-function handleStepClick(step) {
-  const index = onboardingSteps.value.findIndex((item) => item.id === step.id)
-  if (index < 0) return
-
-  if (step.markOnly) {
-    markStepDone(index)
-    return
-  }
-
-  markStepDone(index)
-  const cardId = STEP_CARD_MAP[step.routeKey || step.id]
-  navigateToQuickCard(cardId)
-}
-
-watch(onboardingState, saveOnboarding, { deep: true })
-
-onMounted(() => {
-  loadOnboarding()
-  requestAnimationFrame(() => {
-    pageReady.value = true
-    startStatCountUp()
-  })
-  nextTick(() => {
-    setupHeroSectionObserver()
-    setupRevealSectionObserver()
-    setupTimelineDemo()
-  })
-})
-
-onBeforeUnmount(() => {
-  heroSectionObserver?.disconnect()
-  heroSectionObserver = null
-  revealSectionObserver?.disconnect()
-  revealSectionObserver = null
-  if (statAnimationFrame) cancelAnimationFrame(statAnimationFrame)
-  if (timelineTimer) clearInterval(timelineTimer)
-})
 </script>
 
 <style scoped lang="scss">
 .overview-page {
-  --overview-primary: #e91e8c;
-  --overview-primary-deep: #c2187a;
-  --overview-primary-soft: #fce4f0;
-  --overview-primary-glow: rgba(233, 30, 140, 0.18);
-  --overview-accent-violet: #8b5cf6;
-  --overview-accent-violet-soft: #f3efff;
-  --overview-accent-sky: #0ea5e9;
-  --overview-accent-sky-soft: #e8f7fd;
-  --overview-accent-amber: #f59e0b;
+  --overview-primary: #409eff;
+  --overview-primary-deep: #1677ff;
+  --overview-primary-soft: #eaf3ff;
+  --overview-primary-glow: rgba(64, 158, 255, 0.16);
+  --overview-accent-violet: #7f62e4;
+  --overview-accent-violet-soft: #efe9ff;
+  --overview-accent-sky: #2f75ff;
+  --overview-accent-sky-soft: #eaf3ff;
+  --overview-accent-amber: #e6a23c;
   --overview-accent-amber-soft: #fff7e8;
-  --overview-hero-start: #fff5fa;
-  --overview-hero-end: #eef4ff;
-  --overview-text: #1f2d3d;
-  --overview-muted: #6b7280;
-  --overview-border: #eceff4;
+  --overview-hero-start: #f7fbff;
+  --overview-hero-end: #f3f7fc;
+  --overview-text: #101828;
+  --overview-muted: #667085;
+  --overview-border: #e8edf5;
   --overview-panel: #ffffff;
   min-height: calc(100vh - 84px);
   overflow-y: auto;
-  padding: 16px 16px 32px;
+  padding: 12px;
   color: var(--overview-text);
-  background:
-    radial-gradient(circle at top left, rgba(233, 30, 140, 0.06), transparent 28%),
-    radial-gradient(circle at top right, rgba(64, 158, 255, 0.08), transparent 24%),
-    linear-gradient(180deg, #f7f8fc 0%, #f3f5fa 100%);
+  background: transparent;
 }
 
 .overview-shell {
@@ -1015,17 +673,15 @@ onBeforeUnmount(() => {
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
 }
 
 .section-panel {
-  padding: 22px 24px;
-  border-radius: 20px;
+  padding: 18px 20px;
+  border-radius: 10px;
   background: var(--overview-panel);
-  border: 1px solid rgba(255, 255, 255, 0.8);
-  box-shadow:
-    0 10px 30px rgba(15, 23, 42, 0.05),
-    0 1px 0 rgba(255, 255, 255, 0.9) inset;
+  border: 1px solid var(--overview-border);
+  box-shadow: none;
 }
 
 .section-panel--flat {
@@ -1035,7 +691,7 @@ onBeforeUnmount(() => {
 .hero-section {
   display: grid;
   grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.95fr);
-  gap: 22px;
+  gap: 12px;
   padding: 0;
   overflow: hidden;
   background: transparent;
@@ -1045,172 +701,20 @@ onBeforeUnmount(() => {
 
 .hero-content,
 .lifecycle-card {
-  border-radius: 22px;
+  border-radius: 10px;
   border: 1px solid var(--overview-border);
-  box-shadow: 0 14px 36px rgba(15, 23, 42, 0.06);
+  box-shadow: none;
 }
 
 .hero-content {
   position: relative;
   overflow: hidden;
-  padding: 34px 36px 30px;
-  background: linear-gradient(135deg, var(--overview-hero-start) 0%, #fff 42%, var(--overview-hero-end) 100%);
-}
-
-.hero-glow {
-  position: absolute;
-  border-radius: 50%;
-  pointer-events: none;
-  filter: blur(12px);
-}
-
-.hero-glow--left {
-  top: -40px;
-  left: -30px;
-  width: 180px;
-  height: 180px;
-  background: rgba(233, 30, 140, 0.16);
-}
-
-.hero-glow--right {
-  right: -20px;
-  bottom: -30px;
-  width: 160px;
-  height: 160px;
-  background: rgba(64, 158, 255, 0.12);
-}
-
-.is-ready {
-  .anim-item {
-    opacity: 0;
-    transform: translateY(18px);
-    animation: fadeInUp 0.72s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-  }
-
-  .anim-item--1 { animation-delay: 0.05s; }
-  .anim-item--2 { animation-delay: 0.12s; }
-  .anim-item--3 { animation-delay: 0.2s; }
-  .anim-item--4 { animation-delay: 0.28s; }
-  .anim-item--5 { animation-delay: 0.36s; }
-
-  .anim-block--delay {
-    opacity: 0;
-    transform: translateY(22px) scale(0.985);
-    animation: cardRiseIn 0.82s cubic-bezier(0.22, 1, 0.36, 1) 0.18s forwards;
-  }
-
-  .anim-tag-pop,
-  .anim-chip-pop,
-  .anim-stat-pop {
-    opacity: 0;
-    animation: popIn 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-  }
+  padding: 28px 30px 26px;
+  background: linear-gradient(135deg, var(--overview-hero-start) 0%, #fff 58%, var(--overview-hero-end) 100%);
 }
 
 .reveal-section {
-  transform: translateY(20px);
-  transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
-
-  &.is-revealed {
-    transform: translateY(0);
-  }
-}
-
-.quick-start-section.is-revealed .quick-card {
-  animation: cardSlideUp 0.62s cubic-bezier(0.22, 1, 0.36, 1) backwards;
-}
-
-.quick-start-section.is-revealed .quick-card:nth-child(1) { animation-delay: 0.08s; }
-.quick-start-section.is-revealed .quick-card:nth-child(2) { animation-delay: 0.16s; }
-.quick-start-section.is-revealed .quick-card:nth-child(3) { animation-delay: 0.24s; }
-.quick-start-section.is-revealed .quick-card:nth-child(4) { animation-delay: 0.32s; }
-
-.quick-start-section.is-revealed .onboarding-step {
-  animation: cardSlideUp 0.55s cubic-bezier(0.22, 1, 0.36, 1) backwards;
-}
-
-.quick-start-section.is-revealed .onboarding-step:nth-child(1) { animation-delay: 0.04s; }
-.quick-start-section.is-revealed .onboarding-step:nth-child(2) { animation-delay: 0.1s; }
-.quick-start-section.is-revealed .onboarding-step:nth-child(3) { animation-delay: 0.16s; }
-.quick-start-section.is-revealed .onboarding-step:nth-child(4) { animation-delay: 0.22s; }
-
-.modules-section.is-revealed .module-card-rich {
-  animation: cardSlideUp 0.5s cubic-bezier(0.22, 1, 0.36, 1) backwards;
-}
-
-.modules-section.is-revealed .module-card-rich:nth-child(1) { animation-delay: 0.03s; }
-.modules-section.is-revealed .module-card-rich:nth-child(2) { animation-delay: 0.06s; }
-.modules-section.is-revealed .module-card-rich:nth-child(3) { animation-delay: 0.09s; }
-.modules-section.is-revealed .module-card-rich:nth-child(4) { animation-delay: 0.12s; }
-.modules-section.is-revealed .module-card-rich:nth-child(5) { animation-delay: 0.15s; }
-.modules-section.is-revealed .module-card-rich:nth-child(6) { animation-delay: 0.18s; }
-
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(18px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes cardRiseIn {
-  from {
-    opacity: 0;
-    transform: translateY(22px) scale(0.985);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-@keyframes popIn {
-  0% {
-    opacity: 0;
-    transform: translateY(10px) scale(0.92);
-  }
-  70% {
-    transform: translateY(-2px) scale(1.02);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-@keyframes cardSlideUp {
-  from {
-    opacity: 0;
-    transform: translateY(16px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes stepCelebrate {
-  0% {
-    transform: scale(1);
-  }
-  40% {
-    transform: scale(1.02);
-  }
-  100% {
-    transform: scale(1);
-  }
-}
-
-@keyframes timelinePulse {
-  0%, 100% {
-    box-shadow: 0 0 0 0 rgba(233, 30, 140, 0.28);
-  }
-  50% {
-    box-shadow: 0 0 0 10px rgba(233, 30, 140, 0);
-  }
+  transform: none;
 }
 
 .version-badge {
@@ -1219,24 +723,24 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 14px;
+  padding: 5px 10px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.82);
-  border: 1px solid #f7c8df;
+  background: #eef6ff;
+  border: 1px solid #cfe5ff;
   color: var(--overview-primary);
   font-size: 12px;
   font-weight: 700;
-  letter-spacing: 0.02em;
+  letter-spacing: 0;
 }
 
 .hero-title {
   position: relative;
   z-index: 1;
-  margin: 18px 0 14px;
-  font-size: clamp(28px, 3vw, 38px);
+  margin: 16px 0 12px;
+  font-size: 34px;
   line-height: 1.22;
   font-weight: 800;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
 }
 
 .hero-title__prefix {
@@ -1247,10 +751,7 @@ onBeforeUnmount(() => {
 .hero-title__highlight {
   display: inline;
   margin-left: 0.3em;
-  background: linear-gradient(90deg, #e91e8c 0%, #ff5cae 45%, #c084fc 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  color: var(--overview-primary-deep);
 }
 
 .hero-subtitle {
@@ -1267,16 +768,20 @@ onBeforeUnmount(() => {
   position: relative;
   z-index: 1;
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
   gap: 12px;
-  margin-top: 28px;
+  margin-top: 24px;
 }
 
 .hero-btn {
   position: relative;
   overflow: hidden;
-  height: 42px;
-  border-radius: 12px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
   font-weight: 600;
   transition:
     transform 0.22s cubic-bezier(0.4, 0, 0.2, 1),
@@ -1305,53 +810,42 @@ onBeforeUnmount(() => {
 }
 
 .hero-btn-primary {
-  --el-button-bg-color: transparent;
-  --el-button-border-color: transparent;
-  --el-button-hover-bg-color: transparent;
-  --el-button-hover-border-color: transparent;
-  --el-button-text-color: #fff;
-  padding: 0 22px;
-  border: none;
-  background: linear-gradient(135deg, var(--overview-primary) 0%, #f062ae 52%, #ff8ecf 100%);
-  box-shadow: 0 12px 28px var(--overview-primary-glow);
+  --el-button-bg-color: var(--overview-primary);
+  --el-button-border-color: var(--overview-primary);
+  --el-button-hover-bg-color: var(--overview-primary);
+  --el-button-hover-border-color: var(--overview-primary);
+  --el-button-text-color: #ffffff;
+  height: 46px;
+  min-width: 138px;
+  padding: 0 28px;
+  border: 1px solid var(--overview-primary);
+  background: var(--overview-primary);
+  color: #ffffff;
+  font-size: 16px;
+  box-shadow: 0 8px 18px var(--overview-primary-glow);
 
   &:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 16px 34px rgba(233, 30, 140, 0.28);
+    transform: translateY(-1px);
+    background: #f7fbff;
+    border-color: #b7d8ff;
+    color: var(--overview-primary-deep);
+    box-shadow: 0 8px 18px rgba(16, 24, 40, 0.06);
   }
 
-  &.is-active {
-    transform: translateY(-1px);
-    box-shadow:
-      0 0 0 3px rgba(255, 255, 255, 0.95),
-      0 0 0 6px rgba(233, 30, 140, 0.18),
-      0 16px 34px rgba(233, 30, 140, 0.3);
-  }
 }
 
 .hero-btn-secondary {
-  padding: 0 20px;
+  padding: 0 16px;
   background: rgba(255, 255, 255, 0.94);
   border: 1px solid #e7ebf3;
   color: #475569;
 
   &:hover {
-    transform: translateY(-2px);
-    border-color: #f0c4dc;
-    color: var(--overview-primary-deep);
-    background: linear-gradient(180deg, #fff9fd 0%, #fff 100%);
-    box-shadow: 0 10px 24px rgba(233, 30, 140, 0.1);
-  }
-
-  &.is-active {
     transform: translateY(-1px);
-    border-color: #f0a8cc;
+    border-color: #b7d8ff;
     color: var(--overview-primary-deep);
-    background: linear-gradient(180deg, #fff6fb 0%, #fff 100%);
-    box-shadow:
-      0 0 0 3px rgba(255, 255, 255, 0.95),
-      0 0 0 6px rgba(233, 30, 140, 0.12),
-      0 12px 26px rgba(233, 30, 140, 0.12);
+    background: #f7fbff;
+    box-shadow: 0 8px 18px rgba(16, 24, 40, 0.06);
   }
 }
 
@@ -1360,8 +854,7 @@ onBeforeUnmount(() => {
   transition: transform 0.22s ease;
 }
 
-.hero-btn-primary:hover .btn-arrow,
-.hero-btn-primary.is-active .btn-arrow {
+.hero-btn-primary:hover .btn-arrow {
   transform: translateX(3px);
 }
 
@@ -1378,14 +871,14 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 14px 8px 8px;
+  padding: 7px 12px 7px 8px;
   border-radius: 999px;
-  border: 1px solid transparent;
+  border: 1px solid var(--overview-border);
   font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.01em;
-  backdrop-filter: blur(8px);
-  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.04);
+  letter-spacing: 0;
+  background: #fff;
+  box-shadow: none;
 }
 
 .hero-tag__icon {
@@ -1394,7 +887,7 @@ onBeforeUnmount(() => {
   justify-content: center;
   width: 28px;
   height: 28px;
-  border-radius: 50%;
+  border-radius: 8px;
   font-size: 14px;
 
   .el-icon {
@@ -1408,45 +901,45 @@ onBeforeUnmount(() => {
 }
 
 .hero-tag--rose {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.96) 0%, #fff5fa 100%);
-  border-color: #f7c8df;
-  color: #9d3d72;
+  background: #f7fbff;
+  border-color: #d7eaff;
+  color: #1d65b7;
 
   .hero-tag__icon {
-    background: linear-gradient(180deg, #ffe3f1 0%, #ffd1e8 100%);
+    background: #eaf3ff;
     color: var(--overview-primary);
   }
 }
 
 .hero-tag--violet {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.96) 0%, var(--overview-accent-violet-soft) 100%);
-  border-color: #ddd0ff;
-  color: #6d4fa6;
+  background: #fbfaff;
+  border-color: #ddd4ff;
+  color: #694dc6;
 
   .hero-tag__icon {
-    background: linear-gradient(180deg, #efe7ff 0%, #e3d6ff 100%);
+    background: var(--overview-accent-violet-soft);
     color: var(--overview-accent-violet);
   }
 }
 
 .hero-tag--sky {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.96) 0%, var(--overview-accent-sky-soft) 100%);
-  border-color: #bfe7f8;
-  color: #0c6f96;
+  background: #f7fbff;
+  border-color: #d7eaff;
+  color: #255ec9;
 
   .hero-tag__icon {
-    background: linear-gradient(180deg, #e4f6fd 0%, #d2effb 100%);
+    background: var(--overview-accent-sky-soft);
     color: var(--overview-accent-sky);
   }
 }
 
 .hero-tag--amber {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.96) 0%, var(--overview-accent-amber-soft) 100%);
+  background: #fffdf8;
   border-color: #f8ddb0;
   color: #9a640f;
 
   .hero-tag__icon {
-    background: linear-gradient(180deg, #fff1d9 0%, #ffe6bf 100%);
+    background: var(--overview-accent-amber-soft);
     color: var(--overview-accent-amber);
   }
 }
@@ -1455,9 +948,9 @@ onBeforeUnmount(() => {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  padding: 24px 24px 40px;
-  background: linear-gradient(180deg, #fff 0%, #fcfdff 100%);
+  gap: 16px;
+  padding: 22px 22px 38px;
+  background: #fff;
 }
 
 .lifecycle-toolbar {
@@ -1471,7 +964,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 700;
 }
 
@@ -1498,14 +991,14 @@ onBeforeUnmount(() => {
   border: 1px solid #e8edf5;
   background: #fff;
   color: #64748b;
-  border-radius: 999px;
+  border-radius: 6px;
   padding: 6px 12px;
   font-size: 12px;
   cursor: pointer;
   transition: all 0.2s ease;
 
   &:hover {
-    border-color: #f0c4dc;
+    border-color: #b7d8ff;
     color: var(--overview-primary);
   }
 }
@@ -1516,7 +1009,7 @@ onBeforeUnmount(() => {
   justify-content: center;
   width: 34px;
   height: 34px;
-  border-radius: 12px;
+  border-radius: 8px;
   background: var(--overview-primary-soft);
 }
 
@@ -1539,25 +1032,6 @@ onBeforeUnmount(() => {
     border-radius: 999px;
     background: #e2e8f0;
   }
-}
-
-.timeline-track {
-  position: absolute;
-  top: 38px;
-  left: 28px;
-  right: 28px;
-  min-width: 464px;
-  height: 6px;
-  border-radius: 999px;
-  background: #eef2f7;
-  overflow: hidden;
-}
-
-.timeline-progress {
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, #e91e8c 0%, #a855f7 45%, #38bdf8 100%);
-  transition: width 0.55s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .timeline-nodes {
@@ -1615,28 +1089,28 @@ onBeforeUnmount(() => {
 
 .timeline-node.passed {
   .timeline-node__ring {
-    border-color: #d8b4fe;
+    border-color: #b7d8ff;
   }
 
   .timeline-node__icon {
-    background: #fae8ff;
-    color: #a855f7;
+    background: #eaf3ff;
+    color: var(--overview-primary);
   }
 
   .timeline-node__label {
-    color: #7c3aed;
+    color: var(--overview-primary-deep);
   }
 }
 
 .timeline-node.active {
   .timeline-node__ring {
-    border-color: #e91e8c;
+    border-color: var(--overview-primary);
     animation: timelinePulse 1.8s ease-out infinite;
   }
 
   .timeline-node__icon {
-    background: linear-gradient(180deg, #ffe4f3 0%, #fff0f7 100%);
-    color: #e91e8c;
+    background: #eaf3ff;
+    color: var(--overview-primary);
     transform: scale(1.05);
   }
 
@@ -1655,7 +1129,7 @@ onBeforeUnmount(() => {
 
 .stat-item {
   padding: 16px 12px;
-  border-radius: 16px;
+  border-radius: 8px;
   text-align: center;
   background: #fff;
   border: 1px solid #edf2f7;
@@ -1666,7 +1140,7 @@ onBeforeUnmount(() => {
 }
 
 .stat-item--tone-1 .stat-value {
-  color: #e91e8c;
+  color: #7f62e4;
 }
 
 .stat-item--tone-2 .stat-value {
@@ -1676,68 +1150,13 @@ onBeforeUnmount(() => {
 .stat-value {
   font-size: 26px;
   font-weight: 800;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
 }
 
 .stat-label {
   margin-top: 8px;
   font-size: 12px;
   color: var(--overview-muted);
-}
-
-.mock-hint {
-  position: absolute;
-  right: 18px;
-  bottom: 14px;
-  padding: 4px 8px;
-  border-radius: 999px;
-  background: #f8fafc;
-  font-size: 11px;
-  color: #94a3b8;
-}
-
-.search-section {
-  padding-top: 22px;
-  padding-bottom: 22px;
-}
-
-.search-input {
-  :deep(.el-input__wrapper) {
-    min-height: 52px;
-    padding-left: 8px;
-    border-radius: 16px;
-    box-shadow: 0 10px 28px rgba(15, 23, 42, 0.05);
-    border: 1px solid #e8edf5;
-  }
-
-  :deep(.el-input__prefix) {
-    color: var(--overview-primary);
-  }
-}
-
-.tag-cloud {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 16px;
-}
-
-.hash-tag {
-  border: 1px solid #edf2f7;
-  background: #fafbfd;
-  color: #64748b;
-  border-radius: 999px;
-  padding: 8px 14px;
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-
-  &:hover {
-    background: var(--overview-primary-soft);
-    border-color: #f4c4de;
-    color: var(--overview-primary);
-    transform: translateY(-1px);
-  }
 }
 
 .section-header {
@@ -1755,9 +1174,9 @@ onBeforeUnmount(() => {
 
   h2 {
     margin: 0;
-    font-size: 21px;
+    font-size: 18px;
     font-weight: 800;
-    letter-spacing: -0.02em;
+    letter-spacing: 0;
   }
 }
 
@@ -1765,216 +1184,12 @@ onBeforeUnmount(() => {
   width: 4px;
   height: 22px;
   border-radius: 999px;
-  background: linear-gradient(180deg, var(--overview-primary) 0%, #ff8ecf 100%);
-}
-
-.progress-area {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px 12px;
-  border-radius: 14px;
-  background: #f8fafc;
-}
-
-.progress-bar {
-  width: 180px;
-}
-
-.progress-text {
-  min-width: 36px;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--overview-primary);
-}
-
-.onboarding-steps {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
-  margin-bottom: 18px;
-}
-
-.onboarding-step {
-  position: relative;
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  min-height: 108px;
-  padding: 16px;
-  border: 1px solid var(--overview-border);
-  border-radius: 18px;
-  background: linear-gradient(180deg, #fff 0%, #fbfcfe 100%);
-  text-align: left;
-  cursor: pointer;
-  transition: all 0.22s ease;
-
-  &::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    opacity: 0;
-    box-shadow: 0 14px 30px rgba(15, 23, 42, 0.08);
-    transition: opacity 0.22s ease;
-    pointer-events: none;
-  }
-
-  &:hover::after {
-    opacity: 1;
-  }
-
-  &.done {
-    border-color: #f4c4de;
-    background: linear-gradient(180deg, #fff9fc 0%, #fff 100%);
-  }
-
-  &.active {
-    border-color: var(--overview-primary);
-    box-shadow: 0 0 0 1px rgba(233, 30, 140, 0.1);
-    animation: stepCelebrate 0.45s ease;
-  }
-
-  &.step-pop {
-    animation: stepCelebrate 0.55s ease;
-  }
-
-  strong {
-    display: block;
-    margin-bottom: 6px;
-    font-size: 14px;
-  }
-
-  span {
-    font-size: 12px;
-    color: var(--overview-muted);
-    line-height: 1.55;
-  }
-}
-
-.step-index {
-  flex: 0 0 32px;
-  height: 32px;
-  border-radius: 12px;
-  background: linear-gradient(180deg, #fff0f7 0%, #fce4f0 100%);
-  color: var(--overview-primary);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 13px;
-  font-weight: 800;
-}
-
-.step-body {
-  flex: 1;
-  min-width: 0;
-}
-
-.step-check {
-  color: #22c55e;
-  font-size: 18px;
-}
-
-.quick-cards {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 16px;
-}
-
-.quick-card {
-  position: relative;
-  overflow: hidden;
-  min-height: 156px;
-  padding: 24px 20px 20px;
-  border: 1px solid var(--overview-border);
-  border-radius: 20px;
-  background: #fff;
-  text-align: left;
-  cursor: pointer;
-  transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
-
-  &::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 4px;
-    background: linear-gradient(90deg, var(--overview-primary) 0%, #ff9ed0 100%);
-    opacity: 0.85;
-  }
-
-  &:hover {
-    transform: translateY(-4px);
-    border-color: #f4c4de;
-    box-shadow: 0 18px 34px rgba(15, 23, 42, 0.08);
-
-    .card-link-hint {
-      opacity: 1;
-      transform: translateX(0);
-    }
-  }
-
-  h3 {
-    margin: 0 0 10px;
-    font-size: 18px;
-    font-weight: 800;
-  }
-
-  p {
-    margin: 0;
-    font-size: 13px;
-    line-height: 1.65;
-    color: var(--overview-muted);
-  }
-}
-
-.quick-card--1::before { background: linear-gradient(90deg, #e91e8c 0%, #ff8ecf 100%); }
-.quick-card--2::before { background: linear-gradient(90deg, #7c3aed 0%, #c4b5fd 100%); }
-.quick-card--3::before { background: linear-gradient(90deg, #2563eb 0%, #93c5fd 100%); }
-.quick-card--4::before { background: linear-gradient(90deg, #059669 0%, #6ee7b7 100%); }
-
-.card-number {
-  position: absolute;
-  top: 12px;
-  right: 16px;
-  font-size: 38px;
-  font-weight: 800;
-  line-height: 1;
-  color: rgba(15, 23, 42, 0.05);
-}
-
-.card-link-hint {
-  position: absolute;
-  right: 18px;
-  bottom: 18px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  background: var(--overview-primary-soft);
-  color: var(--overview-primary);
-  opacity: 0;
-  transform: translateX(-6px);
-  transition: all 0.22s ease;
-}
-
-.section-header--stack {
-  align-items: flex-start;
-}
-
-.section-subtitle {
-  margin: 8px 0 0 34px;
-  font-size: 14px;
-  line-height: 1.6;
-  color: var(--overview-muted);
+  background: var(--overview-primary);
 }
 
 .module-count {
   padding: 6px 12px;
-  border-radius: 999px;
+  border-radius: 6px;
   background: #f8fafc;
   font-size: 13px;
   color: var(--overview-muted);
@@ -1992,35 +1207,35 @@ onBeforeUnmount(() => {
   border: 1px solid #e8edf5;
   background: #fafbfd;
   color: var(--overview-muted);
-  border-radius: 999px;
-  padding: 9px 16px;
+  border-radius: 6px;
+  padding: 8px 14px;
   font-size: 13px;
   cursor: pointer;
   transition: all 0.2s ease;
 
   &:hover {
-    border-color: #f4c4de;
+    border-color: #b7d8ff;
     color: var(--overview-primary);
   }
 
   &.active {
-    background: linear-gradient(135deg, var(--overview-primary) 0%, #ff5cae 100%);
-    border-color: transparent;
+    background: var(--overview-primary);
+    border-color: var(--overview-primary);
     color: #fff;
-    box-shadow: 0 10px 20px var(--overview-primary-glow);
+    box-shadow: 0 8px 18px var(--overview-primary-glow);
   }
 }
 
 .module-groups {
   display: flex;
   flex-direction: column;
-  gap: 22px;
+  gap: 16px;
 }
 
 .module-group {
-  padding: 18px 18px 6px;
-  border-radius: 18px;
-  background: linear-gradient(180deg, #fbfcfe 0%, #fff 100%);
+  padding: 16px 16px 6px;
+  border-radius: 8px;
+  background: #fbfcfe;
   border: 1px solid #eef2f7;
 }
 
@@ -2044,7 +1259,7 @@ onBeforeUnmount(() => {
   &__en {
     font-size: 11px;
     font-weight: 600;
-    letter-spacing: 0.06em;
+    letter-spacing: 0;
     color: #94a3b8;
     text-transform: uppercase;
   }
@@ -2053,7 +1268,7 @@ onBeforeUnmount(() => {
 .group-count {
   margin-left: auto;
   padding: 2px 8px;
-  border-radius: 999px;
+  border-radius: 6px;
   background: #fff;
   border: 1px solid #e8edf5;
   font-size: 12px;
@@ -2064,7 +1279,7 @@ onBeforeUnmount(() => {
 .module-grid-rich {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
+  gap: 12px;
   align-items: stretch;
 }
 
@@ -2075,7 +1290,7 @@ onBeforeUnmount(() => {
   min-width: 0;
   padding: 0;
   border: 1px solid #e8edf5;
-  border-radius: 18px;
+  border-radius: 8px;
   background: #fff;
   cursor: pointer;
   text-align: left;
@@ -2086,9 +1301,9 @@ onBeforeUnmount(() => {
     transform 0.22s ease;
 
   &:hover {
-    border-color: #f4c4de;
-    transform: translateY(-3px);
-    box-shadow: 0 14px 32px rgba(15, 23, 42, 0.06);
+    border-color: #b7d8ff;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 22px rgba(16, 24, 40, 0.08);
 
     .module-card-rich__arrow {
       opacity: 1;
@@ -2111,7 +1326,7 @@ onBeforeUnmount(() => {
   justify-content: center;
   width: 40px;
   height: 40px;
-  border-radius: 12px;
+  border-radius: 8px;
   flex-shrink: 0;
 }
 
@@ -2131,7 +1346,7 @@ onBeforeUnmount(() => {
 }
 
 .sparkle-icon {
-  color: #e91e8c;
+  color: var(--overview-primary);
   font-size: 12px;
 }
 
@@ -2181,7 +1396,7 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
   width: 18px;
   height: 18px;
-  border-radius: 6px;
+  border-radius: 5px;
   background: #f1f5f9;
   color: #94a3b8;
   font-size: 11px;
@@ -2202,16 +1417,16 @@ onBeforeUnmount(() => {
 }
 
 .module-card-rich--overview .module-card-rich__icon {
-  background: linear-gradient(180deg, #fff5fa 0%, #fce8f3 100%);
+  background: #eaf3ff;
 
   .module-icon,
   .module-icon-fallback {
-    color: #e91e8c;
+    color: var(--overview-primary);
   }
 }
 
 .module-card-rich--inventory .module-card-rich__icon {
-  background: linear-gradient(180deg, #ecfdf5 0%, #d1fae5 100%);
+  background: #e8f8ef;
 
   .module-icon,
   .module-icon-fallback {
@@ -2220,7 +1435,7 @@ onBeforeUnmount(() => {
 }
 
 .module-card-rich--order .module-card-rich__icon {
-  background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%);
+  background: #eaf3ff;
 
   .module-icon,
   .module-icon-fallback {
@@ -2229,7 +1444,7 @@ onBeforeUnmount(() => {
 }
 
 .module-card-rich--platform .module-card-rich__icon {
-  background: linear-gradient(180deg, #f5f3ff 0%, #ede9fe 100%);
+  background: #efe9ff;
 
   .module-icon,
   .module-icon-fallback {
@@ -2238,7 +1453,7 @@ onBeforeUnmount(() => {
 }
 
 .module-card-rich--vendor .module-card-rich__icon {
-  background: linear-gradient(180deg, #ecfeff 0%, #cffafe 100%);
+  background: #e9f8fa;
 
   .module-icon,
   .module-icon-fallback {
@@ -2247,7 +1462,7 @@ onBeforeUnmount(() => {
 }
 
 .module-card-rich--basic .module-card-rich__icon {
-  background: linear-gradient(180deg, #fffbeb 0%, #fef3c7 100%);
+  background: #fff7e8;
 
   .module-icon,
   .module-icon-fallback {
@@ -2256,7 +1471,7 @@ onBeforeUnmount(() => {
 }
 
 .module-card-rich--system .module-card-rich__icon {
-  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  background: #f1f5f9;
 
   .module-icon,
   .module-icon-fallback {
@@ -2271,7 +1486,7 @@ onBeforeUnmount(() => {
 
   :deep(.el-collapse-item__header) {
     min-height: 52px;
-    border-radius: 16px;
+    border-radius: 8px;
     padding: 0 18px;
     background: #fafbfd;
     border: 1px solid var(--overview-border);
@@ -2291,7 +1506,7 @@ onBeforeUnmount(() => {
 .notice-page {
   margin-top: 14px;
   padding: 20px 22px 24px;
-  border-radius: 16px;
+  border-radius: 8px;
   background: #fff;
   border: 1px solid var(--overview-border);
   font-size: 14px;
@@ -2327,9 +1542,9 @@ onBeforeUnmount(() => {
 .final-reminder {
   margin: 18px 0 0;
   padding: 12px 14px;
-  border-radius: 12px;
-  background: #fff7fb;
-  border: 1px solid #f7d7e7;
+  border-radius: 8px;
+  background: #fff7e8;
+  border: 1px solid #f5dab1;
   font-weight: 700;
 }
 
@@ -2345,14 +1560,6 @@ onBeforeUnmount(() => {
     transform: none;
   }
 
-  .is-ready .anim-item,
-  .is-ready .anim-block--delay,
-  .is-ready .anim-tag-pop,
-  .is-ready .anim-chip-pop,
-  .is-ready .anim-stat-pop {
-    opacity: 1;
-    transform: none;
-  }
 }
 
 @media (max-width: 1200px) {
@@ -2364,10 +1571,6 @@ onBeforeUnmount(() => {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .onboarding-steps,
-  .quick-cards {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }
 
 @media (max-width: 768px) {
@@ -2377,7 +1580,7 @@ onBeforeUnmount(() => {
 
   .section-panel {
     padding: 18px 16px;
-    border-radius: 18px;
+    border-radius: 10px;
   }
 
   .hero-content {
@@ -2393,13 +1596,6 @@ onBeforeUnmount(() => {
     align-items: flex-start;
   }
 
-  .progress-area {
-    width: 100%;
-    flex-wrap: wrap;
-  }
-
-  .onboarding-steps,
-  .quick-cards,
   .lifecycle-stats {
     grid-template-columns: 1fr;
   }
@@ -2430,6 +1626,680 @@ onBeforeUnmount(() => {
   }
 
   .module-grid-rich {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Backend overview refinement */
+.overview-page {
+  background: #f5f7fa;
+  padding: 12px 14px 18px;
+}
+
+.overview-shell {
+  gap: 10px;
+}
+
+.section-panel,
+.hero-content,
+.lifecycle-card {
+  border-radius: 8px;
+  border-color: #e5e9f2;
+  background: #fff;
+  box-shadow: none;
+}
+
+.hero-section {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  align-items: stretch;
+}
+
+.hero-content {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  padding: 24px 28px 22px;
+  background: #fff;
+}
+
+.hero-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.version-badge {
+  border-radius: 6px;
+  background: #f0f7ff;
+  border-color: #cfe5ff;
+}
+
+.hero-title {
+  margin: 15px 0 10px;
+  font-size: 30px;
+  line-height: 1.25;
+}
+
+.hero-subtitle {
+  max-width: 640px;
+  line-height: 1.7;
+}
+
+.hero-actions {
+  gap: 22px;
+  margin-top: 34px;
+}
+
+.hero-btn {
+  height: 58px;
+  border-radius: 7px;
+  font-size: 17px;
+  font-weight: 700;
+  transition: border-color 0.18s ease, background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.hero-btn::after {
+  display: none;
+}
+
+.hero-btn-primary {
+  min-width: 176px;
+  padding: 0 30px;
+  font-size: 18px;
+  box-shadow: none;
+}
+
+.hero-btn-primary:hover {
+  background: #2f8be6;
+  border-color: #2f8be6;
+  color: #fff;
+  box-shadow: 0 4px 10px rgba(64, 158, 255, 0.18);
+}
+
+.hero-btn-secondary {
+  min-width: 220px;
+  padding: 0 30px;
+  background: #fff;
+  border-color: #dcdfe6;
+  color: #303133;
+}
+
+.hero-btn-secondary:hover {
+  background: #ecf5ff;
+  border-color: #a0cfff;
+  color: #1677ff;
+  box-shadow: none;
+}
+
+.hero-tags {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.hero-tags-title {
+  margin-top: auto;
+  padding-top: 34px;
+  color: #303133;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.hero-tag {
+  align-items: flex-start;
+  min-height: 74px;
+  padding: 13px 14px 13px 12px;
+  border-radius: 6px;
+  background: #fafcff;
+  color: #606266;
+  line-height: 1.45;
+  font-size: 14px;
+}
+
+.hero-tag__icon {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  border-radius: 6px;
+}
+
+.hero-tag__text {
+  min-width: 0;
+  white-space: normal;
+}
+
+.hero-tag--green {
+  background: #f6fef9;
+  border-color: #ccebd7;
+  color: #16803d;
+}
+
+.hero-tag--green .hero-tag__icon {
+  background: #e8f8ef;
+  color: #16a34a;
+}
+
+.hero-tag--cyan {
+  background: #f3fbfd;
+  border-color: #cbeff5;
+  color: #08768d;
+}
+
+.hero-tag--cyan .hero-tag__icon {
+  background: #e9f8fa;
+  color: #0891b2;
+}
+
+.lifecycle-card {
+  gap: 14px;
+  padding: 20px 20px 18px;
+}
+
+.lifecycle-header {
+  font-size: 15px;
+}
+
+.lifecycle-icon-wrap {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+}
+
+.lifecycle-timeline {
+  padding: 2px 0 0;
+  overflow: visible;
+}
+
+.timeline-nodes {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  min-width: 0;
+  gap: 6px;
+}
+
+.timeline-node {
+  align-items: stretch;
+  gap: 6px;
+  padding: 8px 6px;
+  border: 1px solid #e8edf5;
+  border-radius: 8px;
+  background: #fafbfd;
+  transition: border-color 0.18s ease, background 0.18s ease;
+}
+
+.timeline-node:hover {
+  border-color: #a0cfff;
+  background: #f0f7ff;
+}
+
+.timeline-node__ring,
+.timeline-node__icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: none;
+}
+
+.timeline-node__ring {
+  margin: 0 auto;
+  background: transparent;
+}
+
+.timeline-node__icon {
+  background: #fff;
+  color: #909399;
+  font-size: 15px;
+}
+
+.timeline-node__label {
+  color: #606266;
+  font-size: 12px;
+}
+
+.timeline-node.active {
+  border-color: #409eff;
+  background: #ecf5ff;
+}
+
+.timeline-node.active .timeline-node__ring {
+  animation: none;
+  border-color: transparent;
+}
+
+.timeline-node.active .timeline-node__icon,
+.timeline-node.passed .timeline-node__icon {
+  background: #d9ecff;
+  color: #1677ff;
+  transform: none;
+}
+
+.timeline-node.active .timeline-node__label,
+.timeline-node.passed .timeline-node__label {
+  color: #1677ff;
+}
+
+.lifecycle-stats {
+  gap: 8px;
+}
+
+.stat-item {
+  padding: 12px 10px;
+  border-radius: 8px;
+  background: #fafbfd;
+}
+
+.stat-value {
+  font-size: 22px;
+}
+
+.section-panel {
+  padding: 16px 18px;
+}
+
+.section-header {
+  margin-bottom: 14px;
+}
+
+.section-title-wrap h2 {
+  font-size: 17px;
+}
+
+.section-subtitle {
+  margin: 6px 0 0;
+  color: #606266;
+  font-size: 13px;
+}
+
+.category-tabs {
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.category-tab {
+  padding: 7px 12px;
+  background: #fff;
+  border-color: #dcdfe6;
+}
+
+.category-tab:hover {
+  background: #ecf5ff;
+  border-color: #a0cfff;
+}
+
+.category-tab.active {
+  box-shadow: none;
+}
+
+.module-groups {
+  gap: 12px;
+}
+
+.module-group {
+  padding: 14px;
+  background: #fbfcff;
+  border-color: #e8edf5;
+}
+
+.group-title-rich {
+  margin-bottom: 12px;
+}
+
+.group-title-rich__en {
+  color: #a8abb2;
+}
+
+.module-grid-rich {
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 10px;
+}
+
+.module-card-rich {
+  min-height: 118px;
+  border-radius: 8px;
+}
+
+.module-card-rich:hover {
+  transform: none;
+  border-color: #a0cfff;
+  box-shadow: 0 4px 12px rgba(16, 24, 40, 0.06);
+}
+
+.module-card-rich__head {
+  gap: 10px;
+  padding: 13px 14px 10px;
+}
+
+.module-card-rich__icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 7px;
+}
+
+.module-card-rich__title {
+  font-size: 14px;
+}
+
+.module-card-rich__desc {
+  margin-top: 4px;
+}
+
+.module-card-rich__arrow {
+  opacity: 1;
+  color: #c0c4cc;
+  transform: none;
+}
+
+.module-card-rich__steps {
+  padding: 9px 14px 12px;
+}
+
+.module-card-rich__steps li {
+  line-height: 1.45;
+}
+
+.step-no {
+  width: 17px;
+  height: 17px;
+  border-radius: 4px;
+}
+
+.guidelines-section {
+  padding-bottom: 16px;
+}
+
+.guidelines-section :deep(.el-collapse-item__header) {
+  min-height: 46px;
+  border-radius: 8px;
+  background: #fbfcff;
+  color: #303133;
+}
+
+.notice-page {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+
+.notice-section {
+  padding: 14px 16px;
+  border: 1px solid #e8edf5;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.notice-section h4 {
+  color: #303133;
+}
+
+.notice-section p {
+  color: #606266;
+}
+
+.notice-section ul {
+  margin-left: 18px;
+  color: #606266;
+}
+
+.final-reminder {
+  grid-column: 1 / -1;
+  margin: 0;
+  background: #fff7e6;
+  color: #9a5b00;
+}
+
+.reveal-section {
+  transform: none;
+}
+
+@media (max-width: 1200px) {
+  .hero-section {
+    grid-template-columns: 1fr;
+  }
+
+  .timeline-nodes {
+    grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+  }
+}
+
+/* Match dashboard/charts.vue: page background is provided by the layout. */
+.overview-page {
+  background: transparent;
+  padding: 14px;
+}
+
+.hero-section {
+  padding: 0;
+  border: none;
+  background: transparent;
+  overflow: visible;
+}
+
+.modules-section,
+.guidelines-section {
+  background: #fff;
+}
+
+.module-group {
+  padding: 12px 0 2px;
+  border: none;
+  border-top: 1px solid #edf0f5;
+  border-radius: 0;
+  background: transparent;
+}
+
+.module-group:first-child {
+  border-top: none;
+  padding-top: 2px;
+}
+
+.module-grid-rich {
+  padding: 0;
+}
+
+.notice-page {
+  background: #fff;
+}
+
+/* Align with el-card style used by inventory/statistic pages. */
+.section-panel,
+.hero-content,
+.lifecycle-card {
+  border-color: #edf0f5;
+  box-shadow: 0 6px 18px rgba(16, 24, 40, 0.12);
+}
+
+.hero-section {
+  box-shadow: none;
+}
+
+.module-card-rich,
+.notice-section {
+  box-shadow: 0 4px 14px rgba(16, 24, 40, 0.06);
+}
+
+.module-card-rich:hover {
+  box-shadow: 0 8px 22px rgba(16, 24, 40, 0.1);
+}
+
+.workflow-map {
+  min-height: 0;
+}
+
+.workflow-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.workflow-step {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 92px;
+  padding: 12px 13px;
+  border: 1px solid #e8edf5;
+  border-radius: 8px;
+  background: #fbfcff;
+}
+
+.workflow-step__index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  border-radius: 6px;
+  background: #fff;
+  border: 1px solid #e8edf5;
+  color: #8a94a6;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.workflow-step__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  border-radius: 8px;
+  font-size: 18px;
+}
+
+.workflow-step__body {
+  min-width: 0;
+}
+
+.workflow-step__body strong,
+.workflow-step__body small {
+  display: block;
+}
+
+.workflow-step__body strong {
+  color: #101828;
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.workflow-step__body small {
+  margin-top: 6px;
+  color: #667085;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.workflow-step--supplier .workflow-step__icon { background: #eaf3ff; color: #1677ff; }
+.workflow-step--purchase .workflow-step__icon { background: #efe9ff; color: #7f62e4; }
+.workflow-step--listing .workflow-step__icon { background: #fff7e8; color: #d97706; }
+.workflow-step--order .workflow-step__icon { background: #e9f8fa; color: #0891b2; }
+.workflow-step--inventory .workflow-step__icon { background: #e8f8ef; color: #16a34a; }
+.workflow-step--settlement .workflow-step__icon { background: #fff1ef; color: #ef5454; }
+
+.workflow-comparison-title {
+  margin-top: 14px;
+  color: #303133;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.workflow-comparison {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.workflow-metric {
+  padding: 12px 13px;
+  border: 1px solid #e8edf5;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.workflow-metric__label {
+  color: #667085;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.workflow-metric__values {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 8px;
+  color: #98a2b3;
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.workflow-metric__values strong {
+  color: #101828;
+  font-size: 13px;
+}
+
+.workflow-metric__old {
+  text-decoration: line-through;
+}
+
+.workflow-metric__saving {
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.workflow-metric--blue .workflow-metric__saving { color: #1677ff; }
+.workflow-metric--violet .workflow-metric__saving { color: #7f62e4; }
+.workflow-metric--green .workflow-metric__saving { color: #16a34a; }
+.workflow-metric--amber .workflow-metric__saving { color: #d97706; }
+.workflow-metric--red .workflow-metric__saving { color: #ef5454; }
+.workflow-metric--cyan .workflow-metric__saving { color: #0891b2; }
+
+@media (max-width: 768px) {
+  .workflow-steps,
+  .workflow-comparison {
+    grid-template-columns: 1fr;
+  }
+
+  .hero-content {
+    padding: 24px 18px 22px;
+  }
+
+  .hero-title {
+    font-size: 34px;
+    line-height: 1.18;
+  }
+
+  .hero-actions {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+    margin-top: 28px;
+  }
+
+  .hero-actions .el-button + .el-button {
+    margin-left: 0;
+  }
+
+  .hero-btn,
+  .hero-btn-primary,
+  .hero-btn-secondary {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .hero-tags {
     grid-template-columns: 1fr;
   }
 }
