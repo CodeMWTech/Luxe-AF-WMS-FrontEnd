@@ -10,7 +10,7 @@
     langSwitchLabelEn: 'English',
   },
   login: {
-    title: 'Luxe AF库存管理系统',
+    title: 'Luxe AF 全自动化智能仓库系统',
     usernamePlaceholder: '账号',
     passwordPlaceholder: '密码',
     codePlaceholder: '验证码',
