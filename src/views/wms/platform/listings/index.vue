@@ -54,30 +54,39 @@
         <span class="table-title">{{ t('platformListings.subtitle') }}</span>
         <div class="table-actions">
           <el-button type="primary" icon="Plus" @click="openPublishDialog" v-hasPermi="['wms:platform:listing:edit']">{{ t('platformListings.btnPublish') }}</el-button>
-          <el-button
-            type="primary"
-            icon="Refresh"
-            :disabled="!selectedListings.length"
-            :loading="batchSyncing"
-            @click="handleBatchSync"
+          <el-dropdown
+            trigger="click"
+            :disabled="batchMode || isBatchOperating"
+            @command="enterBatchMode"
             v-hasPermi="['wms:platform:listing']"
-          >{{ t('platformListings.btnBatchSyncStatus') }}</el-button>
+          >
+            <el-button
+              type="primary"
+              icon="Operation"
+              :loading="isBatchOperating"
+              :disabled="batchMode || isBatchOperating"
+            >{{ t('platformListings.btnBatchOperation') }}</el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="sync" icon="Refresh">{{ t('platformListings.btnBatchSyncStatus') }}</el-dropdown-item>
+                <el-dropdown-item command="delist" icon="Close">{{ t('platformListings.btnBatchDelist') }}</el-dropdown-item>
+                <el-dropdown-item command="delete" icon="Delete">{{ t('platformListings.btnBatchDelete') }}</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
           <el-button
-            type="warning"
+            v-if="batchMode"
+            type="primary"
+            :icon="currentBatchIcon"
+            :loading="isBatchOperating"
+            :disabled="!selectedListings.length || isBatchOperating"
+            @click="executeCurrentBatchAction"
+          >{{ currentBatchExecuteLabel }}</el-button>
+          <el-button
+            v-if="batchMode"
             icon="Close"
-            :disabled="!selectedListings.length"
-            :loading="batchDelisting"
-            @click="handleBatchDelist"
-            v-hasPermi="['wms:platform:listing:edit']"
-          >{{ t('platformListings.btnBatchDelist') }}</el-button>
-          <el-button
-            type="danger"
-            icon="Delete"
-            :disabled="!selectedListings.length"
-            :loading="batchDeleting"
-            @click="handleBatchDelete"
-            v-hasPermi="['wms:platform:listing:edit']"
-          >{{ t('platformListings.btnBatchDelete') }}</el-button>
+            @click="exitBatchMode"
+          >{{ t('platformListings.exitBatchMode') }}</el-button>
           <el-button
             type="info"
             icon="Download"
@@ -88,9 +97,11 @@
           <el-button icon="Setting" @click="goTemplates" v-hasPermi="['wms:platform:listing:edit']">{{ t('platformListings.btnTemplate') }}</el-button>
         </div>
       </div>
-      <div v-if="selectedListings.length" class="selection-summary">
-        {{ t('platformListings.selectedListingSummary', { count: selectedListings.length }) }}
-        <el-button link type="primary" @click="clearSelection">{{ t('platformListings.clearSelection') }}</el-button>
+      <div v-if="batchMode" class="selection-summary">
+        <span>
+          {{ selectedListings.length ? t('platformListings.selectedListingSummary', { count: selectedListings.length }) : currentBatchHint }}
+        </span>
+        <el-button v-if="selectedListings.length" link type="primary" @click="clearSelection">{{ t('platformListings.clearSelection') }}</el-button>
       </div>
 
       <el-table
@@ -103,7 +114,7 @@
         row-key="id"
         @selection-change="handleSelectionChange"
       >
-        <el-table-column type="selection" width="50" align="center" reserve-selection />
+        <el-table-column v-if="batchMode" type="selection" width="50" align="center" reserve-selection :selectable="isRowSelectable" />
         <el-table-column :label="t('platformListings.listingPlatform')" prop="platform" width="100" align="center">
           <template #default="{ row }">
             <el-tag :type="row.platform === 'EBAY' ? '' : 'danger'" size="small">{{ row.platform === 'EBAY' ? 'eBay' : 'TikTok' }}</el-tag>
@@ -113,8 +124,8 @@
         <el-table-column :label="t('platformListings.listingItemName')" prop="itemName" min-width="150" show-overflow-tooltip />
         <el-table-column :label="t('platformListings.listingSkuCode')" prop="skuCode" min-width="120" show-overflow-tooltip />
         <el-table-column :label="t('platformListings.listingTitle')" prop="listingTitle" min-width="180" show-overflow-tooltip />
-        <el-table-column :label="t('platformListings.listingPrice')" prop="channelPrice" width="100" align="right">
-          <template #default="{ row }">{{ row.channelPrice != null ? '$' + Number(row.channelPrice).toFixed(2) : '-' }}</template>
+        <el-table-column :label="t('platformListings.listingPrice')" prop="channelPrice" width="120" align="right">
+          <template #default="{ row }">{{ formatChannelPrice(row.channelPrice) }}</template>
         </el-table-column>
         <el-table-column :label="t('platformListings.listingStatus')" prop="listingStatus" width="100" align="center">
           <template #default="{ row }">
@@ -147,13 +158,15 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, nextTick, getCurrentInstance } from 'vue'
+import { ref, reactive, computed, onMounted, nextTick, getCurrentInstance } from 'vue'
 import { useRouter } from 'vue-router'
 import { listListings, delistListing, syncListingStatus, retryListing, deleteListing } from '@/api/wms/platformListing'
 import { listAllPlatformShops } from '@/api/wms/platformShop'
+import useSettingsStore from '@/store/modules/settings'
 import PublishDialog from './components/PublishDialog.vue'
 
 const router = useRouter()
+const settingsStore = useSettingsStore()
 const { proxy } = getCurrentInstance()
 const t = (key, values) => proxy?.$t?.(key, values) || key
 
@@ -167,10 +180,38 @@ const listingTableRef = ref(null)
 const selectedListings = ref([])
 const selectedListingMap = new Map()
 const listingTimeRange = ref([])
+const batchMode = ref(false)
+const batchAction = ref('')
 const batchSyncing = ref(false)
 const batchDelisting = ref(false)
 const batchDeleting = ref(false)
 const exportLoading = ref(false)
+const isBatchOperating = computed(() => batchSyncing.value || batchDelisting.value || batchDeleting.value)
+const isEn = computed(() => (settingsStore.language || 'zh-cn') === 'en')
+const batchActionConfig = {
+  sync: {
+    icon: 'Refresh',
+    executeLabelKey: 'platformListings.executeBatchSyncStatus',
+    hintKey: 'platformListings.batchSyncModeHint',
+    handler: handleBatchSync
+  },
+  delist: {
+    icon: 'Close',
+    executeLabelKey: 'platformListings.executeBatchDelist',
+    hintKey: 'platformListings.batchDelistModeHint',
+    handler: handleBatchDelist
+  },
+  delete: {
+    icon: 'Delete',
+    executeLabelKey: 'platformListings.executeBatchDelete',
+    hintKey: 'platformListings.batchDeleteModeHint',
+    handler: handleBatchDelete
+  }
+}
+const currentBatchConfig = computed(() => batchActionConfig[batchAction.value] || null)
+const currentBatchIcon = computed(() => currentBatchConfig.value?.icon || 'Operation')
+const currentBatchExecuteLabel = computed(() => t(currentBatchConfig.value?.executeLabelKey || 'platformListings.btnBatchOperation'))
+const currentBatchHint = computed(() => t(currentBatchConfig.value?.hintKey || 'platformListings.batchModeHint'))
 
 const queryParams = reactive({
   pageNum: 1,
@@ -199,6 +240,18 @@ function statusLabel(status) {
   return map[status] || status
 }
 
+function formatChannelPrice(price) {
+  if (price === null || price === undefined || price === '') return '-'
+  const amount = Number(price)
+  if (!Number.isFinite(amount)) return '-'
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }).format(amount)
+}
+
 function formatListingError(error) {
   if (!error) return ''
   const text = String(error).trim()
@@ -216,6 +269,16 @@ function buildQueryParams() {
     ...queryParams,
     beginTime: beginTime || '',
     endTime: endTime || ''
+  }
+}
+
+function getExportLanguagePayload() {
+  const language = isEn.value ? 'en' : 'zh-cn'
+  return {
+    language,
+    lang: language,
+    locale: language,
+    contentLanguage: isEn.value ? 'en_US' : 'zh_CN'
   }
 }
 
@@ -264,9 +327,12 @@ function isListingOnline(row) {
 }
 
 function handleSelectionChange(selection) {
+  if (!batchMode.value) {
+    return
+  }
   const currentPageIds = new Set(listingList.value.map(row => row.id))
   currentPageIds.forEach(id => selectedListingMap.delete(id))
-  selection.forEach(row => selectedListingMap.set(row.id, row))
+  selection.filter(isRowSelectable).forEach(row => selectedListingMap.set(row.id, row))
   syncSelectedListings()
 }
 
@@ -275,7 +341,7 @@ function syncSelectedListings() {
 }
 
 function restoreCurrentPageSelection() {
-  if (!listingTableRef.value) return
+  if (!listingTableRef.value || !batchMode.value) return
   listingList.value.forEach(row => {
     listingTableRef.value.toggleRowSelection(row, selectedListingMap.has(row.id))
   })
@@ -287,8 +353,39 @@ function clearSelection() {
   listingTableRef.value?.clearSelection?.()
 }
 
+function isRowSelectable(row) {
+  if (batchAction.value === 'sync' || batchAction.value === 'delist') {
+    return isListingOnline(row)
+  }
+  if (batchAction.value === 'delete') {
+    return isListingDeletable(row)
+  }
+  return false
+}
+
+function confirmOptions(options = {}) {
+  return {
+    confirmButtonText: t('platformListings.confirmButton'),
+    cancelButtonText: t('platformListings.cancelButton'),
+    ...options
+  }
+}
+
+function enterBatchMode(command) {
+  batchAction.value = command
+  batchMode.value = true
+  clearSelection()
+  nextTick(() => restoreCurrentPageSelection())
+}
+
+function exitBatchMode() {
+  batchMode.value = false
+  batchAction.value = ''
+  clearSelection()
+}
+
 function handleDelist(row) {
-  proxy.$modal.confirm(t('platformListings.confirmDelist'), t('platformListings.promptTitle'), { type: 'warning' }).then(() => {
+  proxy.$modal.confirm(t('platformListings.confirmDelist'), t('platformListings.promptTitle'), confirmOptions({ type: 'warning' })).then(() => {
     delistListing(row.id).then(() => {
       proxy.$modal.msgSuccess(t('platformListings.delistSuccess'))
       getList()
@@ -310,7 +407,7 @@ function handleSync(row) {
 }
 
 function handleRetry(row) {
-  proxy.$modal.confirm(t('platformListings.confirmRetry'), t('platformListings.promptTitle'), { type: 'info' }).then(() => {
+  proxy.$modal.confirm(t('platformListings.confirmRetry'), t('platformListings.promptTitle'), confirmOptions({ type: 'info' })).then(() => {
     retryListing(row.id).then(() => {
       proxy.$modal.msgSuccess(t('platformListings.retrySubmitted'))
       getList()
@@ -329,7 +426,7 @@ function runBatchOperation(options) {
   proxy.$modal.confirm(
     t(options.confirmKey, { count: rows.length }),
     t('platformListings.promptTitle'),
-    { type: options.confirmType || 'warning' }
+    confirmOptions({ type: options.confirmType || 'warning' })
   ).then(() => {
     options.loadingRef.value = true
     return Promise.allSettled(rows.map(options.action)).then(results => {
@@ -387,8 +484,12 @@ function handleBatchDelete() {
   })
 }
 
+function executeCurrentBatchAction() {
+  currentBatchConfig.value?.handler?.()
+}
+
 function handleDelete(row) {
-  proxy.$modal.confirm(t('platformListings.confirmDeleteListing'), t('platformListings.warningTitle'), { type: 'error' }).then(() => {
+  proxy.$modal.confirm(t('platformListings.confirmDeleteListing'), t('platformListings.warningTitle'), confirmOptions({ type: 'error' })).then(() => {
     deleteListing(row.id).then(() => {
       proxy.$modal.msgSuccess(t('platformListings.listingDeleteSuccess'))
       getList()
@@ -399,12 +500,23 @@ function handleDelete(row) {
 }
 
 function handleExport() {
-  proxy.$modal.confirm(t('platformListings.exportConfirm'), t('platformListings.promptTitle'), { type: 'info' }).then(() => {
+  proxy.$modal.confirm(t('platformListings.exportConfirm'), t('platformListings.promptTitle'), confirmOptions({ type: 'info' })).then(() => {
+    const exportLanguage = getExportLanguagePayload()
     exportLoading.value = true
     return proxy.download(
       'wms/platform/listings/export',
-      buildQueryParams(),
-      `上架记录_${new Date().toISOString().slice(0, 10)}.xlsx`
+      {
+        ...buildQueryParams(),
+        ...exportLanguage
+      },
+      `${isEn.value ? 'Listing_Records' : '上架记录'}_${new Date().toISOString().slice(0, 10)}.xlsx`,
+      {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Content-Language': exportLanguage.contentLanguage,
+          'Accept-Language': isEn.value ? 'en-US,en;q=0.9' : 'zh-CN,zh;q=0.9'
+        }
+      }
     )
   }).finally(() => {
     exportLoading.value = false
