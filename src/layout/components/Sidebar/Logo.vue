@@ -55,8 +55,7 @@ const sideTheme = computed(() => settingsStore.sideTheme);
     display: inline-flex;
     align-items: center;
     justify-content: flex-start;
-    gap: 0;
-    padding: 0 20px;
+    padding: 0 22px;
 
     & .sidebar-logo {
       width: 32px;
@@ -69,17 +68,17 @@ const sideTheme = computed(() => settingsStore.sideTheme);
       width: 32px;
       height: 32px;
       border-radius: 9px;
-      margin-right: 24px;
       box-shadow: 0 4px 10px rgba(15, 23, 42, 0.12);
     }
 
     & .sidebar-title {
       display: inline-block;
-      margin: 0;
+      margin: 0 0 0 16px;
       color: #fff;
       font-weight: 700;
       line-height: 50px;
-      font-size: 17px;
+      font-size: 16px;
+      white-space: nowrap;
       font-family: Avenir, Helvetica Neue, Arial, Helvetica, sans-serif;
       vertical-align: middle;
     }
@@ -95,6 +94,10 @@ const sideTheme = computed(() => settingsStore.sideTheme);
     width: 32px;
     height: 32px;
     margin-right: 0;
+  }
+
+  &.collapse .sidebar-title {
+    margin-left: 0;
   }
 }
 </style>

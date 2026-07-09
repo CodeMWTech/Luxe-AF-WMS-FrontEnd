@@ -10,7 +10,7 @@
     langSwitchLabelEn: 'English',
   },
   login: {
-    title: 'Luxe AF Warehouse Management System',
+    title: 'Luxe AF Fully Automated Intelligent Warehouse System',
     usernamePlaceholder: 'Username',
     passwordPlaceholder: 'Password',
     codePlaceholder: 'Verification code',
