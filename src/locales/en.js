@@ -123,7 +123,7 @@
     enterWorkspace: 'Enter Workspace',
     browseFeatures: 'Browse Features',
     viewGuidelines: 'View Operation Notes',
-    aboutStudio: 'About Michael Studio',
+    aboutStudio: 'About Luxe AF',
     advantageTitle: 'Our advantages:',
     featureTagAutomation: 'End-to-end automation for orders, inbound, and outbound',
     featureTagEfficiency: 'Less repeated entry, much faster daily operations',

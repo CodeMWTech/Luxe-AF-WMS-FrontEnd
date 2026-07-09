@@ -26,7 +26,7 @@
             </el-button>
             <el-button
               class="hero-btn hero-btn-secondary"
-              @click="openMichaelStudio"
+              @click="openLuxeAf"
             >
               {{ t('overviewDashboard.aboutStudio') }}
               <el-icon class="btn-arrow"><ArrowRight /></el-icon>
@@ -591,7 +591,7 @@ function setTimelineIndex(index) {
   activeTimelineIndex.value = index
 }
 
-function openMichaelStudio() {
+function openLuxeAf() {
   window.open('https://www.codemw.com/', '_blank', 'noopener,noreferrer')
 }
 
@@ -661,9 +661,16 @@ function navigateTo(path) {
   --overview-muted: #667085;
   --overview-border: #e8edf5;
   --overview-panel: #ffffff;
+  --overview-font-xs: 12px;
+  --overview-font-sm: 13px;
+  --overview-font-base: 14px;
+  --overview-font-md: 15px;
+  --overview-font-lg: 17px;
+  --overview-font-title: 28px;
   min-height: calc(100vh - 84px);
   overflow-y: auto;
   padding: 12px;
+  font-size: var(--overview-font-base);
   color: var(--overview-text);
   background: transparent;
 }
@@ -728,7 +735,7 @@ function navigateTo(path) {
   background: #eef6ff;
   border: 1px solid #cfe5ff;
   color: var(--overview-primary);
-  font-size: 12px;
+  font-size: var(--overview-font-xs);
   font-weight: 700;
   letter-spacing: 0;
 }
@@ -1678,26 +1685,39 @@ function navigateTo(path) {
 
 .hero-title {
   margin: 15px 0 10px;
-  font-size: 30px;
+  font-size: var(--overview-font-title);
   line-height: 1.25;
 }
 
 .hero-subtitle {
   max-width: 640px;
   line-height: 1.7;
+  font-size: var(--overview-font-base);
 }
 
 .hero-actions {
-  gap: 22px;
-  margin-top: 34px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 30px;
 }
 
 .hero-btn {
-  height: 58px;
+  width: 100%;
+  min-width: 0;
+  height: 52px;
   border-radius: 7px;
-  font-size: 17px;
+  padding: 0 18px;
+  font-size: var(--overview-font-md);
   font-weight: 700;
+  line-height: 1.25;
+  white-space: normal;
+  text-align: center;
   transition: border-color 0.18s ease, background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.hero-actions .el-button + .el-button {
+  margin-left: 0;
 }
 
 .hero-btn::after {
@@ -1705,9 +1725,9 @@ function navigateTo(path) {
 }
 
 .hero-btn-primary {
-  min-width: 176px;
-  padding: 0 30px;
-  font-size: 18px;
+  min-width: 0;
+  padding: 0 18px;
+  font-size: var(--overview-font-md);
   box-shadow: none;
 }
 
@@ -1719,8 +1739,8 @@ function navigateTo(path) {
 }
 
 .hero-btn-secondary {
-  min-width: 220px;
-  padding: 0 30px;
+  min-width: 0;
+  padding: 0 18px;
   background: #fff;
   border-color: #dcdfe6;
   color: #303133;
@@ -1744,7 +1764,7 @@ function navigateTo(path) {
   margin-top: auto;
   padding-top: 34px;
   color: #303133;
-  font-size: 16px;
+  font-size: var(--overview-font-md);
   font-weight: 700;
 }
 
@@ -1756,7 +1776,7 @@ function navigateTo(path) {
   background: #fafcff;
   color: #606266;
   line-height: 1.45;
-  font-size: 14px;
+  font-size: var(--overview-font-base);
 }
 
 .hero-tag__icon {
@@ -1799,7 +1819,7 @@ function navigateTo(path) {
 }
 
 .lifecycle-header {
-  font-size: 15px;
+  font-size: var(--overview-font-md);
 }
 
 .lifecycle-icon-wrap {
@@ -1904,13 +1924,13 @@ function navigateTo(path) {
 }
 
 .section-title-wrap h2 {
-  font-size: 17px;
+  font-size: var(--overview-font-lg);
 }
 
 .section-subtitle {
   margin: 6px 0 0;
   color: #606266;
-  font-size: 13px;
+  font-size: var(--overview-font-sm);
 }
 
 .category-tabs {
@@ -1979,7 +1999,7 @@ function navigateTo(path) {
 }
 
 .module-card-rich__title {
-  font-size: 14px;
+  font-size: var(--overview-font-base);
 }
 
 .module-card-rich__desc {
@@ -2272,20 +2292,19 @@ function navigateTo(path) {
   }
 
   .hero-content {
-    padding: 24px 18px 22px;
+    padding: 22px 14px 20px;
   }
 
   .hero-title {
-    font-size: 34px;
-    line-height: 1.18;
+    font-size: 24px;
+    line-height: 1.25;
   }
 
   .hero-actions {
     width: 100%;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 14px;
-    margin-top: 28px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    margin-top: 22px;
   }
 
   .hero-actions .el-button + .el-button {
@@ -2297,6 +2316,15 @@ function navigateTo(path) {
   .hero-btn-secondary {
     width: 100%;
     min-width: 0;
+    height: 48px;
+    padding: 0 6px;
+    font-size: 12px;
+    line-height: 1.2;
+  }
+
+  .hero-btn .btn-arrow {
+    margin-left: 2px;
+    font-size: 12px;
   }
 
   .hero-tags {
