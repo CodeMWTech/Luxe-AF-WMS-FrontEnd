@@ -544,7 +544,7 @@ async function handleExportExcel() {
       throw new Error(errMsg)
     }
     const excelData = await prepareLanguageXlsx(blobData, isEn.value)
-    downloadXlsx(excelData, isEn.value ? 'MichaelStudioWMS-Unstocked SKUs.xlsx' : 'MichaelStudioWMS-未入库商品.xlsx')
+    downloadXlsx(excelData, isEn.value ? 'LuxeAFWMS-Unstocked SKUs.xlsx' : 'LuxeAFWMS-未入库商品.xlsx')
     proxy.$modal.msgSuccess(tr('导出成功'))
   } catch (e) {
     proxy.$modal.msgError(e?.message || tr('导出失败'))
