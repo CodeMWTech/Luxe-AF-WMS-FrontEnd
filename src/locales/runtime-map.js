@@ -50,6 +50,7 @@
   导入: 'Import',
   导入Excel: 'Import Excel',
   下载导入模板: 'Download Import Template',
+  清空文件: 'Clear Files',
   Excel文件: 'Excel File',
   选择Excel文件: 'Select Excel File',
   图片Zip包: 'Image ZIP',

@@ -162,10 +162,19 @@
         :closable="false"
         class="mb10"
       />
-      <el-button type="primary" plain icon="Download" @click="handleDownloadImportTemplate" class="mb10">{{ tr('下载模板') }}</el-button>
+      <div class="import-dialog-toolbar mb10">
+        <el-button type="primary" plain icon="Download" @click="handleDownloadImportTemplate">{{ tr('下载模板') }}</el-button>
+        <el-button
+          plain
+          icon="Refresh"
+          :disabled="!importDialog.excelFile && !importDialog.zipFile"
+          @click="clearImportFiles"
+        >{{ tr('清空文件') }}</el-button>
+      </div>
       <el-form label-width="120px">
         <el-form-item label="Excel">
           <el-upload
+            ref="importExcelUploadRef"
             action="#"
             :auto-upload="false"
             :limit="1"
@@ -178,6 +187,7 @@
         </el-form-item>
         <el-form-item label="Zip">
           <el-upload
+            ref="importZipUploadRef"
             action="#"
             :auto-upload="false"
             :limit="1"
@@ -440,6 +450,8 @@ const defaultTime = reactive([new Date(2000, 0, 1, 0, 0, 0), new Date(2000, 0, 1
 const queryFormRef = ref(ElForm);
 const itemFormRef = ref(ElForm);
 const itemCategoryFormRef = ref(ElForm);
+const importExcelUploadRef = ref(null);
+const importZipUploadRef = ref(null);
 const spanMethod = computed(() => getRowspanMethod(itemList.value, rowSpanArray.value))
 const rowSpanArray = ref(['itemId'])
 const qrcode = ref(null)
@@ -1594,13 +1606,21 @@ function shortImportError(message) {
 }
 
 function openImportDialog() {
+  importDialog.visible = true
+  nextTick(() => clearImportFiles())
+}
+
+function clearImportFiles() {
   importDialog.excelFile = null
   importDialog.zipFile = null
-  importDialog.visible = true
+  importExcelUploadRef.value?.clearFiles?.()
+  importZipUploadRef.value?.clearFiles?.()
 }
 
 async function handleDownloadImportTemplate() {
-  const data = await downloadItemImportTemplate()
+  const data = await downloadItemImportTemplate({
+    headers: getExportLanguageHeaders(isEn.value)
+  })
   const isBlob = blobValidate(data)
   if (!isBlob) {
     const resText = await data.text()
@@ -1744,6 +1764,12 @@ onMounted(async () => {
 });
 </script>
 <style>
+.import-dialog-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .item-content-layout {
   display: flex;
   align-items: flex-start;
