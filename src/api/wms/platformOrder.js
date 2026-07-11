@@ -52,7 +52,7 @@ export function importNotes(file) {
     url: '/wms/platform/orders/import-notes',
     method: 'post',
     data: formData,
-    headers: { 'Content-Type': 'multipart/form-data' }
+    headers: { 'Content-Type': 'multipart/form-data', repeatSubmit: false }
   })
 }
 
