@@ -610,6 +610,7 @@
     listingCreateBy: 'Listed By',
     listingTime: 'Listing Time',
     platformPublishFailed: '{platform} publish failed',
+    listingErrorDetail: '[{platform} Error Code {code}] Listing failed: {reason}. {action}. If the issue persists, contact platform support and provide the error code.',
     statusPending: 'Pending',
     statusListing: 'Listing',
     statusListed: 'Listed',
