@@ -176,12 +176,16 @@ export function deleteItemImage(imageId) {
 }
 
 // 下载商品导入模板
-export function downloadItemImportTemplate() {
+export function downloadItemImportTemplate(config = {}) {
   return request({
     url: '/wms/item/import/template',
     method: 'get',
     responseType: 'blob',
-    timeout: 0
+    timeout: 0,
+    ...config,
+    headers: {
+      ...(config.headers || {})
+    }
   })
 }
 
