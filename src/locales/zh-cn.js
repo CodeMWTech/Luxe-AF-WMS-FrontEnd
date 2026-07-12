@@ -618,6 +618,7 @@
     listingCreateBy: '上架人',
     listingTime: '上架时间',
     platformPublishFailed: '{platform}上架失败',
+    listingErrorDetail: '【{platform} 错误码 {code}】上架失败：{reason}。{action}。若问题仍未解决，请联系平台支持，并提供对应的错误码。',
     // 状态
     statusPending: '待上架',
     statusListing: '上架中',
