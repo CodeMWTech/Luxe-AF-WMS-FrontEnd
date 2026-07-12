@@ -154,101 +154,144 @@
         <el-button type="primary" :loading="quantityDialog.loading" @click="submitQuantityDialog">{{ tr('确认') }}</el-button>
       </template>
     </el-dialog>
-    <el-dialog v-model="importDialog.visible" :title="tr('导入Excel')" width="640px" append-to-body :close-on-click-modal="false">
-      <el-alert
-        :title="tr('请上传商品Excel和图片Zip压缩包，系统会创建导入任务并在后台处理。')"
-        type="info"
-        show-icon
-        :closable="false"
-        class="mb10"
-      />
-      <div class="import-dialog-toolbar mb10">
-        <el-button type="primary" plain icon="Download" @click="handleDownloadImportTemplate">{{ tr('下载模板') }}</el-button>
-        <el-button
-          plain
-          icon="Refresh"
-          :disabled="!importDialog.excelFile && !importDialog.zipFile"
-          @click="clearImportFiles"
-        >{{ tr('清空文件') }}</el-button>
+    <el-dialog v-model="importDialog.visible" :title="tr('导入Excel')" width="680px" append-to-body :close-on-click-modal="false">
+      <div class="import-dialog">
+        <el-alert
+          :title="tr('请上传商品Excel和图片Zip压缩包，系统会创建导入任务并在后台处理。')"
+          type="info"
+          show-icon
+          :closable="false"
+          class="import-dialog__alert"
+        />
+        <div class="import-dialog__toolbar">
+          <el-button type="primary" plain icon="Download" @click="handleDownloadImportTemplate">{{ tr('下载模板') }}</el-button>
+          <el-button
+            plain
+            icon="Delete"
+            :disabled="!importDialog.excelFile && !importDialog.zipFile"
+            @click="clearImportFiles"
+          >{{ tr('清空文件') }}</el-button>
+        </div>
+        <div class="import-upload-grid">
+          <div class="import-upload-card">
+            <div class="import-upload-card__label">Excel</div>
+            <el-upload
+              ref="importExcelUploadRef"
+              class="import-upload-drop"
+              action="#"
+              drag
+              :auto-upload="false"
+              :limit="1"
+              accept=".xlsx"
+              :show-file-list="true"
+              :on-change="handleImportExcelChange"
+              :on-remove="handleImportExcelRemove"
+              :on-exceed="handleImportExcelExceed"
+            >
+              <el-icon class="import-upload-drop__icon"><UploadFilled /></el-icon>
+              <div class="import-upload-drop__text">
+                {{ tr('将Excel拖到此处，或') }}<em>{{ tr('点击选择') }}</em>
+              </div>
+              <template #tip>
+                <div class="import-upload-drop__tip">{{ tr('仅支持 .xlsx 格式') }}</div>
+              </template>
+            </el-upload>
+          </div>
+          <div class="import-upload-card">
+            <div class="import-upload-card__label">Zip</div>
+            <el-upload
+              ref="importZipUploadRef"
+              class="import-upload-drop"
+              action="#"
+              drag
+              :auto-upload="false"
+              :limit="1"
+              accept=".zip"
+              :show-file-list="true"
+              :on-change="handleImportZipChange"
+              :on-remove="handleImportZipRemove"
+              :on-exceed="handleImportZipExceed"
+            >
+              <el-icon class="import-upload-drop__icon"><UploadFilled /></el-icon>
+              <div class="import-upload-drop__text">
+                {{ tr('将Zip拖到此处，或') }}<em>{{ tr('点击选择') }}</em>
+              </div>
+              <template #tip>
+                <div class="import-upload-drop__tip">{{ tr('仅支持 .zip 格式') }}</div>
+              </template>
+            </el-upload>
+          </div>
+        </div>
       </div>
-      <el-form label-width="120px">
-        <el-form-item label="Excel">
-          <el-upload
-            ref="importExcelUploadRef"
-            action="#"
-            :auto-upload="false"
-            :limit="1"
-            accept=".xlsx"
-            :on-change="handleImportExcelChange"
-            :on-remove="handleImportExcelRemove"
-          >
-            <el-button icon="Upload">{{ tr('选择Excel') }}</el-button>
-          </el-upload>
-        </el-form-item>
-        <el-form-item label="Zip">
-          <el-upload
-            ref="importZipUploadRef"
-            action="#"
-            :auto-upload="false"
-            :limit="1"
-            accept=".zip"
-            :on-change="handleImportZipChange"
-            :on-remove="handleImportZipRemove"
-          >
-            <el-button icon="Upload">{{ tr('选择图片Zip') }}</el-button>
-          </el-upload>
-        </el-form-item>
-      </el-form>
       <template #footer>
         <el-button @click="importDialog.visible = false">{{ tr('取消') }}</el-button>
         <el-button type="primary" :loading="importDialog.loading" @click="submitImportDialog">{{ tr('开始导入') }}</el-button>
       </template>
     </el-dialog>
-    <el-dialog v-model="importLogDialog.visible" :title="tr('上传日志')" width="980px" append-to-body>
-      <el-table :data="importTasks" border v-loading="importLogDialog.loading">
-        <el-table-column :label="tr('任务ID')" prop="id" width="100" />
-        <el-table-column :label="tr('文件名')" prop="fileName" min-width="220" show-overflow-tooltip />
-        <el-table-column :label="tr('状态')" prop="status" width="120" align="center">
-          <template #default="{ row }">
-            <el-tag :type="importStatusType(row.status)">{{ importStatusLabel(row.status) }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column :label="tr('成功')" prop="successCount" width="90" align="right" />
-        <el-table-column :label="tr('失败')" prop="failCount" width="90" align="right" />
-        <el-table-column :label="tr('创建时间')" prop="createTime" width="180" />
-        <el-table-column :label="tr('操作')" width="100" align="center">
-          <template #default="{ row }">
-            <el-button link type="primary" @click="openImportDetail(row)">{{ tr('明细') }}</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-      <pagination v-show="importTaskTotal > 0" :total="importTaskTotal" v-model:page="importLogQuery.pageNum" v-model:limit="importLogQuery.pageSize" @pagination="loadImportTasks" />
+    <el-dialog v-model="importLogDialog.visible" :title="tr('上传日志')" width="980px" append-to-body class="import-log-dialog">
+      <div class="import-log-dialog__body">
+        <el-table :data="importTasks" border v-loading="importLogDialog.loading">
+          <el-table-column :label="tr('任务ID')" prop="id" min-width="180" show-overflow-tooltip />
+          <el-table-column :label="tr('状态')" prop="status" width="120" align="center">
+            <template #default="{ row }">
+              <el-tag :type="importStatusType(row.status)">{{ importStatusLabel(row.status) }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column :label="tr('成功')" prop="successCount" width="90" align="right" />
+          <el-table-column :label="tr('失败')" prop="failCount" width="90" align="right" />
+          <el-table-column :label="tr('创建时间')" prop="createTime" width="180" />
+          <el-table-column :label="tr('操作')" width="100" align="center">
+            <template #default="{ row }">
+              <el-button link type="primary" @click="openImportDetail(row)">{{ tr('明细') }}</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+        <div class="import-dialog-pagination" v-show="importTaskTotal > 0">
+          <pagination
+            :total="importTaskTotal"
+            v-model:page="importLogQuery.pageNum"
+            v-model:limit="importLogQuery.pageSize"
+            layout="total, sizes, prev, pager, next"
+            @pagination="loadImportTasks"
+          />
+        </div>
+      </div>
       <template #footer>
         <el-button icon="Refresh" @click="loadImportTasks">{{ tr('刷新') }}</el-button>
         <el-button @click="importLogDialog.visible = false">{{ tr('关闭') }}</el-button>
       </template>
     </el-dialog>
-    <el-dialog v-model="importDetailDialog.visible" :title="tr('导入明细')" width="1080px" append-to-body>
-      <el-table :data="importDetails" border v-loading="importDetailDialog.loading">
-        <el-table-column :label="tr('Excel行号')" prop="rowNum" width="100" align="right" />
-        <el-table-column :label="tr('商品名称')" prop="itemName" min-width="180" show-overflow-tooltip />
-        <el-table-column label="SKU" prop="skuCode" min-width="140" show-overflow-tooltip />
-        <el-table-column :label="tr('状态')" prop="status" width="100" align="center">
-          <template #default="{ row }">
-            <el-tag :type="Number(row.status) === 1 ? 'success' : 'danger'">{{ Number(row.status) === 1 ? tr('成功') : tr('失败') }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column :label="tr('商品ID')" prop="itemId" width="150" />
-        <el-table-column :label="tr('失败原因')" prop="errorMsg" min-width="320">
-          <template #default="{ row }">
-            <el-tooltip v-if="row.errorMsg" effect="dark" placement="top" :content="row.errorMsg">
-              <span class="import-error-text">{{ shortImportError(row.errorMsg) }}</span>
-            </el-tooltip>
-            <span v-else>-</span>
-          </template>
-        </el-table-column>
-      </el-table>
-      <pagination v-show="importDetailTotal > 0" :total="importDetailTotal" v-model:page="importDetailQuery.pageNum" v-model:limit="importDetailQuery.pageSize" @pagination="loadImportDetails" />
+    <el-dialog v-model="importDetailDialog.visible" :title="tr('导入明细')" width="1080px" append-to-body class="import-detail-dialog">
+      <div class="import-detail-dialog__body">
+        <el-table :data="importDetails" border v-loading="importDetailDialog.loading">
+          <el-table-column :label="tr('Excel行号')" prop="rowNum" width="100" align="right" />
+          <el-table-column :label="tr('商品名称')" prop="itemName" min-width="180" show-overflow-tooltip />
+          <el-table-column label="SKU" prop="skuCode" min-width="140" show-overflow-tooltip />
+          <el-table-column :label="tr('状态')" prop="status" width="100" align="center">
+            <template #default="{ row }">
+              <el-tag :type="Number(row.status) === 1 ? 'success' : 'danger'">{{ Number(row.status) === 1 ? tr('成功') : tr('失败') }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column :label="tr('商品ID')" prop="itemId" min-width="180" show-overflow-tooltip />
+          <el-table-column :label="tr('失败原因')" prop="errorMsg" min-width="280" show-overflow-tooltip>
+            <template #default="{ row }">
+              <el-tooltip v-if="row.errorMsg" effect="dark" placement="top" :content="formatImportError(row.errorMsg)">
+                <span class="import-error-text">{{ formatImportError(row.errorMsg) }}</span>
+              </el-tooltip>
+              <span v-else>-</span>
+            </template>
+          </el-table-column>
+        </el-table>
+        <div class="import-dialog-pagination" v-show="importDetailTotal > 0">
+          <pagination
+            :total="importDetailTotal"
+            v-model:page="importDetailQuery.pageNum"
+            v-model:limit="importDetailQuery.pageSize"
+            layout="total, sizes, prev, pager, next"
+            @pagination="loadImportDetails"
+          />
+        </div>
+      </div>
     </el-dialog>
     <div id="outSkuIdBox" style="display: none">
       <img :src="qrcode"/>
@@ -284,6 +327,7 @@ import JSBarcode from 'jsbarcode'
 import {useWmsStore} from '@/store/modules/wms'
 import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
+import { UploadFilled } from '@element-plus/icons-vue'
 import { formatDateTimeForQuery } from '@/utils/laTime'
 import { listItemModelMaterialOptions } from '@/api/wms/itemModel'
 import { blobValidate } from '@/utils/ruoyi'
@@ -1599,10 +1643,15 @@ function importStatusType(status) {
   return 'info'
 }
 
-function shortImportError(message) {
-  if (!message) return '-'
-  const text = String(message)
-  return text.length > 120 ? `${text.slice(0, 120)}...` : text
+function formatImportError(message) {
+  if (!message) return ''
+  let text = String(message).trim()
+  while (/^[A-Za-z_$][\w$.]*(?:Exception)?:\s*/.test(text)) {
+    const next = text.replace(/^[A-Za-z_$][\w$.]*(?:Exception)?:\s*/, '')
+    if (next === text) break
+    text = next
+  }
+  return text.trim() || String(message).trim()
 }
 
 function openImportDialog() {
@@ -1637,6 +1686,7 @@ function handleImportExcelChange(uploadFile) {
   if (!file.name.toLowerCase().endsWith('.xlsx')) {
     proxy?.$modal.msgError(tr('请选择xlsx格式Excel文件'))
     importDialog.excelFile = null
+    importExcelUploadRef.value?.clearFiles?.()
     return
   }
   importDialog.excelFile = file
@@ -1646,12 +1696,21 @@ function handleImportExcelRemove() {
   importDialog.excelFile = null
 }
 
+function handleImportExcelExceed(files) {
+  importExcelUploadRef.value?.clearFiles?.()
+  const file = files[0]
+  if (file) {
+    importExcelUploadRef.value?.handleStart?.(file)
+  }
+}
+
 function handleImportZipChange(uploadFile) {
   const file = uploadFile?.raw
   if (!file) return
   if (!file.name.toLowerCase().endsWith('.zip')) {
     proxy?.$modal.msgError(tr('请选择zip压缩包'))
     importDialog.zipFile = null
+    importZipUploadRef.value?.clearFiles?.()
     return
   }
   importDialog.zipFile = file
@@ -1659,6 +1718,14 @@ function handleImportZipChange(uploadFile) {
 
 function handleImportZipRemove() {
   importDialog.zipFile = null
+}
+
+function handleImportZipExceed(files) {
+  importZipUploadRef.value?.clearFiles?.()
+  const file = files[0]
+  if (file) {
+    importZipUploadRef.value?.handleStart?.(file)
+  }
 }
 
 async function submitImportDialog() {
@@ -1764,6 +1831,138 @@ onMounted(async () => {
 });
 </script>
 <style>
+.import-dialog__alert {
+  margin-bottom: 0;
+}
+
+.import-dialog__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #ebeef5;
+}
+
+.import-upload-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.import-upload-card {
+  min-width: 0;
+}
+
+.import-upload-card__label {
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #606266;
+}
+
+.import-upload-drop {
+  width: 100%;
+}
+
+.import-upload-drop :deep(.el-upload) {
+  width: 100%;
+}
+
+.import-upload-drop :deep(.el-upload-dragger) {
+  width: 100%;
+  height: 148px;
+  padding: 16px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+.import-upload-drop__icon {
+  font-size: 40px;
+  color: #c0c4cc;
+  margin-bottom: 8px;
+}
+
+.import-upload-drop__text {
+  font-size: 13px;
+  line-height: 20px;
+  color: #606266;
+  text-align: center;
+}
+
+.import-upload-drop__text em {
+  color: var(--el-color-primary);
+  font-style: normal;
+}
+
+.import-upload-drop__tip {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 18px;
+  color: #909399;
+  text-align: center;
+}
+
+.import-log-dialog__body,
+.import-detail-dialog__body {
+  padding: 0 16px 8px;
+  overflow-x: hidden;
+}
+
+.import-log-dialog .el-dialog__body,
+.import-detail-dialog .el-dialog__body {
+  padding-top: 10px;
+  padding-bottom: 16px;
+  overflow-x: hidden;
+}
+
+.import-dialog-pagination {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 14px 12px 6px;
+  margin-top: 4px;
+  border-top: 1px solid #ebeef5;
+}
+
+.import-dialog-pagination .pagination-container {
+  position: static !important;
+  height: auto !important;
+  width: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+}
+
+.import-dialog-pagination .pagination-container .el-pagination {
+  position: static !important;
+  right: auto !important;
+  left: auto !important;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.import-error-text {
+  display: inline-block;
+  max-width: 100%;
+  line-height: 1.5;
+  word-break: break-word;
+  vertical-align: middle;
+}
+
+@media (max-width: 560px) {
+  .import-upload-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .import-dialog-toolbar {
   display: flex;
   flex-wrap: wrap;

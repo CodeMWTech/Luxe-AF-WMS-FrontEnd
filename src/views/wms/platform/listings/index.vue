@@ -255,6 +255,20 @@ function formatChannelPrice(price) {
 function formatListingError(error) {
   if (!error) return ''
   const text = String(error).trim()
+  try {
+    const detail = JSON.parse(text)
+    if (detail?.type === 'PLATFORM_LISTING_ERROR') {
+      const english = isEn.value
+      return t('platformListings.listingErrorDetail', {
+        platform: detail.platform === 'EBAY' ? 'eBay' : 'TikTok',
+        code: detail.code || 'N/A',
+        reason: english ? detail.reasonEn : detail.reasonZh,
+        action: english ? detail.actionEn : detail.actionZh
+      })
+    }
+  } catch {
+    // Existing non-structured status messages remain readable as-is.
+  }
   const failedMatch = text.match(/^(eBay|EBAY|TikTok|TIKTOK)\s*上架失败$/i)
   if (failedMatch) {
     const platform = failedMatch[1].toLowerCase() === 'ebay' ? 'eBay' : 'TikTok'
