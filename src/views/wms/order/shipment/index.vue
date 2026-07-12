@@ -28,11 +28,17 @@
               {{ tr('全部') }}
             </el-radio-button>
             <el-radio-button
-              v-for="item in translatedShipmentTypeOptions"
+              v-for="item in translatedShipmentTypeFilterOptions"
               :key="item.value"
               :label="item.value"
             >
               {{ item.label }}
+            </el-radio-button>
+            <el-radio-button
+              v-if="!hasBackendSampleShipmentType"
+              :label="SAMPLE_SHIPMENT_TYPE_OPTION.value"
+            >
+              {{ tr(SAMPLE_SHIPMENT_TYPE_OPTION.label) }}
             </el-radio-button>
           </el-radio-group>
         </el-form-item>
@@ -44,12 +50,29 @@
             @keyup.enter.prevent="handleQuery"
           />
         </el-form-item>
+        <el-form-item class="filter-item" label="SKU" prop="skuCode" :label-width="isEn ? '170px' : undefined">
+          <el-input
+            v-model="queryParams.skuCode"
+            :placeholder="isEn ? 'Please enter SKU' : '请输入SKU编号'"
+            clearable
+            @keyup.enter.prevent="handleQuery"
+          >
+          </el-input>
+        </el-form-item>
         <el-form-item class="filter-item filter-item-actions">
           <el-button type="primary" icon="Search" class="action-btn" @click="handleQuery">{{ tr('搜索') }}</el-button>
           <el-button icon="Refresh" class="action-btn" @click="resetQuery">{{ tr('重置') }}</el-button>
         </el-form-item>
       </el-form>
     </el-card>
+
+    <div v-if="activeSkuCode" class="sku-find-floating" :style="skuFindDragStyle" @pointerdown="startSkuFindDrag">
+          <span class="sku-find-count">{{ skuFindCountText }}</span>
+          <el-button-group>
+            <el-button size="small" icon="ArrowUp" :disabled="matchedSkuRowCount <= 1" @click="scrollToPrevMatchedSku" />
+            <el-button size="small" icon="ArrowDown" :disabled="matchedSkuRowCount <= 1" @click="scrollToNextMatchedSku" />
+          </el-button-group>
+    </div>
 
     <el-card class="mt20">
 
@@ -76,7 +99,7 @@
           <template #default="props">
             <div style="padding: 0 50px 20px 50px">
               <h3>{{ tr('商品明细') }}</h3>
-              <el-table :data="props.row.details" v-loading="detailLoading[props.$index]" :empty-text="tr('暂无商品明细')">
+              <el-table :data="props.row.details" v-loading="detailLoading[props.$index]" :empty-text="tr('暂无商品明细')" :row-class-name="getDetailRowClassName">
                 <el-table-column :label="tr('商品名称')">
                   <template #default="{ row }">
                     <div>{{ row?.item?.itemName }}</div>
@@ -84,7 +107,7 @@
                 </el-table-column>
                 <el-table-column :label="tr('SKU编号')">
                   <template #default="{ row }">
-                    <div>{{ row?.itemSku?.skuCode }}</div>
+                    <div :class="{ 'sku-highlight-text': isMatchedSku(row) }">{{ row?.itemSku?.skuCode }}</div>
                   </template>
                 </el-table-column>
                 <el-table-column :label="tr('数量')" prop="quantity" align="right">
@@ -208,7 +231,7 @@
 <script setup name="ShipmentOrder">
 import {listShipmentOrder, delShipmentOrder, exportShipmentOrder, getShipmentOrder} from "@/api/wms/shipmentOrder";
 import {listByShipmentOrderId} from "@/api/wms/shipmentOrderDetail";
-import {computed, getCurrentInstance, onMounted, reactive, ref, toRefs} from "vue";
+import {computed, getCurrentInstance, nextTick, onMounted, reactive, ref, toRefs} from "vue";
 import {useWmsStore} from "../../../../store/modules/wms";
 import shipmentPanel from "@/components/PrintTemplate/shipment-panel";
 import useSettingsStore from '@/store/modules/settings'
@@ -216,6 +239,7 @@ import { translateByMap } from '@/locales/runtime-map'
 import { createProgressLoading } from '@/utils/progressLoading'
 import { blobValidate } from '@/utils/ruoyi'
 import { downloadXlsx, getExportLanguageHeaders, prepareLanguageXlsx } from '@/utils/xlsxTranslate'
+import { useFixedDrag } from '@/utils/useFixedDrag'
 
 const { proxy } = getCurrentInstance();
 const { wms_shipment_status, wms_shipment_type} = proxy.useDict("wms_shipment_status", "wms_shipment_type");
@@ -231,11 +255,17 @@ const title = ref("");
 const expandedRowKeys = ref([])
 // 商品明细table的loading状态集合
 const detailLoading = ref([])
+const matchedSkuRowCount = ref(0)
+const matchedSkuRowIndex = ref(0)
+const activeSkuCode = ref('')
+const skuFindLoading = ref(false)
+const { dragStyle: skuFindDragStyle, startDrag: startSkuFindDrag } = useFixedDrag()
 const data = reactive({
   queryParams: {
     pageNum: 1,
     pageSize: 10,
     orderNo: undefined,
+    skuCode: undefined,
     optType: -1,
     merchantId: undefined,
     totalAmount: undefined,
@@ -248,8 +278,23 @@ const { queryParams } = toRefs(data);
 const tr = (text) => translateByMap(text, settingsStore.language || 'zh-cn')
 const isEn = computed(() => (settingsStore.language || 'zh-cn') === 'en')
 const formLabelWidth = computed(() => '80px')
+const SAMPLE_SHIPMENT_TYPE_OPTION = { label: 'Sample样品', value: '4', elTagType: 'warning', elTagClass: '' }
+function withSampleShipmentType(options = []) {
+  const list = [...options]
+  if (!list.some(item => String(item.value) === SAMPLE_SHIPMENT_TYPE_OPTION.value)) {
+    list.push({ ...SAMPLE_SHIPMENT_TYPE_OPTION })
+  }
+  return list
+}
 const translatedShipmentStatusOptions = computed(() => (wms_shipment_status.value || []).map(it => ({ ...it, label: tr(it.label) })))
-const translatedShipmentTypeOptions = computed(() => (wms_shipment_type.value || []).map(it => ({ ...it, label: tr(it.label) })))
+const backendShipmentTypeOptions = computed(() => wms_shipment_type.value || [])
+const hasBackendSampleShipmentType = computed(() => backendShipmentTypeOptions.value.some(item => String(item.value) === SAMPLE_SHIPMENT_TYPE_OPTION.value))
+const translatedShipmentTypeFilterOptions = computed(() => backendShipmentTypeOptions.value.map(it => ({ ...it, label: tr(it.label) })))
+const translatedShipmentTypeOptions = computed(() => withSampleShipmentType(backendShipmentTypeOptions.value).map(it => ({ ...it, label: tr(it.label) })))
+const skuFindCountText = computed(() => {
+  if (skuFindLoading.value) return isEn.value ? 'Searching...' : '查找中...'
+  return matchedSkuRowCount.value ? `${matchedSkuRowIndex.value + 1}/${matchedSkuRowCount.value}` : (isEn.value ? 'No match' : '无匹配')
+})
 const wmsStore = useWmsStore()
 
 function getShipmentOrderStateLabel(row) {
@@ -278,6 +323,11 @@ function getList() {
   loading.value = true;
   const query = {...queryParams.value}
   query.orderNo = query.orderNo?.trim() || undefined
+  query.skuCode = query.skuCode?.trim() || undefined
+  activeSkuCode.value = query.skuCode || ''
+  skuFindLoading.value = !!query.skuCode
+  matchedSkuRowCount.value = 0
+  matchedSkuRowIndex.value = 0
   if (query.orderStatus === -2) {
     query.orderStatus = null
   }
@@ -287,10 +337,14 @@ function getList() {
   listShipmentOrder(query).then(response => {
     shipmentOrderList.value = response.rows;
     total.value = response.total;
-    for (let i = 0; i < total; i++) {
-      detailLoading.value.push(false)
+    detailLoading.value = shipmentOrderList.value.map(() => false)
+    if (query.skuCode) {
+      expandedRowKeys.value = shipmentOrderList.value.map(row => row.id)
+      Promise.all(shipmentOrderList.value.map(loadShipmentOrderDetail)).then(() => scrollToMatchedSku(true))
+    } else {
+      expandedRowKeys.value = []
+      skuFindLoading.value = false
     }
-    expandedRowKeys.value = []
     loading.value = false;
   });
 }
@@ -357,7 +411,7 @@ function handleGoDetail(row) {
   } else {
     // 展开
     expandedRowKeys.value.push(row.id)
-    loadShipmentOrderDetail(row)
+    loadShipmentOrderDetail(row).then(() => scrollToMatchedSku(true))
   }
 }
 
@@ -486,8 +540,9 @@ function handleExpandExchange(value, expandedRows) {
 
 function loadShipmentOrderDetail(row) {
   const index = shipmentOrderList.value.findIndex(it => it.id === row.id)
+  if (index === -1) return Promise.resolve()
   detailLoading.value[index] = true
-  listByShipmentOrderId(row.id).then(res => {
+  return listByShipmentOrderId(row.id).then(res => {
     if (res.data?.length) {
       const details = res.data.map(it => {
         return {
@@ -510,6 +565,70 @@ function ifExpand(expandedRows) {
   }
 
   return true
+}
+
+function getActiveSkuCode() {
+  return activeSkuCode.value
+}
+
+function getDetailSkuCode(row) {
+  return row?.itemSku?.skuCode || row?.skuCode || ''
+}
+
+function isMatchedSku(row) {
+  const activeSkuCode = getActiveSkuCode()
+  return !!activeSkuCode && getDetailSkuCode(row) === activeSkuCode
+}
+
+function getDetailRowClassName({ row }) {
+  return isMatchedSku(row) ? 'sku-highlight-row' : ''
+}
+
+function getMatchedSkuRows() {
+  const page = document.querySelector('.shipment-order-page')
+  return Array.from(page?.querySelectorAll('.sku-highlight-row') || [])
+}
+
+function scrollToMatchedSku(resetIndex = false) {
+  if (!getActiveSkuCode()) return
+  nextTick(() => {
+    window.setTimeout(() => {
+      const rows = getMatchedSkuRows()
+      matchedSkuRowCount.value = rows.length
+      skuFindLoading.value = false
+      if (!rows.length) return
+      if (resetIndex || matchedSkuRowIndex.value >= rows.length) {
+        matchedSkuRowIndex.value = 0
+      }
+      rows[matchedSkuRowIndex.value]?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, 50)
+  })
+}
+
+function scrollToPrevMatchedSku() {
+  if (!getActiveSkuCode()) return
+  nextTick(() => {
+    window.setTimeout(() => {
+      const rows = getMatchedSkuRows()
+      matchedSkuRowCount.value = rows.length
+      if (!rows.length) return
+      matchedSkuRowIndex.value = (matchedSkuRowIndex.value - 1 + rows.length) % rows.length
+      rows[matchedSkuRowIndex.value]?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, 50)
+  })
+}
+
+function scrollToNextMatchedSku() {
+  if (!getActiveSkuCode()) return
+  nextTick(() => {
+    window.setTimeout(() => {
+      const rows = getMatchedSkuRows()
+      matchedSkuRowCount.value = rows.length
+      if (!rows.length) return
+      matchedSkuRowIndex.value = (matchedSkuRowIndex.value + 1) % rows.length
+      rows[matchedSkuRowIndex.value]?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, 50)
+  })
 }
 
 function getRowKey(row) {
@@ -604,4 +723,50 @@ onMounted(() => {
 .shipment-order-page .el-table .vertical-top-cell {
   vertical-align: top
 }
+.shipment-order-page .el-table .sku-highlight-row > td {
+  background: #fff4b8 !important;
+}
+
+.shipment-order-page .sku-find-floating {
+  position: fixed;
+  top: 84px;
+  right: 32px;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: #fff;
+  border: 1px solid #dcdfe6;
+  border-radius: 6px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+  cursor: move;
+  touch-action: none;
+  user-select: none;
+}
+
+.shipment-order-page .sku-find-floating .el-button {
+  width: 34px;
+}
+
+@media (max-width: 768px) {
+  .shipment-order-page .sku-find-floating {
+    top: auto;
+    right: 16px;
+    bottom: 18px;
+  }
+}
+.shipment-order-page .sku-find-count {
+  width: 56px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #606266;
+  font-size: 13px;
+}
+.shipment-order-page .sku-highlight-text {
+  color: #8a5a00;
+  font-weight: 600;
+}
+
 </style>

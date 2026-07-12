@@ -1484,7 +1484,7 @@ const handleExportExcel = async () => {
     const url = window.URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = isEn.value ? 'MichaelStudioWMS-Inventory Statistics.xlsx' : 'MichaelStudioWMS-库存统计.xlsx'
+    a.download = isEn.value ? 'LuxeAFWMS-Inventory Statistics.xlsx' : 'LuxeAFWMS-库存统计.xlsx'
     a.click()
     window.URL.revokeObjectURL(url)
     proxy.$modal.msgSuccess(tr('导出成功'))
@@ -1577,7 +1577,7 @@ async function handleBatchExportExcel() {
     const url = window.URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = isEn.value ? 'MichaelStudioWMS-Inventory Batch Export.xlsx' : 'MichaelStudioWMS-库存统计批量导出.xlsx'
+    a.download = isEn.value ? 'LuxeAFWMS-Inventory Batch Export.xlsx' : 'LuxeAFWMS-库存统计批量导出.xlsx'
     a.click()
     window.URL.revokeObjectURL(url)
     proxy.$modal.msgSuccess(tr('批量导出成功'))

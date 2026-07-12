@@ -20,6 +20,23 @@
         </el-form-item>
       </el-form>
       <el-alert :title="t('platformListings.noImageCannotPublish')" type="warning" show-icon :closable="false" class="publish-image-alert" />
+      <div v-if="selectedSkus.length" class="selected-sku-panel">
+        <div class="selected-sku-header">
+          <span>{{ t('platformListings.selectedSkuTitle', { count: selectedSkus.length }) }}</span>
+          <el-button link type="primary" @click="resetPublishSelection">{{ t('platformListings.clearSelected') }}</el-button>
+        </div>
+        <div class="selected-sku-list">
+          <el-tag
+            v-for="sku in selectedSkus"
+            :key="getPublishRowKey(sku)"
+            closable
+            effect="plain"
+            @close="removeSelectedSku(sku)"
+          >
+            {{ sku.skuCode || sku.skuId || sku.id }}
+          </el-tag>
+        </div>
+      </div>
       <el-table
         ref="invTableRef"
         :data="invList"
@@ -33,7 +50,18 @@
         <el-table-column type="selection" width="50" reserve-selection :selectable="isPublishRowSelectable" />
         <el-table-column :label="t('platformListings.image')" width="86" align="center">
           <template #default="{ row }">
-            <el-tag v-if="hasPublishImage(row)" type="success" effect="plain">{{ t('platformListings.hasImage') }}</el-tag>
+            <el-image
+              v-if="hasPublishImage(row)"
+              class="publish-thumb"
+              :src="getPublishImageUrl(row)"
+              fit="cover"
+              :preview-src-list="getPublishPreviewImages(row)"
+              preview-teleported
+            >
+              <template #error>
+                <el-tag type="success" effect="plain">{{ t('platformListings.hasImage') }}</el-tag>
+              </template>
+            </el-image>
             <el-tooltip v-else :content="t('platformListings.noImageCannotPublish')" placement="top">
               <el-tag type="danger" effect="plain">{{ t('platformListings.noImage') }}</el-tag>
             </el-tooltip>
@@ -70,7 +98,7 @@
           <el-descriptions :column="2" border size="small">
             <el-descriptions-item :label="t('platformListings.templatePlatformLabel')">{{ chosenPlatform === 'EBAY' ? 'eBay' : 'TikTok Shop' }}</el-descriptions-item>
             <el-descriptions-item :label="t('platformListings.templatePriceSourceLabel')">{{ chosenTemplate.priceSource === 'CUSTOM' ? t('platformListings.priceSourceCustom') : t('platformListings.priceSourceSelling') }}</el-descriptions-item>
-            <el-descriptions-item :label="t('platformListings.templateMarkupLabel')">{{ (chosenTemplate.priceMarkupValue || 0) + (chosenTemplate.priceMarkupType === 'PERCENT' ? '%' : '') }}</el-descriptions-item>
+            <el-descriptions-item :label="t('platformListings.templateMarkupLabel')">{{ chosenTemplate.priceMarkupValue != null ? chosenTemplate.priceMarkupValue + (chosenTemplate.priceMarkupType === 'PERCENT' ? '%' : '') : '-' }}</el-descriptions-item>
             <el-descriptions-item :label="t('platformListings.templateTitleFormatLabel')" :span="2">{{ chosenTemplate.titleFormat || '{brand} {material} {year} {itemName}' }}</el-descriptions-item>
           </el-descriptions>
         </el-form-item>
@@ -88,22 +116,30 @@
         :closable="false"
         style="margin-bottom:12px"
       />
+      <el-alert
+        v-if="hasBelowSellingPrice"
+        :title="t('platformListings.lowPriceWarningSummary', { count: belowSellingPriceRows.length })"
+        type="warning"
+        show-icon
+        :closable="false"
+        style="margin-bottom:12px"
+      />
       <div v-if="previewList.length" class="channel-preview" :class="chosenPlatform === 'EBAY' ? 'ebay-preview' : 'tiktok-preview'">
         <div class="preview-media">
-          <el-image v-if="previewList[0].images && previewList[0].images.length" :src="previewList[0].images[0]" fit="cover" />
+          <el-image v-if="previewList[0].images && previewList[0].images.length" :src="previewList[0].images[0]" fit="contain" />
           <div v-else class="empty-media">{{ t('platformListings.noImage') }}</div>
         </div>
         <div class="preview-content">
           <div class="preview-platform">{{ chosenPlatform === 'EBAY' ? t('platformListings.ebayPreviewLabel') : t('platformListings.tiktokPreviewLabel') }}</div>
-          <div class="preview-title">{{ previewList[0].overrideTitle || '-' }}</div>
+          <div class="preview-title">{{ getPreviewTitle(previewList[0]) }}</div>
           <div class="preview-price">{{ previewList[0].currency || 'USD' }} {{ Number(previewList[0].overridePrice || 0).toFixed(2) }}</div>
           <div class="preview-meta">
             <span>{{ t('platformListings.sku') }} {{ previewList[0].skuCode }}</span>
             <span>{{ t('platformListings.quantityShort') }} {{ previewList[0].quantity || 1 }}</span>
-            <span>{{ previewList[0].condition || '-' }}</span>
+            <span v-if="formatPreviewCondition(previewList[0])">{{ formatPreviewCondition(previewList[0]) }}</span>
             <span>{{ previewList[0].packageSummary || '-' }}</span>
           </div>
-          <div class="preview-desc" v-html="previewList[0].description"></div>
+          <div v-if="getPreviewDescription(previewList[0])" class="preview-desc" v-html="getPreviewDescription(previewList[0])"></div>
         </div>
       </div>
       <el-table :data="previewList" v-loading="previewLoading" border stripe max-height="320">
@@ -120,6 +156,12 @@
             <div v-if="isEbayTitleTooLong(row)" class="title-error">
               {{ t('platformListings.ebayTitleTooLongDetail', { max: EBAY_TITLE_MAX_LENGTH, length: getTitleLength(row.overrideTitle) }) }}
             </div>
+            <div class="title-preview">{{ getPreviewTitle(row) }}</div>
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('platformListings.sellingPrice')" width="120" align="right">
+          <template #default="{ row }">
+            {{ formatMoney(row.sellingPrice, row.currency || 'USD') }}
           </template>
         </el-table-column>
         <el-table-column :label="t('platformListings.resolvedPrice')" width="160" align="right">
@@ -137,6 +179,9 @@
             />
             <div v-if="isTiktokPriceInvalid(row)" class="price-error">
               {{ t('platformListings.tiktokPriceRangeHint') }}
+            </div>
+            <div v-else-if="isBelowSellingPrice(row)" class="price-warning">
+              {{ t('platformListings.lowPriceRowHint') }}
             </div>
           </template>
         </el-table-column>
@@ -196,19 +241,28 @@ let suppressPublishSelectionChange = false
 const getPublishRowKey = (row) => row?.skuId ? String(row.skuId) : ''
 
 function hasPublishImage(row) {
-  return Boolean(
-    row?.itemImage ||
-    row?.mainImage ||
-    row?.imageUrl ||
-    row?.thumbUrl ||
-    row?.mainImageUrl ||
-    row?.mainThumbUrl ||
-    (Array.isArray(row?.images) && row.images.length > 0) ||
-    (Array.isArray(row?.imageList) && row.imageList.length > 0)
-  )
+  return Boolean(getPublishImageUrl(row))
 }
 
 const isPublishRowSelectable = (row) => hasPublishImage(row)
+
+function resolveImageValue(value) {
+  if (!value) return ''
+  if (typeof value === 'string') return value
+  return value.thumbUrl || value.url || value.imageUrl || value.mainImageUrl || value.ossUrl || ''
+}
+
+function getPublishPreviewImages(row) {
+  const imageSources = []
+  if (Array.isArray(row?.images)) imageSources.push(...row.images)
+  if (Array.isArray(row?.imageList)) imageSources.push(...row.imageList)
+  imageSources.push(row?.mainThumbUrl, row?.thumbUrl, row?.mainImageUrl, row?.imageUrl, row?.mainImage, row?.itemImage)
+  return imageSources.map(resolveImageValue).filter(Boolean)
+}
+
+function getPublishImageUrl(row) {
+  return getPublishPreviewImages(row)[0] || ''
+}
 
 function syncSelectedSkus() {
   selectedSkus.value = Array.from(selectedSkuMap.value.values())
@@ -235,6 +289,17 @@ function resetPublishSelection() {
   selectedSkuMap.value.clear()
   selectedSkus.value = []
   invTableRef.value?.clearSelection()
+}
+
+function removeSelectedSku(sku) {
+  const key = getPublishRowKey(sku)
+  if (!key) return
+  selectedSkuMap.value.delete(key)
+  const currentRow = invList.value.find(row => getPublishRowKey(row) === key)
+  if (currentRow) {
+    invTableRef.value?.toggleRowSelection(currentRow, false)
+  }
+  syncSelectedSkus()
 }
 
 function seedPreselectedSkus(skuIds) {
@@ -326,6 +391,8 @@ const tiktokPriceInvalidRows = computed(() => isTiktokPublish.value
   ? previewList.value.filter(row => isTiktokPriceInvalid(row))
   : [])
 const hasTiktokPriceInvalid = computed(() => tiktokPriceInvalidRows.value.length > 0)
+const belowSellingPriceRows = computed(() => previewList.value.filter(row => isBelowSellingPrice(row)))
+const hasBelowSellingPrice = computed(() => belowSellingPriceRows.value.length > 0)
 
 function getTitleLength(title) {
   return Array.from(title || '').length
@@ -335,10 +402,51 @@ function isEbayTitleTooLong(row) {
   return getTitleLength(row?.overrideTitle) > EBAY_TITLE_MAX_LENGTH
 }
 
+function getPreviewTitle(row) {
+  const title = (row?.overrideTitle || '').trim()
+  if (!title) return '-'
+  return /\bpre-owned\b/i.test(title) ? title : `Pre-owned ${title}`
+}
+
+function getPreviewDescription(row) {
+  const html = row?.description || ''
+  return html.replace(/<img\b[^>]*>/gi, '').trim()
+}
+
 function isTiktokPriceInvalid(row) {
   if (!isTiktokPublish.value) return false
   const price = Number(row?.overridePrice)
   return !Number.isFinite(price) || price < TIKTOK_PRICE_MIN || price > TIKTOK_PRICE_MAX
+}
+
+function validPositiveNumber(value) {
+  const num = Number(value)
+  return Number.isFinite(num) && num > 0 ? num : null
+}
+
+function isBelowSellingPrice(row) {
+  const channelPrice = validPositiveNumber(row?.overridePrice)
+  const sellingPrice = validPositiveNumber(row?.sellingPrice)
+  return channelPrice != null && sellingPrice != null && channelPrice < sellingPrice
+}
+
+function formatMoney(value, currency = 'USD') {
+  const amount = Number(value)
+  return Number.isFinite(amount) ? `${currency} ${amount.toFixed(2)}` : '-'
+}
+
+function buildLowPriceConfirmMessage() {
+  const details = belowSellingPriceRows.value.slice(0, 5).map(row => {
+    return t('platformListings.lowPriceConfirmDetail', {
+      sku: row.skuCode || row.skuId || '-',
+      listingPrice: formatMoney(row.overridePrice, row.currency || 'USD'),
+      sellingPrice: formatMoney(row.sellingPrice, row.currency || 'USD')
+    })
+  }).join('\n')
+  const more = belowSellingPriceRows.value.length > 5
+    ? '\n' + t('platformListings.lowPriceConfirmMore', { count: belowSellingPriceRows.value.length })
+    : ''
+  return t('platformListings.lowPriceConfirmMessage', { count: belowSellingPriceRows.value.length, details: details + more })
 }
 
 function normalizePreviewPrice(price) {
@@ -351,6 +459,17 @@ function normalizePreviewPrice(price) {
 function normalizeOverridePrice(row) {
   if (!row || !isTiktokPublish.value) return
   row.overridePrice = normalizePreviewPrice(row.overridePrice)
+}
+
+function blankIfUnavailable(value) {
+  const text = String(value ?? '').trim()
+  if (!text) return ''
+  return ['N/A', 'NA', 'NONE', 'NULL', '--', '-'].includes(text.toUpperCase()) ? '' : text
+}
+
+function formatPreviewCondition(row) {
+  const condition = blankIfUnavailable(row?.condition)
+  return condition
 }
 
 async function loadPreviews() {
@@ -367,6 +486,7 @@ async function loadPreviews() {
           skuCode: data.skuCode || sku.skuCode,
           overrideTitle: data.title || '',
           overridePrice: normalizePreviewPrice(data.price ?? 0),
+          sellingPrice: data.sellingPrice ?? sku.sellingPrice,
           images: data.images || []
         })
       } catch (e) {
@@ -375,6 +495,7 @@ async function loadPreviews() {
           skuCode: sku.skuCode,
           overrideTitle: '',
           overridePrice: 0,
+          sellingPrice: sku.sellingPrice,
           images: []
         })
       }
@@ -446,6 +567,21 @@ async function doPublish() {
     proxy.$modal.msgWarning(t('platformListings.tiktokPriceRangeSummary', { count: tiktokPriceInvalidRows.value.length }))
     return
   }
+  if (hasBelowSellingPrice.value) {
+    try {
+      await proxy.$modal.confirm(
+        buildLowPriceConfirmMessage(),
+        t('platformListings.lowPriceConfirmTitle'),
+        {
+          type: 'warning',
+          confirmButtonText: t('platformListings.lowPriceConfirmButton'),
+          cancelButtonText: t('platformListings.lowPriceCancelButton')
+        }
+      )
+    } catch {
+      return
+    }
+  }
   const skuIds = previewList.value.map(p => p.skuId)
   const customTitles = {}
   const customPrices = {}
@@ -456,7 +592,14 @@ async function doPublish() {
   })
   publishing.value = true
   try {
-    await batchPublish({ templateId: chosenTemplateId.value, publishShopId: chosenShopId.value, skuIds, customTitles, customPrices })
+    await batchPublish({
+      templateId: chosenTemplateId.value,
+      publishShopId: chosenShopId.value,
+      skuIds,
+      customTitles,
+      customPrices,
+      confirmBelowSellingPrice: hasBelowSellingPrice.value
+    })
     proxy.$modal.msgSuccess(t('platformListings.publishSuccess'))
     visible.value = false
     emit('success')
@@ -490,25 +633,73 @@ defineExpose({ open, openWithSkus })
   margin-bottom: 10px;
 }
 
+.selected-sku-panel {
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border: 1px solid #d9ecff;
+  border-radius: 6px;
+  background: #f5faff;
+}
+
+.selected-sku-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+  color: #344054;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.selected-sku-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-height: 74px;
+  overflow-y: auto;
+}
+
+.publish-thumb {
+  width: 48px;
+  height: 48px;
+  border: 1px solid #ebeef5;
+  border-radius: 4px;
+  overflow: hidden;
+  background: #f5f7fa;
+}
+
 .channel-preview {
   display: grid;
-  grid-template-columns: 180px 1fr;
+  grid-template-columns: 180px minmax(0, 1fr);
   gap: 18px;
   border: 1px solid #e5e7eb;
   border-radius: 6px;
   padding: 16px;
   margin-bottom: 14px;
   background: #fff;
+  max-width: 100%;
+  overflow: hidden;
 }
-.channel-preview .preview-media { width: 180px; height: 180px; background: #f5f7fa; }
+.channel-preview .preview-media { width: 180px; height: 180px; background: #f5f7fa; overflow: hidden; border-radius: 4px; }
 .channel-preview .preview-media :deep(.el-image) { width: 100%; height: 100%; }
+.channel-preview .preview-media :deep(img) { max-width: 100%; max-height: 100%; object-fit: contain; }
 .empty-media { height: 100%; display: flex; align-items: center; justify-content: center; color: #909399; }
+.preview-content { min-width: 0; }
 .preview-platform { font-size: 12px; font-weight: 700; text-transform: uppercase; color: #606266; margin-bottom: 6px; }
 .preview-title { font-size: 18px; font-weight: 700; line-height: 1.35; color: #111827; }
 .preview-price { margin-top: 8px; font-size: 20px; font-weight: 700; color: #111827; }
 .preview-meta { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
 .preview-meta span { border: 1px solid #e5e7eb; border-radius: 4px; padding: 3px 8px; font-size: 12px; color: #606266; }
-.preview-desc { max-height: 110px; overflow: auto; font-size: 12px; color: #606266; border-top: 1px solid #ebeef5; padding-top: 8px; }
+.preview-desc { max-height: 110px; overflow: auto; font-size: 12px; color: #606266; border-top: 1px solid #ebeef5; padding-top: 8px; max-width: 100%; }
+.preview-desc :deep(img),
+.preview-desc :deep(table) {
+  max-width: 100%;
+}
+.preview-desc :deep(table) {
+  table-layout: fixed;
+  word-break: break-word;
+}
 .ebay-preview { border-top: 4px solid #3665f3; }
 .tiktok-preview { border-top: 4px solid #111827; }
 .title-input-error :deep(.el-input__wrapper) {
@@ -519,6 +710,12 @@ defineExpose({ open, openWithSkus })
   font-size: 12px;
   line-height: 1.4;
   color: var(--el-color-danger);
+}
+.title-preview {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #606266;
 }
 .price-input-error :deep(.el-input-number__decrease),
 .price-input-error :deep(.el-input-number__increase),
@@ -531,5 +728,24 @@ defineExpose({ open, openWithSkus })
   line-height: 1.4;
   color: var(--el-color-danger);
   text-align: left;
+}
+.price-warning {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--el-color-warning);
+  text-align: left;
+}
+
+@media (max-width: 768px) {
+  .channel-preview {
+    grid-template-columns: 1fr;
+  }
+
+  .channel-preview .preview-media {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 1 / 1;
+  }
 }
 </style>

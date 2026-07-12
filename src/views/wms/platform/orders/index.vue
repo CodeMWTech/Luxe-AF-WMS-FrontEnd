@@ -631,7 +631,15 @@
     />
 
     <!-- 导入 Note 弹窗 -->
-    <el-dialog v-model="notesImportOpen" :title="t('platformOrders.importNotesTitle')" width="520px" @close="cancelImportNotes">
+    <el-dialog
+      v-model="notesImportOpen"
+      :title="t('platformOrders.importNotesTitle')"
+      width="min(600px, 92vw)"
+      :close-on-click-modal="!notesImportLoading"
+      :close-on-press-escape="!notesImportLoading"
+      :show-close="!notesImportLoading"
+      @close="cancelImportNotes"
+    >
       <el-alert
         :title="t('platformOrders.importNotesHelp')"
         type="info"
@@ -639,19 +647,24 @@
         :closable="false"
         class="mb20"
       />
-      <el-form label-width="130px" class="notes-import-form">
-        <el-form-item :label="t('platformOrders.importNotesSelectFile')">
+      <el-form class="notes-import-form">
+        <el-form-item>
           <el-upload
             ref="importUploadRef"
             class="notes-import-upload"
             :auto-upload="false"
-            :limit="1"
-            accept=".csv"
+            drag
+            multiple
+            accept=".csv,text/csv"
+            :disabled="notesImportLoading"
             :on-change="handleImportFileChange"
             :on-remove="handleImportFileRemove"
             :file-list="importFileList"
           >
-            <el-button type="primary" icon="FolderOpened">{{ t('platformOrders.importNotesSelectFile') }}</el-button>
+            <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
+            <div class="el-upload__text">
+              {{ t('platformOrders.importNotesDropFiles') }}<em>{{ t('platformOrders.importNotesBrowseFiles') }}</em>
+            </div>
             <template #tip>
               <div class="el-upload__tip">{{ t('platformOrders.importNotesFileHint') }}</div>
             </template>
@@ -659,9 +672,9 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="cancelImportNotes">{{ t('platformOrders.cancel') }}</el-button>
-        <el-button type="primary" :loading="notesImportLoading" :disabled="!notesImportFile" @click="submitImportNotes">
-          {{ t('platformOrders.importNotesStart') }}
+        <el-button :disabled="notesImportLoading" @click="cancelImportNotes">{{ t('platformOrders.cancel') }}</el-button>
+        <el-button type="primary" :loading="notesImportLoading" :disabled="importFileList.length === 0" @click="submitImportNotes">
+          {{ notesImportLoading ? notesImportProgress : t('platformOrders.importNotesStart') }}
         </el-button>
       </template>
     </el-dialog>
@@ -671,7 +684,7 @@
 <script setup name="PlatformOrders">
 import { computed, defineComponent, getCurrentInstance, h, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { ArrowDown, ArrowRight, CopyDocument, Edit } from '@element-plus/icons-vue'
+import { ArrowDown, ArrowRight, CopyDocument, Edit, UploadFilled } from '@element-plus/icons-vue'
 import { listPlatformOrders, getOrderStatusMap, updateOrderSku, createShipments, exportPlatformOrders, exportPlatformOrderWeeklyReport, importNotes, getAutoCreateConfig, updateAutoCreateConfig } from '@/api/wms/platformOrder'
 import { listAllPlatformShops, batchSyncOrders } from '@/api/wms/platformShop'
 import { formatDateTimeForQuery, formatLosAngelesTime } from '@/utils/laTime'
@@ -776,8 +789,8 @@ function formatIsoTime(str) {
 const syncOpen = ref(false)
 const syncShopList = ref([])
 const notesImportOpen = ref(false)
-const notesImportFile = ref(null)
 const notesImportLoading = ref(false)
+const notesImportProgress = ref('')
 const queryRef = ref(null)
 const syncRef = ref(null)
 
@@ -1354,6 +1367,11 @@ function formatTaxes(taxes, currency) {
 
 function formatSkipReason(reason) {
   if (!reason) return ''
+  const exactKey = `platformOrders.skipReason['${reason}']`
+  const exactText = t(exactKey)
+  if (exactText && exactText !== exactKey) {
+    return exactText
+  }
   // 处理 "Order status not allowed: XXX" 格式：翻译前半部分，保留状态值
   const colonIdx = reason.indexOf(':')
   if (colonIdx > 0) {
@@ -1468,73 +1486,136 @@ const importFileList = ref([])
 
 function openImportNotesDialog() {
   notesImportOpen.value = true
-  notesImportFile.value = null
+  notesImportProgress.value = ''
   importFileList.value = []
 }
 
-function handleImportFileChange(uploadFile) {
-  notesImportFile.value = uploadFile.raw
+function handleImportFileChange(uploadFile, uploadFiles) {
+  const validFiles = uploadFiles.filter(file => file.name?.toLowerCase().endsWith('.csv'))
+  if (validFiles.length !== uploadFiles.length) {
+    proxy.$modal.msgWarning(t('platformOrders.importNotesInvalidFile'))
+  }
+  importFileList.value = validFiles
 }
 
-function handleImportFileRemove() {
-  notesImportFile.value = null
+function handleImportFileRemove(uploadFile, uploadFiles) {
+  importFileList.value = uploadFiles
 }
 
 function cancelImportNotes() {
   notesImportOpen.value = false
-  notesImportFile.value = null
+  notesImportProgress.value = ''
   importFileList.value = []
 }
 
-function submitImportNotes() {
-  if (!notesImportFile.value) {
+function summarizeImportResults(results) {
+  const summary = {
+    platforms: new Set(),
+    totalRows: 0,
+    updated: 0,
+    matched: 0,
+    noStock: 0,
+    brushOrder: 0,
+    unmatched: 0,
+    notFound: 0,
+    errors: []
+  }
+  results.forEach(({ fileName, data }) => {
+    if (data.platform) summary.platforms.add(data.platform)
+    summary.totalRows += data.totalRows ?? 0
+    summary.updated += data.updated ?? 0
+    summary.matched += data.matched ?? 0
+    summary.noStock += data.noStock ?? 0
+    summary.brushOrder += data.brushOrder ?? 0
+    summary.unmatched += data.unmatched ?? 0
+    summary.notFound += data.notFound ?? 0
+    ;(data.errors || []).forEach(error => summary.errors.push(`${fileName}: ${error}`))
+  })
+  return summary
+}
+
+async function submitImportNotes() {
+  const files = importFileList.value.filter(file => file.raw)
+  if (files.length === 0) {
     proxy.$modal.msgWarning(t('platformOrders.importNotesSelectFile'))
     return
   }
+
   notesImportLoading.value = true
-  importNotes(notesImportFile.value).then(response => {
-    const data = response.data || response
-    const matched = data.matched ?? 0
-    const noStock = data.noStock ?? 0
-    ElMessage({
-      message: t('platformOrders.importNoteResult', {
-        platform: data.platform || '-',
-        total: data.totalRows ?? 0,
-        updated: data.updated ?? 0,
-        skipped: data.skipped ?? 0,
-        skuMatched: matched + noStock,
-        noStock: noStock,
-        expectShip: matched,
-        brushOrder: data.brushOrder ?? 0,
-        unmatched: data.unmatched ?? 0,
-        notFound: data.notFound ?? 0
-      }),
-      type: 'success',
-      duration: 60000,
-      showClose: true
-    })
-    if (data.errors && data.errors.length > 0) {
-      setTimeout(() => {
-        ElMessage({ message: data.errors.slice(0, 3).join('; '), type: 'warning', duration: 60000, showClose: true })
-      }, 500)
+  const succeeded = []
+  const failed = []
+  try {
+    for (let index = 0; index < files.length; index += 1) {
+      const uploadFile = files[index]
+      notesImportProgress.value = t('platformOrders.importNotesProgress', {
+        current: index + 1,
+        total: files.length
+      })
+      try {
+        const response = await importNotes(uploadFile.raw)
+        succeeded.push({ fileName: uploadFile.name, data: response.data || response })
+      } catch {
+        uploadFile.status = 'fail'
+        failed.push({ uploadFile })
+      }
     }
-    if (data.unmatched > 0) {
-      setTimeout(() => {
+
+    if (succeeded.length > 0) {
+      const summary = summarizeImportResults(succeeded)
+      ElMessage({
+        message: t('platformOrders.importNoteBatchResult', {
+          files: succeeded.length,
+          platform: Array.from(summary.platforms).join(' / ') || '-',
+          total: summary.totalRows,
+          updated: summary.updated,
+          skuMatched: summary.matched + summary.noStock,
+          noStock: summary.noStock,
+          brushOrder: summary.brushOrder,
+          expectShip: summary.matched + summary.brushOrder,
+          unmatched: summary.unmatched,
+          notFound: summary.notFound
+        }),
+        type: 'success',
+        duration: 60000,
+        showClose: true
+      })
+      if (summary.errors.length > 0) {
         ElMessage({
-          message: t('platformOrders.importNotesUnmatchedHint', { count: data.unmatched }),
+          message: summary.errors.slice(0, 3).join('; '),
           type: 'warning',
           duration: 60000,
           showClose: true
         })
-      }, 800)
+      }
+      if (summary.unmatched > 0) {
+        ElMessage({
+          message: t('platformOrders.importNotesUnmatchedHint', { count: summary.unmatched }),
+          type: 'warning',
+          duration: 60000,
+          showClose: true
+        })
+      }
+      getList()
     }
-    cancelImportNotes()
-    getList()
-  }).catch(() => {
-    proxy.$modal.msgError(t('platformOrders.importNotesFailed'))
-  }).finally(() => {
+
+    if (failed.length > 0) {
+      importFileList.value = failed.map(item => item.uploadFile)
+      ElMessage({
+        message: t('platformOrders.importNotesPartialFailed', {
+          count: failed.length,
+          files: failed.map(item => item.uploadFile.name).join(', ')
+        }),
+        type: 'error',
+        duration: 60000,
+        showClose: true
+      })
+    } else {
+      cancelImportNotes()
+    }
+  } finally {
     notesImportLoading.value = false
-  })
+    notesImportProgress.value = ''
+  }
 }
 
 function handleApiError(error) {
@@ -1653,6 +1734,21 @@ onMounted(() => {
 .platform-orders-page .notes-import-upload {
   width: 100%;
   min-width: 0;
+
+}
+.platform-orders-page .notes-import-upload .el-upload,
+.platform-orders-page .notes-import-upload .el-upload-dragger {
+  width: 100%;
+}
+
+.platform-orders-page .notes-import-upload .el-upload-dragger {
+  padding: 28px 16px;
+}
+
+.platform-orders-page .notes-import-upload .el-upload-list {
+  max-height: 180px;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .platform-orders-page .notes-import-upload .el-upload-list {

@@ -31,12 +31,15 @@
               <el-form-item :label="tr('出库类型')" prop="optType">
                 <el-radio-group v-model="form.optType">
                   <el-radio-button
-                    v-for="item in wms_shipment_type"
+                    v-for="item in translatedBackendShipmentTypeOptions"
                     :key="item.value"
                     :label="item.value"
                   >{{ item.label }}
-                  </el-radio-button
-                  >
+                  </el-radio-button>
+                  <el-radio-button
+                    v-if="!hasBackendSampleShipmentType"
+                    :label="SAMPLE_SHIPMENT_OPT_TYPE"
+                  >{{ tr(SAMPLE_SHIPMENT_TYPE_OPTION.label) }}</el-radio-button>
                 </el-radio-group>
               </el-form-item>
             </el-col>
@@ -219,6 +222,11 @@ const priceAmountLabel = computed(() => (isEn.value ? 'Price Amount' : tr('金�
 const selectPlaceholder = (field) => (isEn.value ? `Please select ${tr(field).toLowerCase()}` : tr('请选择') + tr(field))
 const enterPlaceholder = (field) => (isEn.value ? `Please enter ${tr(field)}` : tr('请输入') + tr(field))
 const formLabelWidth = computed(() => (isEn.value ? '138px' : '108px'))
+const SAMPLE_SHIPMENT_OPT_TYPE = '4'
+const SAMPLE_SHIPMENT_TYPE_OPTION = { label: 'Sample样品', value: SAMPLE_SHIPMENT_OPT_TYPE, elTagType: 'warning', elTagClass: '' }
+const backendShipmentTypeOptions = computed(() => wms_shipment_type.value || [])
+const hasBackendSampleShipmentType = computed(() => backendShipmentTypeOptions.value.some(item => String(item.value) === SAMPLE_SHIPMENT_OPT_TYPE))
+const translatedBackendShipmentTypeOptions = computed(() => backendShipmentTypeOptions.value.map(item => ({ ...item, label: tr(item.label) })))
 
 const loading = ref(false)
 const initFormData = {
@@ -496,11 +504,13 @@ const doShipment = async () => {
     if (invalidQuantityList?.length) {
       return ElMessage.error('请选择数量')
     }
-    const invalidAmountList = form.value.details.filter(
-      it => it.amount === null || it.amount === undefined || it.amount === '' || Number(it.amount) === 0
-    )
-    if (invalidAmountList?.length) {
-      return ElMessage.warning('出库商品金额不能为空且不能为0')
+    if (String(form.value.optType) !== SAMPLE_SHIPMENT_OPT_TYPE) {
+      const invalidAmountList = form.value.details.filter(
+        it => it.amount === null || it.amount === undefined || it.amount === '' || Number(it.amount) === 0
+      )
+      if (invalidAmountList?.length) {
+        return ElMessage.warning('出库商品金额不能为空且不能为0')
+      }
     }
     const params = getParamsBeforeSave(1)
 
