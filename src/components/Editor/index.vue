@@ -29,6 +29,7 @@
 <script setup>
 import { QuillEditor, Quill } from '@vueup/vue-quill';
 import '@vueup/vue-quill/dist/vue-quill.snow.css';
+import { insertTextIntoEditor } from "@/utils/textSelection";
 import { getToken } from "@/utils/auth";
 
 const props = defineProps({
@@ -166,6 +167,14 @@ function handleBeforeUpload(file) {
 function handleUploadError(err) {
   proxy.$modal.msgError("上传文件失败");
 }
+
+function insertTextAtSelection(text) {
+  const editor = quillEditorRef.value && toRaw(quillEditorRef.value);
+  const quill = editor?.getQuill?.();
+  return insertTextIntoEditor(quill, text);
+}
+
+defineExpose({ insertTextAtSelection });
 
 </script>
 

@@ -91,6 +91,7 @@
             type="info"
             effect="plain"
             class="template-param-tag"
+            @mousedown.prevent="preserveActiveSelection"
             @click="insertParam(param.placeholder)"
           >
             {{ param.label }}
@@ -115,7 +116,7 @@
                 <h3>{{ t('platformListings.ebaySectionTitle') }}</h3>
               </div>
               <label class="ebay-field-label">{{ t('platformListings.ebayItemTitle') }}</label>
-              <el-input ref="titleInputRef" v-model="form.defaultTitle" maxlength="80" show-word-limit placeholder="{brandEn} {itemName} {material} {year} {skuCode}" @focus="lastFocusedField = 'title'" />
+              <el-input ref="titleInputRef" v-model="form.defaultTitle" maxlength="80" show-word-limit placeholder="{brandEn} {itemName} {material} {year} {skuCode}" @focus="handleTitleFocus" @click="rememberTitleSelection" @keyup="rememberTitleSelection" @select="rememberTitleSelection" @blur="rememberTitleSelection" />
               <div class="ebay-field-row two-col compact-row">
                 <div>
                   <label class="ebay-field-label">{{ t('platformListings.ebaySubtitle') }}</label>
@@ -172,7 +173,7 @@
             <section class="ebay-section description-section">
               <div class="ebay-section-title-row"><h3>{{ t('platformListings.ebayDescription') }}</h3></div>
               <div class="description-toolbar-label">{{ t('platformListings.ebayDescriptionToolbar') }}</div>
-              <div class="ebay-rich-editor" @focusin="lastFocusedField = 'description'"><Editor v-model="form.descriptionFormat" :height="260" :min-height="220" /></div>
+              <div class="ebay-rich-editor" @focusin="lastFocusedField = 'description'"><Editor ref="descriptionEditorRef" v-model="form.descriptionFormat" :height="260" :min-height="220" /></div>
               <div class="ebay-note">{{ t('platformListings.ebayDescriptionNote') }}</div>
             </section>
 
@@ -246,7 +247,7 @@
                   <h3>{{ t('platformListings.basicInformation') }}</h3>
                   <div class="tiktok-field-block">
                     <label class="tiktok-required-label">{{ t('platformListings.productNameLabel') }}</label>
-                    <el-input ref="titleInputRef" v-model="form.defaultTitle" maxlength="255" show-word-limit :placeholder="t('platformListings.productNamePlaceholder')" @focus="lastFocusedField = 'title'" />
+                    <el-input ref="titleInputRef" v-model="form.defaultTitle" maxlength="255" show-word-limit :placeholder="t('platformListings.productNamePlaceholder')" @focus="handleTitleFocus" @click="rememberTitleSelection" @keyup="rememberTitleSelection" @select="rememberTitleSelection" @blur="rememberTitleSelection" />
                   </div>
 
                   <div class="tiktok-field-block">
@@ -283,7 +284,7 @@
                 <section class="tiktok-form-section">
                   <h3>{{ t('platformListings.productDetails') }}</h3>
                   <label class="tiktok-required-label">{{ t('platformListings.ebayDescription') }}</label>
-                  <div class="tiktok-rich-editor seller-editor" @focusin="lastFocusedField = 'description'"><Editor v-model="form.descriptionFormat" :height="280" :min-height="240" /></div>
+                  <div class="tiktok-rich-editor seller-editor" @focusin="lastFocusedField = 'description'"><Editor ref="descriptionEditorRef" v-model="form.descriptionFormat" :height="280" :min-height="240" /></div>
                 </section>
 
                 <section class="tiktok-form-section">
@@ -358,6 +359,7 @@ import { ref, reactive, computed, nextTick, onMounted, getCurrentInstance, watch
 import { useI18n } from 'vue-i18n'
 import { listTemplates, addTemplate, updateTemplate, delTemplate, getTemplate, getCategories, getCategoryById, getEbayPolicies, getTiktokWarehouses } from '@/api/wms/platformListing'
 import { listAllPlatformShops } from '@/api/wms/platformShop'
+import { insertTextAtSelection } from '@/utils/textSelection'
 
 const { proxy } = getCurrentInstance()
 const { locale } = useI18n()
@@ -594,7 +596,9 @@ const warehouseLoading = ref(false)
 
 // 模板参数替换
 const titleInputRef = ref(null)
+const descriptionEditorRef = ref(null)
 const lastFocusedField = ref('title')
+const titleSelection = reactive({ start: null, end: null })
 const templateParams = [
   { label: t('platformListings.paramItemName'), placeholder: '{itemName}' },
   { label: t('platformListings.paramBrand'), placeholder: '{brand}' },
@@ -609,49 +613,63 @@ const templateParams = [
   { label: t('platformListings.paramAccessories'), placeholder: '{accessories}' },
 ]
 
+function getTitleInputElement() {
+  const inputComponent = Array.isArray(titleInputRef.value)
+    ? titleInputRef.value[0]
+    : titleInputRef.value
+  return inputComponent?.input
+    || inputComponent?.$el?.querySelector?.('input, textarea')
+    || null
+}
+
+function rememberTitleSelection(event) {
+  const inputEl = event?.target?.matches?.('input, textarea')
+    ? event.target
+    : getTitleInputElement()
+  if (!inputEl) return
+
+  titleSelection.start = inputEl.selectionStart
+  titleSelection.end = inputEl.selectionEnd
+}
+
+function handleTitleFocus(event) {
+  lastFocusedField.value = 'title'
+  rememberTitleSelection(event)
+}
+
+function preserveActiveSelection() {
+  if (lastFocusedField.value === 'title') {
+    rememberTitleSelection()
+  }
+}
+
 function insertParam(placeholder) {
   if (lastFocusedField.value === 'description') {
-    // 描述编辑器：聚焦 Quill 编辑区并通过 execCommand 插入文本
-    const editorEl = document.querySelector('.template-dialog-body .ql-editor')
-    if (editorEl) {
-      editorEl.focus()
-      // 先确保 Quill 有选区（若无则设到末尾）
-      const quillContainer = editorEl.closest('.ql-container')
-      if (quillContainer) {
-        // Quill 将实例存在 container 的 __quill 属性上
-        const quill = quillContainer.__quill
-        if (quill) {
-          const range = quill.getSelection()
-          if (range && range.length >= 0) {
-            // 先删除可能存在的选中内容（用户拖蓝），再插入
-            if (range.length > 0) {
-              quill.deleteText(range.index, range.length)
-            }
-            quill.insertText(range.index, placeholder)
-            quill.setSelection(range.index + placeholder.length)
-            return
-          }
-        }
-      }
-      // 兜底：直接执行 insertText 命令（contenteditable 原生支持）
-      document.execCommand('insertText', false, placeholder)
+    const inserted = descriptionEditorRef.value?.insertTextAtSelection?.(placeholder)
+    if (!inserted) {
+      form.descriptionFormat = `${form.descriptionFormat || ''}${placeholder}`
     }
-  } else {
-    // 标题字段：使用 selectionStart/selectionEnd 在光标处插入
-    const el = titleInputRef.value
-    if (el) {
-      const inputEl = el.$el?.querySelector('input') || el.$el || el
-      inputEl.focus()
-      const start = inputEl.selectionStart ?? 0
-      const end = inputEl.selectionEnd ?? 0
-      const current = form.defaultTitle || ''
-      form.defaultTitle = current.substring(0, start) + placeholder + current.substring(end)
-      nextTick(() => {
-        const newCursor = start + placeholder.length
-        inputEl.setSelectionRange(newCursor, newCursor)
-      })
-    }
+    return
   }
+
+  const inputEl = getTitleInputElement()
+  const current = form.defaultTitle || ''
+  const selectionStart = inputEl === document.activeElement
+    ? inputEl.selectionStart
+    : titleSelection.start
+  const selectionEnd = inputEl === document.activeElement
+    ? inputEl.selectionEnd
+    : titleSelection.end
+  const result = insertTextAtSelection(current, placeholder, selectionStart, selectionEnd)
+
+  form.defaultTitle = result.value
+  titleSelection.start = result.cursor
+  titleSelection.end = result.cursor
+  nextTick(() => {
+    if (!inputEl) return
+    inputEl.focus()
+    inputEl.setSelectionRange(result.cursor, result.cursor)
+  })
 }
 
 function onShopChange() {
