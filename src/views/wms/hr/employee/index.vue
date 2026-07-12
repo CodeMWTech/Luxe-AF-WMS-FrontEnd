@@ -239,6 +239,7 @@
             {{ taxFormTitle(selectedEmployee.taxFormType) }}
             <span class="sub-text">（{{ tr('已上传') }} {{ selectedEmployee.uploadedRequiredCount || 0 }}/{{ selectedEmployee.requiredCount || 0 }}）</span>
           </div>
+          <div class="upload-hint">{{ tr('必备文件仅支持单个 PDF；多个文件请合并为压缩包后上传到「其他文件」。') }}</div>
 
           <el-row :gutter="12" class="attachment-grid">
             <el-col v-for="card in requiredAttachmentCards" :key="card.code" :xs="24" :sm="12" :lg="8">
@@ -248,41 +249,68 @@
                     <div class="attachment-title">{{ tr(card.label) }}</div>
                     <div class="attachment-desc">{{ tr(card.desc) }}</div>
                   </div>
-                  <el-tag :type="getAttachmentByType(card.code) ? 'success' : 'warning'" size="small">
-                    {{ getAttachmentByType(card.code) ? tr('已上传') : tr('缺失') }}
+                  <el-tag :type="attachmentMap[card.code] ? 'success' : 'warning'" size="small">
+                    {{ attachmentMap[card.code] ? tr('已上传') : tr('缺失') }}
                   </el-tag>
                 </div>
                 <div class="attachment-actions">
-                  <el-link v-if="getAttachmentByType(card.code)" type="primary" @click="downloadAttachment(getAttachmentByType(card.code))">{{ tr('查看') }}</el-link>
+                  <div v-if="attachmentMap[card.code]" class="attachment-action-links">
+                    <el-link type="primary" @click.stop.prevent="downloadAttachment(attachmentMap[card.code])">{{ tr('查看') }}</el-link>
+                    <el-button
+                      v-if="selectedEmployee.employeeStatus < 2"
+                      link
+                      type="danger"
+                      @click.stop.prevent="removeRequiredAttachment(card)"
+                      v-hasPermi="['wms:employee:edit']"
+                    >{{ tr('删除') }}</el-button>
+                  </div>
                   <el-upload
                     v-if="selectedEmployee.employeeStatus < 2 && canUploadAttachment(card)"
-                    :action="uploadUrl"
-                    :headers="uploadHeaders"
+                    :key="`required-upload-${card.code}-${requiredUploadKeys[card.code] || 0}`"
+                    drag
+                    class="required-upload"
+                    :class="{ 'is-upload-error': requiredUploadErrors[card.code] }"
+                    :auto-upload="false"
                     :show-file-list="false"
-                    :on-success="(res, file) => handleAttachmentUploadSuccess(res, file, card.code)"
+                    :limit="1"
+                    @exceed="() => handleRequiredExceed(card.code)"
+                    @change="(file) => handleRequiredFileChange(file, card.code)"
+                    v-hasPermi="['wms:employee:edit']"
                   >
-                    <el-button link type="primary">{{ getAttachmentByType(card.code) ? tr('重新上传') : tr('上传文件') }}</el-button>
+                    <div class="required-upload-text">
+                      {{ attachmentMap[card.code] ? tr('拖拽 PDF 到此处重新上传') : tr('拖拽 PDF 到此处，或点击上传') }}
+                    </div>
+                    <template #tip>
+                      <div class="el-upload__tip">{{ tr('仅支持 PDF，每个类型限一个文件') }}</div>
+                    </template>
                   </el-upload>
+                  <div v-if="requiredUploadErrors[card.code]" class="upload-error-text">
+                    {{ requiredUploadErrors[card.code] }}
+                  </div>
                 </div>
               </div>
             </el-col>
           </el-row>
 
           <div class="section-title mt20">{{ tr('其他文件') }} <span class="sub-text">（{{ tr('共') }} {{ otherAttachments.length }}）</span></div>
+          <div class="upload-hint">{{ tr('其他文件支持多种格式，可批量上传；如需打包多个文件，可先压缩再上传。') }}</div>
           <div class="other-files">
             <div v-for="item in otherAttachments" :key="item.id" class="other-file-item">
               <el-link type="primary" @click="downloadAttachment(item)">{{ item.fileName || tr(item.attachmentTypeLabel) }}</el-link>
-              <el-button v-if="selectedEmployee.employeeStatus < 2" link type="danger" @click="removeAttachment(item)" v-hasPermi="['wms:employee:edit']">{{ tr('删除') }}</el-button>
+              <el-button v-if="selectedEmployee.employeeStatus < 2" link type="danger" @click.stop.prevent="removeAttachment(item)" v-hasPermi="['wms:employee:edit']">{{ tr('删除') }}</el-button>
             </div>
             <el-upload
               v-if="selectedEmployee.employeeStatus < 2"
+              drag
+              class="other-upload"
               :action="uploadUrl"
               :headers="uploadHeaders"
               :show-file-list="false"
+              multiple
               :on-success="(res, file) => handleAttachmentUploadSuccess(res, file, 'OTHER')"
               v-hasPermi="['wms:employee:edit']"
             >
-              <el-button type="primary" plain icon="Upload">{{ tr('上传其他文件') }}</el-button>
+              <div class="required-upload-text">{{ tr('拖拽文件到此处，或点击上传其他文件') }}</div>
             </el-upload>
           </div>
           </div>
@@ -331,7 +359,7 @@
               </el-col>
               <el-col :span="12">
                 <el-form-item :label="tr('员工编号')" prop="employeeNo">
-                  <el-input v-model="form.employeeNo" :placeholder="tr('留空自动生成')" />
+                  <el-input v-model="form.employeeNo" :placeholder="tr('留空自动生成')" :disabled="!!form.id" />
                 </el-form-item>
               </el-col>
               <el-col :span="12" />
@@ -347,7 +375,9 @@
               <el-col :span="12" />
               <el-col :span="12">
                 <el-form-item :label="tr('岗位')">
-                  <el-input :model-value="form.position || '-'" disabled />
+                  <el-select v-model="form.postIds" multiple :placeholder="tr('请选择岗位')" style="width: 100%" clearable>
+                    <el-option v-for="item in postOptions" :key="item.postId" :label="item.postName" :value="item.postId" :disabled="item.status == 0" />
+                  </el-select>
                 </el-form-item>
               </el-col>
               <el-col :span="12" />
@@ -405,11 +435,12 @@
 <script setup name="EmployeeArchive">
 import { ArrowDown, InfoFilled, QuestionFilled } from '@element-plus/icons-vue'
 import { getToken } from '@/utils/auth'
+import axios from 'axios'
 import { blobValidate } from '@/utils/ruoyi'
 import { saveAs } from 'file-saver'
 import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
-import { deptTreeSelect } from '@/api/system/user'
+import { deptTreeSelect, getUser } from '@/api/system/user'
 import {
   addEmployee,
   archiveEmployee,
@@ -444,8 +475,11 @@ const stats = ref({})
 const attachmentTypes = ref([])
 const currentAttachments = ref([])
 const deptOptions = ref([])
+const postOptions = ref([])
 const deptFilterValue = ref('__all__')
 const allowTabSwitch = ref(false)
+const requiredUploadErrors = ref({})
+const requiredUploadKeys = ref({})
 
 const uploadUrl = import.meta.env.VITE_APP_BASE_API + '/system/oss/upload'
 const uploadHeaders = { Authorization: 'Bearer ' + getToken() }
@@ -571,6 +605,16 @@ const requiredAttachmentCards = computed(() => {
 
 const otherAttachments = computed(() => currentAttachments.value.filter(item => item.attachmentType === 'OTHER'))
 
+const attachmentMap = computed(() => {
+  const map = {}
+  currentAttachments.value.forEach(item => {
+    if (item?.attachmentType) {
+      map[item.attachmentType] = item
+    }
+  })
+  return map
+})
+
 function statusLabel(status) {
   const map = { 0: tr('在职'), 1: tr('试用期'), 2: tr('已离职'), 3: tr('已归档') }
   return map[status] || '-'
@@ -612,6 +656,19 @@ function findDeptIdByLabel(nodes, label) {
 function loadFormOptions() {
   deptTreeSelect().then(res => {
     deptOptions.value = res.data || []
+  })
+  getUser().then(res => {
+    postOptions.value = res.data?.posts || []
+  })
+}
+
+function syncPostIdsFromUser(userId) {
+  if (!userId) {
+    form.value.postIds = []
+    return
+  }
+  getUser(userId).then(res => {
+    form.value.postIds = res.data?.postIds || []
   })
 }
 
@@ -741,6 +798,8 @@ function getList() {
 }
 
 function loadEmployeeDetail(id) {
+  requiredUploadErrors.value = {}
+  requiredUploadKeys.value = {}
   getEmployee(id).then(res => {
     selectedEmployee.value = res.data
     currentAttachments.value = res.data?.attachments || []
@@ -784,7 +843,8 @@ function reset() {
     gender: 2,
     employeeStatus: undefined,
     taxFormType: undefined,
-    deptId: undefined
+    deptId: undefined,
+    postIds: []
   }
   activeTab.value = 'basic'
   proxy.resetForm('employeeRef')
@@ -806,8 +866,9 @@ function handleUpdate(row) {
   reset()
   loadFormOptions()
   getEmployee(row.id).then(res => {
-    form.value = { ...res.data }
+    form.value = { ...res.data, postIds: [] }
     syncFormSelectors()
+    syncPostIdsFromUser(res.data?.userId)
     open.value = true
     title.value = tr('编辑员工')
   })
@@ -858,7 +919,7 @@ function getTargetEmployeeIds() {
   return employeeList.value.map(item => item.id)
 }
 
-async function downloadAttachments(payload, zipName) {
+async function downloadAttachments(payload, fileName) {
   try {
     const res = await batchDownloadAttachments(payload)
     const isBlob = blobValidate(res)
@@ -868,7 +929,12 @@ async function downloadAttachments(payload, zipName) {
       proxy.$modal.msgError(rspObj?.msg || tr('下载失败'))
       return
     }
-    saveAs(new Blob([res]), zipName)
+    let saveName = fileName
+    const isSingleType = payload.downloadScope === 'TYPE' && (payload.employeeIds?.length || 0) === 1
+    if (!isSingleType && !saveName.toLowerCase().endsWith('.zip')) {
+      saveName = saveName.replace(/\.[^.]+$/, '') + '.zip'
+    }
+    saveAs(new Blob([res]), saveName)
   } catch (err) {
     proxy.$modal.msgError(err?.msg || err?.message || tr('下载失败'))
   }
@@ -912,6 +978,100 @@ function handleDetailExportCommand(command) {
   }
 }
 
+function isPdfFile(file) {
+  const name = (file?.name || '').toLowerCase()
+  const type = (file?.type || '').toLowerCase()
+  return name.endsWith('.pdf') || type === 'application/pdf'
+}
+
+function setRequiredUploadError(code, message) {
+  requiredUploadErrors.value = { ...requiredUploadErrors.value, [code]: message }
+}
+
+function clearRequiredUploadError(code) {
+  if (!requiredUploadErrors.value[code]) return
+  const next = { ...requiredUploadErrors.value }
+  delete next[code]
+  requiredUploadErrors.value = next
+}
+
+function handleRequiredExceed(code) {
+  const msg = tr('每个类型仅限上传一个文件')
+  proxy.$modal.msgWarning(msg)
+  setRequiredUploadError(code, msg)
+  resetRequiredUpload(code)
+}
+
+function resetRequiredUpload(code) {
+  requiredUploadKeys.value = {
+    ...requiredUploadKeys.value,
+    [code]: (requiredUploadKeys.value[code] || 0) + 1
+  }
+}
+
+function handleRequiredFileChange(uploadFile, code) {
+  const raw = uploadFile?.raw
+  if (!raw) return
+  if (uploadFile.status === 'success') return
+
+  if (!isPdfFile(raw)) {
+    const msg = tr('必备文件仅支持 PDF 格式，其他格式请上传到「其他文件」')
+    proxy.$modal.msgError(msg)
+    setRequiredUploadError(code, msg)
+    resetRequiredUpload(code)
+    return
+  }
+  clearRequiredUploadError(code)
+  submitRequiredFile(raw, code)
+}
+
+async function submitRequiredFile(file, attachmentType) {
+  const formData = new FormData()
+  formData.append('file', file)
+  try {
+    const { data } = await axios.post(uploadUrl, formData, {
+      headers: { Authorization: 'Bearer ' + getToken() }
+    })
+    handleAttachmentUploadSuccess(data, { name: file.name }, attachmentType)
+  } catch (err) {
+    const msg = err?.response?.data?.msg || err?.message || tr('上传失败')
+    proxy.$modal.msgError(msg)
+    setRequiredUploadError(attachmentType, msg)
+  }
+}
+
+function removeRequiredAttachment(card) {
+  const item = attachmentMap.value[card.code]
+  if (!item?.id) {
+    proxy.$modal.msgError(tr('附件信息异常，请刷新页面后重试'))
+    return
+  }
+  if (card.sensitive && !canViewSensitive.value) {
+    proxy.$modal.msgError(tr('无权限删除税务/证件类文件'))
+    return
+  }
+  removeAttachment(item)
+}
+
+function removeAttachment(item) {
+  if (!item?.id) {
+    proxy.$modal.msgError(tr('附件信息异常，请刷新页面后重试'))
+    return
+  }
+  proxy.$modal.confirm(tr('确认删除该附件？')).then(() => {
+    return delEmployeeAttachment(item.id)
+  }).then(() => {
+    proxy.$modal.msgSuccess(tr('删除成功'))
+    loadEmployeeDetail(selectedEmployee.value.id)
+    loadStats()
+    getList()
+  }).catch((err) => {
+    if (err === 'cancel' || err === 'close') {
+      return
+    }
+  })
+}
+
 function handleAttachmentUploadSuccess(res, file, attachmentType) {
   if (res.code !== 200) {
     proxy.$modal.msgError(res.msg || tr('上传失败'))
@@ -923,6 +1083,7 @@ function handleAttachmentUploadSuccess(res, file, attachmentType) {
     ossId: res.data.ossId,
     fileName: file.name
   }).then(() => {
+    clearRequiredUploadError(attachmentType)
     proxy.$modal.msgSuccess(tr('上传成功'))
     loadEmployeeDetail(selectedEmployee.value.id)
     loadStats()
@@ -936,14 +1097,6 @@ function downloadAttachment(item) {
   if (item?.ossId) {
     proxy.$download.oss(item.ossId)
   }
-}
-
-function removeAttachment(item) {
-  proxy.$modal.confirm(tr('确认删除该附件？')).then(() => delEmployeeAttachment(item.id)).then(() => {
-    proxy.$modal.msgSuccess(tr('删除成功'))
-    loadEmployeeDetail(selectedEmployee.value.id)
-    loadStats()
-  })
 }
 
 loadFormOptions()
@@ -1205,6 +1358,12 @@ getList()
     font-size: 16px;
     font-weight: 600;
   }
+  .upload-hint {
+    margin-top: 6px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: #909399;
+  }
   .attachment-grid {
     margin-top: 12px;
   }
@@ -1232,8 +1391,41 @@ getList()
   .attachment-actions {
     margin-top: 12px;
     display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: stretch;
+  }
+  .attachment-action-links {
+    display: flex;
     gap: 12px;
     align-items: center;
+    position: relative;
+    z-index: 2;
+  }
+  .required-upload,
+  .other-upload {
+    width: 100%;
+    :deep(.el-upload-dragger) {
+      padding: 10px 12px;
+      height: auto;
+    }
+  }
+  .required-upload.is-upload-error {
+    :deep(.el-upload-dragger) {
+      border-color: #f56c6c;
+      background: #fef0f0;
+    }
+  }
+  .upload-error-text {
+    margin-top: 4px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: #f56c6c;
+  }
+  .required-upload-text {
+    font-size: 12px;
+    color: #606266;
+    line-height: 1.5;
   }
   .other-files {
     margin-top: 12px;

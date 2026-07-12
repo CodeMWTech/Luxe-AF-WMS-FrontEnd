@@ -222,6 +222,7 @@
                      <el-col :span="12" v-if="!form.userId">
                         <el-form-item :label="tr('用户密码')" prop="password">
                            <el-input v-model="form.password" :placeholder="tr('请输入用户密码')" type="password" maxlength="20" show-password />
+                           <div class="field-hint">{{ tr('系统已预设初始密码，可直接使用；也可自行修改后再提交。') }}</div>
                         </el-form-item>
                      </el-col>
                      <el-col :span="12">
@@ -259,6 +260,7 @@
                               <el-option :label="tr('试用期')" :value="1" />
                               <el-option :label="tr('已离职')" :value="2" />
                            </el-select>
+                           <div class="field-hint">{{ tr('必填项；不修改时默认「在职」。') }}</div>
                         </el-form-item>
                      </el-col>
                      <el-col :span="12">
@@ -268,6 +270,7 @@
                               <el-option label="W9" value="W9" />
                               <el-option label="W8" value="W8" />
                            </el-select>
+                           <div class="field-hint">{{ tr('必填项；不修改时默认 W2。') }}</div>
                         </el-form-item>
                      </el-col>
                      <el-col :span="24">
@@ -761,4 +764,10 @@ proxy.getConfigKey("sys.user.initPassword").then(response => {
 .user-page.is-en .el-form-item__label { white-space: nowrap; }
 .user-page .action-btn { min-width: 96px; }
 .user-page.is-en .action-btn { min-width: 110px; }
+.user-page .field-hint {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #909399;
+}
 </style>

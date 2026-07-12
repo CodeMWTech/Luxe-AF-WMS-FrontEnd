@@ -115,6 +115,7 @@ export function batchDownloadAttachments(data) {
     url: '/wms/employee/attachments/batchDownload',
     method: 'post',
     data,
-    responseType: 'blob'
+    responseType: 'blob',
+    timeout: 120000
   })
 }
