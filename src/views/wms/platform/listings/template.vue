@@ -178,6 +178,7 @@
 
             <section class="ebay-section pricing-section">
               <div class="ebay-section-title-row"><h3>{{ t('platformListings.pricing') }}</h3></div>
+              <el-alert v-if="form.listingType === 'AUCTION'" class="auction-rule-alert" :title="t('platformListings.auctionPricingRules')" type="warning" show-icon :closable="false" />
               <div class="ebay-field-row three-col compact-row">
                 <div><label class="ebay-field-label">{{ t('platformListings.format') }}</label><el-select v-model="form.listingType" style="width:100%"><el-option label="Buy It Now" value="FIXED_PRICE" /><el-option label="Auction" value="AUCTION" /></el-select></div>
                 <div><label class="ebay-field-label">{{ form.listingType === 'AUCTION' ? t('platformListings.startPrice') : t('platformListings.buyItNowPrice') }}</label><div style="display:flex;align-items:center;gap:6px"><el-input-number v-model="form.defaultPrice" :precision="2" :step="10" :placeholder="t('platformListings.priceDefaultHint')" style="flex:1" /><el-button v-if="form.defaultPrice != null" link type="warning" size="small" @click="form.defaultPrice = null">{{ t('platformListings.priceResetDefault') }}</el-button></div><div class="field-hint">{{ t('platformListings.priceDefaultHint') }}</div></div>
@@ -188,6 +189,8 @@
                 <div>
                   <label class="ebay-field-label" :class="{ required: isAuctionImmediatePayment }">{{ t('platformListings.buyItNowPrice') }}</label>
                   <el-input-number v-model="form.buyItNowPrice" :min="0" :precision="2" style="width:100%" />
+                  <div v-if="isAuctionBuyItNowPriceTooLow" class="field-hint required-hint">{{ t('platformListings.auctionBuyItNowTooLow', { price: formattedAuctionMinimumPrice, startPrice: formattedAuctionStartPrice }) }}</div>
+                  <div v-else-if="auctionMinimumBuyItNowPrice != null" class="field-hint">{{ t('platformListings.auctionBuyItNowMinimumHint', { price: formattedAuctionMinimumPrice, startPrice: formattedAuctionStartPrice }) }}</div>
                   <div v-if="isAuctionImmediatePayment" class="field-hint required-hint">{{ t('platformListings.auctionImmediatePaymentBuyItNowRequired') }}</div>
                 </div>
                 <div><label class="ebay-field-label">{{ t('platformListings.currency') }}</label><el-select v-model="form.ebayCurrency" style="width:100%"><el-option label="USD" value="USD" /><el-option label="GBP" value="GBP" /><el-option label="EUR" value="EUR" /><el-option label="AUD" value="AUD" /></el-select></div>
@@ -523,6 +526,7 @@ const isAuctionImmediatePayment = computed(() => {
   if (form.platform !== 'EBAY' || form.listingType !== 'AUCTION') return false
   const selected = paymentPolicies.value.find(p => p.id === form.ebayPaymentPolicyId)
   if (!selected) return false
+  if (typeof selected.immediatePay === 'boolean') return selected.immediatePay
   const policyText = [
     selected?.name,
     selected?.description,
@@ -530,6 +534,25 @@ const isAuctionImmediatePayment = computed(() => {
   ].filter(Boolean).join(' ').toLowerCase()
   return !/\bno\b/.test(policyText)
 })
+const auctionStartPrice = computed(() => {
+  const value = Number(form.defaultPrice)
+  return Number.isFinite(value) && value > 0 ? value : null
+})
+const auctionMinimumBuyItNowPrice = computed(() => {
+  if (form.platform !== 'EBAY' || form.listingType !== 'AUCTION' || auctionStartPrice.value == null) return null
+  return Math.ceil(auctionStartPrice.value * 130) / 100
+})
+const isAuctionBuyItNowPriceTooLow = computed(() => {
+  if (auctionMinimumBuyItNowPrice.value == null || !hasPositivePrice(form.buyItNowPrice)) return false
+  return Number(form.buyItNowPrice) < auctionMinimumBuyItNowPrice.value
+})
+const formattedAuctionStartPrice = computed(() => (
+  auctionStartPrice.value == null ? '' : auctionStartPrice.value.toFixed(2)
+))
+const formattedAuctionMinimumPrice = computed(() => (
+  auctionMinimumBuyItNowPrice.value == null ? '' : auctionMinimumBuyItNowPrice.value.toFixed(2)
+))
+
 function isEmptyValue(value) {
   return value === null || value === undefined || value === ''
 }
@@ -787,6 +810,10 @@ function submitValidatedForm() {
     proxy.$modal.msgWarning(t('platformListings.auctionImmediatePaymentBuyItNowRequired'))
     return
   }
+  if (isAuctionBuyItNowPriceTooLow.value) {
+    proxy.$modal.msgWarning(t('platformListings.auctionBuyItNowTooLow', { price: formattedAuctionMinimumPrice.value, startPrice: formattedAuctionStartPrice.value }))
+    return
+  }
   const missing = []
   if (!form.packageLength || !form.packageWidth || !form.packageHeight) {
     missing.push(t('platformListings.packageDimensionsLabel'))
@@ -992,6 +1019,8 @@ onMounted(() => { loadShops(); getList() })
   width: 100%;
 }
 
+.auction-rule-alert { margin-bottom: 14px; }
+.auction-rule-alert :deep(.el-alert__title) { line-height: 1.5; }
 .ebay-listing-builder {
   max-width: 900px;
   margin: 0 auto;
