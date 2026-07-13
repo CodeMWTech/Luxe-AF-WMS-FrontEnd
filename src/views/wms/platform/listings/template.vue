@@ -116,11 +116,11 @@
                 <h3>{{ t('platformListings.ebaySectionTitle') }}</h3>
               </div>
               <label class="ebay-field-label">{{ t('platformListings.ebayItemTitle') }}</label>
-              <el-input ref="titleInputRef" v-model="form.defaultTitle" maxlength="80" show-word-limit placeholder="{brandEn} {itemName} {material} {year} {skuCode}" @focus="handleTitleFocus" @click="rememberTitleSelection" @keyup="rememberTitleSelection" @select="rememberTitleSelection" @blur="rememberTitleSelection" />
+              <el-input ref="titleInputRef" v-model="form.defaultTitle" maxlength="80" show-word-limit placeholder="{brandEn} {itemName} {material} {year} {skuCode}" @focus="handleTextFocus('title', $event)" @click="rememberTextSelection('title', $event)" @keyup="rememberTextSelection('title', $event)" @select="rememberTextSelection('title', $event)" @blur="rememberTextSelection('title', $event)" />
               <div class="ebay-field-row two-col compact-row">
                 <div>
                   <label class="ebay-field-label">{{ t('platformListings.ebaySubtitle') }}</label>
-                  <el-input v-model="form.ebaySubtitle" maxlength="55" show-word-limit :placeholder="t('platformListings.ebaySubtitlePlaceholder')" />
+                  <el-input ref="subtitleInputRef" v-model="form.ebaySubtitle" maxlength="55" show-word-limit :placeholder="t('platformListings.ebaySubtitlePlaceholder')" @focus="handleTextFocus('subtitle', $event)" @click="rememberTextSelection('subtitle', $event)" @keyup="rememberTextSelection('subtitle', $event)" @select="rememberTextSelection('subtitle', $event)" @blur="rememberTextSelection('subtitle', $event)" />
                 </div>
               </div>
             </section>
@@ -247,7 +247,7 @@
                   <h3>{{ t('platformListings.basicInformation') }}</h3>
                   <div class="tiktok-field-block">
                     <label class="tiktok-required-label">{{ t('platformListings.productNameLabel') }}</label>
-                    <el-input ref="titleInputRef" v-model="form.defaultTitle" maxlength="255" show-word-limit :placeholder="t('platformListings.productNamePlaceholder')" @focus="handleTitleFocus" @click="rememberTitleSelection" @keyup="rememberTitleSelection" @select="rememberTitleSelection" @blur="rememberTitleSelection" />
+                    <el-input ref="titleInputRef" v-model="form.defaultTitle" maxlength="255" show-word-limit :placeholder="t('platformListings.productNamePlaceholder')" @focus="handleTextFocus('title', $event)" @click="rememberTextSelection('title', $event)" @keyup="rememberTextSelection('title', $event)" @select="rememberTextSelection('title', $event)" @blur="rememberTextSelection('title', $event)" />
                   </div>
 
                   <div class="tiktok-field-block">
@@ -391,6 +391,7 @@ function filterShops() {
     : shopList.value
 }
 function onPlatformChange() {
+  lastFocusedField.value = 'title'
   applyPlatformUnitDefaults()
   filterShops()
   form.shopId = null
@@ -596,9 +597,17 @@ const warehouseLoading = ref(false)
 
 // 模板参数替换
 const titleInputRef = ref(null)
+const subtitleInputRef = ref(null)
 const descriptionEditorRef = ref(null)
 const lastFocusedField = ref('title')
-const titleSelection = reactive({ start: null, end: null })
+const textSelections = reactive({
+  title: { start: null, end: null },
+  subtitle: { start: null, end: null }
+})
+const plainTextFields = {
+  title: { inputRef: titleInputRef, formKey: 'defaultTitle' },
+  subtitle: { inputRef: subtitleInputRef, formKey: 'ebaySubtitle' }
+}
 const templateParams = [
   { label: t('platformListings.paramItemName'), placeholder: '{itemName}' },
   { label: t('platformListings.paramBrand'), placeholder: '{brand}' },
@@ -613,33 +622,36 @@ const templateParams = [
   { label: t('platformListings.paramAccessories'), placeholder: '{accessories}' },
 ]
 
-function getTitleInputElement() {
-  const inputComponent = Array.isArray(titleInputRef.value)
-    ? titleInputRef.value[0]
-    : titleInputRef.value
+function getInputElement(field) {
+  const inputRef = plainTextFields[field]?.inputRef
+  const inputComponent = Array.isArray(inputRef?.value)
+    ? inputRef.value[0]
+    : inputRef?.value
   return inputComponent?.input
     || inputComponent?.$el?.querySelector?.('input, textarea')
     || null
 }
 
-function rememberTitleSelection(event) {
+function rememberTextSelection(field, event) {
+  const selection = textSelections[field]
+  if (!selection) return
   const inputEl = event?.target?.matches?.('input, textarea')
     ? event.target
-    : getTitleInputElement()
+    : getInputElement(field)
   if (!inputEl) return
 
-  titleSelection.start = inputEl.selectionStart
-  titleSelection.end = inputEl.selectionEnd
+  selection.start = inputEl.selectionStart
+  selection.end = inputEl.selectionEnd
 }
 
-function handleTitleFocus(event) {
-  lastFocusedField.value = 'title'
-  rememberTitleSelection(event)
+function handleTextFocus(field, event) {
+  lastFocusedField.value = field
+  rememberTextSelection(field, event)
 }
 
 function preserveActiveSelection() {
-  if (lastFocusedField.value === 'title') {
-    rememberTitleSelection()
+  if (plainTextFields[lastFocusedField.value]) {
+    rememberTextSelection(lastFocusedField.value)
   }
 }
 
@@ -652,19 +664,24 @@ function insertParam(placeholder) {
     return
   }
 
-  const inputEl = getTitleInputElement()
-  const current = form.defaultTitle || ''
+  const fieldName = plainTextFields[lastFocusedField.value]
+    ? lastFocusedField.value
+    : 'title'
+  const field = plainTextFields[fieldName]
+  const inputEl = getInputElement(fieldName)
+  const selection = textSelections[fieldName]
+  const current = form[field.formKey] || ''
   const selectionStart = inputEl === document.activeElement
     ? inputEl.selectionStart
-    : titleSelection.start
+    : selection.start
   const selectionEnd = inputEl === document.activeElement
     ? inputEl.selectionEnd
-    : titleSelection.end
+    : selection.end
   const result = insertTextAtSelection(current, placeholder, selectionStart, selectionEnd)
 
-  form.defaultTitle = result.value
-  titleSelection.start = result.cursor
-  titleSelection.end = result.cursor
+  form[field.formKey] = result.value
+  selection.start = result.cursor
+  selection.end = result.cursor
   nextTick(() => {
     if (!inputEl) return
     inputEl.focus()
