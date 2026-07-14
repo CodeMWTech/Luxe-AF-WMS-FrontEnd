@@ -4,10 +4,11 @@
       <div class="hero-header">
         <div>
           <h2 class="hero-title">{{ tr('HR 人力资源') }}</h2>
-          <p class="hero-desc">{{ tr('员工档案与系统用户同步展示。新增员工请前往系统管理 → 用户管理；此处可补充档案、附件与归档。') }}</p>
+          <p class="hero-desc">{{ tr('管理公司员工档案与必备文件。系统用户会自动同步到此列表；也可直接新增无登录账号的员工。非公司员工的系统账号可从 HR 移除。') }}</p>
         </div>
         <div class="hero-actions">
-          <el-button type="primary" plain icon="User" @click="goUserManagement">{{ tr('前往用户管理新增') }}</el-button>
+          <el-button type="primary" icon="Plus" @click="handleAdd" v-hasPermi="['wms:employee:add']">{{ tr('新增员工') }}</el-button>
+          <el-button type="primary" plain icon="User" @click="goUserManagement">{{ tr('用户管理（创建登录账号）') }}</el-button>
           <el-dropdown v-hasPermi="['wms:employee:file:batchDownload']" @command="handleBatchDownloadCommand">
             <el-button type="default">
               {{ tr('按文件类型导出') }}<el-icon class="el-icon--right"><arrow-down /></el-icon>
@@ -116,6 +117,11 @@
               <el-option label="W8" value="W8" />
               <el-option label="W9" value="W9" />
             </el-select>
+            <el-select v-model="queryParams.filterHasAccount" class="filter-item" clearable :placeholder="tr('筛选账号')" @change="handleQuery">
+              <el-option :label="tr('全部账号')" value="" />
+              <el-option :label="tr('有账号')" :value="'1'" />
+              <el-option :label="tr('无账号')" :value="'0'" />
+            </el-select>
             <el-button icon="Refresh" @click="resetFilters">{{ tr('重置') }}</el-button>
           </div>
 
@@ -142,14 +148,18 @@
               <el-table-column type="selection" width="42" v-if="canBatchDownload" />
               <el-table-column min-width="120">
                 <template #header>
-                  <span>{{ tr('用户昵称') }}</span>
-                  <el-tooltip :content="tr('即用户管理中的用户昵称，非登录账号')" placement="top">
+                  <span>{{ tr('姓名') }}</span>
+                  <el-tooltip :content="tr('有登录账号的员工会同步用户昵称；无账号员工仅在此维护档案')" placement="top">
                     <el-icon class="header-tip"><QuestionFilled /></el-icon>
                   </el-tooltip>
                 </template>
                 <template #default="{ row }">
                   <div class="name-cell">
-                    <div class="name-primary">{{ row.nameCn }}</div>
+                    <div class="name-primary">
+                      {{ row.nameCn }}
+                      <el-tag v-if="row.userId" size="small" type="primary" effect="plain" class="account-tag account-tag--linked">{{ tr('有账号') }}</el-tag>
+                      <el-tag v-else size="small" type="info" effect="plain" class="account-tag account-tag--none">{{ tr('无账号') }}</el-tag>
+                    </div>
                     <div v-if="row.nameEn" class="name-secondary">{{ row.nameEn }}</div>
                   </div>
                 </template>
@@ -188,8 +198,8 @@
           <div class="detail-header">
             <div>
               <h3 class="detail-name">{{ selectedEmployee.nameCn }}<span v-if="selectedEmployee.nameEn" class="detail-name-en">{{ selectedEmployee.nameEn }}</span></h3>
-              <div v-if="selectedEmployee.email || selectedEmployee.phone" class="detail-meta">
-                {{ [selectedEmployee.email, selectedEmployee.phone].filter(Boolean).join(' · ') }}
+              <div v-if="selectedEmployee.email || selectedEmployee.phone || selectedEmployee.userName" class="detail-meta">
+                {{ [selectedEmployee.userName ? tr('登录账号') + ': ' + selectedEmployee.userName : '', selectedEmployee.email, selectedEmployee.phone].filter(Boolean).join(' · ') }}
               </div>
             </div>
             <div class="detail-actions">
@@ -215,11 +225,19 @@
               </el-dropdown>
               <el-button type="primary" @click="handleUpdate(selectedEmployee)" v-hasPermi="['wms:employee:edit']">{{ tr('编辑资料') }}</el-button>
               <el-button type="warning" @click="handleArchive(selectedEmployee)" v-if="selectedEmployee.employeeStatus < 2" v-hasPermi="['wms:employee:archive']">{{ tr('离职归档') }}</el-button>
+              <el-button
+                type="danger"
+                plain
+                @click="handleRemoveEmployee(selectedEmployee)"
+                v-if="selectedEmployee.employeeStatus < 2"
+                v-hasPermi="['wms:employee:remove']"
+              >{{ selectedEmployee.userId ? tr('从 HR 移除') : tr('删除档案') }}</el-button>
             </div>
           </div>
 
           <el-descriptions :column="3" border class="mt16">
             <el-descriptions-item :label="tr('员工编号')">{{ selectedEmployee.employeeNo }}</el-descriptions-item>
+            <el-descriptions-item :label="tr('登录账号')">{{ selectedEmployee.userName || tr('无（仅档案）') }}</el-descriptions-item>
             <el-descriptions-item :label="tr('税务身份')">{{ selectedEmployee.taxFormType || '-' }}</el-descriptions-item>
             <el-descriptions-item :label="tr('部门')">{{ selectedEmployee.deptName || '-' }}</el-descriptions-item>
             <el-descriptions-item :label="tr('岗位')">{{ selectedEmployee.position || '-' }}</el-descriptions-item>
@@ -328,8 +346,8 @@
           <el-tab-pane :label="tr('基本信息')" name="basic">
             <el-row :gutter="16">
               <el-col :span="12">
-                <el-form-item :label="tr('用户昵称')" prop="nameCn">
-                  <el-input v-model="form.nameCn" :placeholder="tr('请输入用户昵称')" />
+                <el-form-item :label="isCreateMode ? tr('姓名') : tr('姓名/昵称')" prop="nameCn">
+                  <el-input v-model="form.nameCn" :placeholder="isCreateMode ? tr('请输入员工姓名') : tr('请输入姓名或用户昵称')" />
                 </el-form-item>
               </el-col>
               <el-col :span="12">
@@ -378,6 +396,8 @@
                   <el-select v-model="form.postIds" multiple :placeholder="tr('请选择岗位')" style="width: 100%" clearable>
                     <el-option v-for="item in postOptions" :key="item.postId" :label="item.postName" :value="item.postId" :disabled="item.status == 0" />
                   </el-select>
+                  <div v-if="form.userId" class="form-hint">{{ tr('关联登录账号时，岗位会同步到用户管理') }}</div>
+                  <div v-else class="form-hint">{{ tr('无登录账号时，岗位仅保存在员工档案中') }}</div>
                 </el-form-item>
               </el-col>
               <el-col :span="12" />
@@ -445,12 +465,14 @@ import {
   addEmployee,
   archiveEmployee,
   batchDownloadAttachments,
+  delEmployee,
   getAttachmentTypes,
   getEmployee,
   getEmployeeStats,
   listEmployee,
   saveEmployeeAttachment,
   delEmployeeAttachment,
+  syncEmployeeUsers,
   updateEmployee
 } from '@/api/wms/employee'
 
@@ -492,10 +514,11 @@ const data = reactive({
     keyword: undefined,
     viewMode: 'active',
     filterTaxFormType: '',
-    filterEmployeeStatus: ''
+    filterEmployeeStatus: '',
+    filterHasAccount: ''
   },
   rules: {
-    nameCn: [{ required: true, message: () => tr('用户昵称不能为空'), trigger: 'blur' }],
+    nameCn: [{ required: true, message: () => tr('姓名不能为空'), trigger: 'blur' }],
     employeeStatus: [{ required: true, message: () => tr('请选择员工状态'), trigger: 'change' }],
     taxFormType: [{ required: true, message: () => tr('请选择税务身份'), trigger: 'change' }]
   }
@@ -762,6 +785,14 @@ function buildListParams() {
   } else {
     params.filterEmployeeStatus = Number(status)
   }
+  const accountFilter = params.filterHasAccount
+  if (accountFilter === '1' || accountFilter === 1) {
+    params.filterHasAccount = '1'
+  } else if (accountFilter === '0' || accountFilter === 0) {
+    params.filterHasAccount = '0'
+  } else {
+    delete params.filterHasAccount
+  }
   const deptVal = deptFilterValue.value
   if (deptVal === '__none__') {
     params.filterDeptUnassigned = true
@@ -826,6 +857,7 @@ function resetFilters() {
   deptFilterValue.value = '__all__'
   queryParams.value.filterTaxFormType = ''
   queryParams.value.filterEmployeeStatus = ''
+  queryParams.value.filterHasAccount = ''
   handleQuery()
 }
 
@@ -841,8 +873,8 @@ function handleSelectionChange(rows) {
 function reset() {
   form.value = {
     gender: 2,
-    employeeStatus: undefined,
-    taxFormType: undefined,
+    employeeStatus: 0,
+    taxFormType: 'W2',
     deptId: undefined,
     postIds: []
   }
@@ -907,6 +939,26 @@ function handleArchive(row) {
     selectedEmployee.value = null
     currentAttachments.value = []
   })
+}
+
+function handleRemoveEmployee(row) {
+  const message = row.userId
+    ? tr('确认从 HR 移除该员工？系统登录账号将保留，且不会再次自动同步到此列表。')
+    : tr('确认删除该员工档案？此操作不可恢复。')
+  proxy.$modal.confirm(message).then(() => delEmployee(row.id)).then(() => {
+    proxy.$modal.msgSuccess(row.userId ? tr('已从 HR 移除') : tr('删除成功'))
+    loadStats()
+    getList()
+    selectedEmployee.value = null
+    currentAttachments.value = []
+  })
+}
+
+function syncUsersOnLoad() {
+  if (!proxy?.$auth?.hasPermi('wms:employee:edit')) {
+    return
+  }
+  syncEmployeeUsers().catch(() => {})
 }
 
 function handleExport() {
@@ -1100,6 +1152,7 @@ function downloadAttachment(item) {
 }
 
 loadFormOptions()
+syncUsersOnLoad()
 loadStats()
 loadAttachmentTypes()
 getList()
@@ -1312,6 +1365,24 @@ getList()
     font-weight: 400;
     color: #303133;
     line-height: 1.35;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .account-tag {
+    transform: scale(0.9);
+  }
+  .account-tag--linked {
+    --el-tag-text-color: #409eff;
+    --el-tag-border-color: #b3d8ff;
+    --el-tag-bg-color: #ecf5ff;
+  }
+  .form-hint {
+    margin-top: 4px;
+    font-size: 12px;
+    color: #909399;
+    line-height: 1.4;
   }
   .name-cell .name-secondary {
     margin-top: 2px;
