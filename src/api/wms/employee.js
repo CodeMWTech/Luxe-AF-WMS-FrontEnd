@@ -51,6 +51,32 @@ export function syncEmployeeUsers() {
   })
 }
 
+export function getEmployeeSyncStatus(userIds) {
+  if (!userIds || !userIds.length) {
+    return Promise.resolve({ data: [] })
+  }
+  return request({
+    url: '/wms/employee/syncStatus',
+    method: 'get',
+    params: { userIds: userIds.join(',') }
+  })
+}
+
+export function restoreUserToEmployee(userId) {
+  return request({
+    url: '/wms/employee/restoreUser/' + userId,
+    method: 'post'
+  })
+}
+
+export function restoreUsersToEmployee(userIds) {
+  return request({
+    url: '/wms/employee/restoreUsers',
+    method: 'post',
+    data: userIds
+  })
+}
+
 export function deleteUsersWithEmployee(userId) {
   return request({
     url: '/wms/employee/syncUsers/' + userId,

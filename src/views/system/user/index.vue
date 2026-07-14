@@ -120,6 +120,16 @@
                </el-col>
                <el-col :span="1.5">
                   <el-button
+                     type="primary"
+                     plain
+                     icon="User"
+                     :disabled="!canBatchRestoreToHr"
+                     @click="handleBatchRestoreToHr"
+                     v-hasPermi="['wms:employee:add']"
+                  class="action-btn">{{ tr('加入HR档案') }}</el-button>
+               </el-col>
+               <el-col :span="1.5">
+                  <el-button
                      type="warning"
                      plain
                      icon="Download"
@@ -152,13 +162,16 @@
                      <span>{{ parseTime(scope.row.createTime) }}</span>
                   </template>
                </el-table-column>
-               <el-table-column label="操作" align="center" width="150" class-name="small-padding fixed-width">
+               <el-table-column label="操作" align="center" width="190" class-name="small-padding fixed-width">
                   <template #default="scope">
                      <el-tooltip content="修改" placement="top" v-if="![1, 2, 3, 4, 5].includes(Number(scope.row.userId))">
                         <el-button link type="primary" icon="Edit" @click="handleUpdate(scope.row)" v-hasPermi="['system:user:edit']"></el-button>
                      </el-tooltip>
                      <el-tooltip content="删除" placement="top" v-if="![1, 2, 3, 4, 5].includes(Number(scope.row.userId))">
                         <el-button link type="primary" icon="Delete" @click="handleDelete(scope.row)" v-hasPermi="['system:user:remove']"></el-button>
+                     </el-tooltip>
+                     <el-tooltip :content="tr('加入HR档案')" placement="top" v-if="canRestoreToHr(scope.row)">
+                        <el-button link type="primary" icon="User" @click="handleRestoreToHr(scope.row)" v-hasPermi="['wms:employee:add']"></el-button>
                      </el-tooltip>
                      <el-tooltip content="重置密码" placement="top" v-if="![1, 2, 3, 4, 5].includes(Number(scope.row.userId))">
                          <el-button link type="primary" icon="Key" @click="handleResetPwd(scope.row)" v-hasPermi="['system:user:resetPwd']"></el-button>
@@ -367,7 +380,7 @@
 <script setup name="User">
 import { getToken } from "@/utils/auth";
 import { changeUserStatus, listUser, resetUserPwd, delUser, getUser, deptTreeSelect } from "@/api/system/user";
-import { getEmployeeByUserId, saveEmployeeWithUser } from "@/api/wms/employee";
+import { getEmployeeByUserId, saveEmployeeWithUser, getEmployeeSyncStatus, restoreUserToEmployee, restoreUsersToEmployee } from "@/api/wms/employee";
 import { computed, nextTick } from "vue";
 import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
@@ -407,6 +420,11 @@ const deptOptions = ref(undefined);
 const initPassword = ref(undefined);
 const postOptions = ref([]);
 const roleOptions = ref([]);
+const employeeSyncStatusMap = ref({});
+const canBatchRestoreToHr = computed(() => {
+  if (!ids.value.length) return false
+  return userList.value.some(row => ids.value.includes(row.userId) && canRestoreToHr(row))
+});
 /*** 用户导入参数 */
 const upload = reactive({
   // 是否显示弹出层（用户导入）
@@ -483,8 +501,53 @@ function getList() {
     loading.value = false;
     userList.value = res.rows;
     total.value = res.total;
+    loadEmployeeSyncStatus();
   });
 };
+
+function loadEmployeeSyncStatus() {
+  const userIds = (userList.value || []).map(item => item.userId).filter(Boolean)
+  if (!userIds.length || !proxy?.$auth?.hasPermi('wms:employee:list')) {
+    employeeSyncStatusMap.value = {}
+    return
+  }
+  getEmployeeSyncStatus(userIds).then(res => {
+    const map = {}
+    ;(res.data || []).forEach(item => { map[item.userId] = item })
+    employeeSyncStatusMap.value = map
+  }).catch(() => {
+    employeeSyncStatusMap.value = {}
+  })
+}
+
+function canRestoreToHr(row) {
+  const status = employeeSyncStatusMap.value[row?.userId]
+  return status && status.hasArchive === false
+}
+
+function handleRestoreToHr(row) {
+  const name = row.nickName || row.userName || row.userId
+  proxy.$modal.confirm(tr('确认将用户「{name}」重新加入HR员工档案？').replace('{name}', name)).then(() => {
+    return restoreUserToEmployee(row.userId)
+  }).then(() => {
+    proxy.$modal.msgSuccess(tr('已加入HR员工档案'))
+    loadEmployeeSyncStatus()
+  })
+}
+
+function handleBatchRestoreToHr() {
+  const targets = userList.value.filter(row => ids.value.includes(row.userId) && canRestoreToHr(row))
+  if (!targets.length) {
+    proxy.$modal.msgWarning(tr('所选用户均已在HR员工档案中'))
+    return
+  }
+  proxy.$modal.confirm(tr('确认将选中的 {count} 名用户加入HR员工档案？').replace('{count}', String(targets.length))).then(() => {
+    return restoreUsersToEmployee(targets.map(item => item.userId))
+  }).then(() => {
+    proxy.$modal.msgSuccess(tr('已加入HR员工档案'))
+    loadEmployeeSyncStatus()
+  })
+}
 /** 节点单击事件 */
 function handleNodeClick(data) {
   queryParams.value.deptId = data.id;
@@ -715,6 +778,8 @@ function handleAdd() {
     open.value = true;
     title.value = isEn.value ? "Add User" : "添加用户";
     form.value.password = initPassword.value;
+  }).catch(() => {
+    proxy.$modal.msgError(isEn.value ? "Failed to load roles and posts. Please check backend service." : "加载角色与岗位失败，请确认后端服务已启动。");
   });
 };
 /** 修改按钮操作 */
