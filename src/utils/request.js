@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { h } from 'vue'
 import { ElNotification , ElMessageBox, ElMessage } from 'element-plus'
 import { getToken } from '@/utils/auth'
 import errorCode from '@/utils/errorCode'
@@ -91,7 +92,13 @@ service.interceptors.response.use(res => {
       return Promise.reject('无效的会话，或者会话已过期，请重新登录。')
     } else if (code === 409){
       ElMessageBox.alert(
-        res.data.detailMessage,
+        h('div', {
+          style: {
+            whiteSpace: 'pre-line',
+            lineHeight: '1.8',
+            wordBreak: 'break-word'
+          }
+        }, res.data.detailMessage),
         msg
       )
       return Promise.reject(409)
