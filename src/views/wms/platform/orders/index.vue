@@ -688,6 +688,7 @@ import { ArrowDown, ArrowRight, CopyDocument, Edit, UploadFilled } from '@elemen
 import { listPlatformOrders, getOrderStatusMap, updateOrderSku, createShipments, exportPlatformOrders, exportPlatformOrderWeeklyReport, importNotes, getAutoCreateConfig, updateAutoCreateConfig } from '@/api/wms/platformOrder'
 import { listAllPlatformShops, batchSyncOrders } from '@/api/wms/platformShop'
 import { formatDateTimeForQuery, formatLosAngelesTime } from '@/utils/laTime'
+import { getExportLanguageHeaders } from '@/utils/xlsxTranslate'
 import SkuSelect from '@/views/components/SkuSelect.vue'
 
 const InfoLine = defineComponent({
@@ -977,15 +978,20 @@ async function handleAutoCreateToggle(value) {
 }
 
 function handleExport() {
-  proxy.$modal.confirm(t('platformOrders.exportConfirm')).then(() => {
+  proxy.$modal.confirm(t('platformOrders.exportConfirm'), {
+    confirmButtonText: t('platformOrders.confirm'),
+    cancelButtonText: t('platformOrders.cancel')
+  }).then(() => {
     exporting.value = true
     const params = normalizeQuery()
     delete params.pageNum
     delete params.pageSize
-    exportPlatformOrders(params).then((blob) => {
+    const isEnglish = (localStorage.getItem('language') || 'zh-cn').toLowerCase().startsWith('en')
+    const languageHeaders = getExportLanguageHeaders(isEnglish)
+    exportPlatformOrders(params, languageHeaders).then((blob) => {
       const link = document.createElement('a')
       link.href = URL.createObjectURL(blob)
-      link.download = `平台订单_${new Date().toISOString().slice(0, 10)}.xlsx`
+      link.download = `${t('platformOrders.exportFileName')}_${new Date().toISOString().slice(0, 10)}.xlsx`
       link.click()
       URL.revokeObjectURL(link.href)
       proxy.$modal.msgSuccess(t('platformOrders.exportSuccess'))
@@ -998,7 +1004,10 @@ function handleExport() {
 }
 
 function handleWeeklyReportExport() {
-  proxy.$modal.confirm(t('platformOrders.weeklyReportExportConfirm')).then(() => {
+  proxy.$modal.confirm(t('platformOrders.weeklyReportExportConfirm'), {
+    confirmButtonText: t('platformOrders.confirm'),
+    cancelButtonText: t('platformOrders.cancel')
+  }).then(() => {
     weeklyReportExporting.value = true
     const params = normalizeQuery()
     delete params.pageNum

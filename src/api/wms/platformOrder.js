@@ -57,11 +57,12 @@ export function importNotes(file) {
 }
 
 // 导出平台订单 Excel
-export function exportPlatformOrders(query) {
+export function exportPlatformOrders(query, headers = {}) {
   return request({
     url: '/wms/platform/orders/export',
     method: 'post',
     params: query,
+    headers,
     responseType: 'blob'
   })
 }
