@@ -1,5 +1,5 @@
 ﻿<template>
-  <el-dialog v-model="visible" :title="t('platformListings.publishTitle')" width="900px" :close-on-click-modal="false" destroy-on-close @open="onOpen" @closed="onClosed">
+  <el-dialog v-model="visible" :title="t('platformListings.publishTitle')" width="min(1100px, 94vw)" :close-on-click-modal="false" destroy-on-close @open="onOpen" @closed="onClosed">
     <el-steps :active="step" align-center finish-status="success" style="margin-bottom:24px">
       <el-step :title="t('platformListings.stepSelectProducts')" />
       <el-step :title="t('platformListings.stepSelectShop')" />
@@ -130,9 +130,23 @@
           <div v-else class="empty-media">{{ t('platformListings.noImage') }}</div>
         </div>
         <div class="preview-content">
-          <div class="preview-platform">{{ chosenPlatform === 'EBAY' ? t('platformListings.ebayPreviewLabel') : t('platformListings.tiktokPreviewLabel') }}</div>
+          <div class="preview-platform-row">
+            <div class="preview-platform">{{ chosenPlatform === 'EBAY' ? t('platformListings.ebayPreviewLabel') : t('platformListings.tiktokPreviewLabel') }}</div>
+            <el-tag size="small" :type="isAuctionRow(previewList[0]) ? 'warning' : 'success'" effect="dark">
+              {{ getListingTypeLabel(previewList[0]) }}
+            </el-tag>
+          </div>
           <div class="preview-title">{{ getPreviewTitle(previewList[0]) }}</div>
-          <div class="preview-price">{{ previewList[0].currency || 'USD' }} {{ Number(previewList[0].overridePrice || 0).toFixed(2) }}</div>
+          <div class="preview-price-list">
+            <div class="preview-price-item">
+              <span>{{ previewPrimaryPriceLabel }}</span>
+              <strong>{{ formatMoney(previewList[0].overridePrice, previewList[0].currency || 'USD') }}</strong>
+            </div>
+            <div v-if="isAuctionRow(previewList[0])" class="preview-price-item">
+              <span>{{ previewSecondaryPriceLabel }}</span>
+              <strong>{{ formatMoney(getSecondaryPreviewPrice(previewList[0]), previewList[0].currency || 'USD') }}</strong>
+            </div>
+          </div>
           <div class="preview-meta">
             <span>{{ t('platformListings.sku') }} {{ previewList[0].skuCode }}</span>
             <span>{{ t('platformListings.quantityShort') }} {{ previewList[0].quantity || 1 }}</span>
@@ -143,8 +157,15 @@
         </div>
       </div>
       <el-table :data="previewList" v-loading="previewLoading" border stripe max-height="320">
-        <el-table-column :label="t('platformListings.sku')" prop="skuCode" width="120" />
-        <el-table-column :label="t('platformListings.resolvedTitle')" min-width="200">
+        <el-table-column :label="t('platformListings.sku')" prop="skuCode" width="110" />
+        <el-table-column :label="t('platformListings.format')" width="100" align="center">
+          <template #default="{ row }">
+            <el-tag size="small" :type="isAuctionRow(row) ? 'warning' : 'success'">
+              {{ getListingTypeLabel(row) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('platformListings.resolvedTitle')" min-width="180">
           <template #default="{ row }">
             <el-input
               v-model="row.overrideTitle"
@@ -159,12 +180,12 @@
             <div class="title-preview">{{ getPreviewTitle(row) }}</div>
           </template>
         </el-table-column>
-        <el-table-column :label="t('platformListings.sellingPrice')" width="120" align="right">
+        <el-table-column :label="t('platformListings.sellingPrice')" width="110" align="right">
           <template #default="{ row }">
             {{ formatMoney(row.sellingPrice, row.currency || 'USD') }}
           </template>
         </el-table-column>
-        <el-table-column :label="t('platformListings.resolvedPrice')" width="160" align="right">
+        <el-table-column :label="previewPrimaryPriceLabel" width="150" align="right">
           <template #default="{ row }">
             <el-input-number
               v-model="row.overridePrice"
@@ -183,6 +204,11 @@
             <div v-else-if="isBelowSellingPrice(row)" class="price-warning">
               {{ t('platformListings.lowPriceRowHint') }}
             </div>
+          </template>
+        </el-table-column>
+        <el-table-column v-if="isAuctionPublish" :label="previewSecondaryPriceLabel" width="135" align="right">
+          <template #default="{ row }">
+            {{ formatMoney(getSecondaryPreviewPrice(row), row.currency || 'USD') }}
           </template>
         </el-table-column>
         <el-table-column :label="t('platformListings.image')" width="70" align="center">
@@ -383,6 +409,21 @@ const previewLoading = ref(false)
 const previewList = ref([])
 const isEbayPublish = computed(() => chosenPlatform.value === 'EBAY')
 const isTiktokPublish = computed(() => chosenPlatform.value === 'TIKTOK')
+const isAuctionPublish = computed(() => {
+  const listingType = chosenTemplate.value?.listingType || previewList.value[0]?.listingType
+  return String(listingType || '').toUpperCase() === 'AUCTION'
+})
+const previewPrimaryPriceLabel = computed(() => {
+  if (isTiktokPublish.value) return t('platformListings.retailPrice')
+  return isAuctionPublish.value
+    ? t('platformListings.startPrice')
+    : t('platformListings.buyItNowPrice')
+})
+const previewSecondaryPriceLabel = computed(() => (
+  isTiktokPublish.value
+    ? t('platformListings.startPrice')
+    : t('platformListings.buyItNowPrice')
+))
 const ebayTitleTooLongRows = computed(() => isEbayPublish.value
   ? previewList.value.filter(row => isEbayTitleTooLong(row))
   : [])
@@ -411,6 +452,21 @@ function getPreviewTitle(row) {
 function getPreviewDescription(row) {
   const html = row?.description || ''
   return html.replace(/<img\b[^>]*>/gi, '').trim()
+}
+
+function isAuctionRow(row) {
+  return String(row?.listingType || chosenTemplate.value?.listingType || '').toUpperCase() === 'AUCTION'
+}
+
+function getListingTypeLabel(row) {
+  return isAuctionRow(row)
+    ? t('platformListings.tiktokAuction')
+    : t('platformListings.tiktokFixedPrice')
+}
+
+function getSecondaryPreviewPrice(row) {
+  if (!isAuctionRow(row)) return null
+  return isTiktokPublish.value ? row?.startingBidPrice : row?.buyItNowPrice
 }
 
 function isTiktokPriceInvalid(row) {
@@ -486,6 +542,7 @@ async function loadPreviews() {
           skuCode: data.skuCode || sku.skuCode,
           overrideTitle: data.title || '',
           overridePrice: normalizePreviewPrice(data.price ?? 0),
+          listingType: data.listingType || chosenTemplate.value?.listingType || 'FIXED_PRICE',
           sellingPrice: data.sellingPrice ?? sku.sellingPrice,
           images: data.images || []
         })
@@ -495,6 +552,9 @@ async function loadPreviews() {
           skuCode: sku.skuCode,
           overrideTitle: '',
           overridePrice: 0,
+          listingType: chosenTemplate.value?.listingType || 'FIXED_PRICE',
+          startingBidPrice: chosenPlatform.value === 'TIKTOK' ? chosenTemplate.value?.buyItNowPrice : null,
+          buyItNowPrice: chosenPlatform.value === 'EBAY' ? chosenTemplate.value?.buyItNowPrice : null,
           sellingPrice: sku.sellingPrice,
           images: []
         })
@@ -686,9 +746,19 @@ defineExpose({ open, openWithSkus })
 .channel-preview .preview-media :deep(img) { max-width: 100%; max-height: 100%; object-fit: contain; }
 .empty-media { height: 100%; display: flex; align-items: center; justify-content: center; color: #909399; }
 .preview-content { min-width: 0; }
-.preview-platform { font-size: 12px; font-weight: 700; text-transform: uppercase; color: #606266; margin-bottom: 6px; }
+.preview-platform-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.preview-platform { font-size: 12px; font-weight: 700; text-transform: uppercase; color: #606266; }
 .preview-title { font-size: 18px; font-weight: 700; line-height: 1.35; color: #111827; }
-.preview-price { margin-top: 8px; font-size: 20px; font-weight: 700; color: #111827; }
+.preview-price-list { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+.preview-price-item {
+  min-width: 170px;
+  padding: 8px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: #f9fafb;
+}
+.preview-price-item span { display: block; margin-bottom: 2px; font-size: 11px; color: #6b7280; }
+.preview-price-item strong { font-size: 18px; color: #111827; }
 .preview-meta { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
 .preview-meta span { border: 1px solid #e5e7eb; border-radius: 4px; padding: 3px 8px; font-size: 12px; color: #606266; }
 .preview-desc { max-height: 110px; overflow: auto; font-size: 12px; color: #606266; border-top: 1px solid #ebeef5; padding-top: 8px; max-width: 100%; }

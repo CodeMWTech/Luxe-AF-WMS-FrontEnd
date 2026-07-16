@@ -54,7 +54,7 @@
     </el-card>
 
     <!-- 新建/编辑弹窗 -->
-    <el-dialog v-model="dialog.visible" :title="dialog.title" width="1180px" :close-on-click-modal="false" destroy-on-close top="20px">
+    <el-dialog v-model="dialog.visible" :title="dialog.title" width="min(1180px, 94vw)" :close-on-click-modal="false" destroy-on-close top="20px">
       <el-form ref="formRef" :model="form" :rules="rules" label-position="top" class="template-dialog-body">
 
         <!-- ============ 公共头部 ============ -->
@@ -279,6 +279,18 @@
                       <el-option label="New without tag" value="New without tag" />
                     </el-select>
                   </div>
+
+                  <div class="tiktok-field-block">
+                    <label>{{ t('platformListings.fabrication') }}</label>
+                    <el-input v-model="form.tiktokFabrication" maxlength="100" />
+                    <div class="tiktok-tip">{{ t('platformListings.tiktokCategoryAttributeHint') }}</div>
+                  </div>
+
+                  <div class="tiktok-field-block">
+                    <label>{{ t('platformListings.conditionDescription') }}</label>
+                    <el-input v-model="form.tiktokConditionDescription" maxlength="500" />
+                    <div class="tiktok-tip">{{ t('platformListings.tiktokCategoryAttributeHint') }}</div>
+                  </div>
                 </section>
 
                 <section class="tiktok-form-section">
@@ -289,6 +301,16 @@
 
                 <section class="tiktok-form-section">
                   <h3>{{ t('platformListings.salesInformation') }}</h3>
+                  <div class="tiktok-field-block">
+                    <label class="tiktok-required-label">{{ t('platformListings.format') }}</label>
+                    <el-radio-group v-model="form.listingType">
+                      <el-radio-button label="FIXED_PRICE">{{ t('platformListings.tiktokFixedPrice') }}</el-radio-button>
+                      <el-radio-button label="AUCTION">{{ t('platformListings.tiktokAuction') }}</el-radio-button>
+                    </el-radio-group>
+                    <div v-if="form.listingType === 'AUCTION'" class="tiktok-tip auction-mode-tip">
+                      {{ t('platformListings.tiktokAuctionEligibilityHint') }}
+                    </div>
+                  </div>
                   <div class="stock-toolbar editable-stock-toolbar">
                     <el-form-item prop="tiktokWarehouseId" class="template-required-form-item">
                       <el-select v-model="form.tiktokWarehouseId" :placeholder="t('platformListings.warehousePlaceholder')" clearable filterable :disabled="!form.shopId" :loading="warehouseLoading" style="width:100%">
@@ -297,10 +319,22 @@
                     </el-form-item>
                   </div>
                   <div class="tiktok-tip warehouse-warning-tip">{{ t('platformListings.returnWarehouseUnsupported') }}</div>
-                  <div class="tiktok-stock-grid editable-stock-grid">
-                    <div><label>{{ t('platformListings.stock') }}</label><el-input-number v-model="form.tiktokQuantity" :min="1" :max="1" disabled style="width:100%" /></div>
-                    <div><label>{{ t('platformListings.retailPrice') }}</label><div style="display:flex;align-items:center;gap:6px"><el-input-number v-model="form.defaultPrice" :max="TIKTOK_PRICE_MAX" :precision="2" :step="10" :placeholder="t('platformListings.priceDefaultHint')" style="flex:1" /><el-button v-if="form.defaultPrice != null" link type="warning" size="small" @click="form.defaultPrice = null">{{ t('platformListings.priceResetDefault') }}</el-button></div><div class="tiktok-tip">{{ t('platformListings.tiktokPriceRangeHint') }}；{{ t('platformListings.priceDefaultHint') }}</div></div>
-                    <div><label>{{ t('platformListings.currency') }}</label><el-select v-model="form.tiktokCurrency" style="width:100%"><el-option label="USD" value="USD" /><el-option label="GBP" value="GBP" /></el-select></div>
+                  <div class="tiktok-stock-grid editable-stock-grid" :class="{ 'auction-stock-grid': form.listingType === 'AUCTION' }">
+                    <div class="tiktok-stock-field"><label>{{ t('platformListings.stock') }}</label><el-input-number v-model="form.tiktokQuantity" :min="1" :max="1" disabled style="width:100%" /></div>
+                    <div class="tiktok-price-field">
+                      <label>{{ t('platformListings.retailPrice') }}</label>
+                      <div class="tiktok-price-input-row">
+                        <el-input-number v-model="form.defaultPrice" :min="TIKTOK_PRICE_MIN" :max="TIKTOK_PRICE_MAX" :precision="2" :step="10" :placeholder="t('platformListings.priceDefaultHint')" style="flex:1" />
+                        <el-button v-if="form.defaultPrice != null" link type="warning" size="small" @click="form.defaultPrice = null">{{ t('platformListings.priceResetDefault') }}</el-button>
+                      </div>
+                      <div class="tiktok-tip">{{ t('platformListings.tiktokPriceRangeHint') + '；' + t('platformListings.priceDefaultHint') }}</div>
+                    </div>
+                    <div v-if="form.listingType === 'AUCTION'" class="tiktok-price-field">
+                      <label class="tiktok-required-label">{{ t('platformListings.startPrice') }}</label>
+                      <el-input-number v-model="form.buyItNowPrice" :min="TIKTOK_AUCTION_MIN_PRICE" :max="TIKTOK_PRICE_MAX" :precision="2" :step="10" :placeholder="t('platformListings.tiktokAuctionStartPricePlaceholder')" style="width:100%" />
+                      <div class="tiktok-tip">{{ t('platformListings.tiktokAuctionStartPriceHint') }}</div>
+                    </div>
+                    <div class="tiktok-currency-field"><label>{{ t('platformListings.currency') }}</label><el-select v-model="form.tiktokCurrency" style="width:100%"><el-option label="USD" value="USD" /><el-option label="GBP" value="GBP" /></el-select></div>
                   </div>
                 </section>
 
@@ -365,6 +399,7 @@ const { proxy } = getCurrentInstance()
 const { locale } = useI18n()
 const t = (key, values) => proxy?.$t?.(key, values) || key
 const TIKTOK_PRICE_MIN = 0.01
+const TIKTOK_AUCTION_MIN_PRICE = 1
 const TIKTOK_PRICE_MAX = 50000
 
 const loading = ref(false), total = ref(0), templateList = ref([]), submitting = ref(false)
@@ -393,6 +428,7 @@ function filterShops() {
 function onPlatformChange() {
   lastFocusedField.value = 'title'
   applyPlatformUnitDefaults()
+  if (form.platform === 'TIKTOK') form.listingType = 'FIXED_PRICE'
   filterShops()
   form.shopId = null
   warehouseList.value = []
@@ -456,6 +492,7 @@ const initForm = {
   ebayShippingService: 'USPSParcel', ebayShippingCost: 0, ebayReturnsAccepted: false, ebayBestOfferEnabled: false, ebayPrivateListing: false,
   ebayFulfillmentPolicyId: '', ebayPaymentPolicyId: '', ebayReturnPolicyId: '',
   tiktokCategoryId: '', tiktokCategoryVersion: 'v2', tiktokSaveMode: 'LISTING', tiktokBrandId: '', tiktokConditionValue: 'Pre-owned',
+  tiktokFabrication: 'leather', tiktokConditionDescription: 'great',
   tiktokWarehouseId: '', tiktokQuantity: 1, tiktokCurrency: 'USD', tiktokCodAllowed: false,
   packageWeightValue: null, packageWeightUnit: 'POUND', packageLength: null, packageWidth: null, packageHeight: null, packageDimensionUnit: 'INCH'
 }
@@ -754,7 +791,8 @@ function handleEdit(row) {
     Object.assign(form, {
       id: d.id, templateName: d.templateName, platform: d.platform, shopId: d.shopId,
       listingType: d.listingType || 'FIXED_PRICE', listingDuration: d.listingDuration || 'Days_7',
-      enabled: d.status === 'ENABLED', buyItNowPrice: d.buyItNowPrice ?? null,
+      enabled: d.status === 'ENABLED',
+      buyItNowPrice: d.buyItNowPrice ?? (d.platform === 'TIKTOK' && d.listingType === 'AUCTION' ? d.priceMarkupValue : null),
       defaultTitle: d.titleFormat || '', defaultPrice: d.priceMarkupValue ?? null,
       descriptionFormat: d.descriptionFormat || '',
       ebayCategoryId: d.ebayCategoryId || '', ebayCondition: d.ebayCondition || 'USED_GOOD',
@@ -770,6 +808,7 @@ function handleEdit(row) {
       ebayReturnPolicyId: d.ebayReturnPolicyId || '',
       tiktokCategoryId: d.tiktokCategoryId || '', tiktokCategoryVersion: d.tiktokCategoryVersion || 'v2', tiktokSaveMode: d.tiktokSaveMode || 'LISTING',
       tiktokBrandId: d.tiktokBrandId || '', tiktokConditionValue: d.tiktokConditionValue || 'Pre-owned',
+      tiktokFabrication: d.tiktokFabrication || 'leather', tiktokConditionDescription: d.tiktokConditionDescription || 'great',
       tiktokWarehouseId: d.tiktokWarehouseId || '', tiktokQuantity: 1, tiktokCurrency: d.tiktokCurrency || 'USD', tiktokCodAllowed: !!d.tiktokCodAllowed,
       packageWeightValue: d.packageWeightValue, packageWeightUnit: d.packageWeightUnit || 'POUND', packageLength: d.packageLength,
       packageWidth: d.packageWidth, packageHeight: d.packageHeight, packageDimensionUnit: d.packageDimensionUnit || 'INCH'
@@ -837,8 +876,12 @@ function submitValidatedForm() {
 
   // 收集缺失的关键信息
   const isEbay = form.platform === 'EBAY'
-  if (!isEbay && isTiktokDefaultPriceInvalid()) {
+  if (!isEbay && isTiktokRetailPriceInvalid()) {
     proxy.$modal.msgWarning(t('platformListings.tiktokPriceRangeHint'))
+    return
+  }
+  if (!isEbay && isTiktokAuctionStartPriceInvalid()) {
+    proxy.$modal.msgWarning(t('platformListings.tiktokAuctionStartPriceInvalid'))
     return
   }
   if (isAuctionImmediatePayment.value && !hasPositivePrice(form.buyItNowPrice)) {
@@ -880,10 +923,17 @@ function submitValidatedForm() {
   doSubmit(isEbay)
 }
 
-function isTiktokDefaultPriceInvalid() {
+function isTiktokRetailPriceInvalid() {
   if (form.defaultPrice == null || form.defaultPrice === '') return false
   const price = Number(form.defaultPrice)
   return !Number.isFinite(price) || price < TIKTOK_PRICE_MIN || price > TIKTOK_PRICE_MAX
+}
+
+function isTiktokAuctionStartPriceInvalid() {
+  if (form.listingType !== 'AUCTION') return false
+  if (form.buyItNowPrice == null || form.buyItNowPrice === '') return true
+  const price = Number(form.buyItNowPrice)
+  return !Number.isFinite(price) || price < TIKTOK_AUCTION_MIN_PRICE || price > TIKTOK_PRICE_MAX
 }
 
 function hasPositivePrice(value) {
@@ -901,10 +951,11 @@ function doSubmit(isEbay) {
   const data = {
     id: form.id, templateName: form.templateName, platform: form.platform,
     shopId: form.shopId, listingType: form.listingType, listingDuration: form.listingDuration,
+    // buyItNowPrice：eBay=一口价，TikTok 拍卖=起拍价
     status: form.enabled ? 'ENABLED' : 'DISABLED', buyItNowPrice: optionalNumber(form.buyItNowPrice),
     titleFormat: form.defaultTitle,          // 复用此字段存标题
     priceSource: 'CUSTOM',                   // 始终自定义价格
-    priceMarkupValue: optionalNumber(form.defaultPrice),     // FIXED_PRICE=立即购买价，AUCTION=起拍价
+    priceMarkupValue: optionalNumber(form.defaultPrice),     // TikTok 始终为 Retail price
     priceMarkupType: 'FIXED',
     descriptionFormat: form.descriptionFormat || null,
     ebayCategoryId: form.ebayCategoryId || null, ebayCondition: form.ebayCondition || null,
@@ -920,6 +971,7 @@ function doSubmit(isEbay) {
     ebayReturnPolicyId: form.ebayReturnPolicyId || null,
     tiktokCategoryId: form.tiktokCategoryId || null, tiktokCategoryVersion: form.tiktokCategoryVersion || null, tiktokSaveMode: form.tiktokSaveMode || null,
     tiktokBrandId: form.tiktokBrandId || null, tiktokConditionValue: form.tiktokConditionValue || null,
+    tiktokFabrication: form.tiktokFabrication || 'leather', tiktokConditionDescription: form.tiktokConditionDescription || 'great',
     tiktokWarehouseId: form.tiktokWarehouseId || null, tiktokQuantity: 1, tiktokCurrency: form.tiktokCurrency || null, tiktokCodAllowed: form.tiktokCodAllowed,
     packageWeightValue: form.packageWeightValue,
     packageWeightUnit: form.packageWeightUnit,
@@ -1001,6 +1053,7 @@ onMounted(() => { loadShops(); getList() })
 .template-dialog-body {
   max-height: 72vh;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 0 6px 4px 0;
   background: #fff;
 }
@@ -1580,6 +1633,11 @@ onMounted(() => { loadShops(); getList() })
   font-size: 11px;
   font-weight: 600;
 }
+.tiktok-stock-grid > div > label {
+  min-height: 18px;
+  margin: 0 0 5px;
+  line-height: 18px;
+}
 .hide-optional {
   margin-top: 16px;
   color: #6b7280;
@@ -1631,10 +1689,45 @@ onMounted(() => { loadShops(); getList() })
 .tiktok-stock-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: start;
   gap: 8px;
   padding: 10px;
   background: #f6f7f9;
   border: 1px solid #eef0f2;
+}
+.tiktok-stock-grid.auction-stock-grid {
+  grid-template-columns:
+    minmax(120px, 0.7fr)
+    minmax(220px, 1.25fr)
+    minmax(220px, 1.25fr)
+    minmax(120px, 0.7fr);
+  gap: 12px;
+}
+.tiktok-stock-grid > div { min-width: 0; }
+.tiktok-price-input-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+:deep(.tiktok-price-input-row .el-input-number) {
+  width: 100%;
+  min-width: 0;
+}
+.tiktok-stock-grid .tiktok-tip {
+  margin-top: 6px;
+  margin-bottom: 0;
+}
+@media (max-width: 1100px) {
+  .tiktok-stock-grid.auction-stock-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 720px) {
+  .tiktok-stock-grid,
+  .tiktok-stock-grid.auction-stock-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 .compliance-row {
   display: grid;
