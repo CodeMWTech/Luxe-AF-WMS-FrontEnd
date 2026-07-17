@@ -60,6 +60,38 @@
         </el-col>
       </el-row>
 
+      <div
+        v-if="permissionNotice.visible"
+        class="mt16 permission-notice"
+        :class="{ 'is-expanded': permissionNoticeExpanded }"
+      >
+        <div class="permission-notice-header" @click="permissionNoticeExpanded = !permissionNoticeExpanded">
+          <el-icon class="permission-notice-icon"><InfoFilled /></el-icon>
+          <span class="permission-notice-title">{{ permissionNotice.title }}</span>
+          <span v-if="!permissionNoticeExpanded" class="permission-notice-summary">{{ permissionNotice.summary }}</span>
+          <el-button link type="primary" class="permission-notice-toggle" @click.stop="permissionNoticeExpanded = !permissionNoticeExpanded">
+            {{ permissionNoticeExpanded ? hrText('收起', 'Collapse') : hrText('展开', 'Expand') }}
+            <el-icon><component :is="permissionNoticeExpanded ? 'ArrowUp' : 'ArrowDown'" /></el-icon>
+          </el-button>
+        </div>
+        <div v-show="permissionNoticeExpanded" class="permission-notice-body">
+          <p class="permission-notice-intro">{{ permissionNotice.intro }}</p>
+          <div v-if="permissionNotice.allowed.length" class="permission-section">
+            <strong>{{ hrText('当前可以：', 'You can:') }}</strong>
+            <ul>
+              <li v-for="(item, idx) in permissionNotice.allowed" :key="'a-' + idx">{{ item }}</li>
+            </ul>
+          </div>
+          <div v-if="permissionNotice.restricted.length" class="permission-section">
+            <strong>{{ hrText('当前不可用：', 'Not available:') }}</strong>
+            <ul>
+              <li v-for="(item, idx) in permissionNotice.restricted" :key="'r-' + idx">{{ item }}</li>
+            </ul>
+          </div>
+          <p v-if="permissionNotice.grantHint" class="permission-grant-hint">{{ permissionNotice.grantHint }}</p>
+        </div>
+      </div>
+
       <el-alert
         v-if="stats.missingEmployeeCount > 0"
         type="warning"
@@ -113,9 +145,7 @@
             />
             <el-select v-model="queryParams.filterTaxFormType" class="filter-item" clearable :placeholder="tr('筛选税务身份')" @change="handleQuery">
               <el-option :label="tr('全部税务身份')" value="" />
-              <el-option label="W2" value="W2" />
-              <el-option label="W8" value="W8" />
-              <el-option label="W9" value="W9" />
+              <el-option v-for="item in availableTaxFormOptions" :key="item.value" :label="item.label" :value="item.value" />
             </el-select>
             <el-select v-model="queryParams.filterHasAccount" class="filter-item" clearable :placeholder="tr('筛选账号')" @change="handleQuery">
               <el-option :label="tr('全部账号')" value="" />
@@ -223,7 +253,11 @@
                   </el-dropdown-menu>
                 </template>
               </el-dropdown>
-              <el-button type="primary" @click="handleUpdate(selectedEmployee)" v-hasPermi="['wms:employee:edit']">{{ tr('编辑资料') }}</el-button>
+              <el-button
+                type="primary"
+                @click="handleUpdate(selectedEmployee)"
+                v-hasPermi="['wms:employee:edit']"
+              >{{ tr('编辑资料') }}</el-button>
               <el-button type="warning" @click="handleArchive(selectedEmployee)" v-if="selectedEmployee.employeeStatus < 2" v-hasPermi="['wms:employee:archive']">{{ tr('离职归档') }}</el-button>
               <el-button
                 type="danger"
@@ -246,7 +280,7 @@
               <el-tag size="small" :type="statusTagType(selectedEmployee.employeeStatus)">{{ statusLabel(selectedEmployee.employeeStatus) }}</el-tag>
             </el-descriptions-item>
             <el-descriptions-item :label="tr('备注')" :span="3">{{ selectedEmployee.remark || '-' }}</el-descriptions-item>
-            <template v-if="canViewSensitive">
+            <template v-if="canViewSensitiveForSelected">
               <el-descriptions-item :label="tr('薪资类型')">{{ selectedEmployee.salaryType || '-' }}</el-descriptions-item>
               <el-descriptions-item :label="tr('基本工资')">{{ selectedEmployee.baseSalary ?? '-' }}</el-descriptions-item>
               <el-descriptions-item :label="tr('工资账户')">{{ selectedEmployee.bankAccountInfo || '-' }}</el-descriptions-item>
@@ -341,18 +375,30 @@
     </el-row>
 
     <el-drawer v-model="open" :title="title" size="55%" append-to-body>
+      <el-alert
+        v-if="isLinkedUserReadonly"
+        type="warning"
+        show-icon
+        :closable="false"
+        class="drawer-permission-alert"
+      >
+        <template #title>{{ hrText('该员工已关联登录账号，当前无法修改资料', 'This employee has a linked login account; profile editing is read-only') }}</template>
+        {{ linkedUserReadonlyHint }}
+      </el-alert>
       <el-form ref="employeeRef" :model="form" :rules="rules" :label-width="drawerLabelWidth">
         <el-tabs v-model="activeTab" :before-leave="beforeTabLeave">
           <el-tab-pane :label="tr('基本信息')" name="basic">
             <el-row :gutter="16">
               <el-col :span="12">
                 <el-form-item :label="isCreateMode ? tr('姓名') : tr('姓名/昵称')" prop="nameCn">
-                  <el-input v-model="form.nameCn" :placeholder="isCreateMode ? tr('请输入员工姓名') : tr('请输入姓名或用户昵称')" />
+                  <el-input v-model="form.nameCn" :placeholder="isCreateMode ? tr('请输入员工姓名') : tr('请输入姓名或用户昵称')" :disabled="isLinkedUserReadonly" />
                 </el-form-item>
               </el-col>
               <el-col :span="12">
                 <el-form-item :label="tr('归属部门')">
+                  <el-input v-if="isLinkedUserReadonly" :model-value="form.deptName || '-'" disabled />
                   <el-tree-select
+                    v-else
                     v-model="form.deptId"
                     :data="deptOptions"
                     :props="{ value: 'id', label: 'label', children: 'children' }"
@@ -367,12 +413,12 @@
               </el-col>
               <el-col :span="12">
                 <el-form-item :label="tr('联系电话')" prop="phone">
-                  <el-input v-model="form.phone" :placeholder="tr('请输入手机号码')" />
+                  <el-input v-model="form.phone" :placeholder="tr('请输入手机号码')" :disabled="isLinkedUserReadonly" />
                 </el-form-item>
               </el-col>
               <el-col :span="12">
                 <el-form-item :label="tr('邮箱')" prop="email">
-                  <el-input v-model="form.email" :placeholder="tr('请输入邮箱')" />
+                  <el-input v-model="form.email" :placeholder="tr('请输入邮箱')" :disabled="isLinkedUserReadonly" />
                 </el-form-item>
               </el-col>
               <el-col :span="12">
@@ -383,7 +429,7 @@
               <el-col :span="12" />
               <el-col :span="12">
                 <el-form-item :label="tr('性别')">
-                  <el-select v-model="form.gender" :placeholder="tr('请选择')" style="width: 100%">
+                  <el-select v-model="form.gender" :placeholder="tr('请选择')" style="width: 100%" :disabled="isLinkedUserReadonly">
                     <el-option :label="tr('男')" :value="0" />
                     <el-option :label="tr('女')" :value="1" />
                     <el-option :label="tr('未知')" :value="2" />
@@ -393,7 +439,7 @@
               <el-col :span="12" />
               <el-col :span="12">
                 <el-form-item :label="tr('岗位')">
-                  <el-select v-model="form.postIds" multiple :placeholder="tr('请选择岗位')" style="width: 100%" clearable>
+                  <el-select v-model="form.postIds" multiple :placeholder="tr('请选择岗位')" style="width: 100%" clearable :disabled="isLinkedUserReadonly">
                     <el-option v-for="item in postOptions" :key="item.postId" :label="item.postName" :value="item.postId" :disabled="item.status == 0" />
                   </el-select>
                   <div v-if="form.userId" class="form-hint">{{ tr('关联登录账号时，岗位会同步到用户管理') }}</div>
@@ -403,7 +449,7 @@
               <el-col :span="12" />
               <el-col :span="12">
                 <el-form-item :label="tr('员工状态')" prop="employeeStatus">
-                  <el-select v-model="form.employeeStatus" :placeholder="tr('请选择员工状态')" style="width: 100%">
+                  <el-select v-model="form.employeeStatus" :placeholder="tr('请选择员工状态')" style="width: 100%" :disabled="isLinkedUserReadonly">
                     <el-option :label="tr('在职')" :value="0" />
                     <el-option :label="tr('试用期')" :value="1" />
                     <el-option :label="tr('已离职')" :value="2" />
@@ -412,22 +458,20 @@
               </el-col>
               <el-col :span="12">
                 <el-form-item :label="tr('税务身份')" prop="taxFormType">
-                  <el-select v-model="form.taxFormType" :placeholder="tr('请选择税务身份')" style="width: 100%">
-                    <el-option label="W2" value="W2" />
-                    <el-option label="W9" value="W9" />
-                    <el-option label="W8" value="W8" />
+                  <el-select v-model="form.taxFormType" :placeholder="tr('请选择税务身份')" style="width: 100%" :disabled="isLinkedUserReadonly">
+                    <el-option v-for="item in availableTaxFormOptions" :key="item.value" :label="item.label" :value="item.value" />
                   </el-select>
                 </el-form-item>
               </el-col>
               <el-col :span="24">
                 <el-form-item :label="tr('备注')">
-                  <el-input v-model="form.remark" type="textarea" :rows="3" :placeholder="tr('请输入内容')" />
+                  <el-input v-model="form.remark" type="textarea" :rows="3" :placeholder="tr('请输入内容')" :disabled="isLinkedUserReadonly" />
                 </el-form-item>
               </el-col>
             </el-row>
           </el-tab-pane>
 
-          <el-tab-pane v-if="canViewSensitive" :label="tr('薪酬与合同')" name="salary">
+          <el-tab-pane v-if="canViewSensitive && !isLinkedUserReadonly" :label="tr('薪酬与合同')" name="salary">
             <el-row :gutter="16">
               <el-col :span="12"><el-form-item :label="tr('薪资类型')"><el-input v-model="form.salaryType" /></el-form-item></el-col>
               <el-col :span="12"><el-form-item :label="tr('基本工资')"><el-input-number v-model="form.baseSalary" :min="0" :precision="2" style="width: 100%" /></el-form-item></el-col>
@@ -446,19 +490,21 @@
           <el-button v-if="!isLastStep" type="primary" @click="goNext">{{ tr('下一页') }}</el-button>
           <el-button v-else type="primary" :loading="buttonLoading" @click="submitForm">{{ tr('确认') }}</el-button>
         </template>
-        <el-button v-else type="primary" :loading="buttonLoading" @click="submitForm">{{ tr('确认') }}</el-button>
+        <el-button v-else-if="!isLinkedUserReadonly" type="primary" :loading="buttonLoading" @click="submitForm">{{ tr('确认') }}</el-button>
       </template>
     </el-drawer>
   </div>
 </template>
 
 <script setup name="EmployeeArchive">
-import { ArrowDown, InfoFilled, QuestionFilled } from '@element-plus/icons-vue'
+import { ArrowDown, ArrowUp, InfoFilled, QuestionFilled } from '@element-plus/icons-vue'
 import { getToken } from '@/utils/auth'
 import axios from 'axios'
 import { blobValidate } from '@/utils/ruoyi'
 import { saveAs } from 'file-saver'
 import useSettingsStore from '@/store/modules/settings'
+import usePermissionStore from '@/store/modules/permission'
+import { hasAccessibleRoutePath } from '@/store/modules/permission'
 import { translateByMap } from '@/locales/runtime-map'
 import { deptTreeSelect, getUser } from '@/api/system/user'
 import {
@@ -468,6 +514,9 @@ import {
   delEmployee,
   getAttachmentTypes,
   getEmployee,
+  getEmployeeCapabilities,
+  getEmployeeDeptTree,
+  getEmployeePostOptions,
   getEmployeeStats,
   listEmployee,
   saveEmployeeAttachment,
@@ -478,9 +527,23 @@ import {
 
 const router = useRouter()
 const { proxy } = getCurrentInstance()
+const permissionStore = usePermissionStore()
+
+const TAX_FORM_PERM = {
+  W2: 'wms:employee:tax:w2',
+  W8: 'wms:employee:tax:w8',
+  W9: 'wms:employee:tax:w9'
+}
 
 function goUserManagement() {
-  router.push('/system/user')
+  if (!hasAccessibleRoutePath(permissionStore.routes, '/system/user')) {
+    proxy.$modal.msgWarning(hrText(
+      '您没有「用户管理」菜单权限，无法跳转创建登录账号。请联系管理员在「系统管理 → 角色管理（权限分配）」中为您的角色勾选「用户管理」及子权限（用户查询、用户新增等）。',
+      'You do not have User Management menu access and cannot open the login-account page. Ask an administrator to grant System Management → User Management and its sub-permissions (user query, user add, etc.) in Role Management.'
+    ))
+    return
+  }
+  router.push('/system/user').catch(() => {})
 }
 const settingsStore = useSettingsStore()
 
@@ -502,6 +565,8 @@ const deptFilterValue = ref('__all__')
 const allowTabSwitch = ref(false)
 const requiredUploadErrors = ref({})
 const requiredUploadKeys = ref({})
+const hrCapabilities = ref({})
+const permissionNoticeExpanded = ref(false)
 
 const uploadUrl = import.meta.env.VITE_APP_BASE_API + '/system/oss/upload'
 const uploadHeaders = { Authorization: 'Bearer ' + getToken() }
@@ -526,13 +591,39 @@ const data = reactive({
 const { form, queryParams, rules } = toRefs(data)
 
 const tr = (text) => translateByMap(text, settingsStore.language || 'zh-cn')
+const hrText = (zh, en) => ((settingsStore.language || 'zh-cn') === 'en' ? en : zh)
 const isEn = computed(() => (settingsStore.language || 'zh-cn') === 'en')
 const drawerLabelWidth = computed(() => isEn.value ? '150px' : '110px')
 const canViewSensitive = computed(() => proxy?.$auth?.hasPermi('wms:employee:sensitive'))
+const canEditLinkedUser = computed(() => hrCapabilities.value?.canEditLinkedUser ?? proxy?.$auth?.hasPermi('system:user:edit'))
+const canLoadDeptTree = computed(() => hrCapabilities.value?.canLoadDeptTree ?? proxy?.$auth?.hasPermi('system:user:list'))
+const canLoadPostOptions = computed(() => hrCapabilities.value?.canLoadPostOptions ?? proxy?.$auth?.hasPermi('system:user:query'))
+const isLinkedUserReadonly = computed(() => !isCreateMode.value && !!form.value?.userId && !canEditLinkedUser.value)
+const linkedUserReadonlyHint = computed(() => hrText(
+  '该员工资料与用户管理模块同步。请在角色管理中勾选「系统管理 → 用户管理 → 用户修改」（system:user:edit）后再编辑；您仍可在详情页上传/管理附件，或编辑无登录账号的员工。',
+  'This profile syncs with User Management. Grant System Management → User Management → User Edit (system:user:edit) to edit linked accounts. You can still manage attachments here or edit employees without login accounts.'
+))
+const availableTaxFormOptions = computed(() => {
+  const all = [
+    { label: 'W2', value: 'W2' },
+    { label: 'W8', value: 'W8' },
+    { label: 'W9', value: 'W9' }
+  ]
+  const viewable = hrCapabilities.value?.viewableTaxFormTypes
+  if (Array.isArray(viewable)) {
+    return all.filter(item => viewable.includes(item.value))
+  }
+  return all.filter(item => proxy?.$auth?.hasPermi(TAX_FORM_PERM[item.value]))
+})
+const canViewSensitiveForSelected = computed(() => {
+  if (!canViewSensitive.value || !selectedEmployee.value) return false
+  return canViewTaxFormType(selectedEmployee.value.taxFormType)
+})
+const permissionNotice = computed(() => buildPermissionNotice())
 const canBatchDownload = computed(() => proxy?.$auth?.hasPermi('wms:employee:file:batchDownload'))
 const tabOrder = computed(() => {
   const tabs = ['basic']
-  if (canViewSensitive.value) {
+  if (canViewSensitive.value && !isLinkedUserReadonly.value) {
     tabs.push('salary')
   }
   return tabs
@@ -617,6 +708,9 @@ const batchDownloadScopeHint = computed(() => {
 })
 
 const requiredAttachmentCards = computed(() => {
+  if (!selectedEmployee.value || !canViewTaxFormType(selectedEmployee.value.taxFormType)) {
+    return []
+  }
   const tax = selectedEmployee.value?.taxFormType || 'W2'
   return (REQUIRED_BY_TAX[tax] || REQUIRED_BY_TAX.W2).map(code => ({
     code,
@@ -650,6 +744,97 @@ function statusTagType(status) {
   return 'danger'
 }
 
+function canViewTaxFormType(taxFormType) {
+  const type = (taxFormType || 'W2').toUpperCase()
+  const viewable = hrCapabilities.value?.viewableTaxFormTypes
+  if (Array.isArray(viewable)) {
+    return viewable.includes(type)
+  }
+  const perm = TAX_FORM_PERM[type]
+  return perm ? proxy?.$auth?.hasPermi(perm) : true
+}
+
+function buildPermissionNotice() {
+  const allowed = []
+  const restricted = []
+  if (proxy?.$auth?.hasPermi('wms:employee:list')) {
+    allowed.push(hrText('查看员工列表与详情', 'View employee list and details'))
+  }
+  if (proxy?.$auth?.hasPermi('wms:employee:add')) {
+    allowed.push(hrText('新增无登录账号的员工档案', 'Add employees without login accounts'))
+  }
+  if (proxy?.$auth?.hasPermi('wms:employee:edit')) {
+    allowed.push(hrText('编辑无登录账号的员工、上传/管理附件', 'Edit profile-only employees and manage attachments'))
+  }
+  if (canEditLinkedUser.value) {
+    allowed.push(hrText('编辑已关联登录账号员工的基本信息与薪酬', 'Edit basic info and compensation for linked accounts'))
+    allowed.push(hrText('跳转「用户管理」创建或维护登录账号', 'Open User Management to create or maintain login accounts'))
+  } else {
+    restricted.push(hrText(
+      '跳转「用户管理」创建登录账号（需勾选「系统管理 → 用户管理」菜单及用户查询/新增权限）',
+      'Open User Management to create login accounts (requires User Management menu plus user query/add permissions)'
+    ))
+    restricted.push(hrText(
+      '修改已关联登录账号员工的基本信息与薪酬（需勾选「用户管理 → 用户修改」system:user:edit）',
+      'Edit basic info/compensation for linked accounts (requires User Edit: system:user:edit)'
+    ))
+  }
+  if (!canLoadDeptTree.value) {
+    restricted.push(hrText(
+      '通过用户管理加载部门树（需 system:user:list）；无该权限时仍可为无登录账号员工选择部门并筛选',
+      'User Management department tree requires system:user:list; without it you can still assign departments for profile-only employees'
+    ))
+  }
+  if (!canLoadPostOptions.value) {
+    restricted.push(hrText(
+      '通过用户管理加载岗位列表（需 system:user:query）；无该权限时仍可为无登录账号员工选择岗位',
+      'User Management post list requires system:user:query; without it you can still assign posts for profile-only employees'
+    ))
+  }
+  const viewable = availableTaxFormOptions.value.map(item => item.label)
+  if (viewable.length) {
+    allowed.push(hrText('可见税务身份：', 'Visible tax types: ') + viewable.join(isEn.value ? ', ' : '、'))
+  } else if (proxy?.$auth?.hasPermi('wms:employee:list')) {
+    restricted.push(hrText(
+      '查看任何税务身份员工（需在 HR员工档案 中至少勾选一种：查看 W2 / W8 / W9 员工）',
+      'View employees of any tax type (grant at least one of View W2 / W8 / W9 Employees under HR Employee Archive)'
+    ))
+  }
+  const hiddenTax = ['W2', 'W8', 'W9'].filter(type => !canViewTaxFormType(type))
+  if (hiddenTax.length && hiddenTax.length < 3) {
+    hiddenTax.forEach(type => {
+      restricted.push(hrText(
+        `查看 ${type} 税务身份员工（需 HR员工档案 → 查看 ${type} 员工，${TAX_FORM_PERM[type]}）`,
+        `View ${type} employees (grant HR Employee Archive → View ${type} Employees, ${TAX_FORM_PERM[type]})`
+      ))
+    })
+  }
+  if (!canViewSensitive.value) {
+    restricted.push(hrText(
+      '查看薪酬与税务敏感文件（需「敏感信息与税务文件」wms:employee:sensitive）',
+      'View salary and tax-sensitive files (requires Sensitive Info & Tax Documents: wms:employee:sensitive)'
+    ))
+  }
+  if (!restricted.length) {
+    return { visible: false, title: '', summary: '', intro: '', allowed: [], restricted: [], grantHint: '' }
+  }
+  return {
+    visible: true,
+    title: hrText('HR 员工档案 · 权限说明', 'HR Employee Archive · Permissions'),
+    summary: hrText('部分功能受限，点击展开查看详情', 'Some actions are restricted. Expand for details.'),
+    intro: hrText(
+      '根据您当前角色的权限，部分功能受限。以下为可用与不可用操作说明：',
+      'Some features are limited by your current role. Available and unavailable actions are listed below:'
+    ),
+    allowed,
+    restricted,
+    grantHint: hrText(
+      '如需完整使用 HR 与登录账号联动功能，请联系管理员在「系统管理 → 角色管理（权限分配）」中补充上述权限。',
+      'For full HR and login-account integration, ask an administrator to grant the permissions above in System Management → Role Management.'
+    )
+  }
+}
+
 function taxFormTitle(taxFormType) {
   const tax = taxFormType || '-'
   return `${tax} ${tr('雇员必备文件')} (IRS / DHS)`
@@ -657,6 +842,7 @@ function taxFormTitle(taxFormType) {
 
 function canUploadAttachment(card) {
   if (!proxy?.$auth?.hasPermi('wms:employee:edit')) return false
+  if (!canViewTaxFormType(selectedEmployee.value?.taxFormType)) return false
   if (card.sensitive && !canViewSensitive.value) return false
   return true
 }
@@ -677,21 +863,40 @@ function findDeptIdByLabel(nodes, label) {
 }
 
 function loadFormOptions() {
-  deptTreeSelect().then(res => {
+  const deptReq = canLoadDeptTree.value ? deptTreeSelect() : getEmployeeDeptTree()
+  deptReq.then(res => {
     deptOptions.value = res.data || []
-  })
-  getUser().then(res => {
-    postOptions.value = res.data?.posts || []
+    syncFormSelectors()
+  }).catch(() => {})
+
+  if (canLoadPostOptions.value) {
+    getUser().then(res => {
+      postOptions.value = res.data?.posts || []
+    }).catch(() => {})
+  } else {
+    getEmployeePostOptions().then(res => {
+      postOptions.value = res.data || []
+    }).catch(() => {})
+  }
+}
+
+function loadCapabilities() {
+  return getEmployeeCapabilities().then(res => {
+    hrCapabilities.value = res.data || {}
+  }).catch(() => {
+    hrCapabilities.value = {}
   })
 }
 
 function syncPostIdsFromUser(userId) {
-  if (!userId) {
+  if (!userId || !canLoadPostOptions.value) {
     form.value.postIds = []
     return
   }
   getUser(userId).then(res => {
     form.value.postIds = res.data?.postIds || []
+  }).catch(() => {
+    form.value.postIds = []
   })
 }
 
@@ -890,11 +1095,25 @@ function cancel() {
 function handleAdd() {
   reset()
   loadFormOptions()
+  form.value.taxFormType = availableTaxFormOptions.value[0]?.value || 'W2'
   open.value = true
   title.value = tr('新建员工')
 }
 
 function handleUpdate(row) {
+  if (row?.userId && !canEditLinkedUser.value) {
+    reset()
+    loadFormOptions()
+    getEmployee(row.id).then(res => {
+      form.value = { ...res.data, postIds: [] }
+      syncFormSelectors()
+      syncPostIdsFromUser(res.data?.userId)
+      open.value = true
+      title.value = hrText('编辑员工（只读）', 'Edit Employee (Read-only)')
+      activeTab.value = 'basic'
+    })
+    return
+  }
   reset()
   loadFormOptions()
   getEmployee(row.id).then(res => {
@@ -907,6 +1126,10 @@ function handleUpdate(row) {
 }
 
 function submitForm() {
+  if (isLinkedUserReadonly.value) {
+    proxy.$modal.msgWarning(linkedUserReadonlyHint.value)
+    return
+  }
   proxy.$refs.employeeRef.validate(valid => {
     if (!valid) return
     buttonLoading.value = true
@@ -1151,11 +1374,13 @@ function downloadAttachment(item) {
   }
 }
 
-loadFormOptions()
-syncUsersOnLoad()
-loadStats()
-loadAttachmentTypes()
-getList()
+loadCapabilities().then(() => {
+  loadFormOptions()
+  syncUsersOnLoad()
+  loadStats()
+  loadAttachmentTypes()
+  getList()
+})
 </script>
 
 <style scoped lang="scss">
@@ -1521,6 +1746,63 @@ getList()
       justify-content: center;
       align-items: center;
     }
+  }
+  .permission-notice {
+    border: 1px solid #dcdfe6;
+    border-radius: 8px;
+    background: #f4f4f5;
+    overflow: hidden;
+    ul {
+      margin: 6px 0 0;
+      padding-left: 20px;
+    }
+    .permission-notice-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .permission-notice-icon {
+      color: #909399;
+      flex-shrink: 0;
+    }
+    .permission-notice-title {
+      font-weight: 600;
+      color: #303133;
+      flex-shrink: 0;
+    }
+    .permission-notice-summary {
+      flex: 1;
+      color: #909399;
+      font-size: 13px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .permission-notice-toggle {
+      margin-left: auto;
+      flex-shrink: 0;
+    }
+    .permission-notice-body {
+      padding: 0 14px 12px 36px;
+      border-top: 1px solid #e4e7ed;
+    }
+    .permission-notice-intro,
+    .permission-grant-hint {
+      margin: 10px 0 0;
+      line-height: 1.6;
+      color: #606266;
+    }
+    .permission-section {
+      margin-top: 8px;
+      line-height: 1.6;
+      color: #606266;
+    }
+  }
+  .drawer-permission-alert {
+    margin-bottom: 16px;
   }
 }
 </style>
