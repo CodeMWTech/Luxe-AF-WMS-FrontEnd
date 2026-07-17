@@ -193,7 +193,7 @@
                 {{ tr('将Excel拖到此处，或') }}<em>{{ tr('点击选择') }}</em>
               </div>
               <template #tip>
-                <div class="import-upload-drop__tip">{{ tr('仅支持 .xlsx 格式') }}</div>
+                <div class="import-upload-drop__tip">{{ tr('仅支持 .xlsx 格式，文件大小不超过 100MB') }}</div>
               </template>
             </el-upload>
           </div>
@@ -217,7 +217,7 @@
                 {{ tr('将Zip拖到此处，或') }}<em>{{ tr('点击选择') }}</em>
               </div>
               <template #tip>
-                <div class="import-upload-drop__tip">{{ tr('仅支持 .zip 格式') }}</div>
+                <div class="import-upload-drop__tip">{{ tr('仅支持 .zip 格式，文件大小不超过 10GB') }}</div>
               </template>
             </el-upload>
           </div>
@@ -444,6 +444,8 @@ const importDialog = reactive({
   excelFile: null,
   zipFile: null
 })
+const MAX_IMPORT_EXCEL_SIZE_BYTES = 100 * 1024 * 1024
+const MAX_IMPORT_ZIP_SIZE_BYTES = 10 * 1024 * 1024 * 1024
 const importLogDialog = reactive({
   visible: false,
   loading: false
@@ -1689,6 +1691,12 @@ function handleImportExcelChange(uploadFile) {
     importExcelUploadRef.value?.clearFiles?.()
     return
   }
+  if (file.size > MAX_IMPORT_EXCEL_SIZE_BYTES) {
+    proxy?.$modal.msgError(tr('Excel文件不能超过 100MB'))
+    importDialog.excelFile = null
+    importExcelUploadRef.value?.clearFiles?.()
+    return
+  }
   importDialog.excelFile = file
 }
 
@@ -1709,6 +1717,12 @@ function handleImportZipChange(uploadFile) {
   if (!file) return
   if (!file.name.toLowerCase().endsWith('.zip')) {
     proxy?.$modal.msgError(tr('请选择zip压缩包'))
+    importDialog.zipFile = null
+    importZipUploadRef.value?.clearFiles?.()
+    return
+  }
+  if (file.size > MAX_IMPORT_ZIP_SIZE_BYTES) {
+    proxy?.$modal.msgError(tr('图片Zip包不能超过 10GB'))
     importDialog.zipFile = null
     importZipUploadRef.value?.clearFiles?.()
     return
