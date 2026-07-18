@@ -98,7 +98,7 @@ import useUserStore from '@/store/modules/user'
 import { useI18n } from 'vue-i18n'
 import { resolvePostLoginRedirect } from '@/utils/mobileDevice'
 
-const loginVideoUrl = new URL('../../../videos/login-cover-test.mp4', import.meta.url).href
+const loginVideoUrl = new URL('../../../videos/A_high-end,_minimalist_luxury_secondary_202607092241-remove-mark.mp4', import.meta.url).href
 const userStore = useUserStore()
 const router = useRouter()
 const route = useRoute()
