@@ -272,7 +272,11 @@
               <el-tag :type="Number(row.status) === 1 ? 'success' : 'danger'">{{ Number(row.status) === 1 ? tr('成功') : tr('失败') }}</el-tag>
             </template>
           </el-table-column>
-          <el-table-column :label="tr('商品ID')" prop="itemId" min-width="180" show-overflow-tooltip />
+          <el-table-column :label="tr('商品ID')" prop="itemId" min-width="180" show-overflow-tooltip>
+            <template #default="{ row }">
+              <span>{{ row.itemId || '-' }}</span>
+            </template>
+          </el-table-column>
           <el-table-column :label="tr('失败原因')" prop="errorMsg" min-width="280" show-overflow-tooltip>
             <template #default="{ row }">
               <el-tooltip v-if="row.errorMsg" effect="dark" placement="top" :content="formatImportError(row.errorMsg)">
