@@ -124,6 +124,22 @@
         :closable="false"
         style="margin-bottom:12px"
       />
+      <el-alert
+        v-if="isTiktokPublish && tiktokBrandLoadError"
+        :title="tiktokBrandLoadError"
+        type="error"
+        show-icon
+        :closable="false"
+        style="margin-bottom:12px"
+      />
+      <el-alert
+        v-if="isTiktokPublish && hasMissingTiktokBrand"
+        :title="t('platformListings.tiktokBrandRequiredSummary', { count: missingTiktokBrandRows.length })"
+        type="warning"
+        show-icon
+        :closable="false"
+        style="margin-bottom:12px"
+      />
       <div v-if="previewList.length" class="channel-preview" :class="chosenPlatform === 'EBAY' ? 'ebay-preview' : 'tiktok-preview'">
         <div class="preview-media">
           <el-image v-if="previewList[0].images && previewList[0].images.length" :src="previewList[0].images[0]" fit="contain" />
@@ -180,7 +196,29 @@
             <div class="title-preview">{{ getPreviewTitle(row) }}</div>
           </template>
         </el-table-column>
-        <el-table-column :label="t('platformListings.sellingPrice')" width="110" align="right">
+        <el-table-column v-if="isTiktokPublish" :label="t('platformListings.tiktokBrandEnglish')" min-width="210">
+          <template #default="{ row }">
+            <el-select
+              v-model="row.tiktokBrandId"
+              filterable
+              remote
+              reserve-keyword
+              :remote-method="searchTiktokBrands"
+              :loading="tiktokBrandLoading"
+              :placeholder="t('platformListings.tiktokBrandSelectPlaceholder')"
+              :no-data-text="t('platformListings.tiktokBrandNoResults')"
+              style="width:100%"
+            >
+              <el-option
+                v-for="brand in tiktokBrandOptions"
+                :key="brand.id"
+                :label="brand.name"
+                :value="brand.id"
+              />
+            </el-select>
+          </template>
+        </el-table-column>
+        <el-table-column v-if="!isTiktokPublish" :label="t('platformListings.sellingPrice')" width="110" align="right">
           <template #default="{ row }">
             {{ formatMoney(row.sellingPrice, row.currency || 'USD') }}
           </template>
@@ -227,7 +265,7 @@
         {{ t('platformListings.nextStep') }} ({{ selectedSkus.length }})
       </el-button>
       <el-button v-if="step === 1" type="primary" @click="goStep3" :disabled="!chosenTemplateId">{{ t('platformListings.nextStep') }}</el-button>
-      <el-button v-if="step === 2" type="primary" @click="doPublish" :loading="publishing" :disabled="hasEbayTitleTooLong || hasTiktokPriceInvalid">
+      <el-button v-if="step === 2" type="primary" @click="doPublish" :loading="publishing" :disabled="hasEbayTitleTooLong || hasTiktokPriceInvalid || hasMissingTiktokBrand">
         {{ t('platformListings.startPublish') }} ({{ previewList.length }})
       </el-button>
     </template>
@@ -237,7 +275,7 @@
 <script setup>
 import { ref, reactive, computed, nextTick, getCurrentInstance } from 'vue'
 import { listInventoryBoard } from '@/api/wms/inventory'
-import { listAllTemplates, previewTemplate, batchPublish } from '@/api/wms/platformListing'
+import { listAllTemplates, previewTemplate, batchPublish, searchTiktokT1Brands } from '@/api/wms/platformListing'
 import { listAllPlatformShops } from '@/api/wms/platformShop'
 
 const { proxy } = getCurrentInstance()
@@ -397,6 +435,7 @@ const chosenTemplate = computed(() => {
 function onShopChange() {
   chosenTemplateId.value = null
   templateList.value = []
+  resetTiktokBrandState()
   if (chosenPlatform.value) {
     listAllTemplates(chosenPlatform.value, chosenShopId.value).then(res => {
       templateList.value = res.data || res.rows || []
@@ -414,7 +453,9 @@ const isAuctionPublish = computed(() => {
   return String(listingType || '').toUpperCase() === 'AUCTION'
 })
 const previewPrimaryPriceLabel = computed(() => {
-  if (isTiktokPublish.value) return t('platformListings.retailPrice')
+  if (isTiktokPublish.value) {
+    return isAuctionPublish.value ? t('platformListings.tiktokAuctionBuyItNowPrice') : t('platformListings.retailPrice')
+  }
   return isAuctionPublish.value
     ? t('platformListings.startPrice')
     : t('platformListings.buyItNowPrice')
@@ -434,6 +475,79 @@ const tiktokPriceInvalidRows = computed(() => isTiktokPublish.value
 const hasTiktokPriceInvalid = computed(() => tiktokPriceInvalidRows.value.length > 0)
 const belowSellingPriceRows = computed(() => previewList.value.filter(row => isBelowSellingPrice(row)))
 const hasBelowSellingPrice = computed(() => belowSellingPriceRows.value.length > 0)
+const tiktokBrandLoading = ref(false)
+const tiktokBrandLoadError = ref('')
+const tiktokBrandOptions = ref([])
+let tiktokBrandRequestSeq = 0
+let tiktokBrandSearchTimer = null
+const missingTiktokBrandRows = computed(() => isTiktokPublish.value
+  ? previewList.value.filter(row => !row.tiktokBrandId)
+  : [])
+const hasMissingTiktokBrand = computed(() => missingTiktokBrandRows.value.length > 0)
+
+function resetTiktokBrandState() {
+  if (tiktokBrandSearchTimer) {
+    clearTimeout(tiktokBrandSearchTimer)
+    tiktokBrandSearchTimer = null
+  }
+  tiktokBrandRequestSeq += 1
+  tiktokBrandLoading.value = false
+  tiktokBrandLoadError.value = ''
+  tiktokBrandOptions.value = []
+}
+
+function retainSelectedTiktokBrandOptions() {
+  const selectedIds = new Set(previewList.value.map(row => String(row.tiktokBrandId || '')).filter(Boolean))
+  tiktokBrandOptions.value = tiktokBrandOptions.value.filter(brand => selectedIds.has(String(brand.id)))
+}
+
+function searchTiktokBrands(keyword) {
+  if (!isTiktokPublish.value || !chosenShopId.value) return
+  if (tiktokBrandSearchTimer) {
+    clearTimeout(tiktokBrandSearchTimer)
+    tiktokBrandSearchTimer = null
+  }
+
+  const normalizedKeyword = String(keyword || '').trim()
+  const requestSeq = ++tiktokBrandRequestSeq
+  if (Array.from(normalizedKeyword).length < 2) {
+    tiktokBrandLoading.value = false
+    tiktokBrandLoadError.value = ''
+    retainSelectedTiktokBrandOptions()
+    return
+  }
+
+  tiktokBrandSearchTimer = setTimeout(() => {
+    tiktokBrandSearchTimer = null
+    loadTiktokBrands(normalizedKeyword, requestSeq)
+  }, 300)
+}
+
+async function loadTiktokBrands(keyword, requestSeq) {
+  if (requestSeq !== tiktokBrandRequestSeq) return
+  tiktokBrandLoading.value = true
+  tiktokBrandLoadError.value = ''
+  try {
+    const res = await searchTiktokT1Brands(chosenShopId.value, keyword, 100)
+    if (requestSeq !== tiktokBrandRequestSeq) return
+    const selectedIds = new Set(previewList.value.map(row => String(row.tiktokBrandId || '')).filter(Boolean))
+    const optionMap = new Map(tiktokBrandOptions.value
+      .filter(brand => selectedIds.has(String(brand.id)))
+      .map(brand => [String(brand.id), brand]))
+    const searchResults = Array.isArray(res.data) ? res.data : []
+    searchResults.forEach(brand => {
+      if (brand?.id && brand?.name) optionMap.set(String(brand.id), brand)
+    })
+    tiktokBrandOptions.value = Array.from(optionMap.values())
+      .sort((a, b) => String(a.name).localeCompare(String(b.name), 'en'))
+  } catch (_error) {
+    if (requestSeq === tiktokBrandRequestSeq) {
+      tiktokBrandLoadError.value = t('platformListings.tiktokBrandsLoadFailed')
+    }
+  } finally {
+    if (requestSeq === tiktokBrandRequestSeq) tiktokBrandLoading.value = false
+  }
+}
 
 function getTitleLength(title) {
   return Array.from(title || '').length
@@ -540,6 +654,7 @@ async function loadPreviews() {
           ...data,
           skuId: sku.skuId || sku.id,
           skuCode: data.skuCode || sku.skuCode,
+          tiktokBrandId: '',
           overrideTitle: data.title || '',
           overridePrice: normalizePreviewPrice(data.price ?? 0),
           listingType: data.listingType || chosenTemplate.value?.listingType || 'FIXED_PRICE',
@@ -550,6 +665,7 @@ async function loadPreviews() {
         previewList.value.push({
           skuId: sku.skuId || sku.id,
           skuCode: sku.skuCode,
+          tiktokBrandId: '',
           overrideTitle: '',
           overridePrice: 0,
           listingType: chosenTemplate.value?.listingType || 'FIXED_PRICE',
@@ -568,6 +684,7 @@ async function loadPreviews() {
 // ==================== Navigation ====================
 async function onOpen() {
   step.value = 0
+  resetTiktokBrandState()
   invParams.pageNum = 1
   if (preSelectedSkuIds.value?.length) {
     seedPreselectedSkus(preSelectedSkuIds.value)
@@ -590,6 +707,7 @@ function onClosed() {
   chosenShopId.value = null
   chosenTemplateId.value = null
   templateList.value = []
+  resetTiktokBrandState()
 }
 
 function goStep2() {
@@ -609,6 +727,7 @@ async function goStep3() {
     return
   }
   step.value = 2
+  if (isTiktokPublish.value) resetTiktokBrandState()
   await loadPreviews()
   if (hasEbayTitleTooLong.value) {
     proxy.$modal.msgWarning(t('platformListings.ebayTitleTooLongSummary', { count: ebayTitleTooLongRows.value.length }))
@@ -625,6 +744,10 @@ async function doPublish() {
   }
   if (hasTiktokPriceInvalid.value) {
     proxy.$modal.msgWarning(t('platformListings.tiktokPriceRangeSummary', { count: tiktokPriceInvalidRows.value.length }))
+    return
+  }
+  if (hasMissingTiktokBrand.value) {
+    proxy.$modal.msgWarning(t('platformListings.tiktokBrandRequiredSummary', { count: missingTiktokBrandRows.value.length }))
     return
   }
   if (hasBelowSellingPrice.value) {
@@ -645,10 +768,14 @@ async function doPublish() {
   const skuIds = previewList.value.map(p => p.skuId)
   const customTitles = {}
   const customPrices = {}
+  const customBrandIds = {}
   previewList.value.forEach(p => {
     if (p.overrideTitle) customTitles[p.skuId] = p.overrideTitle
     const price = Number(p.overridePrice)
     if (p.overridePrice != null && price > 0) customPrices[p.skuId] = price
+    if (isTiktokPublish.value && p.tiktokBrandId) {
+      customBrandIds[p.skuId] = p.tiktokBrandId
+    }
   })
   publishing.value = true
   try {
@@ -658,6 +785,7 @@ async function doPublish() {
       skuIds,
       customTitles,
       customPrices,
+      customBrandIds,
       confirmBelowSellingPrice: hasBelowSellingPrice.value
     })
     proxy.$modal.msgSuccess(t('platformListings.publishSuccess'))

@@ -415,8 +415,9 @@ function handleSync(row) {
   syncListingStatus(row.id).then(() => {
     proxy.$modal.msgSuccess(t('platformListings.syncSuccess'))
     getList()
-  }).catch(() => {
-    proxy.$modal.msgError(t('platformListings.syncFailed'))
+  }).catch((err) => {
+    const msg = err?.data?.msg || err?.message || t('platformListings.syncFailed')
+    proxy.$modal.msgError(msg)
   })
 }
 

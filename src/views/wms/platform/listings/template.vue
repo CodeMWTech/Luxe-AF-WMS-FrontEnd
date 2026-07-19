@@ -265,31 +265,63 @@
                     />
                   </div>
 
-                  <div v-if="showTiktokBrandField" class="tiktok-field-block">
-                    <label class="tiktok-required-label">{{ t('platformListings.brand') }}</label>
-                    <el-input v-model="form.tiktokBrandId" :placeholder="t('platformListings.tiktokBrandPlaceholder')" disabled />
+                  <div v-if="tiktokAttributeLoading" class="tiktok-attribute-status">
+                    <el-skeleton :rows="2" animated />
                   </div>
+                  <el-alert
+                    v-else-if="tiktokAttributeError"
+                    class="tiktok-attribute-status"
+                    type="error"
+                    :closable="false"
+                    :title="tiktokAttributeError"
+                    show-icon
+                  />
+                  <el-alert
+                    v-else-if="form.tiktokCategoryId && tiktokAttributeLoaded && visibleTiktokAttributes.length === 0"
+                    class="tiktok-attribute-status"
+                    type="info"
+                    :closable="false"
+                    :title="t('platformListings.tiktokNoRequiredAttributes')"
+                    show-icon
+                  />
 
-                  <div class="tiktok-field-block">
-                    <label class="tiktok-required-label">{{ t('platformListings.condition') }}</label>
-                    <el-select v-model="form.tiktokConditionValue" style="width:100%">
-                      <el-option label="N/A" value="N/A" />
-                      <el-option label="Pre-owned" value="Pre-owned" />
-                      <el-option label="New with tag" value="New with tag" />
-                      <el-option label="New without tag" value="New without tag" />
+                  <div
+                    v-for="attribute in visibleTiktokAttributes"
+                    :key="attribute.id"
+                    class="tiktok-field-block"
+                    :class="{ 'is-required-missing': tiktokValidationAttempted && !hasTiktokAttributeValue(attribute) }"
+                    :data-tiktok-attribute-missing="tiktokValidationAttempted && !hasTiktokAttributeValue(attribute) ? 'true' : null"
+                  >
+                    <label class="tiktok-required-label">{{ attribute.name }}</label>
+                    <el-select
+                      v-if="attribute.values?.length"
+                      v-model="tiktokAttributeSelections[attribute.id]"
+                      :multiple="attribute.multipleSelection"
+                      :allow-create="attribute.customizable"
+                      filterable
+                      default-first-option
+                      style="width:100%"
+                      :placeholder="t('platformListings.tiktokAttributeSelectPlaceholder')"
+                    >
+                      <el-option
+                        v-for="option in attribute.values"
+                        :key="option.id"
+                        :label="option.name"
+                        :value="option.id"
+                      />
                     </el-select>
-                  </div>
-
-                  <div class="tiktok-field-block">
-                    <label>{{ t('platformListings.fabrication') }}</label>
-                    <el-input v-model="form.tiktokFabrication" maxlength="100" />
-                    <div class="tiktok-tip">{{ t('platformListings.tiktokCategoryAttributeHint') }}</div>
-                  </div>
-
-                  <div class="tiktok-field-block">
-                    <label>{{ t('platformListings.conditionDescription') }}</label>
-                    <el-input v-model="form.tiktokConditionDescription" maxlength="500" />
-                    <div class="tiktok-tip">{{ t('platformListings.tiktokCategoryAttributeHint') }}</div>
+                    <el-input
+                      v-else
+                      v-model="tiktokAttributeSelections[attribute.id]"
+                      :placeholder="t('platformListings.tiktokAttributeInputPlaceholder')"
+                    />
+                    <div class="tiktok-tip">{{ t('platformListings.tiktokLiveAttributeHint') }}</div>
+                    <div
+                      v-if="tiktokValidationAttempted && !hasTiktokAttributeValue(attribute)"
+                      class="tiktok-required-error"
+                    >
+                      {{ t('platformListings.tiktokAttributeRequired', { field: attribute.name }) }}
+                    </div>
                   </div>
                 </section>
 
@@ -391,7 +423,7 @@
 <script setup>
 import { ref, reactive, computed, nextTick, onMounted, getCurrentInstance, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { listTemplates, addTemplate, updateTemplate, delTemplate, getTemplate, getCategories, getCategoryById, getEbayPolicies, getTiktokWarehouses } from '@/api/wms/platformListing'
+import { listTemplates, addTemplate, updateTemplate, delTemplate, getTemplate, getCategories, getCategoryById, getEbayPolicies, getTiktokWarehouses, getTiktokCategoryAttributes } from '@/api/wms/platformListing'
 import { listAllPlatformShops } from '@/api/wms/platformShop'
 import { insertTextAtSelection } from '@/utils/textSelection'
 
@@ -434,6 +466,7 @@ function onPlatformChange() {
   warehouseList.value = []
   form.tiktokWarehouseId = ''
   clearEbayPolicies()
+  resetTiktokAttributeState()
 }
 
 function clearEbayPolicies() {
@@ -491,8 +524,8 @@ const initForm = {
   ebayLocation: 'Los Angeles, California', ebayPostalCode: '90048', ebayDispatchTimeMax: 3,
   ebayShippingService: 'USPSParcel', ebayShippingCost: 0, ebayReturnsAccepted: false, ebayBestOfferEnabled: false, ebayPrivateListing: false,
   ebayFulfillmentPolicyId: '', ebayPaymentPolicyId: '', ebayReturnPolicyId: '',
-  tiktokCategoryId: '', tiktokCategoryVersion: 'v2', tiktokSaveMode: 'LISTING', tiktokBrandId: '', tiktokConditionValue: 'Pre-owned',
-  tiktokFabrication: 'leather', tiktokConditionDescription: 'great',
+  tiktokCategoryId: '', tiktokCategoryVersion: 'v2', tiktokSaveMode: 'LISTING',
+  tiktokProductAttributes: '',
   tiktokWarehouseId: '', tiktokQuantity: 1, tiktokCurrency: 'USD', tiktokCodAllowed: false,
   packageWeightValue: null, packageWeightUnit: 'POUND', packageLength: null, packageWidth: null, packageHeight: null, packageDimensionUnit: 'INCH'
 }
@@ -627,7 +660,123 @@ const rules = {
 }
 const dialog = reactive({ visible: false, title: '', isEdit: false })
 
-const showTiktokBrandField = false
+const tiktokAttributeDefinitions = ref([])
+const tiktokAttributeSelections = reactive({})
+const tiktokAttributeLoading = ref(false)
+const tiktokAttributeLoaded = ref(false)
+const tiktokAttributeError = ref('')
+const tiktokValidationAttempted = ref(false)
+let tiktokAttributeRequestSeq = 0
+const visibleTiktokAttributes = computed(() => tiktokAttributeDefinitions.value.filter(isTiktokAttributeRequiredNow))
+const missingTiktokRequiredAttributes = computed(() => visibleTiktokAttributes.value.filter(attribute => !hasTiktokAttributeValue(attribute)))
+
+function resetTiktokAttributeState() {
+  tiktokAttributeRequestSeq += 1
+  tiktokAttributeDefinitions.value = []
+  tiktokAttributeLoading.value = false
+  tiktokAttributeLoaded.value = false
+  tiktokAttributeError.value = ''
+  tiktokValidationAttempted.value = false
+  Object.keys(tiktokAttributeSelections).forEach(key => delete tiktokAttributeSelections[key])
+  form.tiktokProductAttributes = ''
+}
+
+function parseTiktokProductAttributes(value) {
+  if (Array.isArray(value)) return value
+  if (!value) return []
+  try {
+    const parsed = JSON.parse(value)
+    return Array.isArray(parsed) ? parsed : []
+  } catch (_error) {
+    return []
+  }
+}
+
+function hydrateTiktokAttributeSelections(attributes) {
+  Object.keys(tiktokAttributeSelections).forEach(key => delete tiktokAttributeSelections[key])
+  parseTiktokProductAttributes(attributes).forEach(attribute => {
+    if (!attribute?.id || !Array.isArray(attribute.values)) return
+    const values = attribute.values
+      .map(value => value?.id || value?.name)
+      .filter(value => value !== null && value !== undefined && value !== '')
+    tiktokAttributeSelections[attribute.id] = values.length > 1 ? values : (values[0] || '')
+  })
+}
+
+function selectedTiktokValues(attribute) {
+  const selection = tiktokAttributeSelections[attribute.id]
+  if (Array.isArray(selection)) return selection.filter(value => value !== null && value !== undefined && value !== '')
+  return selection === null || selection === undefined || selection === '' ? [] : [selection]
+}
+
+function hasTiktokAttributeValue(attribute) {
+  return selectedTiktokValues(attribute).length > 0
+}
+
+function isTiktokAttributeRequiredNow(attribute) {
+  const conditions = Array.isArray(attribute.requirementConditions) ? attribute.requirementConditions : []
+  if (conditions.length === 0) return !!attribute.required
+  return conditions.some(condition => {
+    const parentId = condition.attribute_id || condition.attributeId
+    const expectedValueId = condition.attribute_value_id || condition.value_id || condition.attributeValueId
+    if (!parentId || !expectedValueId) return false
+    const selected = selectedTiktokValues({ id: parentId }).map(String)
+    const matches = selected.includes(String(expectedValueId))
+    const conditionType = String(condition.condition_type || condition.conditionType || 'VALUE_ID_MATCH').toUpperCase()
+    return conditionType === 'VALUE_ID_NOT_MATCH' ? !matches : matches
+  })
+}
+
+function normalizeTiktokAttributeSelection(attribute) {
+  let values = selectedTiktokValues(attribute)
+  const allowedIds = new Set((attribute.values || []).map(option => String(option.id)))
+  if (!attribute.customizable && allowedIds.size > 0) {
+    values = values.filter(value => allowedIds.has(String(value)))
+  }
+  if (!attribute.multipleSelection) {
+    tiktokAttributeSelections[attribute.id] = values[0] || ''
+  } else {
+    tiktokAttributeSelections[attribute.id] = values
+  }
+}
+
+async function loadTiktokAttributes(preservedAttributes = []) {
+  const requestSeq = ++tiktokAttributeRequestSeq
+  tiktokAttributeDefinitions.value = []
+  tiktokAttributeLoaded.value = false
+  tiktokAttributeError.value = ''
+  hydrateTiktokAttributeSelections(preservedAttributes)
+  if (form.platform !== 'TIKTOK' || !form.shopId || !form.tiktokCategoryId) return
+
+  tiktokAttributeLoading.value = true
+  try {
+    const res = await getTiktokCategoryAttributes(
+      form.shopId, form.tiktokCategoryId, form.tiktokCategoryVersion || 'v2', 'en-US'
+    )
+    if (requestSeq !== tiktokAttributeRequestSeq) return
+    tiktokAttributeDefinitions.value = (res.data || []).filter(attribute => attribute?.id && attribute?.name)
+    tiktokAttributeDefinitions.value.forEach(normalizeTiktokAttributeSelection)
+    tiktokAttributeLoaded.value = true
+  } catch (_error) {
+    if (requestSeq !== tiktokAttributeRequestSeq) return
+    tiktokAttributeError.value = t('platformListings.tiktokAttributesLoadFailed')
+  } finally {
+    if (requestSeq === tiktokAttributeRequestSeq) tiktokAttributeLoading.value = false
+  }
+}
+
+function buildTiktokProductAttributes() {
+  return tiktokAttributeDefinitions.value.map(attribute => {
+    const values = selectedTiktokValues(attribute).map(selected => {
+      const option = (attribute.values || []).find(item => String(item.id) === String(selected))
+      if (option) return { id: String(option.id), name: option.name }
+      const customName = String(selected || '').trim()
+      return attribute.customizable && customName ? { name: customName } : null
+    }).filter(Boolean)
+    return values.length ? { id: String(attribute.id), name: attribute.name, values } : null
+  }).filter(Boolean)
+}
+
 const shopNameMap = ref({})
 const warehouseList = ref([])
 const warehouseLoading = ref(false)
@@ -727,13 +876,18 @@ function insertParam(placeholder) {
 }
 
 function onShopChange() {
+  const preservedAttributes = buildTiktokProductAttributes()
   warehouseList.value = []
   form.tiktokWarehouseId = ''
   clearEbayPolicies()
   if (form.platform === 'TIKTOK') {
     loadWarehouses()
-  } else if (form.platform === 'EBAY' && form.shopId) {
-    loadEbayPolicies({ silent: true, refresh: true })
+    loadTiktokAttributes(preservedAttributes)
+  } else {
+    resetTiktokAttributeState()
+    if (form.platform === 'EBAY' && form.shopId) {
+      loadEbayPolicies({ silent: true, refresh: true })
+    }
   }
 }
 
@@ -777,7 +931,7 @@ function getList() {
 
 function handleQuery() { queryParams.pageNum = 1; getList() }
 function resetQuery() { queryRef.value?.resetFields(); handleQuery() }
-function resetForm() { Object.assign(form, initForm); form.enabled = true }
+function resetForm() { Object.assign(form, initForm); form.enabled = true; resetTiktokAttributeState() }
 
 function clearFormValidate() {
   nextTick(() => formRef.value?.clearValidate?.())
@@ -807,8 +961,7 @@ function handleEdit(row) {
       ebayPaymentPolicyId: d.ebayPaymentPolicyId || '',
       ebayReturnPolicyId: d.ebayReturnPolicyId || '',
       tiktokCategoryId: d.tiktokCategoryId || '', tiktokCategoryVersion: d.tiktokCategoryVersion || 'v2', tiktokSaveMode: d.tiktokSaveMode || 'LISTING',
-      tiktokBrandId: d.tiktokBrandId || '', tiktokConditionValue: d.tiktokConditionValue || 'Pre-owned',
-      tiktokFabrication: d.tiktokFabrication || 'leather', tiktokConditionDescription: d.tiktokConditionDescription || 'great',
+      tiktokProductAttributes: d.tiktokProductAttributes || '',
       tiktokWarehouseId: d.tiktokWarehouseId || '', tiktokQuantity: 1, tiktokCurrency: d.tiktokCurrency || 'USD', tiktokCodAllowed: !!d.tiktokCodAllowed,
       packageWeightValue: d.packageWeightValue, packageWeightUnit: d.packageWeightUnit || 'POUND', packageLength: d.packageLength,
       packageWidth: d.packageWidth, packageHeight: d.packageHeight, packageDimensionUnit: d.packageDimensionUnit || 'INCH'
@@ -841,6 +994,7 @@ function handleEdit(row) {
     // TikTok：加载仓库列表让 select 显示仓库名而非 ID
     if (platform === 'TIKTOK' && d.shopId) {
       getTiktokWarehouses(d.shopId).then(res => {
+      loadTiktokAttributes(d.tiktokProductAttributes)
         warehouseList.value = res.data || []
       }).catch(() => {})
     }
@@ -863,9 +1017,31 @@ function submitForm() {
     submitValidatedForm()
     return
   }
-  formRef.value.validate((valid) => {
-    if (!valid) return
+  // 无论 Element Form 校验是否通过，都进入统一校验以汇总并提示全部缺失项。
+  formRef.value.validate(() => {
     submitValidatedForm()
+  })
+}
+
+function isPositiveValue(value) {
+  return value !== null && value !== undefined && value !== '' && Number(value) > 0
+}
+
+function isRichTextEmpty(value) {
+  if (!value) return true
+  const plainText = String(value)
+    .replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;|&#160;/gi, ' ')
+    .trim()
+  return plainText.length === 0
+}
+
+function focusFirstRequiredError() {
+  nextTick(() => {
+    const target = document.querySelector(
+      '.template-dialog-body [data-tiktok-attribute-missing="true"], .template-dialog-body .is-error'
+    )
+    target?.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
   })
 }
 
@@ -874,8 +1050,8 @@ function submitValidatedForm() {
   if (!form.platform) { proxy.$modal.msgWarning(t('platformListings.platformRequired')); return }
   if (!form.shopId) { proxy.$modal.msgWarning(t('platformListings.shopRequired')); return }
 
-  // 收集缺失的关键信息
   const isEbay = form.platform === 'EBAY'
+  tiktokValidationAttempted.value = !isEbay
   if (!isEbay && isTiktokRetailPriceInvalid()) {
     proxy.$modal.msgWarning(t('platformListings.tiktokPriceRangeHint'))
     return
@@ -892,31 +1068,60 @@ function submitValidatedForm() {
     proxy.$modal.msgWarning(t('platformListings.auctionBuyItNowTooLow', { price: formattedAuctionMinimumPrice.value, startPrice: formattedAuctionStartPrice.value }))
     return
   }
+
+  // 保存模板时所有必填项均为硬校验，不再提供“仍然保存”。
   const missing = []
-  if (!form.packageLength || !form.packageWidth || !form.packageHeight) {
+  if (!isPositiveValue(form.packageLength) || !isPositiveValue(form.packageWidth) || !isPositiveValue(form.packageHeight)) {
     missing.push(t('platformListings.packageDimensionsLabel'))
   }
-  if (form.packageWeightValue == null) {
+  if (!isPositiveValue(form.packageWeightValue)) {
     missing.push(t('platformListings.packageWeight'))
   }
   if (isEbay && !form.ebayCategoryId) {
     missing.push(t('platformListings.ebayItemCategory'))
   }
+  if (isEbay && !form.ebayFulfillmentPolicyId) {
+    missing.push(t('platformListings.domesticShipping'))
+  }
+  if (isEbay && !form.ebayReturnPolicyId) {
+    missing.push(t('platformListings.returnPolicy'))
+  }
+  if (isEbay && !form.ebayPaymentPolicyId) {
+    missing.push(t('platformListings.paymentPolicy'))
+  }
+  if (!isEbay && !String(form.defaultTitle || '').trim()) {
+    missing.push(t('platformListings.productNameLabel'))
+  }
+  if (!isEbay && !form.tiktokWarehouseId) {
+    missing.push(t('platformListings.warehouse'))
+  }
   if (!isEbay && !form.tiktokCategoryId) {
     missing.push(t('platformListings.category'))
   }
-  if (!form.descriptionFormat) {
+  if (!isEbay && form.tiktokCategoryId) {
+    if (tiktokAttributeLoading.value) {
+      proxy.$modal.msgWarning(t('platformListings.tiktokAttributesLoading'))
+      focusFirstRequiredError()
+      return
+    }
+    if (tiktokAttributeError.value || !tiktokAttributeLoaded.value) {
+      proxy.$modal.msgWarning(t('platformListings.tiktokAttributesLoadFailed'))
+      focusFirstRequiredError()
+      return
+    }
+    if (missingTiktokRequiredAttributes.value.length > 0) {
+      missing.push(...missingTiktokRequiredAttributes.value.map(attribute => attribute.name))
+    }
+  }
+  if (isRichTextEmpty(form.descriptionFormat)) {
     missing.push(t('platformListings.ebayDescription'))
   }
 
   if (missing.length > 0) {
-    proxy.$modal.confirm(
-      t('platformListings.missingFieldsHint', { fields: missing.join('、') }),
-      t('platformListings.warningTitle'),
-      { type: 'warning', confirmButtonText: t('platformListings.continueAnyway'), cancelButtonText: t('platformListings.goBackToFill') }
-    ).then(() => {
-      doSubmit(isEbay)
-    }).catch(() => {})
+    proxy.$modal.msgWarning(t('platformListings.requiredFieldsMissing', {
+      fields: [...new Set(missing)].join('、')
+    }))
+    focusFirstRequiredError()
     return
   }
 
@@ -970,8 +1175,7 @@ function doSubmit(isEbay) {
     ebayPaymentPolicyId: form.ebayPaymentPolicyId || null,
     ebayReturnPolicyId: form.ebayReturnPolicyId || null,
     tiktokCategoryId: form.tiktokCategoryId || null, tiktokCategoryVersion: form.tiktokCategoryVersion || null, tiktokSaveMode: form.tiktokSaveMode || null,
-    tiktokBrandId: form.tiktokBrandId || null, tiktokConditionValue: form.tiktokConditionValue || null,
-    tiktokFabrication: form.tiktokFabrication || 'leather', tiktokConditionDescription: form.tiktokConditionDescription || 'great',
+    tiktokProductAttributes: JSON.stringify(buildTiktokProductAttributes()),
     tiktokWarehouseId: form.tiktokWarehouseId || null, tiktokQuantity: 1, tiktokCurrency: form.tiktokCurrency || null, tiktokCodAllowed: form.tiktokCodAllowed,
     packageWeightValue: form.packageWeightValue,
     packageWeightUnit: form.packageWeightUnit,
@@ -1031,7 +1235,10 @@ function onTiktokCategoryChange(val) {
   if (val && tiktokLeafIds.value.size > 0 && !tiktokLeafIds.value.has(val)) {
     proxy.$modal.msgWarning(t('platformListings.mustSelectLeafCategory'))
     form.tiktokCategoryId = ''
+    loadTiktokAttributes([])
+    return
   }
+  loadTiktokAttributes([])
 }
 
 function validateLeafCategory() {
@@ -1546,6 +1753,17 @@ onMounted(() => { loadShops(); getList() })
   line-height: 1.45;
 }
 .tiktok-tip { color: #6b7280; margin-bottom: 8px; }
+.tiktok-field-block.is-required-missing :deep(.el-input__wrapper),
+.tiktok-field-block.is-required-missing :deep(.el-select__wrapper) {
+  box-shadow: 0 0 0 1px #f56c6c inset;
+}
+.tiktok-required-error {
+  margin-top: -2px;
+  margin-bottom: 8px;
+  color: #f56c6c;
+  font-size: 12px;
+  line-height: 1.4;
+}
 .warehouse-warning-tip { color: #b45309; margin-top: -2px; }
 .tiktok-warning { margin-top: 6px; }
 .tiktok-image-grid {
@@ -1601,6 +1819,7 @@ onMounted(() => { loadShops(); getList() })
   opacity: 0.55;
 }
 .tiktok-field-block { margin-top: 14px; }
+.tiktok-attribute-status { margin-top: 14px; }
 .tiktok-label-row {
   display: flex;
   align-items: center;
