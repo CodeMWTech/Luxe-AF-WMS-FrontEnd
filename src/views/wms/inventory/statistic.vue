@@ -706,13 +706,13 @@ const queryParams = ref({
 // ───────────── 格式化工具函数 ─────────────
 
 /**
- * 金额格式化：null/undefined → '--'，否则保留两位小数
+ * 金额格式化：null/undefined → '--'，否则显示 $ + 千分位 + 两位小数
  */
 function formatMoney(v) {
   if (v === null || v === undefined) return '--'
   const n = Number(v)
   if (!Number.isFinite(n)) return '--'
-  return n.toFixed(2)
+  return `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
 function displayValue(value) {
@@ -978,14 +978,14 @@ function getCategoryName(item) {
 }
 
 /**
- * 利润格式化：null → '--'，0 → '0.00'，其余保留两位小数
+ * 利润格式化：null → '--'，0 → '$0.00'，其余显示 $ + 千分位 + 两位小数
  * totalProfit 无出库时后端返回 0，不应显示 '--'
  */
 function formatProfit(v) {
   if (v === null || v === undefined) return '--'
   const n = Number(v)
   if (!Number.isFinite(n)) return '--'
-  return n.toFixed(2)
+  return `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
 /**
