@@ -15,6 +15,27 @@ export function getEmployeeStats() {
   })
 }
 
+export function getEmployeeCapabilities() {
+  return request({
+    url: '/wms/employee/capabilities',
+    method: 'get'
+  })
+}
+
+export function getEmployeeDeptTree() {
+  return request({
+    url: '/wms/employee/deptTree',
+    method: 'get'
+  })
+}
+
+export function getEmployeePostOptions() {
+  return request({
+    url: '/wms/employee/postOptions',
+    method: 'get'
+  })
+}
+
 export function getAttachmentTypes() {
   return request({
     url: '/wms/employee/attachmentTypes',
