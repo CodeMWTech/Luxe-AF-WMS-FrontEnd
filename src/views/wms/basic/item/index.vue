@@ -168,63 +168,96 @@
           <el-button
             plain
             icon="Delete"
-            :disabled="!importDialog.excelFile && !importDialog.zipFile"
+            :disabled="importDialog.loading || (!importDialog.excelFile && !importDialog.zipFile)"
             @click="clearImportFiles"
           >{{ tr('清空文件') }}</el-button>
         </div>
         <div class="import-upload-grid">
-          <div class="import-upload-card">
+          <div class="import-upload-card" :class="{ 'import-upload-card--selected': !!importDialog.excelFile }">
             <div class="import-upload-card__label">Excel</div>
             <el-upload
               ref="importExcelUploadRef"
               class="import-upload-drop"
+              :class="{ 'import-upload-drop--selected': !!importDialog.excelFile }"
               action="#"
               drag
               :auto-upload="false"
               :limit="1"
               accept=".xlsx"
-              :show-file-list="true"
+              :disabled="importDialog.loading"
+              :show-file-list="false"
               :on-change="handleImportExcelChange"
               :on-remove="handleImportExcelRemove"
               :on-exceed="handleImportExcelExceed"
             >
-              <el-icon class="import-upload-drop__icon"><UploadFilled /></el-icon>
-              <div class="import-upload-drop__text">
-                {{ tr('将Excel拖到此处，或') }}<em>{{ tr('点击选择') }}</em>
-              </div>
+              <template v-if="importDialog.excelFile">
+                <el-icon class="import-upload-drop__icon import-upload-drop__icon--success"><CircleCheckFilled /></el-icon>
+                <div class="import-upload-drop__filename" :title="importDialog.excelFile.name">{{ importDialog.excelFile.name }}</div>
+                <div class="import-upload-drop__meta">{{ formatImportFileSize(importDialog.excelFile.size) }}</div>
+                <div class="import-upload-drop__hint">{{ tr('已选择，点击可更换') }}</div>
+              </template>
+              <template v-else>
+                <el-icon class="import-upload-drop__icon"><UploadFilled /></el-icon>
+                <div class="import-upload-drop__text">
+                  {{ tr('将Excel拖到此处，或') }}<em>{{ tr('点击选择') }}</em>
+                </div>
+              </template>
               <template #tip>
                 <div class="import-upload-drop__tip">{{ tr('仅支持 .xlsx 格式，文件大小不超过 100MB') }}</div>
               </template>
             </el-upload>
           </div>
-          <div class="import-upload-card">
+          <div class="import-upload-card" :class="{ 'import-upload-card--selected': !!importDialog.zipFile }">
             <div class="import-upload-card__label">Zip</div>
             <el-upload
               ref="importZipUploadRef"
               class="import-upload-drop"
+              :class="{ 'import-upload-drop--selected': !!importDialog.zipFile }"
               action="#"
               drag
               :auto-upload="false"
               :limit="1"
               accept=".zip"
-              :show-file-list="true"
+              :disabled="importDialog.loading"
+              :show-file-list="false"
               :on-change="handleImportZipChange"
               :on-remove="handleImportZipRemove"
               :on-exceed="handleImportZipExceed"
             >
-              <el-icon class="import-upload-drop__icon"><UploadFilled /></el-icon>
-              <div class="import-upload-drop__text">
-                {{ tr('将Zip拖到此处，或') }}<em>{{ tr('点击选择') }}</em>
-              </div>
+              <template v-if="importDialog.zipFile">
+                <el-icon class="import-upload-drop__icon import-upload-drop__icon--success"><CircleCheckFilled /></el-icon>
+                <div class="import-upload-drop__filename" :title="importDialog.zipFile.name">{{ importDialog.zipFile.name }}</div>
+                <div class="import-upload-drop__meta">{{ formatImportFileSize(importDialog.zipFile.size) }}</div>
+                <div class="import-upload-drop__hint">{{ tr('已选择，点击可更换') }}</div>
+              </template>
+              <template v-else>
+                <el-icon class="import-upload-drop__icon"><UploadFilled /></el-icon>
+                <div class="import-upload-drop__text">
+                  {{ tr('将Zip拖到此处，或') }}<em>{{ tr('点击选择') }}</em>
+                </div>
+              </template>
               <template #tip>
                 <div class="import-upload-drop__tip">{{ tr('仅支持 .zip 格式，文件大小不超过 10GB') }}</div>
               </template>
             </el-upload>
           </div>
         </div>
+        <div v-if="importDialog.loading" class="import-upload-progress">
+          <div class="import-upload-progress__label">
+            <span>{{ tr('正在上传文件') }}</span>
+            <span>{{ importDialog.uploadProgress }}%</span>
+          </div>
+          <el-progress
+            :percentage="importDialog.uploadProgress"
+            :stroke-width="10"
+            striped
+            striped-flow
+          />
+          <div class="import-upload-progress__tip">{{ tr('大文件上传可能需要较长时间，请勿关闭窗口') }}</div>
+        </div>
       </div>
       <template #footer>
-        <el-button @click="importDialog.visible = false">{{ tr('取消') }}</el-button>
+        <el-button :disabled="importDialog.loading" @click="importDialog.visible = false">{{ tr('取消') }}</el-button>
         <el-button type="primary" :loading="importDialog.loading" @click="submitImportDialog">{{ tr('开始导入') }}</el-button>
       </template>
     </el-dialog>
@@ -272,7 +305,11 @@
               <el-tag :type="Number(row.status) === 1 ? 'success' : 'danger'">{{ Number(row.status) === 1 ? tr('成功') : tr('失败') }}</el-tag>
             </template>
           </el-table-column>
-          <el-table-column :label="tr('商品ID')" prop="itemId" min-width="180" show-overflow-tooltip />
+          <el-table-column :label="tr('商品ID')" prop="itemId" min-width="180" show-overflow-tooltip>
+            <template #default="{ row }">
+              <span>{{ row.itemId || '-' }}</span>
+            </template>
+          </el-table-column>
           <el-table-column :label="tr('失败原因')" prop="errorMsg" min-width="280" show-overflow-tooltip>
             <template #default="{ row }">
               <el-tooltip v-if="row.errorMsg" effect="dark" placement="top" :content="formatImportError(row.errorMsg)">
@@ -327,7 +364,7 @@ import JSBarcode from 'jsbarcode'
 import {useWmsStore} from '@/store/modules/wms'
 import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
-import { UploadFilled } from '@element-plus/icons-vue'
+import { CircleCheckFilled, UploadFilled } from '@element-plus/icons-vue'
 import { formatDateTimeForQuery } from '@/utils/laTime'
 import { listItemModelMaterialOptions } from '@/api/wms/itemModel'
 import { blobValidate } from '@/utils/ruoyi'
@@ -441,6 +478,7 @@ const quantityDialog = reactive({
 const importDialog = reactive({
   visible: false,
   loading: false,
+  uploadProgress: 0,
   excelFile: null,
   zipFile: null
 })
@@ -1653,7 +1691,36 @@ function formatImportError(message) {
     if (next === text) break
     text = next
   }
-  return text.trim() || String(message).trim()
+  text = text.replace(/\/tmp\/\S+/g, '').replace(/[A-Za-z]:\\[^\s,]+/gi, '')
+
+  const lower = text.toLowerCase()
+  if (lower.includes('no space left on device')) {
+    return '服务器临时目录磁盘空间不足，请清理临时文件或联系管理员后重试'
+  }
+  if (lower.includes('error reading png metadata') || lower.includes('error reading png')) {
+    return 'PNG 图片无法读取，文件可能已损坏或格式不兼容，请重新导出后重试'
+  }
+  if (lower.includes('no suitable imagereader')) {
+    return '无法识别图片格式，请确认文件为 JPG/PNG 且未损坏'
+  }
+  if (lower.includes('not a png file') || lower.includes('invalid png') || lower.includes('bad png signature')) {
+    return 'PNG 文件格式无效或已损坏，请重新导出后重试'
+  }
+
+  if (text.includes('->')) {
+    const reasonIdx = text.lastIndexOf(': ')
+    if (reasonIdx >= 0) {
+      const tail = text.slice(reasonIdx + 2).trim()
+      if (tail && !tail.includes('/')) {
+        const mapped = formatImportError(tail)
+        if (mapped !== tail) return mapped
+        return tail
+      }
+    }
+  }
+
+  text = text.replace(/\s{2,}/g, ' ').trim()
+  return text || String(message).trim()
 }
 
 function openImportDialog() {
@@ -1661,9 +1728,28 @@ function openImportDialog() {
   nextTick(() => clearImportFiles())
 }
 
+function resetImportUploadProgress() {
+  importDialog.uploadProgress = 0
+}
+
+function formatImportFileSize(size) {
+  const bytes = Number(size || 0)
+  if (bytes <= 0) return '0 B'
+  const units = ['B', 'KB', 'MB', 'GB']
+  let value = bytes
+  let unitIndex = 0
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024
+    unitIndex += 1
+  }
+  const digits = unitIndex === 0 ? 0 : value >= 100 ? 0 : value >= 10 ? 1 : 2
+  return `${value.toFixed(digits)} ${units[unitIndex]}`
+}
+
 function clearImportFiles() {
   importDialog.excelFile = null
   importDialog.zipFile = null
+  resetImportUploadProgress()
   importExcelUploadRef.value?.clearFiles?.()
   importZipUploadRef.value?.clearFiles?.()
 }
@@ -1752,13 +1838,26 @@ async function submitImportDialog() {
     return
   }
   importDialog.loading = true
+  resetImportUploadProgress()
   try {
-    await importItemsByExcel(importDialog.excelFile, importDialog.zipFile)
+    await importItemsByExcel(importDialog.excelFile, importDialog.zipFile, {
+      onUploadProgress: (event) => {
+        if (event.total > 0) {
+          importDialog.uploadProgress = Math.min(99, Math.round((event.loaded * 100) / event.total))
+          return
+        }
+        if (event.loaded > 0 && importDialog.uploadProgress < 95) {
+          importDialog.uploadProgress += 1
+        }
+      }
+    })
+    importDialog.uploadProgress = 100
     proxy?.$modal.msgSuccess(tr('导入任务已提交'))
     importDialog.visible = false
     openImportLogDialog()
   } finally {
     importDialog.loading = false
+    resetImportUploadProgress()
   }
 }
 
@@ -1876,6 +1975,10 @@ onMounted(async () => {
   color: #606266;
 }
 
+.import-upload-card--selected .import-upload-card__label {
+  color: var(--el-color-success);
+}
+
 .import-upload-drop {
   width: 100%;
 }
@@ -1893,12 +1996,73 @@ onMounted(async () => {
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.import-upload-drop--selected :deep(.el-upload-dragger) {
+  border-color: var(--el-color-success-light-5);
+  background: var(--el-color-success-light-9);
 }
 
 .import-upload-drop__icon {
   font-size: 40px;
   color: #c0c4cc;
   margin-bottom: 8px;
+}
+
+.import-upload-drop__icon--success {
+  color: var(--el-color-success);
+}
+
+.import-upload-drop__filename {
+  max-width: 100%;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 20px;
+  color: #303133;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.import-upload-drop__meta {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 18px;
+  color: #909399;
+}
+
+.import-upload-drop__hint {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--el-color-primary);
+}
+
+.import-upload-progress {
+  margin-top: 20px;
+  padding: 14px 16px;
+  border: 1px solid #ebeef5;
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+.import-upload-progress__label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #606266;
+}
+
+.import-upload-progress__tip {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 18px;
+  color: #909399;
 }
 
 .import-upload-drop__text {
