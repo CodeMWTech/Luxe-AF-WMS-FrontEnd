@@ -190,16 +190,19 @@ export function downloadItemImportTemplate(config = {}) {
 }
 
 // 提交商品 Excel 异步导入
-export function importItemsByExcel(excel, images) {
+export function importItemsByExcel(excel, images, config = {}) {
   const formData = new FormData()
   formData.append('excel', excel)
   formData.append('images', images)
+  const { onUploadProgress, ...restConfig } = config
   return request({
     url: '/wms/item/import',
     method: 'post',
     data: formData,
     headers: { 'Content-Type': 'multipart/form-data', repeatSubmit: false },
-    timeout: 0
+    timeout: 0,
+    onUploadProgress,
+    ...restConfig
   })
 }
 

@@ -18,6 +18,7 @@ import {
   isSkuLookupPath,
   shouldUseMobileExperience
 } from '@/utils/mobileDevice'
+import { setupImageViewerDesktopEnhance } from '@/utils/imageViewerDesktopEnhance'
 
 const settingsStore = useSettingsStore()
 const route = useRoute()
@@ -51,9 +52,11 @@ const elementLocale = computed(() =>
 )
 
 const runtimeI18n = setupRuntimeI18nWatcher(() => settingsStore.language || 'zh-cn')
+let teardownImageViewerDesktopEnhance = null
 
 onMounted(() => {
   window.addEventListener('resize', handleResize, { passive: true })
+  teardownImageViewerDesktopEnhance = setupImageViewerDesktopEnhance()
   nextTick(() => {
     handleThemeStyle(settingsStore.theme)
     runtimeI18n.start()
@@ -72,6 +75,8 @@ watch(
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', handleResize)
+  teardownImageViewerDesktopEnhance?.()
+  teardownImageViewerDesktopEnhance = null
   runtimeI18n.stop()
 })
 </script>
