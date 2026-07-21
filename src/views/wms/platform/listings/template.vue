@@ -433,6 +433,10 @@ const t = (key, values) => proxy?.$t?.(key, values) || key
 const TIKTOK_PRICE_MIN = 0.01
 const TIKTOK_AUCTION_MIN_PRICE = 1
 const TIKTOK_PRICE_MAX = 50000
+const TIKTOK_ATTRIBUTE_DEFAULTS = {
+  fabrication: 'Leather',
+  'condition description': 'excellent'
+}
 
 const loading = ref(false), total = ref(0), templateList = ref([]), submitting = ref(false)
 const queryRef = ref(null), formRef = ref(null)
@@ -713,6 +717,25 @@ function hasTiktokAttributeValue(attribute) {
   return selectedTiktokValues(attribute).length > 0
 }
 
+function normalizeTiktokAttributeName(name) {
+  return String(name || '').trim().toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ')
+}
+
+function applyTiktokAttributeDefaults() {
+  tiktokAttributeDefinitions.value.forEach(attribute => {
+    const defaultValue = TIKTOK_ATTRIBUTE_DEFAULTS[normalizeTiktokAttributeName(attribute.name)]
+    if (!defaultValue || hasTiktokAttributeValue(attribute)) return
+
+    const options = Array.isArray(attribute.values) ? attribute.values : []
+    const matchedOption = options.find(option => (
+      String(option?.name || '').trim().toLowerCase() === defaultValue.toLowerCase()
+    ))
+    const selection = matchedOption?.id ?? ((attribute.customizable || options.length === 0) ? defaultValue : '')
+    if (selection === '') return
+    tiktokAttributeSelections[attribute.id] = attribute.multipleSelection ? [selection] : selection
+  })
+}
+
 function isTiktokAttributeRequiredNow(attribute) {
   const conditions = Array.isArray(attribute.requirementConditions) ? attribute.requirementConditions : []
   if (conditions.length === 0) return !!attribute.required
@@ -756,6 +779,7 @@ async function loadTiktokAttributes(preservedAttributes = []) {
     if (requestSeq !== tiktokAttributeRequestSeq) return
     tiktokAttributeDefinitions.value = (res.data || []).filter(attribute => attribute?.id && attribute?.name)
     tiktokAttributeDefinitions.value.forEach(normalizeTiktokAttributeSelection)
+    applyTiktokAttributeDefaults()
     tiktokAttributeLoaded.value = true
   } catch (_error) {
     if (requestSeq !== tiktokAttributeRequestSeq) return
