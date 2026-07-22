@@ -7,6 +7,16 @@ import { listItemModel } from "@/api/wms/itemModel";
 import {defineStore} from "pinia";
 import {ref} from "vue";
 
+const brandNameCollator = new Intl.Collator('en', { sensitivity: 'base' })
+
+const sortItemBrands = (brands = []) => [...brands].sort((a, b) => {
+  const nameA = String(a?.brandName || '').trim()
+  const nameB = String(b?.brandName || '').trim()
+  if (!nameA) return nameB ? 1 : 0
+  if (!nameB) return -1
+  return brandNameCollator.compare(nameA, nameB)
+})
+
 export const useWmsStore = defineStore('wms', () => {
 
   // 仓库管理
@@ -74,7 +84,7 @@ export const useWmsStore = defineStore('wms', () => {
   const getItemBrandList =  () => {
     return new Promise((resolve, reject) => {
       listItemBrand({}).then(res => {
-        itemBrandList.value = res.data
+        itemBrandList.value = sortItemBrands(res.data || [])
         const map = new Map()
         itemBrandList.value.forEach(supplier => {
           map.set(supplier.id, {...supplier})
