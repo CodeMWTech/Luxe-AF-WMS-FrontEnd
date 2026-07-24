@@ -682,7 +682,8 @@
 </template>
 
 <script setup name="PlatformOrders">
-import { computed, defineComponent, getCurrentInstance, h, onMounted, reactive, ref } from 'vue'
+import { computed, defineComponent, getCurrentInstance, h, onActivated, onMounted, reactive, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { ArrowDown, ArrowRight, CopyDocument, Edit, UploadFilled } from '@element-plus/icons-vue'
 import { listPlatformOrders, getOrderStatusMap, updateOrderSku, createShipments, exportPlatformOrders, exportPlatformOrderWeeklyReport, importNotes, getAutoCreateConfig, updateAutoCreateConfig } from '@/api/wms/platformOrder'
@@ -707,6 +708,7 @@ const InfoLine = defineComponent({
 })
 
 const { proxy } = getCurrentInstance()
+const route = useRoute()
 const t = (key, values) => proxy?.$t?.(key, values) || key
 
 const orderStatusOptions = ref([])
@@ -797,7 +799,7 @@ const syncRef = ref(null)
 
 const queryParams = ref({
   pageNum: 1,
-  pageSize: 10,
+  pageSize: 20,
   platform: '',
   shopAuthId: undefined,
   platformOrderId: undefined,
@@ -807,6 +809,20 @@ const queryParams = ref({
   shipmentStatus: '',
   orderCreateTimeRange: []
 })
+
+const appliedRouteFilterKey = ref('')
+
+function applyRouteSkuFilter() {
+  const skuCode = String(route.query.skuCode || '').trim()
+  const orderStatus = String(route.query.orderStatus || '').trim()
+  const filterKey = `${skuCode}|${orderStatus}`
+  if (!skuCode || (filterKey === appliedRouteFilterKey.value && queryParams.value.sellerSku === skuCode && (!orderStatus || queryParams.value.orderStatus === orderStatus))) return false
+  queryParams.value.sellerSku = skuCode
+  if (orderStatus) queryParams.value.orderStatus = orderStatus
+  queryParams.value.pageNum = 1
+  appliedRouteFilterKey.value = filterKey
+  return true
+}
 
 const syncForm = ref({
   startTime: undefined,
@@ -1653,10 +1669,15 @@ function loadStatusMap() {
 onMounted(() => {
   loadShops()
   loadStatusMap()
+  applyRouteSkuFilter()
   getList()
   if (canManageAutoCreateConfig.value) {
     fetchAutoCreateConfig()
   }
+})
+
+onActivated(() => {
+  if (applyRouteSkuFilter()) getList()
 })
 </script>
 

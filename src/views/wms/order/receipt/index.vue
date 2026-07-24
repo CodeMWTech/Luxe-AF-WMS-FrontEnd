@@ -228,7 +228,8 @@
 
 <script setup name="ReceiptOrder">
 import {delReceiptOrder, exportReceiptOrder, getReceiptOrder, listReceiptOrder} from "@/api/wms/receiptOrder";
-import {computed, getCurrentInstance, nextTick, onMounted, reactive, ref, toRefs} from "vue";
+import {computed, getCurrentInstance, nextTick, onActivated, onMounted, reactive, ref, toRefs, watch} from "vue";
+import {useRoute} from "vue-router";
 import {useWmsStore} from "../../../../store/modules/wms";
 import {listByReceiptOrderId} from "@/api/wms/receiptOrderDetail";
 import {ElMessageBox} from "element-plus";
@@ -239,6 +240,7 @@ import { createProgressLoading } from '@/utils/progressLoading'
 import { blobValidate } from '@/utils/ruoyi'
 import { downloadXlsx, getExportLanguageHeaders, prepareLanguageXlsx } from '@/utils/xlsxTranslate'
 import { useFixedDrag } from '@/utils/useFixedDrag'
+const route = useRoute();
 
 const { proxy } = getCurrentInstance();
 const { wms_receipt_status, wms_receipt_type } = proxy.useDict("wms_receipt_status", "wms_receipt_type");
@@ -273,6 +275,36 @@ const data = reactive({
 });
 
 const { queryParams } = toRefs(data);
+
+const appliedRouteFilterKey = ref('')
+
+function applyRouteSkuFilter() {
+  const skuCode = String(route.query.skuCode || '').trim()
+  const receiptType = String(route.query.receiptType || '').trim().toUpperCase()
+  const returnTypeOption = receiptType === 'RETURN'
+    ? (wms_receipt_type.value || []).find(option => {
+        const label = String(option?.label || '')
+        return label.includes('退货') || /return/i.test(label)
+      })
+    : undefined
+  const routeOptType = receiptType === 'RETURN' ? returnTypeOption?.value : -1
+  const filterKey = `${skuCode}|${receiptType}|${routeOptType ?? 'PENDING'}`
+  const typeMatches = receiptType !== 'RETURN'
+    ? queryParams.value.optType === -1
+    : routeOptType === undefined
+      ? queryParams.value.optType === -1
+      : String(queryParams.value.optType) === String(routeOptType)
+  if (!skuCode || (filterKey === appliedRouteFilterKey.value && queryParams.value.skuCode === skuCode && typeMatches)) return false
+  queryParams.value.skuCode = skuCode
+  queryParams.value.optType = routeOptType ?? -1
+  queryParams.value.pageNum = 1
+  appliedRouteFilterKey.value = filterKey
+  return true
+}
+
+watch(wms_receipt_type, () => {
+  if (String(route.query.receiptType || '').toUpperCase() === 'RETURN' && applyRouteSkuFilter()) getList()
+}, { deep: true })
 
 const tr = (text) => translateByMap(text, settingsStore.language || 'zh-cn')
 const isEn = computed(() => (settingsStore.language || 'zh-cn') === 'en')
@@ -637,7 +669,12 @@ function initLookupOptions() {
 
 onMounted(() => {
   initLookupOptions()
+  applyRouteSkuFilter()
   getList()
+})
+
+onActivated(() => {
+  if (applyRouteSkuFilter()) getList()
 })
 </script>
 <style lang="scss">
