@@ -378,6 +378,7 @@ import ItemCategoryDialog from './components/ItemCategoryDialog.vue'
 import ItemNameTagDrawer from './components/ItemNameTagDrawer.vue'
 import { useItemNameTags } from './composables/useItemNameTags'
 import { useItemCategory } from './composables/useItemCategory'
+import { parseBrandIdList } from '@/utils/itemBrand'
 
 const barcode = ref(null)
 const route = useRoute()
@@ -544,6 +545,38 @@ const dialog = reactive({
   title: ''
 });
 
+/** 鉴定机构多选：接口存逗号分隔字符串，表单用数组 */
+function parseAuthAgencyList(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item).trim()).filter(Boolean)
+  }
+  if (value == null || value === '') return []
+  return String(value)
+    .split(/[,，]/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
+function serializeAuthAgency(value) {
+  const list = parseAuthAgencyList(value)
+  return list.length ? list.join(', ') : undefined
+}
+
+function resolveFormBrandId(itemBrandIds, itemBrand) {
+  const list = useWmsStore().itemBrandList || []
+  const candidates = []
+  if (itemBrand != null && itemBrand !== '') {
+    candidates.push(String(itemBrand))
+  }
+  candidates.push(...parseBrandIdList(itemBrandIds))
+  for (const id of candidates) {
+    if (list.some((b) => String(b?.id) === id)) {
+      return id
+    }
+  }
+  return undefined
+}
+
 /** 鉴定机构固定选项（仅可选，不可手输） */
 const AUTH_AGENCY_OPTIONS = ['Entrupy', 'Real Authentication', 'Legitmark', 'CheckCheck', 'N/A']
 /** 成色固定选项 */
@@ -620,7 +653,7 @@ const initFormData = {
   itemCondition: undefined,
   year: undefined,
   cared: false,
-  authAgency: undefined,
+  authAgency: [],
   consignInfo: undefined,
   defaultQty: 1,
   material: undefined,
@@ -662,13 +695,13 @@ const data = reactive({
     pageSize: 10,
     itemName: undefined,
     skuCode: undefined,         // SKU编码
-    itemBrand: undefined,       // 品牌
+    itemBrand: [],              // 列表筛选：品牌多选
     itemCategory: undefined,    // 分类
     itemCondition: undefined,   // 成色
     year: undefined,            // 年份
     cared: undefined,           // 是否已护理
     defaultQty: undefined,      // 默认数量
-    authAgency: undefined,      // 鉴定机构
+    authAgency: [],             // 列表筛选：鉴定机构多选
     consignInfo: undefined,     // 寄售信息
     createTimeRange: [],        // 创建时间区间 [开始, 结束]
     sellingPriceMin: undefined, // 销售价下限(元)
@@ -683,7 +716,7 @@ const data = reactive({
       {required: true, message: "分类不能为空", trigger: "blur"}
     ],
     itemBrand: [
-      {required: true, message: "品牌不能为空", trigger: "change"}
+      { required: true, message: "品牌不能为空", trigger: "change" }
     ],
     itemCondition: [
       {required: true, message: "成色不能为空", trigger: "blur"}
@@ -1142,6 +1175,8 @@ const handleDeleteItemSku = async (row, index) => {
   const res = await getItem(row.itemId);
   skuForm.itemSkuList = res.data.sku
   form.value = res.data
+  form.value.itemBrand = resolveFormBrandId(form.value.itemBrandIds, form.value.itemBrand)
+  form.value.authAgency = parseAuthAgencyList(form.value.authAgency)
 }
 const cancel = () => {
   reset();
@@ -1361,12 +1396,16 @@ const handleUpdate = (row) => {
       const _id = row?.itemId || ids.value[0]
       const [skuRes, itemRes] = await Promise.all([
         listItemSku({ itemId: _id }),
-        getItem(_id)
+        getItem(_id),
+        initItemBrandDataIfNeeded()
       ])
       Object.assign(skuForm.itemSkuList, skuRes.data)
       const itemData = itemRes.data || {}
       const imageList = (itemData.imageList || itemData.images || []).map((img, idx) => normalizeServerImage(img, idx))
       form.value = { ...form.value, ...row.item, ...itemData, imageList }
+      // 表单品牌为单选（字符串 ID，避免雪花精度问题）；鉴定机构为多选
+      form.value.itemBrand = resolveFormBrandId(form.value.itemBrandIds, form.value.itemBrand)
+      form.value.authAgency = parseAuthAgencyList(form.value.authAgency)
       normalizeUploadedImageMeta()
       form.value.skuCode = skuForm.itemSkuList[0]?.skuCode ?? ''
       form.value.costPrice = canViewCostPrice.value ? (skuForm.itemSkuList[0]?.costPrice ?? null) : null
@@ -1425,19 +1464,30 @@ const submitForm = async () => {
 
   buttonLoading.value = true;
   try {
+    if (form.value.itemBrand == null || form.value.itemBrand === '') {
+      proxy?.$modal.msgError('品牌不能为空')
+      buttonLoading.value = false
+      return
+    }
     // 先保存商品，拿到 itemId（新增时后端返回 Long 类型 itemId）
     let itemId = form.value.id;
     if (itemId) {
       normalizeUploadedImageMeta()
       const payload = {
         ...form.value,
+        itemBrand: form.value.itemBrand,
+        authAgency: serializeAuthAgency(form.value.authAgency),
         ...(canEditCostPrice.value ? {} : { costPrice: undefined }),
         ...(canEditSellingPrice.value ? {} : { sellingPrice: undefined }),
         imageList: buildImageListPayload()
       }
+      delete payload.itemBrands
       await updateItem(payload);
     } else {
       const payload = { ...form.value };
+      payload.itemBrand = form.value.itemBrand
+      payload.authAgency = serializeAuthAgency(form.value.authAgency);
+      delete payload.itemBrands
       payload.pendingImageCount = pendingImageFiles.value.length;
       if (!canEditCostPrice.value) {
         delete payload.costPrice;

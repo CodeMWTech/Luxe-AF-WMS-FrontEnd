@@ -58,12 +58,19 @@
         <el-row :gutter="16">
           <el-col :xs="24" :sm="12" :md="6" :lg="6">
             <el-form-item :label="tr('商品品牌')" prop="itemBrand">
-              <el-select v-model="queryParams.itemBrand" clearable filterable style="width: 100%">
+              <el-select
+                v-model="queryParams.itemBrand"
+                multiple
+                clearable
+                filterable
+                :placeholder="tr('可多选')"
+                style="width: 100%"
+              >
                 <el-option
                   v-for="item in useWmsStore().itemBrandList"
-                  :key="item.id"
+                  :key="String(item.id)"
                   :label="item.brandName"
-                  :value="item.id"
+                  :value="String(item.id)"
                 />
               </el-select>
             </el-form-item>
@@ -82,7 +89,13 @@
           </el-col>
           <el-col :xs="24" :sm="12" :md="6" :lg="6">
             <el-form-item :label="tr('鉴定机构')" prop="authAgency">
-              <el-select v-model="queryParams.authAgency" clearable style="width: 100%" :placeholder="tr('请选择')">
+              <el-select
+                v-model="queryParams.authAgency"
+                multiple
+                clearable
+                style="width: 100%"
+                :placeholder="tr('可多选')"
+              >
                 <el-option v-for="opt in AUTH_AGENCY_OPTIONS" :key="opt" :label="opt" :value="opt" />
               </el-select>
             </el-form-item>
@@ -589,6 +602,7 @@ import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
 import { blobValidate } from '@/utils/ruoyi'
 import { formatDateTimeForQuery } from '@/utils/laTime'
+import { formatBrandNames } from '@/utils/itemBrand'
 import PublishDialog from '@/views/wms/platform/listings/components/PublishDialog.vue'
 
 const { proxy } = getCurrentInstance()
@@ -685,12 +699,12 @@ const queryParams = ref({
   itemName: undefined,
   skuCode: undefined,
   itemCategory: undefined,
-  itemBrand: undefined,
+  itemBrand: [],
   itemCondition: undefined,
   year: undefined,
   cared: undefined,
   defaultQty: undefined,
-  authAgency: undefined,
+  authAgency: [],
   consignInfo: undefined,
   createTimeRange: [],
   receiptTimeRange: [],
@@ -964,9 +978,10 @@ function exportDetailPdf() {
 }
 
 function getBrandName(item) {
+  if (item?.brandNames) return item.brandNames
   if (item?.brandName) return item.brandName
-  if (!item?.itemBrand) return ''
-  return useWmsStore().itemBrandMap.get(item.itemBrand)?.brandName || ''
+  const store = useWmsStore()
+  return formatBrandNames(item, store.itemBrandMap, store.itemBrandList)
 }
 
 function getCategoryName(item) {

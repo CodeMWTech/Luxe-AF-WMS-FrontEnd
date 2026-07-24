@@ -21,8 +21,20 @@
         <el-row :gutter="16">
           <el-col :xs="24" :sm="12" :md="6" :lg="6">
             <el-form-item label="商品品牌" prop="itemBrand">
-              <el-select v-model="queryParams.itemBrand" clearable filterable style="width: 100%">
-                <el-option v-for="item in useWmsStore().itemBrandList" :key="item.id" :label="item.brandName" :value="item.id"/>
+              <el-select
+                v-model="queryParams.itemBrand"
+                multiple
+                clearable
+                filterable
+                placeholder="可多选"
+                style="width: 100%"
+              >
+                <el-option
+                  v-for="item in useWmsStore().itemBrandList"
+                  :key="String(item.id)"
+                  :label="item.brandName"
+                  :value="String(item.id)"
+                />
               </el-select>
             </el-form-item>
           </el-col>
@@ -40,7 +52,13 @@
           </el-col>
           <el-col :xs="24" :sm="12" :md="6" :lg="6">
             <el-form-item label="鉴定机构" prop="authAgency">
-              <el-select v-model="queryParams.authAgency" placeholder="请选择鉴定机构" clearable style="width: 100%">
+              <el-select
+                v-model="queryParams.authAgency"
+                multiple
+                placeholder="可多选"
+                clearable
+                style="width: 100%"
+              >
                 <el-option v-for="item in AUTH_AGENCY_OPTIONS" :key="item" :label="item" :value="item"/>
               </el-select>
             </el-form-item>
