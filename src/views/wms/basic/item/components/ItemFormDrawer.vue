@@ -47,10 +47,9 @@
                 <el-form-item label="商品品牌" prop="itemBrand">
                   <el-select
                     v-model="form.itemBrand"
-                    multiple
                     clearable
                     filterable
-                    placeholder="请选择品牌（可多选）"
+                    placeholder="请选择品牌"
                     style="width: 100%!important;"
                   >
                     <el-option
