@@ -77,7 +77,9 @@ export const useWmsStore = defineStore('wms', () => {
         itemBrandList.value = res.data
         const map = new Map()
         itemBrandList.value.forEach(supplier => {
-          map.set(supplier.id, {...supplier})
+          // 同时用原始 id 与字符串 key，避免雪花 ID 精度/类型不一致导致查不到名称
+          map.set(supplier.id, { ...supplier })
+          map.set(String(supplier.id), { ...supplier })
         })
         itemBrandMap.value = map
         resolve()

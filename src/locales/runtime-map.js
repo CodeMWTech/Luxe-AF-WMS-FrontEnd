@@ -1,4 +1,4 @@
-﻿const zhToEnMap = {
+const zhToEnMap = {
   首页: 'Home',
   系统概述: 'System Overview',
   个人中心: 'Profile',
@@ -196,6 +196,7 @@
   座机号: 'Telephone',
   联系人: 'Contact Person',
   鉴定机构: 'Agency',
+  可多选: 'Multi-select',
   配件: 'Accessories',
   业务单号: 'Business No.',
   订单类型: 'Order Type',
