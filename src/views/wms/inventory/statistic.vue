@@ -582,7 +582,8 @@ import {
   listInventoryBoardWarehouseSummary
 } from '@/api/wms/inventory'
 import { downloadItemImage, getItemImages } from '@/api/wms/item'
-import { computed, getCurrentInstance, nextTick, onMounted, ref } from 'vue'
+import { computed, getCurrentInstance, nextTick, onActivated, onMounted, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import { getRowspanMethod } from '@/utils/getRowSpanMethod'
 import { useWmsStore } from '@/store/modules/wms'
 import useSettingsStore from '@/store/modules/settings'
@@ -590,6 +591,7 @@ import { translateByMap } from '@/locales/runtime-map'
 import { blobValidate } from '@/utils/ruoyi'
 import { formatDateTimeForQuery } from '@/utils/laTime'
 import PublishDialog from '@/views/wms/platform/listings/components/PublishDialog.vue'
+const route = useRoute()
 
 const { proxy } = getCurrentInstance()
 const settingsStore = useSettingsStore()
@@ -702,6 +704,20 @@ const queryParams = ref({
   orderByColumn: DEFAULT_INVENTORY_SORT.prop,
   isAsc: DEFAULT_INVENTORY_SORT.order
 })
+
+const appliedRouteFilterKey = ref('')
+
+function applyRouteSkuFilter() {
+  const skuCode = String(route.query.skuCode || '').trim()
+  const inStockOnly = String(route.query.inStock || '') === '1'
+  const filterKey = `${skuCode}|${inStockOnly}`
+  if (!skuCode || (filterKey === appliedRouteFilterKey.value && queryParams.value.skuCode === skuCode && (!inStockOnly || filterable.value))) return false
+  queryParams.value.skuCode = skuCode
+  if (inStockOnly) filterable.value = true
+  queryParams.value.pageNum = 1
+  appliedRouteFilterKey.value = filterKey
+  return true
+}
 
 // ───────────── 格式化工具函数 ─────────────
 
@@ -1789,10 +1805,15 @@ onMounted(() => {
   useWmsStore().getItemBrandList()
   useWmsStore().getItemCategoryList()
   useWmsStore().getItemCategoryTreeList()
+  applyRouteSkuFilter()
   getList()
 })
-</script>
 
+onActivated(() => {
+  if (applyRouteSkuFilter()) getList()
+})
+
+</script>
 <style scoped lang="scss">
 .page-title {
   font-size: large;

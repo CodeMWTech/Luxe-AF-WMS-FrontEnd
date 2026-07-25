@@ -215,7 +215,7 @@ const currentBatchHint = computed(() => t(currentBatchConfig.value?.hintKey || '
 
 const queryParams = reactive({
   pageNum: 1,
-  pageSize: 10,
+  pageSize: 20,
   platform: '',
   shopId: null,
   listingStatus: '',

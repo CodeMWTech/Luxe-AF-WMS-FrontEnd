@@ -36,34 +36,19 @@
           :query-params="queryParams"
           :total="total"
           :loading="loading"
-          :multiple="multiple"
-          :is-supplier-user="isSupplierUser"
-          :can-select-purchase="canSelectPurchase"
-          :can-supplier-ship="canSupplierShip"
-          :can-show-selection-column="canShowSelectionColumn"
           :can-view-cost-price="canViewCostPrice"
           :can-view-selling-price="canViewSellingPrice"
           :amount-column-label="amountColumnLabel"
           :span-method="spanMethod"
           :get-item-row-key="getItemRowKey"
-          :is-purchase-selectable="isPurchaseSelectable"
-          :is-row-selectable="isRowSelectable"
-          :get-purchase-selected-qty="getPurchaseSelectedQty"
-          :get-purchase-pending-qty="getPurchasePendingQty"
-          :get-purchase-available-qty="getPurchaseAvailableQty"
           :field-label="fieldLabel"
-          :purchase-status-type="purchaseStatusType"
-          :purchase-status-label="purchaseStatusLabel"
           :get-main-image-url="getMainImageUrl"
           :tr="tr"
           @toggle-category="toggleCategoryPanel"
           @export="handleExport"
           @import="openImportDialog"
           @import-log="openImportLogDialog"
-          @select-purchase="openQuantityDialog('purchase')"
-          @supplier-ship="openQuantityDialog('supplierShip')"
           @add="handleAdd"
-          @selection-change="handleSelectionChange"
           @delete="handleDelete"
           @update="handleUpdate"
           @pagination="getList"
@@ -136,24 +121,6 @@
       @remove="removeNameTag"
       @insert="insertNameTag"
     />
-    <el-dialog v-model="quantityDialog.visible" :title="quantityDialog.title" width="980px" append-to-body>
-      <el-table :data="quantityDialog.rows" border max-height="420">
-        <el-table-column :label="tr('商品名称')" prop="itemName" min-width="220" show-overflow-tooltip />
-        <el-table-column label="SKU" prop="skuCode" min-width="140" show-overflow-tooltip />
-        <el-table-column :label="quantityColumnLabel('已选购')" prop="selectedQty" width="110" align="right" />
-        <el-table-column :label="quantityColumnLabel('审核中')" prop="pendingQty" width="110" align="right" />
-        <el-table-column :label="quantityColumnLabel('可选购')" prop="availableQty" width="110" align="right" />
-        <el-table-column :label="quantityColumnLabel('选购数量')" prop="quantity" width="160" align="center">
-          <template #default="{ row }">
-            <el-input-number v-model="row.quantity" :min="1" :max="row.availableQty" :controls="false" style="width: 120px" />
-          </template>
-        </el-table-column>
-      </el-table>
-      <template #footer>
-        <el-button @click="quantityDialog.visible = false">{{ tr('取消') }}</el-button>
-        <el-button type="primary" :loading="quantityDialog.loading" @click="submitQuantityDialog">{{ tr('确认') }}</el-button>
-      </template>
-    </el-dialog>
     <el-dialog v-model="importDialog.visible" :title="tr('导入Excel')" width="680px" append-to-body :close-on-click-modal="false">
       <div class="import-dialog">
         <el-alert
@@ -346,15 +313,13 @@ import {
   uploadItemImage,
   deleteItemImage,
   getItemImages,
-  selectItemsForPurchase,
-  supplierShipItems,
   downloadItemImportTemplate,
   importItemsByExcel,
   listItemImportTasks,
   listItemImportDetails
 } from '@/api/wms/item';
 import { listSupplierNoPage, getCurrentSupplier } from '@/api/wms/supplier';
-import { computed, getCurrentInstance, nextTick, onBeforeUnmount, onMounted, reactive, ref, toRefs, watch } from 'vue';
+import { computed, getCurrentInstance, nextTick, onActivated, onBeforeUnmount, onMounted, reactive, ref, toRefs, watch } from 'vue';
 import { ElForm, ElMessage } from 'element-plus';
 import {getRowspanMethod} from "@/utils/getRowSpanMethod";
 import {listItemSkuPage, delItemSku, listItemSku, exportItemSku} from "@/api/wms/itemSku";
@@ -387,7 +352,6 @@ const tr = (text) => translateByMap(text, settingsStore.language || 'zh-cn')
 const isEn = computed(() => (settingsStore.language || 'zh-cn') === 'en')
 const supplierOptions = ref([]);
 const isSupplierUser = ref(false);
-const supplierResolved = ref(false);
 
 /** 初始化供应商相关数据 */
 async function initSupplierData() {
@@ -409,38 +373,13 @@ async function initSupplierData() {
       supplierOptions.value = [];
     }
   }
-  supplierResolved.value = true;
 }
 const amountColumnLabel = computed(() => isEn.value ? 'Amount($)' : '金额($)')
 const fieldLabel = (text) => `${tr(text)}${isEn.value ? ': ' : '：'}`
-const quantityDialogLabels = {
-  已选购: 'Selected',
-  审核中: 'In Review',
-  可选购: 'Available',
-  选购数量: 'Purchase Qty'
-}
-const quantityColumnLabel = (text) => isEn.value ? quantityDialogLabels[text] : tr(text)
-const PURCHASE_STATUS_LABELS = {
-  0: '未选购',
-  1: '待审核',
-  2: '已选购',
-  3: '已拒绝'
-}
-const purchaseStatusLabel = (status) => tr(PURCHASE_STATUS_LABELS[Number(status ?? 0)] || '未选购')
-const purchaseStatusType = (status) => {
-  const value = Number(status ?? 0)
-  if (value === 1) return 'warning'
-  if (value === 2) return 'success'
-  if (value === 3) return 'danger'
-  return 'info'
-}
 const canViewSellingPrice = computed(() => proxy?.$auth?.hasPermi('wms:itemSellingPrice:view'));
 const canEditSellingPrice = computed(() => proxy?.$auth?.hasPermi('wms:itemSellingPrice:edit'));
 const canViewCostPrice = computed(() => proxy?.$auth?.hasPermi('wms:itemCostPrice:view'));
 const canEditCostPrice = computed(() => proxy?.$auth?.hasPermi('wms:itemCostPrice:edit'));
-const canSelectPurchase = computed(() => supplierResolved.value && !isSupplierUser.value && !!proxy?.$auth?.hasPermi('wms:item:purchase'))
-const canSupplierShip = computed(() => supplierResolved.value && isSupplierUser.value && !!proxy?.$auth?.hasPermi('wms:item:supplierShip'))
-const canShowSelectionColumn = computed(() => canSelectPurchase.value || canSupplierShip.value)
 /** 成本价变更时，销售价 = 成本价 × 该系数（保留两位小数） */
 const SELLING_PRICE_FROM_COST_MULTIPLIER = 1.8
 /**
@@ -467,14 +406,6 @@ function handleMaterialChange(id) {
 }
 const itemList = ref([]);
 const itemTableRef = ref(null);
-const selectedItemMap = ref(new Map());
-const quantityDialog = reactive({
-  visible: false,
-  title: '',
-  action: '',
-  rows: [],
-  loading: false
-})
 const importDialog = reactive({
   visible: false,
   loading: false,
@@ -524,9 +455,6 @@ const itemCategoryTreeOptionsList = computed(() => {
 const buttonLoading = ref(false);
 const loading = ref(true);
 const showSearch = ref(true);
-const ids = ref([]);
-const single = ref(true);
-const multiple = ref(true);
 const total = ref(0);
 const skuLoading = ref(false)
 /** 创建时间选择器默认时间：当天 00:00:00 - 23:59:59（参考库存记录） */
@@ -700,6 +628,16 @@ const data = reactive({
   }
 });
 const {queryParams, form, rules} = toRefs(data);
+const appliedRouteSkuCode = ref('')
+
+function applyRouteSkuFilter() {
+  const skuCode = String(route.query.skuCode || '').trim()
+  if (!skuCode || (skuCode === appliedRouteSkuCode.value && queryParams.value.skuCode === skuCode)) return false
+  queryParams.value.skuCode = skuCode
+  queryParams.value.pageNum = 1
+  appliedRouteSkuCode.value = skuCode
+  return true
+}
 const {
   nameTagDrawerVisible,
   nameTagList,
@@ -822,7 +760,6 @@ const getList = async () => {
   listMainImageErrorAtMap.value.clear()
   preloadMainImages(itemList.value)
   total.value = res.total;
-  await restoreItemSelection()
   loading.value = false;
 }
 const {
@@ -1174,171 +1111,9 @@ const resetQuery = () => {
   handleQuery();
 }
 
-/** 多选框选中数据 */
-let suppressItemSelectionChange = false
-
-const getItemSelectionKey = (row) => {
-  const key = row?.itemId || row?.item?.id
-  return key || null
-}
-
-const getItemRowKey = (row) => row?.skuId ? String(row.skuId) : String(getItemSelectionKey(row) || '')
-
-function syncSelectedItemIds() {
-  ids.value = Array.from(selectedItemMap.value.keys())
-  single.value = ids.value.length !== 1
-  multiple.value = ids.value.length === 0
-}
-
-async function restoreItemSelection() {
-  await nextTick()
-  suppressItemSelectionChange = true
-  itemTableRef.value?.clearSelection()
-  const restoredKeySet = new Set()
-  itemList.value.forEach(row => {
-    const key = getItemSelectionKey(row)
-    if (key && selectedItemMap.value.has(key) && !restoredKeySet.has(key) && isRowSelectable(row)) {
-      itemTableRef.value?.toggleRowSelection(row, true)
-      restoredKeySet.add(key)
-    }
-  })
-  await nextTick()
-  suppressItemSelectionChange = false
-  syncSelectedItemIds()
-}
-
-function clearItemSelection() {
-  selectedItemMap.value.clear()
-  syncSelectedItemIds()
-  itemTableRef.value?.clearSelection()
-}
-
-const handleSelectionChange = (selection) => {
-  if (suppressItemSelectionChange) return
-  const selectedKeySet = new Set(selection.map(getItemSelectionKey).filter(Boolean))
-  const selectedRowMap = new Map()
-  selection.forEach(row => {
-    const key = getItemSelectionKey(row)
-    if (key && !selectedRowMap.has(key)) {
-      selectedRowMap.set(key, row)
-    }
-  })
-  const currentKeySet = new Set(itemList.value.map(getItemSelectionKey).filter(Boolean))
-  currentKeySet.forEach(key => {
-    if (selectedKeySet.has(key)) {
-      selectedItemMap.value.set(key, toSelectedItem(selectedRowMap.get(key)))
-    } else {
-      selectedItemMap.value.delete(key)
-    }
-  })
-  syncSelectedItemIds()
-}
-
-function getRowAvailableQty(row) {
-  const qty = Number(row?.item?.defaultQty ?? 0)
-  return Number.isFinite(qty) ? Math.max(0, qty) : 0
-}
-
-function getPurchaseSelectedQty(row) {
-  const value = row?.item?.purchaseSelectedQuantity
-  if (value !== null && value !== undefined) {
-    const qty = Number(value)
-    return Number.isFinite(qty) ? Math.max(0, qty) : 0
-  }
-  const status = Number(row?.item?.purchaseStatus ?? 0)
-  return status === 2 ? Math.max(0, Number(row?.item?.purchaseQuantity ?? 0) || 0) : 0
-}
-
-function getPurchasePendingQty(row) {
-  const value = row?.item?.purchasePendingQuantity
-  if (value !== null && value !== undefined) {
-    const qty = Number(value)
-    return Number.isFinite(qty) ? Math.max(0, qty) : 0
-  }
-  const status = Number(row?.item?.purchaseStatus ?? 0)
-  return status === 1 ? Math.max(0, Number(row?.item?.purchaseQuantity ?? 0) || 0) : 0
-}
-
-function getPurchaseAvailableQty(row) {
-  return Math.max(0, getRowAvailableQty(row) - getPurchasePendingQty(row))
-}
-
-function toSelectedItem(row) {
-  const isPurchaseAction = canSelectPurchase.value
-  return {
-    itemId: row.itemId,
-    itemName: row?.item?.itemName || '',
-    skuCode: row?.itemSku?.skuCode || '',
-    selectedQty: isPurchaseAction ? getPurchaseSelectedQty(row) : 0,
-    pendingQty: isPurchaseAction ? getPurchasePendingQty(row) : 0,
-    availableQty: isPurchaseAction ? getPurchaseAvailableQty(row) : getRowAvailableQty(row),
-    quantity: 1
-  }
-}
-
-function isPurchaseSelectable(row) {
-  return !!row?.item?.supplierId && getPurchaseAvailableQty(row) > 0
-}
-
-function isSupplierShipSelectable(row) {
-  const status = Number(row?.item?.purchaseStatus ?? 0)
-  return !!row?.item?.supplierId && status !== 1 && status !== 2 && getRowAvailableQty(row) > 0
-}
-
-function isRowSelectable(row) {
-  if (canSupplierShip.value) return isSupplierShipSelectable(row)
-  return isPurchaseSelectable(row)
-}
-
-function openQuantityDialog(action) {
-  if (!ids.value.length) {
-    proxy?.$modal.msgWarning(tr('请选择商品'))
-    return
-  }
-  quantityDialog.action = action
-  quantityDialog.title = action === 'supplierShip' ? tr('确认批量发货数量') : tr('确认选购数量')
-  quantityDialog.rows = Array.from(selectedItemMap.value.values()).map(item => ({
-    ...item,
-    quantity: Math.min(Math.max(Number(item.quantity || 1), 1), item.availableQty)
-  }))
-  quantityDialog.visible = true
-}
-
-async function submitQuantityDialog() {
-  const rows = quantityDialog.rows
-  if (!rows.length) {
-    proxy?.$modal.msgWarning(tr('请选择商品'))
-    return
-  }
-  const invalid = rows.find(row => !row.quantity || row.quantity < 1 || row.quantity > row.availableQty)
-  if (invalid) {
-    proxy?.$modal.msgWarning(tr('操作数量不能超过可用数量'))
-    return
-  }
-  const selectedIds = rows.map(row => row.itemId)
-  const quantityMap = rows.reduce((acc, row) => {
-    acc[row.itemId] = Number(row.quantity)
-    return acc
-  }, {})
-  const confirmText = quantityDialog.action === 'supplierShip'
-    ? tr('确认将选中的商品批量发货？')
-    : tr('确认将选中的商品提交选购审核？')
-  await proxy?.$modal.confirm(confirmText)
-  quantityDialog.loading = true
-  try {
-    if (quantityDialog.action === 'supplierShip') {
-      await supplierShipItems(selectedIds, quantityMap)
-    } else {
-      await selectItemsForPurchase(selectedIds, quantityMap)
-    }
-    proxy?.$modal.msgSuccess(tr('提交成功'))
-    clearItemSelection()
-    quantityDialog.visible = false
-    getList()
-  } finally {
-    quantityDialog.loading = false
-  }
-}
+const getItemRowKey = (row) => row?.skuId
+  ? String(row.skuId)
+  : String(row?.itemId || row?.item?.id || '')
 
 /** 新增按钮操作 */
 const handleAdd = () => {
@@ -1358,7 +1133,7 @@ const handleUpdate = (row) => {
   nextTick(async () => {
     try {
       reset();
-      const _id = row?.itemId || ids.value[0]
+      const _id = row?.itemId
       const [skuRes, itemRes] = await Promise.all([
         listItemSku({ itemId: _id }),
         getItem(_id)
@@ -1620,7 +1395,7 @@ const initMaterialModelDataIfNeeded = async () => {
 }
 /** 删除按钮操作 */
 const handleDelete = async (row) => {
-  const _ids = row?.itemId || ids.value;
+  const _ids = row?.itemId;
   await proxy?.$modal.confirm(tr('确认删除') + tr('商品') + '【' + row?.item.itemName + '】' + '？');
   loading.value = true;
   await delItem(_ids).finally(()=> loading.value = false);
@@ -1936,12 +1711,17 @@ onMounted(async () => {
   }
   initSupplierData();
   nextTick(() => {
+    applyRouteSkuFilter()
     getList();
     if (route.query.openDrawer) {
       handleAdd()
     }
   })
 });
+
+onActivated(() => {
+  if (applyRouteSkuFilter()) getList()
+})
 </script>
 <style>
 .import-dialog__alert {
