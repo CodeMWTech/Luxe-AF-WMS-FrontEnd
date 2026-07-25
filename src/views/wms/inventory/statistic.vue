@@ -58,12 +58,19 @@
         <el-row :gutter="16">
           <el-col :xs="24" :sm="12" :md="6" :lg="6">
             <el-form-item :label="tr('商品品牌')" prop="itemBrand">
-              <el-select v-model="queryParams.itemBrand" clearable filterable style="width: 100%">
+              <el-select
+                v-model="queryParams.itemBrand"
+                multiple
+                clearable
+                filterable
+                :placeholder="tr('可多选')"
+                style="width: 100%"
+              >
                 <el-option
                   v-for="item in useWmsStore().itemBrandList"
-                  :key="item.id"
+                  :key="String(item.id)"
                   :label="item.brandName"
-                  :value="item.id"
+                  :value="String(item.id)"
                 />
               </el-select>
             </el-form-item>
@@ -82,7 +89,13 @@
           </el-col>
           <el-col :xs="24" :sm="12" :md="6" :lg="6">
             <el-form-item :label="tr('鉴定机构')" prop="authAgency">
-              <el-select v-model="queryParams.authAgency" clearable style="width: 100%" :placeholder="tr('请选择')">
+              <el-select
+                v-model="queryParams.authAgency"
+                multiple
+                clearable
+                style="width: 100%"
+                :placeholder="tr('可多选')"
+              >
                 <el-option v-for="opt in AUTH_AGENCY_OPTIONS" :key="opt" :label="opt" :value="opt" />
               </el-select>
             </el-form-item>
@@ -582,14 +595,17 @@ import {
   listInventoryBoardWarehouseSummary
 } from '@/api/wms/inventory'
 import { downloadItemImage, getItemImages } from '@/api/wms/item'
-import { computed, getCurrentInstance, nextTick, onMounted, ref } from 'vue'
+import { computed, getCurrentInstance, nextTick, onActivated, onMounted, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import { getRowspanMethod } from '@/utils/getRowSpanMethod'
 import { useWmsStore } from '@/store/modules/wms'
 import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
 import { blobValidate } from '@/utils/ruoyi'
 import { formatDateTimeForQuery } from '@/utils/laTime'
+import { formatBrandNames } from '@/utils/itemBrand'
 import PublishDialog from '@/views/wms/platform/listings/components/PublishDialog.vue'
+const route = useRoute()
 
 const { proxy } = getCurrentInstance()
 const settingsStore = useSettingsStore()
@@ -685,12 +701,12 @@ const queryParams = ref({
   itemName: undefined,
   skuCode: undefined,
   itemCategory: undefined,
-  itemBrand: undefined,
+  itemBrand: [],
   itemCondition: undefined,
   year: undefined,
   cared: undefined,
   defaultQty: undefined,
-  authAgency: undefined,
+  authAgency: [],
   consignInfo: undefined,
   createTimeRange: [],
   receiptTimeRange: [],
@@ -702,6 +718,20 @@ const queryParams = ref({
   orderByColumn: DEFAULT_INVENTORY_SORT.prop,
   isAsc: DEFAULT_INVENTORY_SORT.order
 })
+
+const appliedRouteFilterKey = ref('')
+
+function applyRouteSkuFilter() {
+  const skuCode = String(route.query.skuCode || '').trim()
+  const inStockOnly = String(route.query.inStock || '') === '1'
+  const filterKey = `${skuCode}|${inStockOnly}`
+  if (!skuCode || (filterKey === appliedRouteFilterKey.value && queryParams.value.skuCode === skuCode && (!inStockOnly || filterable.value))) return false
+  queryParams.value.skuCode = skuCode
+  if (inStockOnly) filterable.value = true
+  queryParams.value.pageNum = 1
+  appliedRouteFilterKey.value = filterKey
+  return true
+}
 
 // ───────────── 格式化工具函数 ─────────────
 
@@ -964,9 +994,10 @@ function exportDetailPdf() {
 }
 
 function getBrandName(item) {
+  if (item?.brandNames) return item.brandNames
   if (item?.brandName) return item.brandName
-  if (!item?.itemBrand) return ''
-  return useWmsStore().itemBrandMap.get(item.itemBrand)?.brandName || ''
+  const store = useWmsStore()
+  return formatBrandNames(item, store.itemBrandMap, store.itemBrandList)
 }
 
 function getCategoryName(item) {
@@ -1789,10 +1820,15 @@ onMounted(() => {
   useWmsStore().getItemBrandList()
   useWmsStore().getItemCategoryList()
   useWmsStore().getItemCategoryTreeList()
+  applyRouteSkuFilter()
   getList()
 })
-</script>
 
+onActivated(() => {
+  if (applyRouteSkuFilter()) getList()
+})
+
+</script>
 <style scoped lang="scss">
 .page-title {
   font-size: large;
