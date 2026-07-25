@@ -52,12 +52,19 @@
           </el-col>
           <el-col :xs="24" :sm="12" :md="6" :lg="6">
             <el-form-item :label="tr('商品品牌')" prop="itemBrand">
-              <el-select v-model="queryParams.itemBrand" clearable filterable style="width: 100%">
+              <el-select
+                v-model="queryParams.itemBrand"
+                multiple
+                clearable
+                filterable
+                :placeholder="tr('可多选')"
+                style="width: 100%"
+              >
                 <el-option
                   v-for="item in wmsStore.itemBrandList"
-                  :key="item.id"
+                  :key="String(item.id)"
                   :label="item.brandName"
-                  :value="item.id"
+                  :value="String(item.id)"
                 />
               </el-select>
             </el-form-item>
@@ -114,10 +121,11 @@
             <el-form-item :label="tr('鉴定机构')" prop="authAgency">
               <el-select
                 v-model="queryParams.authAgency"
+                multiple
                 clearable
                 filterable
                 style="width: 100%"
-                :placeholder="tr('请选择')"
+                :placeholder="tr('可多选')"
               >
                 <el-option v-for="opt in AUTH_AGENCY_OPTIONS" :key="opt" :label="opt" :value="opt" />
               </el-select>
@@ -413,7 +421,7 @@ const queryParams = ref({
   itemName: undefined,
   skuCode: undefined,
   itemCategory: undefined,
-  itemBrand: undefined,
+  itemBrand: [],
   itemCondition: undefined,
   itemYear: undefined,
   costPriceMin: undefined,
@@ -421,7 +429,7 @@ const queryParams = ref({
   sellingPriceMin: undefined,
   sellingPriceMax: undefined,
   skuCreateBy: undefined,
-  authAgency: undefined,
+  authAgency: [],
   cared: undefined,
   orderByColumn: undefined,
   isAsc: undefined
@@ -488,7 +496,7 @@ function buildRequestQuery() {
   if (p.itemName != null && String(p.itemName).trim() !== '') q.itemName = String(p.itemName).trim()
   if (p.skuCode != null && String(p.skuCode).trim() !== '') q.skuCode = String(p.skuCode).trim()
   if (p.itemCategory != null && p.itemCategory !== '') q.itemCategory = String(p.itemCategory)
-  if (p.itemBrand != null && p.itemBrand !== '') q.itemBrand = p.itemBrand
+  if (Array.isArray(p.itemBrand) && p.itemBrand.length) q.itemBrand = p.itemBrand
   if (p.itemCondition) q.itemCondition = p.itemCondition
 
   const y = numParam(p.itemYear)
@@ -510,7 +518,7 @@ function buildRequestQuery() {
   if (p.skuCreateBy != null && String(p.skuCreateBy).trim() !== '') {
     q.skuCreateBy = String(p.skuCreateBy).trim()
   }
-  if (p.authAgency) q.authAgency = p.authAgency
+  if (Array.isArray(p.authAgency) && p.authAgency.length) q.authAgency = p.authAgency
   if (typeof p.cared === 'boolean') q.cared = p.cared
 
   return q

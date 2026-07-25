@@ -20,8 +20,8 @@
             <el-table-column :label="tr('商品信息')" prop="itemId">
               <template #default="{ row }">
                 <div>{{ row.item.itemName }}</div>
-                <div v-if="row.item.itemBrand">
-                  {{ row.item.itemBrand ? (fieldLabel('品牌') + useWmsStore().itemBrandMap.get(row.item.itemBrand)?.brandName) : '' }}
+                <div v-if="row.item.itemBrandIds || row.item.itemBrand">
+                  {{ fieldLabel('品牌') }}{{ formatItemBrandNames(row.item) }}
                 </div>
                 <div v-if="row.item.itemCategory">
                   {{ row.item.itemCategory ? (fieldLabel('分类') + useWmsStore().itemCategoryMap.get(row.item.itemCategory)?.categoryName) : '' }}
@@ -94,6 +94,7 @@
 import { ref } from 'vue'
 import { Expand } from '@element-plus/icons-vue'
 import { useWmsStore } from '@/store/modules/wms'
+import { formatBrandNames } from '@/utils/itemBrand'
 
 defineProps({
   collapsed: { type: Boolean, default: false },
@@ -122,6 +123,11 @@ const emit = defineEmits([
   'pagination'
 ])
 const itemTableRef = ref(null)
+
+function formatItemBrandNames(item) {
+  const store = useWmsStore()
+  return formatBrandNames(item, store.itemBrandMap, store.itemBrandList)
+}
 
 defineExpose({
   doLayout: () => itemTableRef.value?.doLayout?.(),
