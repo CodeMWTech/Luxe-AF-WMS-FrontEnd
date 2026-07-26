@@ -120,6 +120,8 @@ const zhToEnMap = {
   请选择供应商: 'Please select supplier',
   业务状态: 'Business Status',
   发出数量: 'Sent Qty',
+  已采购: 'Purchased',
+  已结算: 'Settled',
   已收数量: 'Received Qty',
   在库数量: 'In Stock Qty',
   已售数量: 'Sold Qty',

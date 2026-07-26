@@ -231,7 +231,8 @@
 <script setup name="ShipmentOrder">
 import {listShipmentOrder, delShipmentOrder, exportShipmentOrder, getShipmentOrder} from "@/api/wms/shipmentOrder";
 import {listByShipmentOrderId} from "@/api/wms/shipmentOrderDetail";
-import {computed, getCurrentInstance, nextTick, onMounted, reactive, ref, toRefs} from "vue";
+import {computed, getCurrentInstance, nextTick, onActivated, onMounted, reactive, ref, toRefs} from "vue";
+import {useRoute} from "vue-router";
 import {useWmsStore} from "../../../../store/modules/wms";
 import shipmentPanel from "@/components/PrintTemplate/shipment-panel";
 import useSettingsStore from '@/store/modules/settings'
@@ -242,6 +243,7 @@ import { downloadXlsx, getExportLanguageHeaders, prepareLanguageXlsx } from '@/u
 import { useFixedDrag } from '@/utils/useFixedDrag'
 
 const { proxy } = getCurrentInstance();
+const route = useRoute();
 const { wms_shipment_status, wms_shipment_type} = proxy.useDict("wms_shipment_status", "wms_shipment_type");
 const settingsStore = useSettingsStore()
 const shipmentOrderList = ref([]);
@@ -274,6 +276,20 @@ const data = reactive({
 });
 
 const { queryParams } = toRefs(data);
+const appliedRouteFilterKey = ref('')
+
+function applyRouteSkuFilter() {
+  const skuCode = String(route.query.skuCode || '').trim()
+  const orderStatus = String(route.query.orderStatus || '').trim()
+  const filterKey = `${skuCode}|${orderStatus}`
+  if (!skuCode || filterKey === appliedRouteFilterKey.value) return false
+  queryParams.value.skuCode = skuCode
+  if (orderStatus) queryParams.value.orderStatus = Number(orderStatus)
+  queryParams.value.pageNum = 1
+  appliedRouteFilterKey.value = filterKey
+  return true
+}
+
 
 const tr = (text) => translateByMap(text, settingsStore.language || 'zh-cn')
 const isEn = computed(() => (settingsStore.language || 'zh-cn') === 'en')
@@ -646,7 +662,12 @@ function initLookupOptions() {
 
 onMounted(() => {
   initLookupOptions()
+  applyRouteSkuFilter()
   getList()
+})
+
+onActivated(() => {
+  if (applyRouteSkuFilter()) getList()
 })
 </script>
 <style lang="scss">
