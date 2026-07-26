@@ -120,12 +120,25 @@
           <span v-else>{{ quantity(row.inventoryQuantity) }}</span>
         </template>
       </el-table-column>
-      <el-table-column :label="text('已售', 'Delivered')" align="right" min-width="90">
+      <el-table-column v-if="identityResolved && !isSupplierUser" :label="text('平台已售', 'Platform sold')" align="right" min-width="115">
         <template #default="{ row }">
-          <el-link v-if="canOpenSkuPage('sold', row)" type="primary" :underline="false" class="sku-metric-link" @click.stop="openSkuPage('sold', row)">
-            {{ quantity(row.soldQuantity) }}
+          <el-link v-if="canOpenSkuPage('platformSold', row)" type="primary" :underline="false" class="sku-metric-link" @click.stop="openSkuPage('platformSold', row)">
+            {{ quantity(row.platformSoldQuantity) }}
           </el-link>
-          <span v-else>{{ quantity(row.soldQuantity) }}</span>
+          <span v-else>{{ quantity(row.platformSoldQuantity) }}</span>
+        </template>
+      </el-table-column>
+      <el-table-column v-if="identityResolved && !isSupplierUser" :label="text('平台外已售', 'Off-platform sold')" align="right" min-width="135">
+        <template #default="{ row }">
+          <el-link v-if="canOpenSkuPage('offPlatformSold', row)" type="primary" :underline="false" class="sku-metric-link" @click.stop="openSkuPage('offPlatformSold', row)">
+            {{ quantity(row.offPlatformSoldQuantity) }}
+          </el-link>
+          <span v-else>{{ quantity(row.offPlatformSoldQuantity) }}</span>
+        </template>
+      </el-table-column>
+      <el-table-column :label="isSupplierUser ? text('已售', 'Sold') : text('已售合计', 'Total sold')" align="right" min-width="105">
+        <template #default="{ row }">
+          <span>{{ quantity(row.soldQuantity) }}</span>
         </template>
       </el-table-column>
       <el-table-column :label="text('退货', 'Returned')" align="right" min-width="90">
@@ -206,29 +219,30 @@
       destroy-on-close
     >
       <el-alert
-        :title="text('确认后将保存结算单和明细，并更新 SKU 累计已结算金额；不会发起外部付款。负数待结算金额会冲减累计已结算金额。', 'Confirmation saves the order and details and updates SKU settled totals; it does not initiate external payment. Negative pending amounts reduce settled totals.')"
+        :title="text('取消勾选可将商品从本次结算中剔除。确认后仅保存已勾选明细并更新对应 SKU 累计已结算金额；不会发起外部付款。', 'Uncheck items to exclude them from this settlement. Confirmation saves only selected lines and updates those SKU totals; no external payment is made.')"
         type="warning"
         show-icon
         :closable="false"
         class="preview-alert"
       />
       <el-descriptions :column="4" border class="preview-summary">
-        <el-descriptions-item :label="text('供货商', 'Supplier')">{{ preview.supplierName || text('多个供货商', 'Multiple suppliers') }}</el-descriptions-item>
-        <el-descriptions-item label="SKU">{{ preview.skuCount || 0 }}</el-descriptions-item>
-        <el-descriptions-item :label="text('全部商品数量', 'All product qty')">{{ quantity(preview.productQuantity) }}</el-descriptions-item>
-        <el-descriptions-item :label="text('已售数量', 'Delivered qty')">{{ quantity(preview.soldQuantity) }}</el-descriptions-item>
-        <el-descriptions-item :label="text('退货数量', 'Returned qty')">{{ quantity(preview.returnedQuantity) }}</el-descriptions-item>
-        <el-descriptions-item :label="text('销售成本总额', 'Gross cost')">{{ money(preview.grossAmount) }}</el-descriptions-item>
-        <el-descriptions-item :label="text('退货抵扣', 'Return deduction')">{{ money(preview.returnDeductionAmount) }}</el-descriptions-item>
-        <el-descriptions-item :label="text('总结算价格', 'Total settlement value')">{{ money(preview.totalSettlementAmount) }}</el-descriptions-item>
-        <el-descriptions-item :label="text('累计已结算', 'Settled')">{{ money(preview.settledAmount) }}</el-descriptions-item>
+        <el-descriptions-item :label="text('供货商', 'Supplier')">{{ settlementPreview.supplierName || text('多个供货商', 'Multiple suppliers') }}</el-descriptions-item>
+        <el-descriptions-item label="SKU">{{ settlementPreview.skuCount || 0 }}</el-descriptions-item>
+        <el-descriptions-item :label="text('全部商品数量', 'All product qty')">{{ quantity(settlementPreview.productQuantity) }}</el-descriptions-item>
+        <el-descriptions-item :label="text('已售数量', 'Delivered qty')">{{ quantity(settlementPreview.soldQuantity) }}</el-descriptions-item>
+        <el-descriptions-item :label="text('退货数量', 'Returned qty')">{{ quantity(settlementPreview.returnedQuantity) }}</el-descriptions-item>
+        <el-descriptions-item :label="text('销售成本总额', 'Gross cost')">{{ money(settlementPreview.grossAmount) }}</el-descriptions-item>
+        <el-descriptions-item :label="text('退货抵扣', 'Return deduction')">{{ money(settlementPreview.returnDeductionAmount) }}</el-descriptions-item>
+        <el-descriptions-item :label="text('总结算价格', 'Total settlement value')">{{ money(settlementPreview.totalSettlementAmount) }}</el-descriptions-item>
+        <el-descriptions-item :label="text('累计已结算', 'Settled')">{{ money(settlementPreview.settledAmount) }}</el-descriptions-item>
         <el-descriptions-item :label="text('本次待结算', 'Pending')">
-          <strong :class="Number(preview.pendingSettlementAmount) < 0 ? 'danger-text' : 'success-text'">{{ money(preview.pendingSettlementAmount) }}</strong>
+          <strong :class="Number(settlementPreview.pendingSettlementAmount) < 0 ? 'danger-text' : 'success-text'">{{ money(settlementPreview.pendingSettlementAmount) }}</strong>
         </el-descriptions-item>
       </el-descriptions>
 
-      <el-table :data="preview.lines || []" border stripe max-height="520">
-        <el-table-column :label="text('供货商', 'Supplier')" prop="supplierName" min-width="140" />
+      <el-table ref="previewTableRef" :data="preview.lines || []" row-key="skuId" border stripe max-height="520" @selection-change="handlePreviewSelectionChange">
+        <el-table-column type="selection" width="52" reserve-selection fixed="left" />
+        <el-table-column :label="text('供货商', 'Supplier')" prop="supplierName" min-width="105" show-overflow-tooltip />
         <el-table-column label="SKU" prop="skuCode" min-width="135" />
         <el-table-column :label="text('商品', 'Item')" prop="itemName" min-width="180" show-overflow-tooltip />
         <el-table-column :label="text('全部商品数量', 'All product qty')" align="right" width="125">
@@ -243,16 +257,16 @@
         <el-table-column :label="text('净结算数量', 'Net qty')" align="right" width="115">
           <template #default="{ row }">{{ quantity(row.settleableQuantity) }}</template>
         </el-table-column>
-        <el-table-column :label="text('单价', 'Unit price')" align="right" width="105">
+        <el-table-column :label="text('单价', 'Unit price')" align="right" width="130" class-name="amount-column">
           <template #default="{ row }">{{ money(row.unitPrice) }}</template>
         </el-table-column>
-        <el-table-column :label="text('总结算价格', 'Total settlement')" align="right" width="130">
+        <el-table-column :label="text('总结算价格', 'Total settlement')" align="right" width="165" class-name="amount-column">
           <template #default="{ row }">{{ money(row.totalSettlementAmount) }}</template>
         </el-table-column>
-        <el-table-column :label="text('已结算', 'Settled')" align="right" width="110">
+        <el-table-column :label="text('已结算', 'Settled')" align="right" width="140" class-name="amount-column">
           <template #default="{ row }">{{ money(row.settledAmount) }}</template>
         </el-table-column>
-        <el-table-column :label="text('本次待结算', 'Pending')" align="right" width="130">
+        <el-table-column :label="text('本次待结算', 'Pending')" align="right" width="165" class-name="amount-column">
           <template #default="{ row }"><span :class="Number(row.pendingSettlementAmount) < 0 ? 'danger-text' : ''">{{ money(row.pendingSettlementAmount) }}</span></template>
         </el-table-column>
       </el-table>
@@ -261,9 +275,9 @@
         <el-button
           type="primary"
           :loading="confirmLoading"
-          :disabled="!(preview.lines || []).length"
+          :disabled="!selectedPreviewLines.length"
           @click="confirmSettlement"
-        >{{ text('确认结算', 'Confirm settlement') }}</el-button>
+        >{{ text(`确认结算（${selectedPreviewLines.length}项）`, `Confirm (${selectedPreviewLines.length})`) }}</el-button>
       </template>
     </el-dialog>
 
@@ -271,7 +285,7 @@
 </template>
 
 <script setup name="SupplierSettlement">
-import { computed, getCurrentInstance, onMounted, reactive, ref } from 'vue'
+import { computed, getCurrentInstance, nextTick, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { getCurrentSupplier, listSupplierNoPage } from '@/api/wms/supplier'
 import {
@@ -299,6 +313,8 @@ const isSupplierUser = ref(false)
 const currentSupplierId = ref(null)
 const createdTimeRange = ref([])
 const preview = ref({ lines: [] })
+const previewTableRef = ref()
+const selectedPreviewLines = ref([])
 const settlementSelection = reactive({
   supplierId: undefined
 })
@@ -324,6 +340,8 @@ const summary = reactive({
   inventoryQuantity: 0,
   soldQuantity: 0,
   returnedQuantity: 0,
+  platformSoldQuantity: 0,
+  offPlatformSoldQuantity: 0,
   settledAmount: 0,
   totalSettlementAmount: 0,
   pendingSettlementAmount: 0
@@ -349,7 +367,9 @@ const summaryCards = computed(() => [
   { key: 'unreceived', label: text('未入库', 'Not inbound'), value: summary.unreceivedQuantity, className: 'warning' },
   { key: 'received', label: text('已入库', 'Inbound'), value: summary.receivedQuantity },
   { key: 'inventory', label: text('在仓', 'In stock'), value: summary.inventoryQuantity },
-  { key: 'sold', label: text('已售', 'Delivered'), value: summary.soldQuantity, className: 'success' },
+  ...(!isSupplierUser.value ? [{ key: 'platformSold', label: text('平台已售', 'Platform sold'), value: summary.platformSoldQuantity },
+    { key: 'offPlatformSold', label: text('平台外已售', 'Off-platform sold'), value: summary.offPlatformSoldQuantity }] : []),
+  { key: 'sold', label: isSupplierUser.value ? text('已售', 'Sold') : text('已售合计', 'Total sold'), value: summary.soldQuantity, className: 'success' },
   { key: 'returned', label: text('退货', 'Returned'), value: summary.returnedQuantity, className: 'danger' },
   { key: 'settled', label: text('已结算价格', 'Settled'), value: summary.settledAmount, money: true },
   { key: 'total', label: text('总结算价格', 'Total payable'), value: summary.totalSettlementAmount, money: true },
@@ -358,6 +378,29 @@ const summaryCards = computed(() => [
 
 const canPreviewSettlement = computed(() => identityResolved.value && !isSupplierUser.value && !!proxy?.$auth?.hasPermi('wms:vendor:settlement:preview'))
 
+const settlementPreview = computed(() => {
+  const lines = selectedPreviewLines.value
+  const result = { ...preview.value, lines, skuCount: lines.length }
+  const aggregateFields = [
+    'productQuantity', 'soldQuantity', 'returnedQuantity', 'grossAmount',
+    'returnDeductionAmount', 'totalSettlementAmount', 'settledAmount', 'pendingSettlementAmount'
+  ]
+  aggregateFields.forEach(field => {
+    result[field] = lines.reduce((sum, line) => sum + Number(line?.[field] || 0), 0).toFixed(2)
+  })
+  return result
+})
+
+function handlePreviewSelectionChange(lines) {
+  selectedPreviewLines.value = lines || []
+}
+
+function selectAllPreviewLines() {
+  previewTableRef.value?.clearSelection()
+  for (const line of preview.value.lines || []) {
+    previewTableRef.value?.toggleRowSelection(line, true)
+  }
+}
 const skuPageTargets = {
   product: {
     route: { name: 'Item' },
@@ -375,11 +418,17 @@ const skuPageTargets = {
     quantityField: 'inventoryQuantity',
     query: { inStock: '1' }
   },
-  sold: {
+  platformSold: {
     route: { name: 'PlatformOrders' },
     permission: 'wms:platform:list',
-    quantityField: 'soldQuantity',
+    quantityField: 'platformSoldQuantity',
     query: { orderStatus: 'DELIVERED' }
+  },
+  offPlatformSold: {
+    route: { path: '/wms/order/shipmentOrder' },
+    permission: 'wms:shipment:all',
+    quantityField: 'offPlatformSoldQuantity',
+    query: { orderStatus: '1', nonAutoOnly: 'true' }
   },
   returned: {
     route: { name: 'ReceiptOrder' },
@@ -474,15 +523,18 @@ async function loadSettlementPreview() {
   try {
     const response = await previewSupplierSettlement({ supplierId: settlementSelection.supplierId })
     preview.value = response.data || { lines: [] }
+    selectedPreviewLines.value = []
     supplierSelectVisible.value = false
     previewVisible.value = true
+    await nextTick()
+    selectAllPreviewLines()
   } finally {
     previewLoading.value = false
   }
 }
 
 async function confirmSettlement() {
-  const detail = preview.value || {}
+  const detail = settlementPreview.value || {}
   confirmLoading.value = true
   try {
     await confirmSupplierSettlement({
@@ -705,6 +757,10 @@ onMounted(async () => {
 .preview-alert,
 .preview-summary {
   margin-bottom: 16px;
+}
+
+.supplier-settlement-page :deep(.amount-column .cell) {
+  white-space: nowrap;
 }
 
 @media (max-width: 1200px) {
