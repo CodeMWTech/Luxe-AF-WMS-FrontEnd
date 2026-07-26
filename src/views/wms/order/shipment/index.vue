@@ -273,6 +273,7 @@ const data = reactive({
     totalAmount: undefined,
     orderStatus: -2,
     nonAutoOnly: undefined,
+    excludeSample: undefined,
   },
 });
 
@@ -283,11 +284,13 @@ function applyRouteSkuFilter() {
   const skuCode = String(route.query.skuCode || '').trim()
   const orderStatus = String(route.query.orderStatus || '').trim()
   const nonAutoOnly = String(route.query.nonAutoOnly || '').trim().toLowerCase() === 'true'
-  const filterKey = `${skuCode}|${orderStatus}|${nonAutoOnly}`
+  const excludeSample = String(route.query.excludeSample || '').trim().toLowerCase() === 'true'
+  const filterKey = `${skuCode}|${orderStatus}|${nonAutoOnly}|${excludeSample}`
   if (!skuCode || filterKey === appliedRouteFilterKey.value) return false
   queryParams.value.skuCode = skuCode
   if (orderStatus) queryParams.value.orderStatus = Number(orderStatus)
   queryParams.value.nonAutoOnly = nonAutoOnly || undefined
+  queryParams.value.excludeSample = excludeSample || undefined
   queryParams.value.pageNum = 1
   appliedRouteFilterKey.value = filterKey
   return true

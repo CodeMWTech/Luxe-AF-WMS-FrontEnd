@@ -428,7 +428,7 @@ const skuPageTargets = {
     route: { path: '/wms/order/shipmentOrder' },
     permission: 'wms:shipment:all',
     quantityField: 'offPlatformSoldQuantity',
-    query: { orderStatus: '1', nonAutoOnly: 'true' }
+    query: { orderStatus: '1', nonAutoOnly: 'true', excludeSample: 'true' }
   },
   returned: {
     route: { name: 'ReceiptOrder' },
