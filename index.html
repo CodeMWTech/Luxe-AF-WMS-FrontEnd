@@ -35,141 +35,255 @@
       width: 100%;
       height: 100%;
       z-index: 999999;
+      font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+      color: #14213d;
+      background: #edf3fa;
+    }
+
+    #loader-wrapper .stage {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #f8f6f2;
+    }
+
+    #loader-wrapper .scene {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    #loader-wrapper .stage::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: radial-gradient(ellipse at center, transparent 34%, rgba(255, 255, 255, 0.08) 72%, rgba(255, 255, 255, 0.28) 100%);
+    }
+
+    #loader-wrapper .loader-brand {
+      position: absolute;
+      z-index: 2;
+      left: 4%;
+      top: 4%;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 18px 8px 8px;
+      border: 1px solid rgba(211, 168, 76, 0.3);
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.78);
+      box-shadow: 0 10px 24px rgba(20, 33, 61, 0.1);
+    }
+
+    #loader-wrapper .loader-brand img {
+      width: 46px;
+      height: 46px;
+      display: block;
+      object-fit: contain;
+    }
+
+    #loader-wrapper .loader-brand strong {
+      display: block;
+      color: #071a38;
+      font-size: 23px;
+      line-height: 1;
+    }
+
+    #loader-wrapper .loader-brand small {
+      display: block;
+      margin-top: 6px;
+      color: #64748b;
+      font-size: 11px;
+      letter-spacing: 0.1em;
+    }
+
+    #loader-wrapper .loader-panel {
+      position: absolute;
+      z-index: 3;
+      left: 50%;
+      top: 47%;
+      width: min(430px, 58%);
+      transform: translate(-50%, -50%);
+      padding: 22px 28px 24px;
+      border: 1px solid rgba(211, 168, 76, 0.52);
+      border-radius: 24px;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.74), rgba(255, 255, 255, 0.5));
+      backdrop-filter: blur(8px) saturate(108%);
+      box-shadow: 0 18px 38px rgba(20, 33, 61, 0.12), 0 0 0 5px rgba(255, 255, 255, 0.14);
+      text-align: center;
     }
 
     #loader {
-      display: block;
       position: relative;
-      left: 50%;
-      top: 50%;
-      width: 150px;
-      height: 150px;
-      margin: -75px 0 0 -75px;
+      width: 66px;
+      height: 66px;
+      margin: 0 auto 13px;
+      border: 3px solid rgba(23, 105, 255, 0.16);
+      border-top-color: #1769ff;
+      border-right-color: #d3a84c;
       border-radius: 50%;
-      border: 3px solid transparent;
-      border-top-color: #FFF;
-      -webkit-animation: spin 2s linear infinite;
-      -ms-animation: spin 2s linear infinite;
-      -moz-animation: spin 2s linear infinite;
-      -o-animation: spin 2s linear infinite;
-      animation: spin 2s linear infinite;
-      z-index: 1001;
+      -webkit-animation: spin 1.7s linear infinite;
+      animation: spin 1.7s linear infinite;
+      filter: drop-shadow(0 5px 10px rgba(23, 105, 255, 0.18));
     }
 
     #loader:before {
       content: "";
       position: absolute;
-      top: 5px;
-      left: 5px;
-      right: 5px;
-      bottom: 5px;
+      inset: 10px;
+      border: 1px solid rgba(211, 168, 76, 0.62);
+      border-left-color: transparent;
       border-radius: 50%;
-      border: 3px solid transparent;
-      border-top-color: #FFF;
-      -webkit-animation: spin 3s linear infinite;
-      -moz-animation: spin 3s linear infinite;
-      -o-animation: spin 3s linear infinite;
-      -ms-animation: spin 3s linear infinite;
-      animation: spin 3s linear infinite;
+      -webkit-animation: spin-reverse 2.3s linear infinite;
+      animation: spin-reverse 2.3s linear infinite;
     }
 
     #loader:after {
       content: "";
       position: absolute;
-      top: 15px;
-      left: 15px;
-      right: 15px;
-      bottom: 15px;
+      top: 1px;
+      left: 50%;
+      width: 7px;
+      height: 7px;
       border-radius: 50%;
-      border: 3px solid transparent;
-      border-top-color: #FFF;
-      -moz-animation: spin 1.5s linear infinite;
-      -o-animation: spin 1.5s linear infinite;
-      -ms-animation: spin 1.5s linear infinite;
-      -webkit-animation: spin 1.5s linear infinite;
-      animation: spin 1.5s linear infinite;
+      background: #d3a84c;
+      box-shadow: 0 0 0 4px rgba(211, 168, 76, 0.14);
+      transform: translateX(-50%);
     }
 
+    #loader-wrapper .kicker {
+      margin: 0 0 9px;
+      color: #1769ff;
+      font-size: 14px;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+    }
+
+    #loader-wrapper .load_title {
+      margin: 0;
+      color: #071a38;
+      font-size: clamp(32px, 3.4vw, 48px);
+      line-height: 1.15;
+      letter-spacing: -0.03em;
+      font-weight: 700;
+      text-shadow: 0 1px 0 rgba(255, 255, 255, 0.65);
+    }
+
+    #loader-wrapper .load_subtitle {
+      margin: 15px 0 21px;
+      color: #334155;
+      font-size: 15px;
+      line-height: 1.75;
+      font-weight: 500;
+    }
+
+    #loader-wrapper .progress-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 8px;
+      color: #334155;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    #loader-wrapper .progress-track {
+      height: 9px;
+      overflow: hidden;
+      border: 1px solid rgba(211, 168, 76, 0.34);
+      border-radius: 99px;
+      background: rgba(23, 105, 255, 0.1);
+    }
+
+    #loader-wrapper .progress-fill {
+      position: relative;
+      width: 78%;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #1769ff 0%, #5c9fff 72%, #d3a84c 100%);
+      box-shadow: 0 0 16px rgba(23, 105, 255, 0.22);
+    }
+
+    #loader-wrapper .progress-fill::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(110deg, transparent 20%, rgba(255, 255, 255, 0.7) 50%, transparent 80%);
+      -webkit-animation: shimmer 1.8s linear infinite;
+      animation: shimmer 1.8s linear infinite;
+    }
+
+    #loader-wrapper .loading-meta {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 16px;
+      color: #64748b;
+      font-size: 12px;
+    }
+
+    #loader-wrapper .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #d3a84c;
+      box-shadow: 0 0 0 5px rgba(211, 168, 76, 0.16);
+    }
 
     @-webkit-keyframes spin {
-      0% {
-        -webkit-transform: rotate(0deg);
-        -ms-transform: rotate(0deg);
-        transform: rotate(0deg);
-      }
-
-      100% {
-        -webkit-transform: rotate(360deg);
-        -ms-transform: rotate(360deg);
+      to {
         transform: rotate(360deg);
       }
     }
 
     @keyframes spin {
-      0% {
-        -webkit-transform: rotate(0deg);
-        -ms-transform: rotate(0deg);
-        transform: rotate(0deg);
-      }
-
-      100% {
-        -webkit-transform: rotate(360deg);
-        -ms-transform: rotate(360deg);
+      to {
         transform: rotate(360deg);
       }
     }
 
-
-    #loader-wrapper .loader-section {
-      position: fixed;
-      top: 0;
-      width: 51%;
-      height: 100%;
-      background: #7171C6;
-      z-index: 1000;
-      -webkit-transform: translateX(0);
-      -ms-transform: translateX(0);
-      transform: translateX(0);
+    @-webkit-keyframes spin-reverse {
+      to {
+        transform: rotate(-360deg);
+      }
     }
 
-    #loader-wrapper .loader-section.section-left {
-      left: 0;
+    @keyframes spin-reverse {
+      to {
+        transform: rotate(-360deg);
+      }
     }
 
-    #loader-wrapper .loader-section.section-right {
-      right: 0;
+    @-webkit-keyframes shimmer {
+      from {
+        transform: translateX(-100%);
+      }
+      to {
+        transform: translateX(100%);
+      }
     }
 
-
-    .loaded #loader-wrapper .loader-section.section-left {
-      -webkit-transform: translateX(-100%);
-      -ms-transform: translateX(-100%);
-      transform: translateX(-100%);
-      -webkit-transition: all 0.7s 0.3s cubic-bezier(0.645, 0.045, 0.355, 1.000);
-      transition: all 0.7s 0.3s cubic-bezier(0.645, 0.045, 0.355, 1.000);
-    }
-
-    .loaded #loader-wrapper .loader-section.section-right {
-      -webkit-transform: translateX(100%);
-      -ms-transform: translateX(100%);
-      transform: translateX(100%);
-      -webkit-transition: all 0.7s 0.3s cubic-bezier(0.645, 0.045, 0.355, 1.000);
-      transition: all 0.7s 0.3s cubic-bezier(0.645, 0.045, 0.355, 1.000);
-    }
-
-    .loaded #loader {
-      opacity: 0;
-      -webkit-transition: all 0.3s ease-out;
-      transition: all 0.3s ease-out;
+    @keyframes shimmer {
+      from {
+        transform: translateX(-100%);
+      }
+      to {
+        transform: translateX(100%);
+      }
     }
 
     .loaded #loader-wrapper {
       visibility: hidden;
-      -webkit-transform: translateY(-100%);
-      -ms-transform: translateY(-100%);
-      transform: translateY(-100%);
-      -webkit-transition: all 0.3s 1s ease-out;
-      transition: all 0.3s 1s ease-out;
+      opacity: 0;
+      -webkit-transition: all 0.45s ease-out;
+      transition: all 0.45s ease-out;
     }
 
     .no-js #loader-wrapper {
@@ -180,25 +294,73 @@
       color: #222222;
     }
 
-    #loader-wrapper .load_title {
-      font-family: 'Open Sans';
-      color: #FFF;
-      font-size: 19px;
-      width: 100%;
-      text-align: center;
-      z-index: 9999999999999;
-      position: absolute;
-      top: 60%;
-      opacity: 1;
-      line-height: 30px;
+    @media (max-width: 760px) {
+      #loader-wrapper .loader-brand {
+        left: 3%;
+        top: 3%;
+        padding: 5px 10px 5px 5px;
+      }
+
+      #loader-wrapper .loader-brand img {
+        width: 32px;
+        height: 32px;
+      }
+
+      #loader-wrapper .loader-brand strong {
+        font-size: 15px;
+      }
+
+      #loader-wrapper .loader-brand small {
+        font-size: 8px;
+      }
+
+      #loader-wrapper .loader-panel {
+        top: 50%;
+        width: min(420px, 74%);
+        padding: 16px 15px 18px;
+        border-radius: 17px;
+      }
+
+      #loader {
+        width: 48px;
+        height: 48px;
+        margin-bottom: 9px;
+      }
+
+      #loader:before {
+        inset: 7px;
+      }
+
+      #loader-wrapper .load_title {
+        font-size: 27px;
+      }
+
+      #loader-wrapper .kicker {
+        font-size: 11px;
+      }
+
+      #loader-wrapper .load_subtitle {
+        margin: 10px 0 14px;
+        font-size: 11px;
+        line-height: 1.6;
+      }
+
+      #loader-wrapper .progress-head {
+        font-size: 10px;
+      }
+
+      #loader-wrapper .loading-meta {
+        margin-top: 12px;
+        font-size: 10px;
+      }
     }
 
-    #loader-wrapper .load_title span {
-      font-weight: normal;
-      font-style: italic;
-      font-size: 13px;
-      color: #FFF;
-      opacity: 0.5;
+    @media (prefers-reduced-motion: reduce) {
+      #loader,
+      #loader:before,
+      #loader-wrapper .progress-fill::after {
+        animation: none;
+      }
     }
   </style>
 </head>
@@ -206,10 +368,33 @@
 <body>
   <div id="app">
     <div id="loader-wrapper">
-      <div id="loader"></div>
-      <div class="loader-section section-left"></div>
-      <div class="loader-section section-right"></div>
-      <div class="load_title">正在加载系统资源，请耐心等待</div>
+      <section class="stage" aria-label="LUXE AF Loading">
+        <img class="scene" src="/loading-boutique-scene.png" alt="">
+        <div class="loader-brand">
+          <img src="/logo-mark.png" alt="LUXE AF">
+          <div>
+            <strong>LUXE AF</strong>
+            <small>全自动化智能仓库系统</small>
+          </div>
+        </div>
+        <div class="loader-panel">
+          <div id="loader" aria-hidden="true"></div>
+          <p class="kicker">全自动化智能仓库系统</p>
+          <div class="load_title">系统正在加载</div>
+          <p class="load_subtitle">正在连接仓储服务并同步包包库位，请稍候。</p>
+          <div class="progress-head">
+            <span>正在准备工作区 · 78%</span>
+            <span>78%</span>
+          </div>
+          <div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="78">
+            <div class="progress-fill"></div>
+          </div>
+          <div class="loading-meta">
+            <i class="dot"></i>
+            <span>库存索引同步</span>
+          </div>
+        </div>
+      </section>
     </div>
   </div>
   <script type="module" src="/src/main.js"></script>
