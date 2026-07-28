@@ -1472,10 +1472,15 @@ function saveSkuEdit() {
     return
   }
   const ord = getDisplayOrder(skuEditOrder.value, skuEditIndex.value)
+  const rowId = ord.id
   const orderId = getOrderId(ord)
   const platform = getPlatform(ord)
+  if (!rowId) {
+    proxy.$modal.msgError(t('platformOrders.skuUpdateFailed'))
+    return
+  }
   skuSaving.value = true
-  updateOrderSku(orderId, platform, skuEditForm.value.newSku.trim()).then(() => {
+  updateOrderSku(rowId, orderId, platform, skuEditForm.value.newSku.trim()).then(() => {
     proxy.$modal.msgSuccess(t('platformOrders.skuUpdateSuccess'))
     cancelSkuEdit()
     getList()

@@ -27,12 +27,12 @@ export function getOrderStatusMap() {
 }
 
 // 更新订单 SKU
-export function updateOrderSku(orderId, platform, newSku) {
+export function updateOrderSku(rowId, orderId, platform, newSku) {
   return request({
     url: `/wms/platform/orders/${orderId}/sku`,
     method: 'put',
     params: { platform },
-    data: { newSku }
+    data: { rowId: String(rowId), newSku }
   })
 }
 
