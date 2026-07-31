@@ -68,9 +68,9 @@
       </div>
       <el-table v-loading="loading" :data="inventoryHistoryList" border class="mt20" :empty-text="tr('暂无库存记录')" cell-class-name="vertical-top-cell">
         <el-table-column :label="tr('操作单号')" prop="orderNo" width="220" show-overflow-tooltip header-class-name="nowrap-header" class-name="nowrap-cell"/>
-        <el-table-column :label="tr('商品名称')" min-width="180" show-overflow-tooltip>
+        <el-table-column :label="tr('商品名称')" min-width="180">
           <template #default="{ row }">
-            <div>{{ row.item.itemName }}</div>
+            <div class="item-name-two-line" :title="row.item?.itemName || ''">{{ row.item?.itemName || '-' }}</div>
           </template>
         </el-table-column>
         <el-table-column :label="tr('商品图片')" width="110" align="center">
@@ -362,6 +362,18 @@ onMounted(() => {
 
 .inventory-history-page .table-toolbar .el-button {
   margin-left: auto;
+}
+
+.inventory-history-page .item-name-two-line {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  word-break: break-word;
+  white-space: normal;
+  line-height: 1.4;
+  max-height: 2.8em;
 }
 
 .inventory-history-page .item-main-image {
