@@ -18,6 +18,7 @@
     login: 'Log in',
     loggingIn: 'Logging in...',
     ruleUsernameRequired: 'Please input your username',
+    ruleUsernameLength: 'Account length must be between 2 and 50 characters',
     rulePasswordRequired: 'Please input your password',
     ruleCodeRequired: 'Please input verification code',
   },

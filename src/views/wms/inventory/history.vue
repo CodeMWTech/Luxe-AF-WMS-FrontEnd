@@ -73,6 +73,23 @@
             <div>{{ row.item.itemName }}</div>
           </template>
         </el-table-column>
+        <el-table-column :label="tr('商品图片')" width="110" align="center">
+          <template #default="{ row }">
+            <el-image
+              v-if="row.itemImage"
+              :src="row.itemImage"
+              fit="cover"
+              class="item-main-image"
+              :preview-src-list="[row.itemImage]"
+              preview-teleported
+            >
+              <template #error>
+                <div class="image-empty">{{ tr('暂无图片') }}</div>
+              </template>
+            </el-image>
+            <div v-else class="image-empty">{{ tr('暂无图片') }}</div>
+          </template>
+        </el-table-column>
         <el-table-column :label="tr('SKU编号')" min-width="150" show-overflow-tooltip>
           <template #default="{ row }">
             <div v-if="row.itemSku?.skuCode">{{ row.itemSku.skuCode }}</div>
@@ -345,6 +362,25 @@ onMounted(() => {
 
 .inventory-history-page .table-toolbar .el-button {
   margin-left: auto;
+}
+
+.inventory-history-page .item-main-image {
+  width: 72px;
+  height: 72px;
+  border-radius: 6px;
+  display: inline-block;
+}
+
+.inventory-history-page .image-empty {
+  width: 72px;
+  height: 72px;
+  border-radius: 6px;
+  border: 1px dashed var(--el-border-color, #dcdfe6);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--el-text-color-secondary, #909399);
+  font-size: 12px;
 }
 
 </style>

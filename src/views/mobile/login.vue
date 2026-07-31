@@ -19,6 +19,7 @@
           v-model="loginForm.username"
           type="text"
           auto-complete="off"
+          maxlength="50"
           :placeholder="$t('login.usernamePlaceholder')"
         >
           <template #prefix><svg-icon icon-class="user" class="input-icon" /></template>
@@ -100,7 +101,10 @@ const loginForm = ref({
 })
 
 const loginRules = computed(() => ({
-  username: [{ required: true, trigger: 'blur', message: t('login.ruleUsernameRequired') }],
+  username: [
+    { required: true, trigger: 'blur', message: t('login.ruleUsernameRequired') },
+    { min: 2, max: 50, trigger: 'blur', message: t('login.ruleUsernameLength') }
+  ],
   password: [{ required: true, trigger: 'blur', message: t('login.rulePasswordRequired') }],
   code: [{ required: true, trigger: 'change', message: t('login.ruleCodeRequired') }]
 }))

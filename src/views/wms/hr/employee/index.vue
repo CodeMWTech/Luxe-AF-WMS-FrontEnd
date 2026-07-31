@@ -112,13 +112,13 @@
             <el-input
               v-model="queryParams.keyword"
               class="search-input"
-              :placeholder="tr('搜索昵称/登录名/手机/邮箱/部门/岗位等')"
+              :placeholder="tr('搜索用户信息/用户名/手机/邮箱/部门/岗位等')"
               clearable
               @keyup.enter="handleQuery"
             />
             <el-button type="primary" icon="Search" @click="handleQuery">{{ tr('搜索') }}</el-button>
           </div>
-          <div class="search-hint">{{ tr('支持搜索员工档案中已填写的各类信息，含用户昵称、登录名、手机、邮箱、部门、岗位、备注等') }}</div>
+          <div class="search-hint">{{ tr('支持搜索员工档案中已填写的各类信息，含用户信息、用户名、手机、邮箱、部门、岗位、备注等') }}</div>
           <div class="filter-bar">
             <el-select v-model="queryParams.viewMode" class="filter-item" @change="handleViewModeChange">
               <el-option :label="tr('在职员工')" value="active" />
@@ -179,7 +179,7 @@
               <el-table-column min-width="120">
                 <template #header>
                   <span>{{ tr('姓名') }}</span>
-                  <el-tooltip :content="tr('有登录账号的员工会同步用户昵称；无账号员工仅在此维护档案')" placement="top">
+                  <el-tooltip :content="tr('有登录账号的员工会同步用户信息；无账号员工仅在此维护档案')" placement="top">
                     <el-icon class="header-tip"><QuestionFilled /></el-icon>
                   </el-tooltip>
                 </template>
@@ -390,8 +390,8 @@
           <el-tab-pane :label="tr('基本信息')" name="basic">
             <el-row :gutter="16">
               <el-col :span="12">
-                <el-form-item :label="isCreateMode ? tr('姓名') : tr('姓名/昵称')" prop="nameCn">
-                  <el-input v-model="form.nameCn" :placeholder="isCreateMode ? tr('请输入员工姓名') : tr('请输入姓名或用户昵称')" :disabled="isLinkedUserReadonly" />
+                <el-form-item :label="isCreateMode ? tr('姓名') : tr('姓名/用户信息')" prop="nameCn">
+                  <el-input v-model="form.nameCn" :placeholder="isCreateMode ? tr('请输入员工姓名') : tr('请输入姓名或用户信息')" :disabled="isLinkedUserReadonly" />
                 </el-form-item>
               </el-col>
               <el-col :span="12">
