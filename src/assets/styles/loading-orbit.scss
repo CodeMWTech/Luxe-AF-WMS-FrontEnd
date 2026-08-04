@@ -1,0 +1,76 @@
+/* Data-loading spinner: match index.html #loader (blue #1769ff + gold #d3a84c) */
+@keyframes luxe-orbit-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes luxe-orbit-spin-reverse {
+  to {
+    transform: rotate(-360deg);
+  }
+}
+
+.el-loading-spinner {
+  .circular {
+    display: none !important;
+  }
+
+  /* Outer dual-tone ring */
+  &::before {
+    content: "";
+    box-sizing: border-box;
+    display: block;
+    width: 42px;
+    height: 42px;
+    margin: 0 auto;
+    border: 3px solid rgba(23, 105, 255, 0.16);
+    border-top-color: #1769ff;
+    border-right-color: #d3a84c;
+    border-radius: 50%;
+    animation: luxe-orbit-spin 1.7s linear infinite;
+    filter: drop-shadow(0 5px 10px rgba(23, 105, 255, 0.18));
+  }
+
+  /* Inner reverse gold ring */
+  &::after {
+    content: "";
+    box-sizing: border-box;
+    position: absolute;
+    left: 50%;
+    top: 0;
+    width: 22px;
+    height: 22px;
+    margin: 10px 0 0 -11px;
+    border: 1px solid rgba(211, 168, 76, 0.62);
+    border-left-color: transparent;
+    border-radius: 50%;
+    animation: luxe-orbit-spin-reverse 2.3s linear infinite;
+    pointer-events: none;
+  }
+
+  .el-loading-text {
+    color: #1769ff;
+    margin-top: 10px;
+  }
+}
+
+.el-loading-mask.is-fullscreen .el-loading-spinner {
+  &::before {
+    width: 52px;
+    height: 52px;
+  }
+
+  &::after {
+    width: 28px;
+    height: 28px;
+    margin: 12px 0 0 -14px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .el-loading-spinner::before,
+  .el-loading-spinner::after {
+    animation: none;
+  }
+}

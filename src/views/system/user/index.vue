@@ -29,10 +29,10 @@
          <!--用户数据-->
          <el-col :span="20" :xs="24">
             <el-form :model="queryParams" ref="queryRef" :inline="true" v-show="showSearch" :label-width="queryLabelWidth">
-               <el-form-item label="用户名称" prop="userName">
+               <el-form-item label="用户名" prop="userName">
                   <el-input
                      v-model="queryParams.userName"
-                     placeholder="请输入用户名称"
+                     placeholder="请输入用户名"
                      clearable
                      style="width: 240px"
                      @keyup.enter="handleQuery"
@@ -143,8 +143,8 @@
             <el-table v-loading="loading" :data="userList" @selection-change="handleSelectionChange">
                <el-table-column type="selection" width="50" align="center" />
                <el-table-column label="用户编号" align="center" key="userId" prop="userId" v-if="columns[0].visible" />
-               <el-table-column label="用户名称" align="center" key="userName" prop="userName" v-if="columns[1].visible" :show-overflow-tooltip="true" />
-               <el-table-column label="用户昵称" align="center" key="nickName" prop="nickName" v-if="columns[2].visible" :show-overflow-tooltip="true" />
+               <el-table-column label="用户名" align="center" key="userName" prop="userName" v-if="columns[1].visible" :show-overflow-tooltip="true" />
+               <el-table-column label="用户信息" align="center" key="nickName" prop="nickName" v-if="columns[2].visible" :show-overflow-tooltip="true" />
                <el-table-column label="部门" align="center" key="deptName" prop="deptName" v-if="columns[3].visible" :show-overflow-tooltip="true" />
                <el-table-column label="手机号码" align="center" key="phonenumber" prop="phonenumber" v-if="columns[4].visible" width="120" />
                <el-table-column label="状态" align="center" key="status" v-if="columns[5].visible">
@@ -199,8 +199,16 @@
                <el-tab-pane :label="tr('基本信息')" name="basic">
                   <el-row :gutter="16">
                      <el-col :span="12">
-                        <el-form-item :label="tr('用户昵称')" prop="nickName">
-                           <el-input v-model="form.nickName" :placeholder="tr('请输入用户昵称')" maxlength="30" />
+                        <el-form-item prop="userName">
+                           <template #label>
+                              <span class="label-with-tip">
+                                 {{ tr('用户名') }}
+                                 <el-tooltip :content="tr('用户名提示：用于登录系统的账号名，支持邮箱等形式；创建后不可修改')" placement="top">
+                                    <el-icon class="label-tip"><QuestionFilled /></el-icon>
+                                 </el-tooltip>
+                              </span>
+                           </template>
+                           <el-input v-model="form.userName" :placeholder="tr('请输入用户名')" maxlength="50" :disabled="!!form.userId" />
                         </el-form-item>
                      </el-col>
                      <el-col :span="12">
@@ -228,8 +236,16 @@
                         </el-form-item>
                      </el-col>
                      <el-col :span="12">
-                        <el-form-item :label="tr('用户名称')" prop="userName">
-                           <el-input v-model="form.userName" :placeholder="tr('请输入用户名称')" maxlength="30" :disabled="!!form.userId" />
+                        <el-form-item prop="nickName">
+                           <template #label>
+                              <span class="label-with-tip">
+                                 {{ tr('用户信息') }}
+                                 <el-tooltip :content="tr('用户信息提示：此处为员工真实姓名；创建登录账号时以「用户名」为准')" placement="top">
+                                    <el-icon class="label-tip"><QuestionFilled /></el-icon>
+                                 </el-tooltip>
+                              </span>
+                           </template>
+                           <el-input v-model="form.nickName" :placeholder="tr('请输入用户信息')" maxlength="30" />
                         </el-form-item>
                      </el-col>
                      <el-col :span="12" v-if="!form.userId">
@@ -443,8 +459,8 @@ const upload = reactive({
 // 列显隐信息
 const columns = ref([
   { key: 0, label: `用户编号`, visible: true },
-  { key: 1, label: `用户名称`, visible: true },
-  { key: 2, label: `用户昵称`, visible: true },
+  { key: 1, label: `用户名`, visible: true },
+  { key: 2, label: `用户信息`, visible: true },
   { key: 3, label: `部门`, visible: true },
   { key: 4, label: `手机号码`, visible: true },
   { key: 5, label: `状态`, visible: true },
@@ -462,8 +478,8 @@ const data = reactive({
     deptId: undefined
   },
   rules: {
-    userName: [{ required: true, message: "用户名称不能为空", trigger: "blur" }, { min: 2, max: 20, message: "用户名称长度必须介于 2 和 20 之间", trigger: "blur" }],
-    nickName: [{ required: true, message: "用户昵称不能为空", trigger: "blur" }],
+    userName: [{ required: true, message: "用户名不能为空", trigger: "blur" }, { min: 2, max: 50, message: "用户名长度必须介于 2 和 50 之间", trigger: "blur" }],
+    nickName: [{ required: true, message: "用户信息不能为空", trigger: "blur" }],
     password: [{
       validator: (rule, value, callback) => {
         if (form.value.userId) return callback()
@@ -834,5 +850,15 @@ proxy.getConfigKey("sys.user.initPassword").then(response => {
   font-size: 12px;
   line-height: 1.5;
   color: #909399;
+}
+.user-page .label-with-tip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.user-page .label-tip {
+  color: #909399;
+  cursor: help;
+  vertical-align: middle;
 }
 </style>

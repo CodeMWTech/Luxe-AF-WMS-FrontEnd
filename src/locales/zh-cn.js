@@ -18,6 +18,7 @@
     login: '登 录',
     loggingIn: '登 录 中...',
     ruleUsernameRequired: '请输入您的账号',
+    ruleUsernameLength: '账号长度必须在 2 到 50 个字符之间',
     rulePasswordRequired: '请输入您的密码',
     ruleCodeRequired: '请输入验证码',
   },

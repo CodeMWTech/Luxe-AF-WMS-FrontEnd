@@ -68,9 +68,26 @@
       </div>
       <el-table v-loading="loading" :data="inventoryHistoryList" border class="mt20" :empty-text="tr('暂无库存记录')" cell-class-name="vertical-top-cell">
         <el-table-column :label="tr('操作单号')" prop="orderNo" width="220" show-overflow-tooltip header-class-name="nowrap-header" class-name="nowrap-cell"/>
-        <el-table-column :label="tr('商品名称')" min-width="180" show-overflow-tooltip>
+        <el-table-column :label="tr('商品名称')" min-width="180">
           <template #default="{ row }">
-            <div>{{ row.item.itemName }}</div>
+            <div class="item-name-two-line" :title="row.item?.itemName || ''">{{ row.item?.itemName || '-' }}</div>
+          </template>
+        </el-table-column>
+        <el-table-column :label="tr('商品图片')" width="110" align="center">
+          <template #default="{ row }">
+            <el-image
+              v-if="row.itemImage"
+              :src="row.itemImage"
+              fit="cover"
+              class="item-main-image"
+              :preview-src-list="[row.itemImage]"
+              preview-teleported
+            >
+              <template #error>
+                <div class="image-empty">{{ tr('暂无图片') }}</div>
+              </template>
+            </el-image>
+            <div v-else class="image-empty">{{ tr('暂无图片') }}</div>
           </template>
         </el-table-column>
         <el-table-column :label="tr('SKU编号')" min-width="150" show-overflow-tooltip>
@@ -345,6 +362,37 @@ onMounted(() => {
 
 .inventory-history-page .table-toolbar .el-button {
   margin-left: auto;
+}
+
+.inventory-history-page .item-name-two-line {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  word-break: break-word;
+  white-space: normal;
+  line-height: 1.4;
+  max-height: 2.8em;
+}
+
+.inventory-history-page .item-main-image {
+  width: 72px;
+  height: 72px;
+  border-radius: 6px;
+  display: inline-block;
+}
+
+.inventory-history-page .image-empty {
+  width: 72px;
+  height: 72px;
+  border-radius: 6px;
+  border: 1px dashed var(--el-border-color, #dcdfe6);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--el-text-color-secondary, #909399);
+  font-size: 12px;
 }
 
 </style>

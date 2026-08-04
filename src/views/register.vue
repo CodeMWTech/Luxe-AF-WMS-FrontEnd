@@ -98,7 +98,7 @@ const equalToPassword = (rule, value, callback) => {
 const registerRules = {
   username: [
     { required: true, trigger: "blur", message: "请输入您的账号" },
-    { min: 2, max: 20, message: "用户账号长度必须介于 2 和 20 之间", trigger: "blur" }
+    { min: 2, max: 50, message: "用户账号长度必须介于 2 和 50 之间", trigger: "blur" }
   ],
   password: [
     { required: true, trigger: "blur", message: "请输入您的密码" },
