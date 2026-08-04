@@ -58,14 +58,19 @@
       </el-form-item>
     </el-form>
 
-    <div class="summary-grid" v-loading="summaryLoading">
-      <div v-for="card in summaryCards" :key="card.key" class="summary-card" :class="card.className">
-        <span>{{ card.label }}</span>
-        <strong>{{ card.money ? money(card.value) : quantity(card.value) }}</strong>
+    <div
+      v-loading="loading"
+      element-loading-custom-class="purchased-loading-mask"
+      class="purchased-data-section"
+    >
+      <div class="summary-grid">
+        <div v-for="card in summaryCards" :key="card.key" class="summary-card" :class="card.className">
+          <span>{{ card.label }}</span>
+          <strong>{{ card.money ? money(card.value) : quantity(card.value) }}</strong>
+        </div>
       </div>
-    </div>
 
-    <el-table v-loading="loading" :data="rows" border stripe class="overview-table">
+      <el-table :data="rows" border stripe class="overview-table">
       <el-table-column :label="text('商品', 'Item')" min-width="260" fixed="left">
         <template #default="{ row }">
           <div class="item-cell">
@@ -165,15 +170,16 @@
           </el-tag>
         </template>
       </el-table-column>
-    </el-table>
+      </el-table>
 
-    <div v-show="total > 0" class="supplier-pagination">
-      <pagination
-        :total="total"
-        v-model:page="queryParams.pageNum"
-        v-model:limit="queryParams.pageSize"
-        @pagination="loadData"
-      />
+      <div v-show="total > 0" class="supplier-pagination">
+        <pagination
+          :total="total"
+          v-model:page="queryParams.pageNum"
+          v-model:limit="queryParams.pageSize"
+          @pagination="loadData"
+        />
+      </div>
     </div>
 
     <el-dialog
@@ -299,7 +305,6 @@ const { proxy } = getCurrentInstance()
 const router = useRouter()
 const loading = ref(false)
 const exportLoading = ref(false)
-const summaryLoading = ref(false)
 const previewLoading = ref(false)
 const confirmLoading = ref(false)
 const supplierSelectVisible = ref(false)
@@ -468,18 +473,24 @@ function buildQuery(includePage = true) {
 
 async function loadData() {
   loading.value = true
-  summaryLoading.value = true
   try {
-    const [listResponse, summaryResponse] = await Promise.all([
+    const [listResult, summaryResult] = await Promise.allSettled([
       listSupplierSkuOverview(buildQuery(true)),
       getSupplierSkuSummary(buildQuery(false))
     ])
-    rows.value = listResponse.rows || []
-    total.value = Number(listResponse.total || 0)
-    Object.assign(summary, summaryResponse.data || {})
+
+    if (listResult.status === 'fulfilled') {
+      rows.value = listResult.value.rows || []
+      total.value = Number(listResult.value.total || 0)
+    }
+    if (summaryResult.status === 'fulfilled') {
+      Object.assign(summary, summaryResult.value.data || {})
+    }
+
+    const failedResult = [listResult, summaryResult].find(result => result.status === 'rejected')
+    if (failedResult) throw failedResult.reason
   } finally {
     loading.value = false
-    summaryLoading.value = false
   }
 }
 
@@ -618,6 +629,15 @@ onMounted(async () => {
 <style scoped>
 .supplier-settlement-page {
   --card-border: #e6e9ef;
+}
+
+.supplier-settlement-page :deep(.purchased-loading-mask .el-loading-spinner) {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  width: auto;
+  margin-top: 0;
+  transform: translate(-50%, -50%);
 }
 
 .page-alert,
