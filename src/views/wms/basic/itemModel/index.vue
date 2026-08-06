@@ -1,7 +1,13 @@
 <template>
   <div class="app-container item-model-page" :class="{ 'is-en': isEn }">
     <el-card>
-      <el-form :model="queryParams" ref="queryRef" :inline="true" label-width="88px">
+      <el-form
+        ref="queryRef"
+        :model="queryParams"
+        :inline="true"
+        :label-width="isEn ? '112px' : '88px'"
+        class="model-query-form"
+      >
         <el-form-item :label="tr('包型名称')" prop="modelName">
           <el-input v-model="queryParams.modelName" :placeholder="tr('请输入包型名称')" clearable @keyup.enter="handleQuery" />
         </el-form-item>
@@ -26,7 +32,7 @@
       </el-row>
 
       <el-table v-loading="loading" :data="itemModelList" border class="mt20" :empty-text="tr('暂无数据')">
-        <el-table-column :label="tr('图片')" width="90">
+        <el-table-column :label="tr('图片')" width="90" align="center" header-align="left">
           <template #default="{ row }">
             <el-image v-if="row.imageUrl" class="thumb" :src="row.imageUrl" fit="cover" :preview-src-list="[row.imageUrl]" preview-teleported />
             <div v-else class="thumb empty-thumb">{{ tr('无') }}</div>
@@ -45,7 +51,7 @@
           </template>
         </el-table-column>
         <el-table-column :label="tr('创建时间')" prop="createTime" width="180" />
-        <el-table-column v-hasPermi="['wms:itemModel:edit']" :label="tr('操作')" align="right" width="180">
+        <el-table-column v-hasPermi="['wms:itemModel:edit']" :label="tr('操作')" align="right" header-align="left" width="180">
           <template #default="{ row }">
             <el-button link type="primary" icon="Edit" @click="handleUpdate(row)">{{ tr('修改') }}</el-button>
             <el-button link type="primary" icon="Delete" @click="handleDelete(row)">{{ tr('删除') }}</el-button>
@@ -56,7 +62,13 @@
     </el-card>
 
     <el-drawer :title="title" v-model="open" size="50%" append-to-body>
-      <el-form ref="itemModelRef" :model="form" :rules="rules" label-width="96px">
+      <el-form
+        ref="itemModelRef"
+        :model="form"
+        :rules="rules"
+        :label-width="isEn ? '136px' : '96px'"
+        class="model-drawer-form"
+      >
         <el-form-item :label="tr('分类')" prop="itemCategory">
           <el-tree-select
             v-model="form.itemCategory"
@@ -341,9 +353,15 @@ getList()
 .table-title {
   font-size: 18px;
 }
+.model-query-form :deep(.el-form-item__label),
+.model-drawer-form :deep(.el-form-item__label) {
+  white-space: nowrap;
+}
 .thumb {
+  display: block;
   width: 48px;
   height: 48px;
+  margin: 0 auto;
   border-radius: 6px;
 }
 .empty-thumb {
