@@ -5,6 +5,74 @@ export function displayValue(value) {
   return value
 }
 
+/** 与后端 BusinessTimeUtils 一致：业务日按美西时区 */
+const BUSINESS_TIME_ZONE = 'America/Los_Angeles'
+
+function toDateOnlyParts(value) {
+  if (!value) return null
+  const text = String(value).trim()
+  // 优先取日期部分，与 SQL date(receipt_time) 对齐，忽略时分秒
+  const match = text.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (match) {
+    return { year: Number(match[1]), month: Number(match[2]), day: Number(match[3]) }
+  }
+  const date = new Date(text)
+  if (Number.isNaN(date.getTime())) return null
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: BUSINESS_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(date)
+  const year = Number(parts.find(p => p.type === 'year')?.value)
+  const month = Number(parts.find(p => p.type === 'month')?.value)
+  const day = Number(parts.find(p => p.type === 'day')?.value)
+  if (![year, month, day].every(Number.isFinite)) return null
+  return { year, month, day }
+}
+
+function toUtcDay(parts) {
+  return Date.UTC(parts.year, parts.month - 1, parts.day)
+}
+
+function businessTodayParts() {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: BUSINESS_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(new Date())
+  return {
+    year: Number(parts.find(p => p.type === 'year')?.value),
+    month: Number(parts.find(p => p.type === 'month')?.value),
+    day: Number(parts.find(p => p.type === 'day')?.value)
+  }
+}
+
+/**
+ * 周转天数口径（对齐库存看板 SQL）：
+ * 1) 无入库时间 → 无法计算
+ * 2) 库存未清零 → 今天 - 入库日期
+ * 3) 库存已清零且有出库 → 出库日期 - 入库日期
+ * 4) 库存已清零但无出库 → 无法计算
+ */
+export function computeTurnoverDays(receiptTime, shipmentTime, quantity) {
+  const receipt = toDateOnlyParts(receiptTime)
+  if (!receipt) return undefined
+
+  const qty = Number(quantity)
+  const cleared = Number.isFinite(qty) && qty === 0
+
+  if (!cleared) {
+    const today = businessTodayParts()
+    return Math.round((toUtcDay(today) - toUtcDay(receipt)) / 86400000)
+  }
+
+  const shipment = toDateOnlyParts(shipmentTime)
+  if (!shipment) return undefined
+  return Math.round((toUtcDay(shipment) - toUtcDay(receipt)) / 86400000)
+}
+
 export function formatMoney(value) {
   if (value === null || value === undefined) return '--'
   const n = Number(value)
@@ -172,6 +240,10 @@ export function mergeInventoryIntoDetail(detail, inventoryRow = {}) {
   if ((detail.sellingPrice === null || detail.sellingPrice === undefined) && inventoryRow.sellingPrice !== undefined) {
     detail.sellingPrice = inventoryRow.sellingPrice
   }
+  // 历史接口/部分库存接口不带周转天数时，按看板口径本地补算
+  if (detail.turnoverDays === null || detail.turnoverDays === undefined) {
+    detail.turnoverDays = computeTurnoverDays(detail.receiptTime, detail.shipmentTime, detail.quantity)
+  }
   return detail
 }
 
@@ -202,13 +274,20 @@ export function summarizeInventoryHistoryRows(rows = [], warehouseMap) {
   const latestRow = sortByCreateTimeDesc(rows)[0]
   const quantity = latestRow?.afterQuantity ?? latestRow?.beforeQuantity
 
+  const quantityValue = quantity
+  const receiptTime = receiptRows[0]?.createTime
+  // 库存未清零时，看板强制不展示出库时间
+  const shipmentTime = (Number(quantityValue) === 0) ? shipmentRows[0]?.createTime : undefined
+  const shipmentOrderNo = (Number(quantityValue) === 0) ? shipmentRows[0]?.orderNo : undefined
+
   return {
-    quantity,
+    quantity: quantityValue,
     warehouseName: resolveWarehouseName(latestRow?.warehouseId, warehouseMap),
-    receiptTime: receiptRows[0]?.createTime,
-    shipmentTime: shipmentRows[0]?.createTime,
-    shipmentOrderNo: shipmentRows[0]?.orderNo,
-    outboundPlatform: undefined
+    receiptTime,
+    shipmentTime,
+    shipmentOrderNo,
+    outboundPlatform: undefined,
+    turnoverDays: computeTurnoverDays(receiptTime, shipmentTime, quantityValue)
   }
 }
 
