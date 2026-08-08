@@ -78,7 +78,7 @@
                 </div>
               </template>
             </el-table-column>
-            <el-table-column v-hasPermi="['wms:item:edit']" :label="tr('操作')" align="right" prop="itemId" width="200">
+            <el-table-column v-hasPermi="['wms:item:edit']" :label="tr('操作')" align="right" header-align="left" prop="itemId" width="200">
               <template #default="scope">
                 <el-button link type="primary" @click="emit('delete', scope.row)" icon="Delete" v-hasPermi="['wms:item:edit']">{{ tr('删除') }}</el-button>
                 <el-button link type="primary" @click="emit('update', scope.row)" icon="Edit" v-hasPermi="['wms:item:edit']">{{ tr('修改') }}</el-button>

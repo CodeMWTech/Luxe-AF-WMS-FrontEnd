@@ -27,6 +27,14 @@
             @keyup.enter.prevent="handleQuery"
           />
         </el-form-item>
+        <el-form-item class="filter-item" label="SKU" prop="skuCode" :label-width="isEn ? '170px' : undefined">
+          <el-input
+            v-model="queryParams.skuCode"
+            :placeholder="isEn ? 'Please enter SKU' : '请输入SKU编号'"
+            clearable
+            @keyup.enter.prevent="handleQuery"
+          />
+        </el-form-item>
         <el-form-item class="filter-item filter-item-actions">
           <el-button type="primary" icon="Search" class="action-btn" @click="handleQuery">{{ isEn ? 'Search' : '搜索' }}</el-button>
           <el-button icon="Refresh" class="action-btn" @click="resetQuery">{{ isEn ? 'Reset' : '重置' }}</el-button>
@@ -277,6 +285,7 @@ const data = reactive({
     pageNum: 1,
     pageSize: 10,
     orderNo: undefined,
+    skuCode: undefined,
     orderStatus: -2,
   },
 });
@@ -342,6 +351,7 @@ function getList() {
   loading.value = true;
   const query = {...queryParams.value}
   query.orderNo = query.orderNo?.trim() || undefined
+  query.skuCode = query.skuCode?.trim() || undefined
   if (query.orderStatus === -2) {
     query.orderStatus = null
   }

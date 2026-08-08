@@ -240,7 +240,7 @@
           <el-table-column :label="tr('成功')" prop="successCount" width="90" align="right" />
           <el-table-column :label="tr('失败')" prop="failCount" width="90" align="right" />
           <el-table-column :label="tr('创建时间')" prop="createTime" width="180" />
-          <el-table-column :label="tr('操作')" width="100" align="center">
+          <el-table-column :label="tr('操作')" width="100" align="center" header-align="left">
             <template #default="{ row }">
               <el-button link type="primary" @click="openImportDetail(row)">{{ tr('明细') }}</el-button>
             </template>
