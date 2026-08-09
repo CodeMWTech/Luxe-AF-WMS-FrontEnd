@@ -92,7 +92,14 @@
         </el-table-column>
         <el-table-column :label="tr('SKU编号')" min-width="150" show-overflow-tooltip>
           <template #default="{ row }">
-            <div v-if="row.itemSku?.skuCode">{{ row.itemSku.skuCode }}</div>
+            <el-link
+              v-if="canOpenSkuLink(row)"
+              type="primary"
+              :underline="false"
+              class="sku-history-link"
+              @click.stop="openSkuLink(row)"
+            >{{ row.itemSku.skuCode }}</el-link>
+            <div v-else-if="row.itemSku?.skuCode">{{ row.itemSku.skuCode }}</div>
             <div v-else>-</div>
           </template>
         </el-table-column>
@@ -156,13 +163,28 @@
 <script setup name="InventoryHistory">
 import { exportInventoryHistory, listInventoryHistory } from "@/api/wms/inventoryHistory";
 import {computed, getCurrentInstance, onMounted, reactive, ref} from "vue";
+import { useRouter } from 'vue-router'
 import {useWmsStore} from '@/store/modules/wms'
 import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
 import { formatDateTimeForQuery, formatLosAngelesTime } from '@/utils/laTime'
 import { blobValidate } from '@/utils/ruoyi'
+
+const ORDER_TYPE_RECEIPT = 1
+const ORDER_TYPE_SHIPMENT = 2
+const skuLinkTargets = {
+  [ORDER_TYPE_RECEIPT]: {
+    route: { name: 'Item' },
+    permission: 'wms:item:list'
+  },
+  [ORDER_TYPE_SHIPMENT]: {
+    route: { name: 'PlatformOrders' },
+    permission: 'wms:platform:list'
+  }
+}
 const defaultTime = reactive([new Date(2000,0,1,0,0,0), new Date(2000,0,1,23,59,59)])
 const {proxy} = getCurrentInstance();
+const router = useRouter()
 const {wms_inventory_history_type} = proxy.useDict('wms_inventory_history_type');
 const settingsStore = useSettingsStore()
 
@@ -258,6 +280,29 @@ function handleQuery() {
 function resetQuery() {
   proxy.resetForm("queryRef");
   handleQuery();
+}
+
+function getSkuCode(row) {
+  return String(row?.itemSku?.skuCode || '').trim()
+}
+
+function getSkuLinkTarget(row) {
+  return skuLinkTargets[Number(row?.orderType)]
+}
+
+function canOpenSkuLink(row) {
+  const skuCode = getSkuCode(row)
+  const target = getSkuLinkTarget(row)
+  return !!skuCode && !!target && !!proxy?.$auth?.hasPermi(target.permission)
+}
+
+function openSkuLink(row) {
+  if (!canOpenSkuLink(row)) return
+  const target = getSkuLinkTarget(row)
+  router.push({
+    ...target.route,
+    query: { skuCode: getSkuCode(row) }
+  }).catch(() => {})
 }
 
 onMounted(() => {
@@ -393,6 +438,10 @@ onMounted(() => {
   justify-content: center;
   color: var(--el-text-color-secondary, #909399);
   font-size: 12px;
+}
+
+.inventory-history-page .sku-history-link {
+  font-weight: 600;
 }
 
 </style>
