@@ -8,7 +8,14 @@
       class="page-alert"
     />
 
-    <el-form ref="queryRef" :model="queryParams" :inline="true" label-width="92px" class="query-form">
+    <el-form
+      v-if="identityResolved"
+      ref="queryRef"
+      :model="queryParams"
+      :inline="true"
+      label-width="92px"
+      class="query-form"
+    >
       <el-form-item :label="text('商品名称', 'Item')" prop="itemName">
         <el-input v-model="queryParams.itemName" :placeholder="text('请输入商品名称', 'Enter item name')" clearable @keyup.enter="handleQuery" />
       </el-form-item>
@@ -225,7 +232,7 @@
       destroy-on-close
     >
       <el-alert
-        :title="text('取消勾选可将商品从本次结算中剔除。确认后仅保存已勾选明细并更新对应 SKU 累计已结算金额；不会发起外部付款。', 'Uncheck items to exclude them from this settlement. Confirmation saves only selected lines and updates those SKU totals; no external payment is made.')"
+        :title="text('可取消勾选、手工添加强制结算 SKU，并为每条填写备注。确认后仅保存已勾选明细并更新对应 SKU 累计已结算金额；不会发起外部付款。', 'You can uncheck lines, add forced-settlement SKUs, and enter a remark for each line. Confirmation saves only selected lines and updates those SKU totals; no external payment is made.')"
         type="warning"
         show-icon
         :closable="false"
@@ -246,8 +253,24 @@
         </el-descriptions-item>
       </el-descriptions>
 
+      <div class="preview-toolbar">
+        <el-button type="warning" plain icon="Plus" @click="openForceSkuDialog">
+          {{ text('手工添加 SKU 强制结算', 'Add SKU for forced settlement') }}
+        </el-button>
+        <span class="preview-toolbar__tip">
+          {{ text('强制结算金额会计入累计已结算；以后满足正常结算条件时自动扣除。', 'Forced amounts are added to settled totals and deducted from future normal settlements.') }}
+        </span>
+      </div>
+
       <el-table ref="previewTableRef" :data="preview.lines || []" row-key="skuId" border stripe max-height="520" @selection-change="handlePreviewSelectionChange">
         <el-table-column type="selection" width="52" reserve-selection fixed="left" />
+        <el-table-column :label="text('结算类型', 'Type')" width="105" fixed="left">
+          <template #default="{ row }">
+            <el-tag :type="row.settlementType === 'FORCED' ? 'warning' : 'success'" effect="plain">
+              {{ row.settlementType === 'FORCED' ? text('强制结算', 'Forced') : text('正常结算', 'Normal') }}
+            </el-tag>
+          </template>
+        </el-table-column>
         <el-table-column :label="text('供货商', 'Supplier')" prop="supplierName" min-width="105" show-overflow-tooltip />
         <el-table-column label="SKU" prop="skuCode" min-width="135" />
         <el-table-column :label="text('商品', 'Item')" prop="itemName" min-width="180" show-overflow-tooltip />
@@ -273,7 +296,38 @@
           <template #default="{ row }">{{ money(row.settledAmount) }}</template>
         </el-table-column>
         <el-table-column :label="text('本次待结算', 'Pending')" align="right" width="165" class-name="amount-column">
-          <template #default="{ row }"><span :class="Number(row.pendingSettlementAmount) < 0 ? 'danger-text' : ''">{{ money(row.pendingSettlementAmount) }}</span></template>
+          <template #default="{ row }">
+            <el-input-number
+              v-if="row.settlementType === 'FORCED'"
+              v-model="row.pendingSettlementAmount"
+              :min="0.01"
+              :max="forceRemainingAmount(row)"
+              :precision="2"
+              :controls="false"
+              size="small"
+              class="force-amount-input"
+              :placeholder="text('输入金额', 'Amount')"
+            />
+            <span v-else :class="Number(row.pendingSettlementAmount) < 0 ? 'danger-text' : ''">{{ money(row.pendingSettlementAmount) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column :label="text('备注', 'Remark')" min-width="220">
+          <template #default="{ row }">
+            <el-input
+              v-model="row.remark"
+              maxlength="500"
+              show-word-limit
+              clearable
+              :placeholder="text('可填写本条结算备注', 'Optional line remark')"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column :label="text('操作', 'Actions')" width="90" fixed="right">
+          <template #default="{ row }">
+            <el-button v-if="row.settlementType === 'FORCED'" link type="danger" @click="removeForcedLine(row)">
+              {{ text('移除', 'Remove') }}
+            </el-button>
+          </template>
         </el-table-column>
       </el-table>
       <template #footer>
@@ -284,6 +338,77 @@
           :disabled="!selectedPreviewLines.length"
           @click="confirmSettlement"
         >{{ text(`确认结算（${selectedPreviewLines.length}项）`, `Confirm (${selectedPreviewLines.length})`) }}</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog
+      v-model="forceSkuVisible"
+      :title="text('选择强制结算 SKU', 'Select forced-settlement SKUs')"
+      width="78%"
+      top="7vh"
+      append-to-body
+      destroy-on-close
+    >
+      <el-alert
+        :title="text('仅可选择当前供货商的已采购 SKU；已在结算明细中的 SKU 不可重复添加。', 'Only purchased SKUs from the current supplier can be selected. Existing detail SKUs cannot be added twice.')"
+        type="warning"
+        show-icon
+        :closable="false"
+        class="preview-alert"
+      />
+      <el-form :inline="true" class="force-sku-query">
+        <el-form-item label="SKU">
+          <el-input v-model="forceSkuQuery.skuCode" clearable @keyup.enter="searchForceSkuCandidates" />
+        </el-form-item>
+        <el-form-item :label="text('商品', 'Item')">
+          <el-input v-model="forceSkuQuery.itemName" clearable @keyup.enter="searchForceSkuCandidates" />
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" icon="Search" @click="searchForceSkuCandidates">{{ text('查询', 'Search') }}</el-button>
+          <el-button icon="Refresh" @click="resetForceSkuQuery">{{ text('重置', 'Reset') }}</el-button>
+        </el-form-item>
+      </el-form>
+      <el-table
+        v-loading="forceSkuLoading"
+        :data="forceSkuRows"
+        row-key="skuId"
+        border
+        stripe
+        max-height="460"
+        @selection-change="handleForceSkuSelectionChange"
+      >
+        <el-table-column type="selection" width="52" :selectable="canSelectForceSku" />
+        <el-table-column label="SKU" prop="skuCode" min-width="140" />
+        <el-table-column :label="text('商品', 'Item')" prop="itemName" min-width="190" show-overflow-tooltip />
+        <el-table-column :label="text('商品数量', 'Product qty')" width="110" align="right">
+          <template #default="{ row }">{{ quantity(row.productQuantity) }}</template>
+        </el-table-column>
+        <el-table-column :label="text('单价', 'Unit price')" width="120" align="right">
+          <template #default="{ row }">{{ money(row.unitCost) }}</template>
+        </el-table-column>
+        <el-table-column :label="text('总结算价格', 'Total settlement')" width="145" align="right">
+          <template #default="{ row }">{{ money(row.totalSettlementAmount) }}</template>
+        </el-table-column>
+        <el-table-column :label="text('累计已结算', 'Settled')" width="135" align="right">
+          <template #default="{ row }">{{ money(row.settledAmount) }}</template>
+        </el-table-column>
+        <el-table-column :label="text('剩余可强制结算', 'Available to force')" width="165" align="right">
+          <template #default="{ row }">{{ money(forceCandidateRemainingAmount(row)) }}</template>
+        </el-table-column>
+      </el-table>
+      <div v-show="forceSkuTotal > 0" class="force-sku-pagination">
+        <pagination
+          :total="forceSkuTotal"
+          v-model:page="forceSkuQuery.pageNum"
+          v-model:limit="forceSkuQuery.pageSize"
+          @pagination="loadForceSkuCandidates"
+        />
+      </div>
+      <template #footer>
+        <el-button @click="forceSkuVisible = false">{{ text('取消', 'Cancel') }}</el-button>
+        <el-button type="warning" :disabled="!forceSkuSelected.length" @click="addForcedSkuLines">
+          {{ text(`添加（${forceSkuSelected.length}项）`, `Add (${forceSkuSelected.length})`) }}
+        </el-button>
       </template>
     </el-dialog>
 
@@ -320,6 +445,17 @@ const createdTimeRange = ref([])
 const preview = ref({ lines: [] })
 const previewTableRef = ref()
 const selectedPreviewLines = ref([])
+const forceSkuVisible = ref(false)
+const forceSkuLoading = ref(false)
+const forceSkuRows = ref([])
+const forceSkuTotal = ref(0)
+const forceSkuSelected = ref([])
+const forceSkuQuery = reactive({
+  pageNum: 1,
+  pageSize: 10,
+  skuCode: undefined,
+  itemName: undefined
+})
 const settlementSelection = reactive({
   supplierId: undefined
 })
@@ -405,6 +541,106 @@ function selectAllPreviewLines() {
   for (const line of preview.value.lines || []) {
     previewTableRef.value?.toggleRowSelection(line, true)
   }
+}
+
+function forceRemainingAmount(row) {
+  return Math.max(Number(row?.totalSettlementAmount || 0) - Number(row?.settledAmount || 0), 0)
+}
+
+function forceCandidateRemainingAmount(row) {
+  return forceRemainingAmount(row)
+}
+
+function canSelectForceSku(row) {
+  const alreadyAdded = (preview.value.lines || []).some(line => String(line.skuId) === String(row.skuId))
+  return !alreadyAdded && forceCandidateRemainingAmount(row) > 0
+}
+
+function handleForceSkuSelectionChange(lines) {
+  forceSkuSelected.value = lines || []
+}
+
+async function openForceSkuDialog() {
+  forceSkuQuery.pageNum = 1
+  forceSkuQuery.skuCode = undefined
+  forceSkuQuery.itemName = undefined
+  forceSkuSelected.value = []
+  forceSkuVisible.value = true
+  await loadForceSkuCandidates()
+}
+
+async function loadForceSkuCandidates() {
+  forceSkuLoading.value = true
+  try {
+    const response = await listSupplierSkuOverview({
+      supplierId: preview.value.supplierId,
+      skuCode: forceSkuQuery.skuCode,
+      itemName: forceSkuQuery.itemName,
+      pageNum: forceSkuQuery.pageNum,
+      pageSize: forceSkuQuery.pageSize
+    })
+    forceSkuRows.value = response.rows || []
+    forceSkuTotal.value = Number(response.total || 0)
+    forceSkuSelected.value = []
+  } finally {
+    forceSkuLoading.value = false
+  }
+}
+
+function searchForceSkuCandidates() {
+  forceSkuQuery.pageNum = 1
+  loadForceSkuCandidates()
+}
+
+function resetForceSkuQuery() {
+  forceSkuQuery.pageNum = 1
+  forceSkuQuery.skuCode = undefined
+  forceSkuQuery.itemName = undefined
+  loadForceSkuCandidates()
+}
+
+function toForcedSettlementLine(row) {
+  const soldQuantity = Number(row.soldQuantity || 0)
+  const returnedQuantity = Number(row.returnedQuantity || 0)
+  const unitPrice = Number(row.unitCost || 0)
+  return {
+    supplierId: row.supplierId,
+    supplierName: row.supplierName,
+    itemId: row.itemId,
+    skuId: row.skuId,
+    skuCode: row.skuCode,
+    itemName: row.itemName,
+    mainThumbUrl: row.mainThumbUrl,
+    productQuantity: row.productQuantity,
+    soldQuantity: row.soldQuantity,
+    returnedQuantity: row.returnedQuantity,
+    settleableQuantity: Math.max(soldQuantity - returnedQuantity, 0).toFixed(2),
+    unitPrice: row.unitCost,
+    grossAmount: (soldQuantity * unitPrice).toFixed(2),
+    returnDeductionAmount: (returnedQuantity * unitPrice).toFixed(2),
+    totalSettlementAmount: row.totalSettlementAmount,
+    settledAmount: row.settledAmount,
+    pendingSettlementAmount: undefined,
+    settlementType: 'FORCED',
+    remark: ''
+  }
+}
+
+async function addForcedSkuLines() {
+  const addedLines = forceSkuSelected.value
+    .filter(canSelectForceSku)
+    .map(toForcedSettlementLine)
+  if (!addedLines.length) return
+  preview.value.lines.push(...addedLines)
+  forceSkuVisible.value = false
+  await nextTick()
+  addedLines.forEach(line => previewTableRef.value?.toggleRowSelection(line, true))
+}
+
+function removeForcedLine(row) {
+  previewTableRef.value?.toggleRowSelection(row, false)
+  preview.value.lines = (preview.value.lines || []).filter(line => String(line.skuId) !== String(row.skuId))
+  selectedPreviewLines.value = selectedPreviewLines.value.filter(line => String(line.skuId) !== String(row.skuId))
 }
 const skuPageTargets = {
   product: {
@@ -533,7 +769,15 @@ async function loadSettlementPreview() {
   previewLoading.value = true
   try {
     const response = await previewSupplierSettlement({ supplierId: settlementSelection.supplierId })
-    preview.value = response.data || { lines: [] }
+    const result = response.data || { lines: [] }
+    preview.value = {
+      ...result,
+      lines: (result.lines || []).map(line => ({
+        ...line,
+        settlementType: line.settlementType || 'NORMAL',
+        remark: line.remark || ''
+      }))
+    }
     selectedPreviewLines.value = []
     supplierSelectVisible.value = false
     previewVisible.value = true
@@ -546,6 +790,16 @@ async function loadSettlementPreview() {
 
 async function confirmSettlement() {
   const detail = settlementPreview.value || {}
+  const invalidForcedLine = (detail.lines || []).find(line => line.settlementType === 'FORCED'
+    && (Number(line.pendingSettlementAmount || 0) <= 0
+      || Number(line.pendingSettlementAmount || 0) > forceRemainingAmount(line)))
+  if (invalidForcedLine) {
+    proxy.$modal.msgWarning(text(
+      `请为 SKU ${invalidForcedLine.skuCode || invalidForcedLine.skuId} 填写有效的强制结算金额`,
+      `Enter a valid forced settlement amount for SKU ${invalidForcedLine.skuCode || invalidForcedLine.skuId}`
+    ))
+    return
+  }
   confirmLoading.value = true
   try {
     await confirmSupplierSettlement({
@@ -567,7 +821,9 @@ async function confirmSettlement() {
         unitPrice: line.unitPrice,
         totalSettlementAmount: line.totalSettlementAmount,
         settledAmount: line.settledAmount,
-        pendingSettlementAmount: line.pendingSettlementAmount
+        pendingSettlementAmount: line.pendingSettlementAmount,
+        settlementType: line.settlementType || 'NORMAL',
+        remark: line.remark?.trim() || undefined
       }))
     })
     proxy.$modal.msgSuccess(text('结算单已保存，SKU 累计已结算金额已更新', 'Settlement saved and SKU settled totals updated'))
@@ -779,6 +1035,53 @@ onMounted(async () => {
   margin-bottom: 16px;
 }
 
+.preview-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.preview-toolbar__tip {
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+}
+
+.force-sku-query {
+  margin-bottom: 4px;
+}
+
+.force-sku-pagination {
+  display: flex;
+  justify-content: flex-end;
+  width: 100%;
+  padding-top: 12px;
+  overflow-x: auto;
+  box-sizing: border-box;
+}
+
+.force-sku-pagination :deep(.pagination-container) {
+  position: static !important;
+  flex: 0 0 auto;
+  width: auto;
+  height: auto;
+  min-height: 32px;
+  margin: 0;
+  padding: 0 !important;
+  background: transparent;
+}
+
+.force-sku-pagination :deep(.el-pagination) {
+  position: static !important;
+  right: auto !important;
+  width: auto;
+  justify-content: flex-end;
+}
+
+.force-amount-input {
+  width: 135px;
+}
+
 .supplier-settlement-page :deep(.amount-column .cell) {
   white-space: nowrap;
 }
@@ -798,5 +1101,6 @@ onMounted(async () => {
 
   .summary-grid { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
   .supplier-pagination { justify-content: flex-start; }
+  .preview-toolbar { align-items: flex-start; flex-direction: column; }
 }
 </style>

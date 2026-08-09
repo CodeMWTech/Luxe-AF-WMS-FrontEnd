@@ -53,6 +53,14 @@
             @keyup.enter.prevent="handleQuery"
           />
         </el-form-item>
+        <el-form-item class="filter-item" :label="t('platformOrders.filterShipmentOrderNo')" prop="shipmentOrderNo">
+          <el-input
+            v-model="queryParams.shipmentOrderNo"
+            :placeholder="t('platformOrders.filterShipmentOrderNoPlaceholder')"
+            clearable
+            @keyup.enter.prevent="handleQuery"
+          />
+        </el-form-item>
         <el-form-item class="filter-item" :label="t('platformOrders.filterSku')" prop="sellerSku">
           <el-input
             v-model="queryParams.sellerSku"
@@ -803,6 +811,7 @@ const queryParams = ref({
   platform: '',
   shopAuthId: undefined,
   platformOrderId: undefined,
+  shipmentOrderNo: undefined,
   orderStatus: undefined,
   sellerSku: undefined,
   skuMatched: '',
@@ -866,6 +875,7 @@ const isIndeterminate = computed(() => syncSelectedCount.value > 0 && !allShopsS
 function normalizeQuery() {
   const query = { ...queryParams.value }
   query.platformOrderId = query.platformOrderId?.trim() || undefined
+  query.shipmentOrderNo = query.shipmentOrderNo?.trim() || undefined
   query.sellerSku = query.sellerSku?.trim() || undefined
   query.skuMatched = query.skuMatched || undefined
   query.shipmentStatus = query.shipmentStatus || undefined
@@ -1547,7 +1557,13 @@ function summarizeImportResults(results) {
     noStock: 0,
     brushOrder: 0,
     readyToShip: 0,
+    notReadyToShip: 0,
+    alreadyShipped: 0,
+    cancelled: 0,
     statusNotAllowed: 0,
+    shipmentSkuUnmatched: 0,
+    shipmentNoStock: 0,
+    shipmentNoWarehouse: 0,
     unmatched: 0,
     notFound: 0,
     errors: []
@@ -1560,7 +1576,15 @@ function summarizeImportResults(results) {
     summary.noStock += data.noStock ?? 0
     summary.brushOrder += data.brushOrder ?? 0
     summary.readyToShip += data.readyToShip ?? 0
+    const notReadyToShip = data.notReadyToShip ?? data.statusNotAllowed ?? 0
+    summary.notReadyToShip += notReadyToShip
+    summary.alreadyShipped += data.alreadyShipped
+      ?? Math.max(0, (data.updated ?? 0) - (data.readyToShip ?? 0) - notReadyToShip)
+    summary.cancelled += data.cancelled ?? 0
     summary.statusNotAllowed += data.statusNotAllowed ?? 0
+    summary.shipmentSkuUnmatched += data.shipmentSkuUnmatched ?? 0
+    summary.shipmentNoStock += data.shipmentNoStock ?? 0
+    summary.shipmentNoWarehouse += data.shipmentNoWarehouse ?? 0
     summary.unmatched += data.unmatched ?? 0
     summary.notFound += data.notFound ?? 0
     ;(data.errors || []).forEach(error => summary.errors.push(`${fileName}: ${error}`))
@@ -1605,9 +1629,15 @@ async function submitImportNotes() {
           skuMatched: summary.matched + summary.noStock,
           noStock: summary.noStock,
           brushOrder: summary.brushOrder,
-          expectShip: summary.readyToShip + summary.statusNotAllowed,
+          shipmentChecked: summary.readyToShip + summary.notReadyToShip + summary.alreadyShipped,
           readyToShip: summary.readyToShip,
+          notReadyToShip: summary.notReadyToShip,
+          alreadyShipped: summary.alreadyShipped,
+          cancelled: summary.cancelled,
           statusNotAllowed: summary.statusNotAllowed,
+          shipmentSkuUnmatched: summary.shipmentSkuUnmatched,
+          shipmentNoStock: summary.shipmentNoStock,
+          shipmentNoWarehouse: summary.shipmentNoWarehouse,
           unmatched: summary.unmatched,
           notFound: summary.notFound
         }),
