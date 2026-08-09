@@ -1546,6 +1546,8 @@ function summarizeImportResults(results) {
     matched: 0,
     noStock: 0,
     brushOrder: 0,
+    readyToShip: 0,
+    statusNotAllowed: 0,
     unmatched: 0,
     notFound: 0,
     errors: []
@@ -1557,6 +1559,8 @@ function summarizeImportResults(results) {
     summary.matched += data.matched ?? 0
     summary.noStock += data.noStock ?? 0
     summary.brushOrder += data.brushOrder ?? 0
+    summary.readyToShip += data.readyToShip ?? 0
+    summary.statusNotAllowed += data.statusNotAllowed ?? 0
     summary.unmatched += data.unmatched ?? 0
     summary.notFound += data.notFound ?? 0
     ;(data.errors || []).forEach(error => summary.errors.push(`${fileName}: ${error}`))
@@ -1601,7 +1605,9 @@ async function submitImportNotes() {
           skuMatched: summary.matched + summary.noStock,
           noStock: summary.noStock,
           brushOrder: summary.brushOrder,
-          expectShip: summary.matched + summary.brushOrder,
+          expectShip: summary.readyToShip + summary.statusNotAllowed,
+          readyToShip: summary.readyToShip,
+          statusNotAllowed: summary.statusNotAllowed,
           unmatched: summary.unmatched,
           notFound: summary.notFound
         }),

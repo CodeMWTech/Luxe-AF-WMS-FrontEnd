@@ -196,7 +196,7 @@
 </template>
 
 <script setup name="ShipmentOrderEdit">
-import {computed, getCurrentInstance, onMounted, reactive, ref, toRef, toRefs, watch} from "vue";
+import {computed, getCurrentInstance, h, onMounted, reactive, ref, toRef, toRefs, watch} from "vue";
 import {addShipmentOrder, getShipmentOrder, updateShipmentOrder, shipment} from "@/api/wms/shipmentOrder";
 import {delShipmentOrderDetail} from "@/api/wms/shipmentOrderDetail";
 import {ElMessage, ElMessageBox} from "element-plus";
@@ -225,6 +225,42 @@ const SAMPLE_SHIPMENT_TYPE_OPTION = { label: 'Sample样品', value: SAMPLE_SHIPM
 const backendShipmentTypeOptions = computed(() => wms_shipment_type.value || [])
 const hasBackendSampleShipmentType = computed(() => backendShipmentTypeOptions.value.some(item => String(item.value) === SAMPLE_SHIPMENT_OPT_TYPE))
 const translatedBackendShipmentTypeOptions = computed(() => backendShipmentTypeOptions.value.map(item => ({ ...item, label: tr(item.label) })))
+
+const showAutoDelistNotice = async (result = {}) => {
+  const skuList = result.autoDelistSkus || []
+  if (!skuList.length) {
+    ElMessage.success(isEn.value ? 'Outbound completed successfully' : '出库成功')
+    return
+  }
+  const total = Number(result.autoDelistListingCount || 0)
+  const rows = skuList.map((item, index) => {
+    const platformParts = []
+    if (Number(item.tiktokListingCount || 0) > 0) platformParts.push(`TikTok ${item.tiktokListingCount}`)
+    if (Number(item.ebayListingCount || 0) > 0) platformParts.push(`eBay ${item.ebayListingCount}`)
+    const itemName = item.itemName ? `｜${item.itemName}` : ''
+    return h('div', {
+      style: 'padding:8px 10px;margin-top:6px;border:1px solid #f3d19e;border-radius:4px;background:#fdf6ec;line-height:1.5;word-break:break-all;'
+    }, `${index + 1}. SKU：${item.skuCode || item.skuId}${itemName}｜${platformParts.join(' / ')}｜${isEn.value ? 'Listings' : '已上架商品'} ${item.listingCount}`)
+  })
+  const title = isEn.value ? 'Out-of-stock automatic delisting' : '无库存自动下架提示'
+  const summary = isEn.value
+    ? `Outbound completed. The following ${skuList.length} SKU(s) are out of stock. ${total} active listing(s) are being delisted automatically:`
+    : `出库成功。以下 ${skuList.length} 个 SKU 库存已归零，系统正在自动下架共 ${total} 条已上架商品：`
+  await ElMessageBox.alert(
+    h('div', [
+      h('div', { style: 'margin-bottom:10px;line-height:1.6;' }, summary),
+      h('div', { style: 'max-height:360px;overflow-y:auto;padding-right:4px;' }, rows)
+    ]),
+    title,
+    {
+      confirmButtonText: isEn.value ? 'OK' : '我知道了',
+      showClose: false,
+      closeOnClickModal: false,
+      closeOnPressEscape: false,
+      customClass: 'auto-delist-sku-notice'
+    }
+  )
+}
 
 const loading = ref(false)
 const initFormData = {
@@ -507,9 +543,9 @@ const doShipment = async () => {
     const params = getParamsBeforeSave(1)
 
     loading.value = true
-    shipment(params).then((res) => {
+    shipment(params).then(async (res) => {
       if (res.code === 200) {
-        ElMessage.success('出库成功')
+        await showAutoDelistNotice(res.data || {})
         close()
       } else {
         ElMessage.error(res.msg)
@@ -643,5 +679,9 @@ const handleDeleteDetail = (row, index) => {
 
 .el-statistic__content {
   font-size: 14px;
+}
+
+:global(.auto-delist-sku-notice) {
+  width: min(680px, 92vw);
 }
 </style>

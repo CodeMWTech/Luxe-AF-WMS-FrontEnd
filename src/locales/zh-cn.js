@@ -505,8 +505,8 @@
     importNotesStart: '开始导入',
     importNotesSuccess: '导入完成',
     importNotesFailed: '导入失败',
-    importNoteResult: '{platform} 导入完成：上传 {total} 条，更新 {updated} 条，匹配SKU {skuMatched} 条（其中无库存 {noStock} 条），Sample样品 {brushOrder} 条，预计出库 {expectShip} 条，未匹配SKU {unmatched} 条，未找到订单 {notFound} 条',
-    importNoteBatchResult: '已导入 {files} 个文件（{platform}）：上传 {total} 条，更新 {updated} 条，匹配SKU {skuMatched} 条（其中无库存 {noStock} 条），Sample样品 {brushOrder} 条，预计出库 {expectShip} 条，未匹配SKU {unmatched} 条，未找到订单 {notFound} 条',
+    importNoteResult: '{platform} 导入完成：上传 {total} 条，更新 {updated} 条，匹配SKU {skuMatched} 条（其中无库存 {noStock} 条），Sample样品 {brushOrder} 条，预计可出库 {expectShip} 条（现在可立即出库 {readyToShip} 条，订单状态不允许出库 {statusNotAllowed} 条），未匹配SKU {unmatched} 条，未找到订单 {notFound} 条',
+    importNoteBatchResult: '已导入 {files} 个文件（{platform}）：上传 {total} 条，更新 {updated} 条，匹配SKU {skuMatched} 条（其中无库存 {noStock} 条），Sample样品 {brushOrder} 条，预计可出库 {expectShip} 条（现在可立即出库 {readyToShip} 条，订单状态不允许出库 {statusNotAllowed} 条），未匹配SKU {unmatched} 条，未找到订单 {notFound} 条',
     importNotesPartialFailed: '{count} 个文件导入失败，已保留在列表中：{files}',
     importNotesUnmatchedHint: '有 {count} 条未匹配SKU，请检查导入文件中 Note 列的 SKU 数据是否正确',
     // 未创建出库单原因

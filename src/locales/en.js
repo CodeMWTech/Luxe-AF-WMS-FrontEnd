@@ -505,8 +505,8 @@
     importNotesStart: 'Start Import',
     importNotesSuccess: 'Import complete',
     importNotesFailed: 'Import failed',
-    importNoteResult: '{platform} import: {total} uploaded, {updated} updated, {skuMatched} SKU matched ({noStock} no stock), {brushOrder} Sample orders, {expectShip} expect ship, {unmatched} SKU unmatched, {notFound} orders not found',
-    importNoteBatchResult: 'Imported {files} files ({platform}): {total} uploaded, {updated} updated, {skuMatched} SKU matched ({noStock} no stock), {brushOrder} Sample orders, {expectShip} expect ship, {unmatched} SKU unmatched, {notFound} orders not found',
+    importNoteResult: '{platform} import: {total} uploaded, {updated} updated, {skuMatched} SKU matched ({noStock} no stock), {brushOrder} Sample orders, {expectShip} potentially shippable ({readyToShip} ready now, {statusNotAllowed} blocked by order status), {unmatched} SKU unmatched, {notFound} orders not found',
+    importNoteBatchResult: 'Imported {files} files ({platform}): {total} uploaded, {updated} updated, {skuMatched} SKU matched ({noStock} no stock), {brushOrder} Sample orders, {expectShip} potentially shippable ({readyToShip} ready now, {statusNotAllowed} blocked by order status), {unmatched} SKU unmatched, {notFound} orders not found',
     importNotesPartialFailed: '{count} files failed and remain in the list: {files}',
     importNotesUnmatchedHint: '{count} SKU unmatched, please check the Note column data in the imported file',
     // Skip reason for auto-shipment
