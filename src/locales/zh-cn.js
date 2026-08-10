@@ -489,6 +489,7 @@
     endBeforeStart: '结束时间不能早于开始时间',
     copied: '已复制',
     skuRequired: 'SKU不能为空',
+    skuNoSalesRecord: '该sku在平台中无销售记录，请和相关人员确认是否是线下交易或者忘记写seller note',
     skuUpdateSuccess: 'SKU已更新',
     skuUpdateFailed: 'SKU更新失败',
     loginExpired: '登录已过期，请重新登录',
