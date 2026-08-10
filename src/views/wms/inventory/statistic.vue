@@ -1620,8 +1620,8 @@ async function handleBatchExportExcel() {
 }
 
 /**
- * 批量导出 PDF（参考详细信息页面的 exportDetailPdf 实现方式：
- * 前端构建 HTML，新窗口打开后自动触发浏览器打印为 PDF）。
+ * 批量导出 PDF：前端构建可配置的打印页面。
+ * 用户可在打印页面调整平均成本价系数、隐藏任意列，再手动触发打印。
  */
 function handleBatchExportPdf() {
   if (selectedRows.value.length === 0) {
@@ -1633,40 +1633,68 @@ function handleBatchExportPdf() {
     const canViewCost = canViewCostPrice.value
     const canViewSelling = canViewSellingPrice.value
 
-    // ── 表头 ──
-    const headers = [
-      tr('商品图片'), tr('商品名称'), tr('SKU编号'), tr('仓库'), tr('库存数量'),
-      tr('入库时间'), tr('出库时间'), tr('出库平台'), tr('周转天数')
+    // 列定义同时驱动表头、数据单元格和显隐设置，隐藏后不会占据表格空间。
+    const columns = [
+      {
+        key: 'image',
+        label: tr('商品图片'),
+        className: 'image-cell',
+        render: row => {
+          const imgUrl = row.itemImage || ''
+          return imgUrl
+            ? `<img src="${escapeHtml(imgUrl)}" alt="" />`
+            : escapeHtml(tr('暂无图片'))
+        }
+      },
+      { key: 'itemName', label: tr('商品名称'), render: row => escapeHtml(row.itemName || '--') },
+      { key: 'skuCode', label: tr('SKU编号'), render: row => escapeHtml(row.skuCode || '--') },
+      { key: 'warehouse', label: tr('仓库'), render: row => escapeHtml(row.warehouseName || '--') },
+      { key: 'quantity', label: tr('库存数量'), className: 'number-cell', render: row => row.quantity != null ? escapeHtml(row.quantity) : '--' },
+      { key: 'receiptTime', label: tr('入库时间'), render: row => escapeHtml(formatTime(row.receiptTime)) },
+      { key: 'shipmentTime', label: tr('出库时间'), render: row => escapeHtml(formatTime(row.shipmentTime)) },
+      { key: 'platform', label: tr('出库平台'), render: row => escapeHtml(row.outboundPlatform || '--') },
+      { key: 'turnoverDays', label: tr('周转天数'), className: 'number-cell', render: row => row.turnoverDays != null ? escapeHtml(row.turnoverDays) : '--' }
     ]
-    if (canViewCost) headers.push(tr('平均成本价'))
-    if (canViewSelling) headers.push(tr('平均销售价'))
-    if (canViewCost && canViewSelling) headers.push(tr('利润'))
-    headers.push(tr('成色'), tr('瑕疵'))
-    const headerHtml = headers.map(h => `<th>${escapeHtml(h)}</th>`).join('')
+    if (canViewCost) {
+      columns.push({
+        key: 'avgCost',
+        label: tr('平均成本价'),
+        className: 'number-cell',
+        render: row => {
+          const rawCost = Number(row.avgReceiptCost)
+          const rawValue = row.avgReceiptCost !== null && row.avgReceiptCost !== undefined && Number.isFinite(rawCost)
+            ? String(rawCost)
+            : ''
+          return `<span data-cost-value="${escapeHtml(rawValue)}">${escapeHtml(formatMoney(row.avgReceiptCost))}</span>`
+        }
+      })
+    }
+    if (canViewSelling) {
+      columns.push({ key: 'avgSelling', label: tr('平均销售价'), className: 'number-cell', render: row => escapeHtml(formatMoney(row.avgShipmentPrice)) })
+    }
+    if (canViewCost && canViewSelling) {
+      columns.push({ key: 'profit', label: tr('利润'), className: 'number-cell', render: row => escapeHtml(formatProfit(row.totalProfit)) })
+    }
+    columns.push(
+      { key: 'condition', label: tr('成色'), render: row => escapeHtml(row.itemCondition || '--') },
+      { key: 'defect', label: tr('瑕疵'), render: row => escapeHtml(row.defect || '--') }
+    )
 
-    // ── 数据行 ──
+    const headerHtml = columns
+      .map(column => `<th data-column="${column.key}" class="${column.className || ''}">${escapeHtml(column.label)}</th>`)
+      .join('')
     const rowsHtml = selectedRows.value.map(row => {
-      const cells = []
-      // 图片列（参考前端 72×72 展示尺寸）
-      const imgUrl = row.itemImage || ''
-      cells.push(imgUrl
-        ? `<img src="${escapeHtml(imgUrl)}" style="width:72px;height:72px;object-fit:cover;border-radius:4px;display:block;margin:0 auto;" />`
-        : escapeHtml(tr('暂无图片')))
-      cells.push(escapeHtml(row.itemName || '--'))
-      cells.push(escapeHtml(row.skuCode || '--'))
-      cells.push(escapeHtml(row.warehouseName || '--'))
-      cells.push(row.quantity != null ? row.quantity : '--')
-      cells.push(formatTime(row.receiptTime))
-      cells.push(formatTime(row.shipmentTime))
-      cells.push(escapeHtml(row.outboundPlatform || '--'))
-      cells.push(row.turnoverDays != null ? row.turnoverDays : '--')
-      if (canViewCost) cells.push(formatMoney(row.avgReceiptCost))
-      if (canViewSelling) cells.push(formatMoney(row.avgShipmentPrice))
-      if (canViewCost && canViewSelling) cells.push(formatProfit(row.totalProfit))
-      cells.push(escapeHtml(row.itemCondition || '--'))
-      cells.push(escapeHtml(row.defect || '--'))
-      return `<tr>${cells.map(c => `<td>${c}</td>`).join('')}</tr>`
+      const cells = columns.map(column => (
+        `<td data-column="${column.key}" class="${column.className || ''}">${column.render(row)}</td>`
+      )).join('')
+      return `<tr>${cells}</tr>`
     }).join('')
+    const columnOptionsHtml = columns.map(column => `
+      <label class="column-option">
+        <input type="checkbox" data-column-toggle value="${column.key}" checked />
+        <span>${escapeHtml(column.label)}</span>
+      </label>
+    `).join('')
 
     // ── 报表标题与导出时间 ──
     const title = tr('库存统计报表')
@@ -1676,6 +1704,25 @@ function handleBatchExportPdf() {
     const metaText = isEn.value
       ? `${nowStr} | ${count} records`
       : `${nowStr} | 共 ${count} 条记录`
+    const pageText = isEn.value
+      ? {
+          settings: 'PDF settings',
+          costCoefficient: 'Avg cost coefficient',
+          costHint: 'The average cost price in the report will be multiplied by this coefficient.',
+          visibleColumns: 'Visible columns',
+          print: 'Print',
+          invalidCoefficient: 'Please enter a valid coefficient.',
+          emptyColumns: 'Please keep at least one column visible.'
+        }
+      : {
+          settings: 'PDF 设置',
+          costCoefficient: '平均成本价系数',
+          costHint: '报表中的平均成本价将乘以此系数。',
+          visibleColumns: '显示的表头',
+          print: '打印',
+          invalidCoefficient: '请输入有效的系数。',
+          emptyColumns: '请至少保留一个显示字段。'
+        }
     const printWindow = window.open('', '_blank')
     if (!printWindow) {
       proxy.$modal.msgError(tr('批量导出失败'))
@@ -1690,40 +1737,131 @@ function handleBatchExportPdf() {
   <title>${escapeHtml(safeFileName(title, title))}</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: Arial, "Microsoft YaHei", sans-serif; padding: 20px; color: #1f2329; }
+    body { font-family: Arial, "Microsoft YaHei", sans-serif; padding: 20px; color: #1f2329; background: #f5f7fa; }
+    button, input { font: inherit; }
+    .settings-panel { max-width: 1480px; margin: 0 auto 16px; padding: 16px 18px; border: 1px solid #dfe3eb; border-radius: 8px; background: #fff; box-shadow: 0 2px 8px rgba(31, 35, 41, .06); }
+    .settings-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+    .settings-title { font-size: 17px; font-weight: 700; }
+    .print-button { min-width: 92px; padding: 8px 18px; border: 1px solid #409eff; border-radius: 5px; color: #fff; background: #409eff; cursor: pointer; }
+    .print-button:hover { background: #337ecc; border-color: #337ecc; }
+    .setting-row { display: flex; align-items: flex-start; gap: 14px; padding-top: 12px; border-top: 1px solid #edf0f5; }
+    .setting-row + .setting-row { margin-top: 12px; }
+    .setting-label { flex: 0 0 150px; padding-top: 5px; color: #4b5563; font-weight: 600; }
+    .setting-content { flex: 1; min-width: 0; }
+    .coefficient-input { width: 180px; height: 32px; padding: 0 10px; border: 1px solid #cfd5df; border-radius: 4px; outline: none; }
+    .coefficient-input:focus { border-color: #409eff; box-shadow: 0 0 0 2px rgba(64, 158, 255, .15); }
+    .setting-hint { margin-top: 6px; color: #7b8494; font-size: 12px; }
+    .column-options { display: flex; flex-wrap: wrap; gap: 8px 18px; }
+    .column-option { display: inline-flex; align-items: center; gap: 6px; min-width: 112px; line-height: 28px; cursor: pointer; user-select: none; }
+    .column-option input { width: 16px; height: 16px; accent-color: #409eff; }
+    .report-content { max-width: 1480px; margin: 0 auto; padding: 20px; background: #fff; }
     h1 { font-size: 18px; margin-bottom: 4px; }
     .meta { color: #667085; font-size: 11px; margin-bottom: 16px; }
     table { width: 100%; border-collapse: collapse; font-size: 11px; table-layout: auto; }
     th, td { border: 1px solid #dfe3eb; padding: 4px 6px; text-align: left; vertical-align: middle; overflow-wrap: break-word; }
     th { background: #f5f7fa; color: #4b5563; font-weight: 600; white-space: nowrap; }
     tr:nth-child(even) td { background: #fafbfc; }
-    td:first-child { width: 80px; text-align: center; }
-    .cell-num { text-align: right; white-space: nowrap; }
+    th[hidden], td[hidden] { display: none; }
+    .image-cell { width: 80px; text-align: center; }
+    td.image-cell img { width: 72px; height: 72px; object-fit: cover; border-radius: 4px; display: block; margin: 0 auto; }
+    .number-cell { text-align: right; white-space: nowrap; }
     @page { size: landscape; margin: 6mm; }
     @media print {
-      body { padding: 0; }
+      body { padding: 0; background: #fff; }
+      .no-print { display: none !important; }
+      .report-content { max-width: none; margin: 0; padding: 0; }
       table { font-size: 8px; }
       th, td { padding: 2px 3px; }
       th { white-space: normal; }
-      td:first-child { width: 56px; }
-      td:first-child img { width: 48px; height: 48px; }
+      .image-cell { width: 56px; }
+      td.image-cell img { width: 48px; height: 48px; }
       h1 { font-size: 14px; }
       .meta { font-size: 8px; margin-bottom: 8px; }
     }
   </style>
 </head>
 <body>
-  <h1>${escapeHtml(title)}</h1>
-  <div class="meta">${escapeHtml(metaText)}</div>
-  <table><thead><tr>${headerHtml}</tr></thead><tbody>${rowsHtml}</tbody></table>
+  <section class="settings-panel no-print">
+    <div class="settings-header">
+      <div class="settings-title">${escapeHtml(pageText.settings)}</div>
+      <button id="print-button" class="print-button" type="button">${escapeHtml(pageText.print)}</button>
+    </div>
+    ${canViewCost ? `
+    <div class="setting-row">
+      <div class="setting-label">${escapeHtml(pageText.costCoefficient)}</div>
+      <div class="setting-content">
+        <input id="cost-coefficient" class="coefficient-input" type="number" value="1" step="0.01" />
+        <div class="setting-hint">${escapeHtml(pageText.costHint)}</div>
+      </div>
+    </div>` : ''}
+    <div class="setting-row">
+      <div class="setting-label">${escapeHtml(pageText.visibleColumns)}</div>
+      <div class="setting-content column-options">${columnOptionsHtml}</div>
+    </div>
+  </section>
+  <main class="report-content">
+    <h1>${escapeHtml(title)}</h1>
+    <div class="meta">${escapeHtml(metaText)}</div>
+    <table><thead><tr>${headerHtml}</tr></thead><tbody>${rowsHtml}</tbody></table>
+  </main>
+  <script>
+    (function () {
+      var toggles = Array.prototype.slice.call(document.querySelectorAll('[data-column-toggle]'));
+      var coefficientInput = document.getElementById('cost-coefficient');
+      var printButton = document.getElementById('print-button');
+
+      function syncColumns() {
+        toggles.forEach(function (toggle) {
+          var cells = document.querySelectorAll('[data-column="' + toggle.value + '"]');
+          Array.prototype.forEach.call(cells, function (cell) {
+            cell.hidden = !toggle.checked;
+          });
+        });
+      }
+
+      function syncCostValues() {
+        if (!coefficientInput) return;
+        var coefficient = Number(coefficientInput.value);
+        var isValid = coefficientInput.value.trim() !== '' && Number.isFinite(coefficient);
+        var formatter = new Intl.NumberFormat('en-US', {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2
+        });
+        var values = document.querySelectorAll('[data-cost-value]');
+        Array.prototype.forEach.call(values, function (valueElement) {
+          var rawValue = valueElement.getAttribute('data-cost-value');
+          var cost = Number(rawValue);
+          valueElement.textContent = isValid && rawValue !== '' && Number.isFinite(cost)
+            ? '$' + formatter.format(cost * coefficient)
+            : '--';
+        });
+      }
+
+      toggles.forEach(function (toggle) {
+        toggle.addEventListener('change', syncColumns);
+      });
+      if (coefficientInput) coefficientInput.addEventListener('input', syncCostValues);
+      printButton.addEventListener('click', function () {
+        if (!toggles.some(function (toggle) { return toggle.checked; })) {
+          window.alert('${escapeHtml(pageText.emptyColumns)}');
+          return;
+        }
+        if (coefficientInput && (coefficientInput.value.trim() === '' || !Number.isFinite(Number(coefficientInput.value)))) {
+          window.alert('${escapeHtml(pageText.invalidCoefficient)}');
+          coefficientInput.focus();
+          return;
+        }
+        window.print();
+      });
+
+      syncColumns();
+      syncCostValues();
+    })();
+  <\/script>
 </body>
 </html>
     `)
     printWindow.document.close()
-    // 等新窗口渲染完成后自动呼出浏览器打印对话框
-    setTimeout(function () {
-      try { printWindow.print(); } catch (e) { /* 用户可能已关闭窗口 */ }
-    }, 800)
     proxy.$modal.msgSuccess(tr('批量导出成功'))
   } catch (e) {
     proxy.$modal.msgError(e?.message || tr('批量导出失败'))
