@@ -51,3 +51,22 @@ export function delItemBrand(id) {
     method: 'delete'
   })
 }
+
+export function uploadItemBrandImage(id, file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request({
+    url: `/wms/itemBrand/${id}/image/upload`,
+    method: 'post',
+    data: formData,
+    headers: { 'Content-Type': 'multipart/form-data', repeatSubmit: false },
+    timeout: 0
+  })
+}
+
+export function deleteItemBrandImage(id) {
+  return request({
+    url: `/wms/itemBrand/${id}/image`,
+    method: 'delete'
+  })
+}

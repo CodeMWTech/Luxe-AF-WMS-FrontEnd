@@ -1,6 +1,13 @@
 <template>
   <div class="app-container item-material-page" :class="{ 'is-en': isEn }">
     <el-card>
+      <CatalogHierarchySteps
+        current="material"
+        :category-label="hierarchyCategoryLabel"
+        :brand-label="hierarchyBrandLabel"
+        :model-label="hierarchyModelLabel"
+        @select="handleHierarchySelect"
+      />
       <el-form
         ref="queryRef"
         :model="queryParams"
@@ -8,8 +15,60 @@
         :label-width="isEn ? '112px' : '88px'"
         class="material-query-form"
       >
-        <el-form-item :label="tr('材质名称')" prop="materialName">
-          <el-input v-model="queryParams.materialName" :placeholder="tr('请输入材质名称')" clearable @keyup.enter="handleQuery" />
+        <el-form-item :label="tr('分类')" prop="itemCategory">
+          <el-tree-select
+            v-model="queryParams.itemCategory"
+            :data="categoryTreeWithPath"
+            :props="{ value: 'id', label: 'pathLabel', children: 'children' }"
+            value-key="id"
+            :placeholder="tr('请选择分类')"
+            clearable
+            filterable
+            style="width: 280px"
+            @change="handleQueryCategoryChange"
+          >
+            <template #default="{ data }">
+              <span>{{ data.shortLabel }}</span>
+            </template>
+          </el-tree-select>
+        </el-form-item>
+        <el-form-item :label="tr('品牌')" prop="itemBrand">
+          <el-select
+            v-model="queryParams.itemBrand"
+            :placeholder="queryParams.itemCategory ? tr('请选择品牌') : tr('请先选择分类')"
+            clearable
+            filterable
+            :disabled="!queryParams.itemCategory"
+            style="width: 200px"
+            @change="handleQueryBrandChange"
+          >
+            <el-option v-for="item in queryBrandOptions" :key="item.id" :label="item.brandName" :value="item.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item :label="tr('包型')" prop="modelId">
+          <el-select
+            v-model="queryParams.modelId"
+            :placeholder="queryParams.itemBrand ? tr('请选择包型') : tr('请先选择品牌')"
+            clearable
+            filterable
+            :disabled="!queryParams.itemBrand"
+            style="width: 220px"
+            @change="handleQueryModelChange"
+          >
+            <el-option v-for="item in queryModelOptions" :key="item.id" :label="item.modelName" :value="item.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item :label="tr('材质名称')" prop="id">
+          <el-select
+            v-model="queryParams.id"
+            :placeholder="queryParams.modelId ? tr('请选择材质') : tr('请先选择包型')"
+            clearable
+            filterable
+            :disabled="!queryParams.modelId"
+            style="width: 240px"
+          >
+            <el-option v-for="item in queryMaterialOptions" :key="item.id" :label="item.materialName" :value="item.id" />
+          </el-select>
         </el-form-item>
         <el-form-item>
           <el-button type="primary" icon="Search" @click="handleQuery">{{ tr('搜索') }}</el-button>
@@ -19,14 +78,18 @@
     </el-card>
 
     <el-card class="mt20">
-      <el-row :gutter="10" class="mb8" justify="space-between">
-        <el-col :span="6"><span class="table-title">{{ tr('材质列表') }}</span></el-col>
-        <el-col :span="1.5">
+      <el-row :gutter="10" class="mb8" justify="space-between" align="middle">
+        <el-col :span="14"><span class="table-title" :title="listTitle">{{ listTitle }}</span></el-col>
+        <el-col :span="10" class="toolbar-right">
+          <el-radio-group v-model="viewMode" size="small" class="view-toggle">
+            <el-radio-button label="list">{{ tr('列表') }}</el-radio-button>
+            <el-radio-button label="gallery">{{ tr('图集') }}</el-radio-button>
+          </el-radio-group>
           <el-button type="primary" plain icon="Plus" @click="handleAdd" v-hasPermi="['wms:itemMaterial:edit']">{{ tr('新增') }}</el-button>
         </el-col>
       </el-row>
 
-      <el-table v-loading="loading" :data="itemMaterialList" border class="mt20" :empty-text="tr('暂无数据')">
+      <el-table v-if="viewMode === 'list'" v-loading="loading" :data="itemMaterialList" border class="mt20" :empty-text="tr('暂无数据')">
         <el-table-column :label="tr('图片')" width="90" align="center" header-align="left">
           <template #default="{ row }">
             <el-image v-if="row.imageUrl" class="thumb" :src="row.imageUrl" fit="cover" :preview-src-list="[row.imageUrl]" preview-teleported />
@@ -63,7 +126,39 @@
           </template>
         </el-table-column>
       </el-table>
-      <pagination v-show="total > 0" :total="total" v-model:page="queryParams.pageNum" v-model:limit="queryParams.pageSize" @pagination="getList" />
+
+      <div v-else ref="galleryGridRef" v-loading="loading" class="gallery-grid mt20">
+        <div v-if="!itemMaterialList.length" class="gallery-empty">{{ tr('暂无数据') }}</div>
+        <article
+          v-for="row in itemMaterialList"
+          :key="row.id"
+          class="gallery-card"
+          @click="handleUpdate(row)"
+        >
+          <div class="gallery-cover">
+            <el-image v-if="row.imageUrl" :src="row.imageUrl" fit="cover" :preview-src-list="[row.imageUrl]" preview-teleported @click.stop />
+            <div v-else class="gallery-cover-empty">{{ tr('暂无图片') }}</div>
+          </div>
+          <div class="gallery-body">
+            <h3 class="gallery-title" :title="row.materialName">{{ row.materialName }}</h3>
+            <p class="gallery-meta">{{ row.modelName || '-' }}</p>
+            <p class="gallery-meta muted">{{ getBrandName(row.itemBrand) }} · {{ getCategoryName(row.itemCategory) }}</p>
+            <div class="gallery-actions" @click.stop>
+              <el-button link type="primary" @click="handleUpdate(row)">{{ tr('修改') }}</el-button>
+              <el-button link type="danger" v-hasPermi="['wms:itemMaterial:edit']" @click="handleDelete(row)">{{ tr('删除') }}</el-button>
+            </div>
+          </div>
+        </article>
+      </div>
+
+      <pagination
+        v-show="total > 0"
+        class="catalog-pagination"
+        :total="total"
+        v-model:page="queryParams.pageNum"
+        v-model:limit="queryParams.pageSize"
+        @pagination="handlePagination"
+      />
     </el-card>
 
     <el-drawer :title="title" v-model="open" size="50%" append-to-body>
@@ -77,20 +172,24 @@
         <el-form-item :label="tr('分类')" prop="itemCategory">
           <el-tree-select
             v-model="form.itemCategory"
-            :data="wmsStore.itemCategoryTreeList"
-            :props="{ value: 'id', label: 'label', children: 'children' }"
+            :data="categoryTreeWithPath"
+            :props="{ value: 'id', label: 'pathLabel', children: 'children' }"
             value-key="id"
             :placeholder="tr('请选择分类')"
             clearable
             filterable
             style="width: 100%"
             @change="handleCategoryChange"
-          />
+          >
+            <template #default="{ data }">
+              <span>{{ data.shortLabel }}</span>
+            </template>
+          </el-tree-select>
         </el-form-item>
         <el-form-item :label="tr('品牌')" prop="itemBrand">
           <el-select
             v-model="form.itemBrand"
-            :placeholder="tr('请选择品牌')"
+            :placeholder="form.itemCategory ? tr('请选择品牌') : tr('请先选择分类')"
             clearable
             filterable
             :disabled="!form.itemCategory"
@@ -181,13 +280,20 @@
 </template>
 
 <script setup name="ItemMaterial">
-import { listItemMaterialPage, getItemMaterial, delItemMaterial, addItemMaterial, updateItemMaterial, uploadItemMaterialImage, deleteItemMaterialImage } from '@/api/wms/itemMaterial'
+import { listItemMaterialPage, listItemMaterial, getItemMaterial, delItemMaterial, addItemMaterial, updateItemMaterial, uploadItemMaterialImage, deleteItemMaterialImage } from '@/api/wms/itemMaterial'
+import { listItemModel, listItemModelBrandOptions } from '@/api/wms/itemModel'
 import { useWmsStore } from '@/store/modules/wms'
 import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
+import { joinCatalogPath, withCategoryPathLabels } from '@/utils/wmsUtil'
+import { useGalleryFillPage } from '@/composables/useGalleryFillPage'
+import CatalogHierarchySteps from '@/components/CatalogHierarchySteps/index.vue'
 import { Plus } from '@element-plus/icons-vue'
+import { useRoute, useRouter } from 'vue-router'
 
 const { proxy } = getCurrentInstance()
+const route = useRoute()
+const router = useRouter()
 const settingsStore = useSettingsStore()
 const wmsStore = useWmsStore()
 const itemMaterialList = ref([])
@@ -196,22 +302,32 @@ const open = ref(false)
 const buttonLoading = ref(false)
 const loading = ref(true)
 const title = ref('')
+const viewMode = ref(localStorage.getItem('wms.itemMaterial.viewMode') || 'list')
+const galleryGridRef = ref(null)
 const imageUploadRef = ref(null)
 const pendingImageFile = ref(null)
 const pendingImageUrl = ref('')
 const imageMarkedForRemoval = ref(false)
+const queryBrandIds = ref([])
+const queryModelOptions = ref([])
+const queryMaterialOptions = ref([])
+const formBrandIds = ref([])
 
 const data = reactive({
   form: {},
   queryParams: {
     pageNum: 1,
-    pageSize: 10,
-    materialName: undefined
+    pageSize: (localStorage.getItem('wms.itemMaterial.viewMode') || 'list') === 'gallery' ? 24 : 12,
+    id: undefined,
+    itemCategory: undefined,
+    itemBrand: undefined,
+    modelId: undefined
   },
 })
 
 const { queryParams, form } = toRefs(data)
 const tr = (text) => translateByMap(text, settingsStore.language || 'zh-cn')
+const categoryTreeWithPath = computed(() => withCategoryPathLabels(wmsStore.itemCategoryTreeList || []))
 const isEn = computed(() => (settingsStore.language || 'zh-cn') === 'en')
 const currentImageUrl = computed(() => pendingImageUrl.value || (!imageMarkedForRemoval.value ? form.value.imageUrl : ''))
 const rules = computed(() => ({
@@ -220,10 +336,21 @@ const rules = computed(() => ({
   modelId: [{ required: true, message: tr('包型不能为空'), trigger: 'change' }],
   materialName: [{ required: true, message: tr('材质名称不能为空'), trigger: 'blur' }]
 }))
-const filteredItemBrandOptions = computed(() => {
-  if (!form.value.itemCategory) return []
-  return wmsStore.itemBrandList || []
+
+const queryBrandOptions = computed(() => {
+  const all = wmsStore.itemBrandList || []
+  if (!queryParams.value.itemCategory) return []
+  const idSet = new Set(queryBrandIds.value.map(String))
+  return all.filter(item => idSet.has(String(item.id)))
 })
+
+const filteredItemBrandOptions = computed(() => {
+  const all = wmsStore.itemBrandList || []
+  if (!form.value.itemCategory) return []
+  const idSet = new Set(formBrandIds.value.map(String))
+  return all.filter(item => idSet.has(String(item.id)))
+})
+
 const filteredItemModelOptions = computed(() => {
   const category = form.value.itemCategory
   const brand = form.value.itemBrand
@@ -231,6 +358,10 @@ const filteredItemModelOptions = computed(() => {
   return (wmsStore.itemModelList || []).filter(item =>
     String(item.itemCategory) === String(category) && String(item.itemBrand) === String(brand)
   )
+})
+
+watch(viewMode, (mode) => {
+  localStorage.setItem('wms.itemMaterial.viewMode', mode)
 })
 
 function getCategoryName(id) {
@@ -248,9 +379,144 @@ function findModelById(id) {
   return wmsStore.itemModelMap.get(id) || null
 }
 
-function handleCategoryChange() {
+const hierarchyCategoryLabel = computed(() => {
+  const id = queryParams.value.itemCategory
+  if (!id) return ''
+  const findPath = (nodes) => {
+    for (const node of nodes || []) {
+      if (String(node.id) === String(id)) return node.pathLabel || node.shortLabel || ''
+      const child = findPath(node.children)
+      if (child) return child
+    }
+    return ''
+  }
+  const path = findPath(categoryTreeWithPath.value)
+  if (path) return path
+  const name = getCategoryName(id)
+  return name === '-' ? '' : name
+})
+
+const hierarchyBrandLabel = computed(() => {
+  const id = queryParams.value.itemBrand
+  if (!id) return ''
+  const name = getBrandName(id)
+  return name === '-' ? '' : name
+})
+
+const hierarchyModelLabel = computed(() => {
+  const id = queryParams.value.modelId
+  if (!id) return ''
+  const fromOptions = (queryModelOptions.value || []).find((item) => String(item.id) === String(id))
+  if (fromOptions?.modelName) return fromOptions.modelName
+  return findModelById(id)?.modelName || ''
+})
+
+const listTitle = computed(() =>
+  joinCatalogPath(
+    hierarchyCategoryLabel.value,
+    hierarchyBrandLabel.value,
+    hierarchyModelLabel.value,
+    tr('材质列表')
+  )
+)
+
+function handleHierarchySelect(key) {
+  if (key === 'material') return
+  const q = {
+    itemCategory: queryParams.value.itemCategory || undefined,
+    itemBrand: queryParams.value.itemBrand || undefined,
+    modelId: queryParams.value.modelId || undefined
+  }
+  if (key === 'category' || key === 'brand') {
+    router.push({ path: '/basic/itemBrand', query: { itemCategory: q.itemCategory } })
+    return
+  }
+  if (key === 'model') {
+    router.push({
+      path: '/basic/itemModel',
+      query: {
+        itemCategory: q.itemCategory,
+        itemBrand: q.itemBrand,
+        view: 'gallery'
+      }
+    })
+  }
+}
+
+async function refreshQueryBrandOptions() {
+  if (!queryParams.value.itemCategory) {
+    queryBrandIds.value = []
+    return
+  }
+  try {
+    const res = await listItemModelBrandOptions(queryParams.value.itemCategory)
+    queryBrandIds.value = res.data || []
+  } catch (e) {
+    queryBrandIds.value = []
+  }
+}
+
+async function refreshFormBrandOptions() {
+  if (!form.value.itemCategory) {
+    formBrandIds.value = []
+    return
+  }
+  try {
+    const res = await listItemModelBrandOptions(form.value.itemCategory)
+    formBrandIds.value = res.data || []
+  } catch (e) {
+    formBrandIds.value = []
+  }
+}
+
+async function refreshQueryModelOptions() {
+  if (!queryParams.value.itemCategory && !queryParams.value.itemBrand) {
+    queryModelOptions.value = []
+    return
+  }
+  const res = await listItemModel({
+    itemCategory: queryParams.value.itemCategory,
+    itemBrand: queryParams.value.itemBrand
+  })
+  queryModelOptions.value = res.data || []
+}
+
+async function refreshQueryMaterialOptions() {
+  queryMaterialOptions.value = []
+  if (!queryParams.value.modelId) return
+  try {
+    const res = await listItemMaterial({ modelId: queryParams.value.modelId })
+    queryMaterialOptions.value = res.data || []
+  } catch (e) {
+    queryMaterialOptions.value = []
+  }
+}
+
+async function handleQueryCategoryChange() {
+  queryParams.value.itemBrand = undefined
+  queryParams.value.modelId = undefined
+  queryParams.value.id = undefined
+  queryMaterialOptions.value = []
+  await refreshQueryBrandOptions()
+  await refreshQueryModelOptions()
+}
+
+async function handleQueryBrandChange() {
+  queryParams.value.modelId = undefined
+  queryParams.value.id = undefined
+  queryMaterialOptions.value = []
+  await refreshQueryModelOptions()
+}
+
+async function handleQueryModelChange() {
+  queryParams.value.id = undefined
+  await refreshQueryMaterialOptions()
+}
+
+async function handleCategoryChange() {
   form.value.itemBrand = null
   form.value.modelId = null
+  await refreshFormBrandOptions()
 }
 
 function handleBrandChange() {
@@ -331,6 +597,24 @@ async function getList() {
   }
 }
 
+const { snapPageSize } = useGalleryFillPage({
+  gridRef: galleryGridRef,
+  viewMode,
+  queryParams,
+  reload: getList,
+  minCardWidth: 220,
+  gap: 16,
+  preferredRows: 3,
+  listPageSize: 12
+})
+
+function handlePagination() {
+  if (viewMode.value === 'gallery') {
+    queryParams.value.pageSize = snapPageSize(queryParams.value.pageSize)
+  }
+  getList()
+}
+
 function reset() {
   resetImageState()
   form.value = {
@@ -347,6 +631,7 @@ function reset() {
     status: '1',
     remark: null
   }
+  formBrandIds.value = []
   proxy.resetForm('itemMaterialRef')
 }
 
@@ -361,6 +646,13 @@ function handleQuery() {
 }
 
 function resetQuery() {
+  queryParams.value.id = undefined
+  queryParams.value.itemCategory = undefined
+  queryParams.value.itemBrand = undefined
+  queryParams.value.modelId = undefined
+  queryBrandIds.value = []
+  queryModelOptions.value = []
+  queryMaterialOptions.value = []
   proxy.resetForm('queryRef')
   handleQuery()
 }
@@ -383,6 +675,7 @@ async function handleUpdate(row) {
     imageOssId: res.data?.imageOssId ? String(res.data.imageOssId) : null,
     imageUrl: res.data?.imageUrl || ''
   }
+  await refreshFormBrandOptions()
   open.value = true
   title.value = tr('修改材质')
 }
@@ -445,8 +738,21 @@ async function ensureCategoryOptions() {
   }
 }
 
+async function applyRouteQuery() {
+  const q = route.query || {}
+  if (q.itemCategory) queryParams.value.itemCategory = Number(q.itemCategory) || q.itemCategory
+  if (q.itemBrand) queryParams.value.itemBrand = Number(q.itemBrand) || q.itemBrand
+  if (q.modelId) queryParams.value.modelId = Number(q.modelId) || q.modelId
+  if (q.view === 'gallery' || q.view === 'list') viewMode.value = q.view
+  if (queryParams.value.itemCategory) await refreshQueryBrandOptions()
+  await refreshQueryModelOptions()
+  if (queryParams.value.modelId) await refreshQueryMaterialOptions()
+}
+
 async function initPage() {
-  await Promise.all([ensureCategoryOptions(), ensureBrandOptions(), ensureModelOptions(), getList()])
+  await Promise.all([ensureCategoryOptions(), ensureBrandOptions(), ensureModelOptions()])
+  await applyRouteQuery()
+  await getList()
 }
 
 initPage()
@@ -454,7 +760,43 @@ initPage()
 
 <style scoped>
 .table-title {
+  display: inline-block;
+  max-width: 100%;
   font-size: 18px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+}
+.toolbar-right {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+}
+.view-toggle {
+  margin-right: 4px;
+}
+:deep(.pagination-container.catalog-pagination) {
+  position: relative !important;
+  width: 100%;
+  box-sizing: border-box;
+  height: auto !important;
+  min-height: 48px;
+  margin: 16px 0 0 !important;
+  padding: 12px 8px 4px !important;
+  overflow: visible;
+  display: flex;
+  justify-content: flex-end;
+}
+:deep(.pagination-container.catalog-pagination .el-pagination) {
+  position: static !important;
+  right: auto !important;
+  max-width: 100%;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  row-gap: 8px;
 }
 .material-query-form :deep(.el-form-item__label) {
   white-space: nowrap;
@@ -475,6 +817,84 @@ initPage()
   color: #909399;
   background: #f5f7fa;
   border: 1px dashed #dcdfe6;
+}
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--gallery-cols, 4), minmax(0, 1fr));
+  gap: 16px;
+  min-height: 120px;
+}
+.gallery-empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  color: #909399;
+  padding: 48px 0;
+}
+.gallery-card {
+  border: 1px solid #ebeef5;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+  cursor: pointer;
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+.gallery-card:hover {
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+  transform: translateY(-2px);
+}
+.gallery-cover {
+  aspect-ratio: 1;
+  background: #f5f7fa;
+}
+.gallery-cover :deep(.el-image),
+.gallery-cover-empty {
+  width: 100%;
+  height: 100%;
+}
+.gallery-cover-empty {
+  display: grid;
+  place-items: center;
+  color: #909399;
+  font-size: 13px;
+}
+.gallery-body {
+  display: flex;
+  flex-direction: column;
+  padding: 12px 12px 10px;
+}
+.gallery-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #1f2937;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.gallery-meta {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: #374151;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.gallery-meta.muted {
+  color: #909399;
+}
+.gallery-actions {
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1px solid #eef0f4;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 4px;
+}
+.gallery-actions :deep(.el-button) {
+  margin: 0;
+  padding: 0 4px;
+  height: auto;
 }
 .business-image-upload {
   display: flex;
