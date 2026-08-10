@@ -44,11 +44,12 @@ export function updateItemBrand(data) {
   })
 }
 
-// 删除商品品牌
-export function delItemBrand(id) {
+// 删除商品品牌；传入 itemCategory 时：开放池分类=从本分类解绑，绑定分类=删实体
+export function delItemBrand(id, itemCategory) {
   return request({
     url: '/wms/itemBrand/' + id,
-    method: 'delete'
+    method: 'delete',
+    params: itemCategory != null && itemCategory !== '' ? { itemCategory } : undefined
   })
 }
 

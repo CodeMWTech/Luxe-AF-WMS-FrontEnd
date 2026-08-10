@@ -107,7 +107,14 @@
           </template>
         </el-table-column>
         <el-table-column :label="tr('包型')" prop="modelName" min-width="180" show-overflow-tooltip />
-        <el-table-column :label="tr('材质名称')" prop="materialName" min-width="180" show-overflow-tooltip />
+        <el-table-column
+          class-name="catalog-focus-col"
+          label-class-name="catalog-focus-col"
+          :label="tr('材质名称')"
+          prop="materialName"
+          min-width="180"
+          show-overflow-tooltip
+        />
         <el-table-column :label="tr('特殊材质')" prop="specialFlag" width="100">
           <template #default="{ row }">
             <el-tag :type="row.specialFlag ? 'warning' : 'info'">{{ row.specialFlag ? tr('是') : tr('否') }}</el-tag>
@@ -285,7 +292,7 @@ import { listItemModel, listItemModelBrandOptions } from '@/api/wms/itemModel'
 import { useWmsStore } from '@/store/modules/wms'
 import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
-import { joinCatalogPath, withCategoryPathLabels } from '@/utils/wmsUtil'
+import { joinCatalogPath, sortByCatalogName, withCategoryPathLabels } from '@/utils/wmsUtil'
 import { useGalleryFillPage } from '@/composables/useGalleryFillPage'
 import CatalogHierarchySteps from '@/components/CatalogHierarchySteps/index.vue'
 import { Plus } from '@element-plus/icons-vue'
@@ -478,7 +485,7 @@ async function refreshQueryModelOptions() {
     itemCategory: queryParams.value.itemCategory,
     itemBrand: queryParams.value.itemBrand
   })
-  queryModelOptions.value = res.data || []
+  queryModelOptions.value = sortByCatalogName(res.data || [], 'modelName')
 }
 
 async function refreshQueryMaterialOptions() {
@@ -486,7 +493,7 @@ async function refreshQueryMaterialOptions() {
   if (!queryParams.value.modelId) return
   try {
     const res = await listItemMaterial({ modelId: queryParams.value.modelId })
-    queryMaterialOptions.value = res.data || []
+    queryMaterialOptions.value = sortByCatalogName(res.data || [], 'materialName')
   } catch (e) {
     queryMaterialOptions.value = []
   }
@@ -769,6 +776,14 @@ initPage()
   text-overflow: ellipsis;
   vertical-align: bottom;
 }
+:deep(th.catalog-focus-col .cell) {
+  font-weight: 700;
+  color: var(--el-color-primary);
+}
+:deep(td.catalog-focus-col .cell) {
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
 .toolbar-right {
   display: flex;
   justify-content: flex-end;
@@ -865,8 +880,8 @@ initPage()
 .gallery-title {
   margin: 0;
   font-size: 15px;
-  font-weight: 600;
-  color: #1f2937;
+  font-weight: 700;
+  color: var(--el-color-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

@@ -63,6 +63,7 @@
       :form="form"
       :rules="rules"
       :item-category-tree-select-list="itemCategoryTreeSelectList"
+      :form-brand-options="formBrandOptions"
       :ITEM_CONDITION_OPTIONS="ITEM_CONDITION_OPTIONS"
       :AUTH_AGENCY_OPTIONS="AUTH_AGENCY_OPTIONS"
       :ACCESSORY_TAG_OPTIONS="ACCESSORY_TAG_OPTIONS"
@@ -88,6 +89,7 @@
       :tr="tr"
       @open-name-tag-drawer="openNameTagDrawer"
       @add-category="handleAddType(true)"
+      @category-change="handleFormCategoryChange"
       @cost-price-change="handleCostPriceChange"
       @material-change="handleMaterialChange"
       @append-accessory-tag="appendAccessoryTag"
@@ -331,7 +333,7 @@ import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
 import { CircleCheckFilled, UploadFilled } from '@element-plus/icons-vue'
 import { formatDateTimeForQuery } from '@/utils/laTime'
-import { listItemModelMaterialOptions } from '@/api/wms/itemModel'
+import { listItemModelBrandOptions, listItemModelMaterialOptions } from '@/api/wms/itemModel'
 import { blobValidate } from '@/utils/ruoyi'
 import { downloadXlsx, getExportLanguageHeaders, getExportLanguagePayload, prepareLanguageXlsx } from '@/utils/xlsxTranslate'
 import { saveAs } from 'file-saver'
@@ -682,7 +684,42 @@ const {
 } = useItemNameTags({ queryParams, form })
 
 const modelMaterialIds = ref([]);
+/** Brand ids allowed for current form category (legacy originals vs Rebag tree). */
+const formBrandIds = ref([])
 
+const formBrandOptions = computed(() => {
+  const all = useWmsStore().itemBrandList || []
+  if (!form.value.itemCategory) return []
+  const idSet = new Set(formBrandIds.value.map(String))
+  return all.filter(item => idSet.has(String(item.id)))
+})
+
+async function refreshFormBrandOptions({ keepCurrentBrand = false } = {}) {
+  formBrandIds.value = []
+  if (!form.value.itemCategory) return
+  try {
+    const res = await listItemModelBrandOptions(form.value.itemCategory)
+    formBrandIds.value = res.data || []
+  } catch (_) {
+    formBrandIds.value = []
+  }
+  if (
+    keepCurrentBrand
+    && form.value.itemBrand
+    && !formBrandIds.value.map(String).includes(String(form.value.itemBrand))
+  ) {
+    formBrandIds.value = [...formBrandIds.value, form.value.itemBrand]
+  }
+}
+
+async function handleFormCategoryChange() {
+  form.value.itemBrand = undefined
+  form.value.modelId = undefined
+  form.value.materialId = undefined
+  form.value.material = undefined
+  modelMaterialIds.value = []
+  await refreshFormBrandOptions()
+}
 
 const hasItemModelContext = computed(() => !!form.value.itemBrand && !!form.value.itemCategory)
 const hasItemMaterialContext = computed(() => hasItemModelContext.value && !!form.value.modelId)
@@ -1114,6 +1151,7 @@ const handleDeleteItemSku = async (row, index) => {
   form.value = res.data
   form.value.itemBrand = resolveFormBrandId(form.value.itemBrandIds, form.value.itemBrand)
   form.value.authAgency = parseAuthAgencyList(form.value.authAgency)
+  await refreshFormBrandOptions({ keepCurrentBrand: true })
 }
 const cancel = () => {
   reset();
@@ -1131,6 +1169,7 @@ const reset = () => {
   itemFormRef.value?.clearFiles?.()
   form.value = {...initFormData};
   modelMaterialIds.value = [];
+  formBrandIds.value = [];
   itemFormRef.value?.resetFields();
 }
 
@@ -1181,6 +1220,7 @@ const handleUpdate = (row) => {
       // 表单品牌为单选（字符串 ID，避免雪花精度问题）；鉴定机构为多选
       form.value.itemBrand = resolveFormBrandId(form.value.itemBrandIds, form.value.itemBrand)
       form.value.authAgency = parseAuthAgencyList(form.value.authAgency)
+      await refreshFormBrandOptions({ keepCurrentBrand: true })
       normalizeUploadedImageMeta()
       form.value.skuCode = skuForm.itemSkuList[0]?.skuCode ?? ''
       form.value.costPrice = canViewCostPrice.value ? (skuForm.itemSkuList[0]?.costPrice ?? null) : null

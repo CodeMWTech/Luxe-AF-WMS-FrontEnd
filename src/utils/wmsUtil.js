@@ -31,3 +31,18 @@ export function withCategoryPathLabels(nodes, parentPath = []) {
 export function joinCatalogPath(...parts) {
   return parts.map((part) => (part == null ? '' : String(part).trim())).filter(Boolean).join(' / ')
 }
+
+const catalogNameCollator = new Intl.Collator('en', { sensitivity: 'base' })
+
+/** A–Z by English-ish name; keep dropdown and list/gallery in the same order. */
+export function sortByCatalogName(rows = [], nameKey = 'name') {
+  return [...rows].sort((a, b) => {
+    const nameA = String(a?.[nameKey] || '').trim()
+    const nameB = String(b?.[nameKey] || '').trim()
+    if (!nameA) return nameB ? 1 : 0
+    if (!nameB) return -1
+    const byName = catalogNameCollator.compare(nameA, nameB)
+    if (byName !== 0) return byName
+    return String(a?.id ?? '').localeCompare(String(b?.id ?? ''))
+  })
+}

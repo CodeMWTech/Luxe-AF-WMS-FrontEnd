@@ -6,16 +6,11 @@ import { listItemMaterial } from "@/api/wms/itemMaterial";
 import { listItemModel } from "@/api/wms/itemModel";
 import {defineStore} from "pinia";
 import {ref} from "vue";
+import { sortByCatalogName } from '@/utils/wmsUtil'
 
-const brandNameCollator = new Intl.Collator('en', { sensitivity: 'base' })
-
-const sortItemBrands = (brands = []) => [...brands].sort((a, b) => {
-  const nameA = String(a?.brandName || '').trim()
-  const nameB = String(b?.brandName || '').trim()
-  if (!nameA) return nameB ? 1 : 0
-  if (!nameB) return -1
-  return brandNameCollator.compare(nameA, nameB)
-})
+const sortItemBrands = (brands = []) => sortByCatalogName(brands, 'brandName')
+const sortItemModels = (models = []) => sortByCatalogName(models, 'modelName')
+const sortItemMaterials = (materials = []) => sortByCatalogName(materials, 'materialName')
 
 export const useWmsStore = defineStore('wms', () => {
 
@@ -103,7 +98,7 @@ export const useWmsStore = defineStore('wms', () => {
   const getItemMaterialList = () => {
     return new Promise((resolve, reject) => {
       listItemMaterial({ status: '1' }).then(res => {
-        itemMaterialList.value = res.data || []
+        itemMaterialList.value = sortItemMaterials(res.data || [])
         const map = new Map()
         itemMaterialList.value.forEach(item => {
           map.set(item.id, { ...item })
@@ -120,7 +115,7 @@ export const useWmsStore = defineStore('wms', () => {
   const getItemModelList = () => {
     return new Promise((resolve, reject) => {
       listItemModel({ status: '1' }).then(res => {
-        itemModelList.value = res.data || []
+        itemModelList.value = sortItemModels(res.data || [])
         const map = new Map()
         itemModelList.value.forEach(item => {
           map.set(item.id, { ...item })

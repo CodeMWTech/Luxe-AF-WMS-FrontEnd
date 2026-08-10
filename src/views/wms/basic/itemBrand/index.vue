@@ -81,7 +81,14 @@
             <div v-else class="thumb empty-thumb">{{ tr('暂无图片') }}</div>
           </template>
         </el-table-column>
-        <el-table-column :label="tr('品牌名称')" prop="brandName" min-width="180" show-overflow-tooltip />
+        <el-table-column
+          class-name="catalog-focus-col"
+          label-class-name="catalog-focus-col"
+          :label="tr('品牌名称')"
+          prop="brandName"
+          min-width="180"
+          show-overflow-tooltip
+        />
         <el-table-column :label="tr('关联分类')" min-width="200" show-overflow-tooltip>
           <template #default="{ row }">{{ formatCategories(row.categoryNames) }}</template>
         </el-table-column>
@@ -400,8 +407,14 @@ function submitForm() {
 }
 
 async function handleDelete(row) {
-  await proxy.$modal.confirm(isEn.value ? `Confirm delete brand [${row.brandName}]?` : `确认删除品牌【${row.brandName}】吗？`)
-  await delItemBrand(row.id)
+  const categoryId = queryParams.value.itemCategory
+  const tip = categoryId
+    ? (isEn.value
+      ? `Remove brand [${row.brandName}] from this category? (Other categories are unaffected.)`
+      : `确认从当前分类移除品牌【${row.brandName}】吗？（不影响其他分类）`)
+    : (isEn.value ? `Confirm delete brand [${row.brandName}]?` : `确认删除品牌【${row.brandName}】吗？`)
+  await proxy.$modal.confirm(tip)
+  await delItemBrand(row.id, categoryId)
   proxy.$modal.msgSuccess(tr('删除成功'))
   await wmsStore.getItemBrandList()
   await getList()
@@ -431,6 +444,14 @@ refreshQueryBrandOptions().finally(() => getList())
   overflow: hidden;
   text-overflow: ellipsis;
   vertical-align: bottom;
+}
+:deep(th.catalog-focus-col .cell) {
+  font-weight: 700;
+  color: var(--el-color-primary);
+}
+:deep(td.catalog-focus-col .cell) {
+  font-weight: 600;
+  color: var(--el-text-color-primary);
 }
 .title-with-tip {
   display: flex;
@@ -541,8 +562,8 @@ refreshQueryBrandOptions().finally(() => getList())
 .gallery-title {
   margin: 0;
   font-size: 15px;
-  font-weight: 600;
-  color: #1f2937;
+  font-weight: 700;
+  color: var(--el-color-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
