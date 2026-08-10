@@ -912,10 +912,11 @@ async function getList() {
       return
     }
     // 从库存记录（出库）跳转过来且未匹配到平台订单时给出业务提示
+    // 传中文原文，英文界面由 runtime-map 整句映射，避免被逐词乱译
     if (pendingSkuMissHint.value) {
       pendingSkuMissHint.value = false
       if (!orderList.value.length && total.value === 0) {
-        proxy.$modal.msgWarning(t('platformOrders.skuNoSalesRecord'))
+        proxy.$modal.msgWarning('该sku在平台中无销售记录，请和相关人员确认是否是线下交易或者忘记写seller note')
       }
     }
   } catch (e) {
