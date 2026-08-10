@@ -195,7 +195,7 @@ const total = ref(0);
 const queryRef = ref(null)
 const queryParams = ref({
   pageNum: 1,
-  pageSize: 10,
+  pageSize: 20,
   orderType: -1,
   orderNo: undefined,
   itemName: undefined,
