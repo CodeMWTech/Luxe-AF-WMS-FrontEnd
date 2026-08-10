@@ -307,7 +307,7 @@
                 </div>
                 <div class="attachment-actions">
                   <div v-if="attachmentMap[card.code]" class="attachment-action-links">
-                    <el-link type="primary" @click.stop.prevent="downloadAttachment(attachmentMap[card.code])">{{ tr('查看') }}</el-link>
+                    <el-link type="primary" @click.stop.prevent="previewAttachment(attachmentMap[card.code])">{{ tr('查看') }}</el-link>
                     <el-button
                       v-if="selectedEmployee.employeeStatus < 2"
                       link
@@ -316,26 +316,31 @@
                       v-hasPermi="['wms:employee:edit']"
                     >{{ tr('删除') }}</el-button>
                   </div>
-                  <el-upload
+                  <div
                     v-if="selectedEmployee.employeeStatus < 2 && canUploadAttachment(card)"
-                    :key="`required-upload-${card.code}-${requiredUploadKeys[card.code] || 0}`"
-                    drag
                     class="required-upload"
-                    :class="{ 'is-upload-error': requiredUploadErrors[card.code] }"
-                    :auto-upload="false"
-                    :show-file-list="false"
-                    :limit="1"
-                    @exceed="() => handleRequiredExceed(card.code)"
-                    @change="(file) => handleRequiredFileChange(file, card.code)"
+                    :class="{
+                      'is-upload-error': requiredUploadErrors[card.code],
+                      'is-uploading': isUploadingType(card.code)
+                    }"
                     v-hasPermi="['wms:employee:edit']"
+                    @click="openRequiredUploadDialog(card)"
+                    @dragover.prevent
+                    @drop.prevent="(e) => handleRequiredCardDrop(e, card)"
                   >
-                    <div class="required-upload-text">
-                      {{ attachmentMap[card.code] ? tr('拖拽 PDF 到此处重新上传') : tr('拖拽 PDF 到此处，或点击上传') }}
+                    <div class="el-upload-dragger">
+                      <template v-if="isUploadingType(card.code)">
+                        <div class="upload-progress-label">{{ tr('上传中') }}... {{ uploadProgress }}%</div>
+                        <el-progress :percentage="uploadProgress" :stroke-width="10" />
+                      </template>
+                      <template v-else>
+                        <div class="required-upload-text">
+                          {{ attachmentMap[card.code] ? tr('拖拽 PDF 到此处重新上传') : tr('拖拽 PDF 到此处，或点击上传') }}
+                        </div>
+                        <div class="el-upload__tip">{{ tr('仅支持 PDF，每个类型限一个文件') }}</div>
+                      </template>
                     </div>
-                    <template #tip>
-                      <div class="el-upload__tip">{{ tr('仅支持 PDF，每个类型限一个文件') }}</div>
-                    </template>
-                  </el-upload>
+                  </div>
                   <div v-if="requiredUploadErrors[card.code]" class="upload-error-text">
                     {{ requiredUploadErrors[card.code] }}
                   </div>
@@ -348,22 +353,26 @@
           <div class="upload-hint">{{ tr('其他文件支持多种格式，可批量上传；如需打包多个文件，可先压缩再上传。') }}</div>
           <div class="other-files">
             <div v-for="item in otherAttachments" :key="item.id" class="other-file-item">
-              <el-link type="primary" @click="downloadAttachment(item)">{{ item.fileName || tr(item.attachmentTypeLabel) }}</el-link>
+              <el-link type="primary" @click="previewAttachment(item)">{{ item.fileName || tr(item.attachmentTypeLabel) }}</el-link>
               <el-button v-if="selectedEmployee.employeeStatus < 2" link type="danger" @click.stop.prevent="removeAttachment(item)" v-hasPermi="['wms:employee:edit']">{{ tr('删除') }}</el-button>
             </div>
-            <el-upload
+            <div
               v-if="selectedEmployee.employeeStatus < 2"
-              drag
               class="other-upload"
-              :action="uploadUrl"
-              :headers="uploadHeaders"
-              :show-file-list="false"
-              multiple
-              :on-success="(res, file) => handleAttachmentUploadSuccess(res, file, 'OTHER')"
+              :class="{ 'is-uploading': isUploadingType('OTHER') }"
               v-hasPermi="['wms:employee:edit']"
+              @click="openOtherUploadDialog"
+              @dragover.prevent
+              @drop.prevent="handleOtherCardDrop"
             >
-              <div class="required-upload-text">{{ tr('拖拽文件到此处，或点击上传其他文件') }}</div>
-            </el-upload>
+              <div class="el-upload-dragger">
+                <template v-if="isUploadingType('OTHER')">
+                  <div class="upload-progress-label">{{ tr('上传中') }}... {{ uploadProgress }}%</div>
+                  <el-progress :percentage="uploadProgress" :stroke-width="10" />
+                </template>
+                <div v-else class="required-upload-text">{{ tr('拖拽文件到此处，或点击上传其他文件') }}</div>
+              </div>
+            </div>
           </div>
           </div>
         </el-card>
@@ -373,6 +382,92 @@
         </el-card>
       </el-col>
     </el-row>
+
+    <el-dialog
+      v-model="uploadDialogOpen"
+      :title="uploadDialogTitle"
+      width="min(600px, 92vw)"
+      :close-on-click-modal="!uploadDialogLoading"
+      :close-on-press-escape="!uploadDialogLoading"
+      :show-close="!uploadDialogLoading"
+      destroy-on-close
+      @close="cancelUploadDialog"
+    >
+      <el-alert
+        :title="uploadDialogHelp"
+        type="info"
+        show-icon
+        :closable="false"
+        class="mb16"
+      />
+      <el-upload
+        class="hr-upload-dialog-zone"
+        drag
+        :auto-upload="false"
+        :multiple="uploadDialogMultiple"
+        :limit="uploadDialogMultiple ? 20 : 1"
+        :accept="uploadDialogAccept"
+        :disabled="uploadDialogLoading"
+        :file-list="uploadDialogFileList"
+        :on-change="handleUploadDialogFileChange"
+        :on-remove="handleUploadDialogFileRemove"
+        :on-exceed="handleUploadDialogExceed"
+      >
+        <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
+        <div class="el-upload__text">
+          {{ uploadDialogDropText }}<em>{{ tr('点击选择') }}</em>
+        </div>
+        <template #tip>
+          <div class="el-upload__tip">{{ uploadDialogTip }}</div>
+        </template>
+      </el-upload>
+      <div v-if="uploadDialogLoading" class="hr-upload-progress">
+        <div class="upload-progress-label">{{ tr('上传中') }}... {{ uploadProgress }}%</div>
+        <el-progress :percentage="uploadProgress" :stroke-width="12" />
+      </div>
+      <template #footer>
+        <el-button :disabled="uploadDialogLoading" @click="cancelUploadDialog">{{ tr('取消') }}</el-button>
+        <el-button
+          type="primary"
+          :loading="uploadDialogLoading"
+          :disabled="!uploadDialogFileList.length"
+          @click="submitUploadDialog"
+        >{{ tr('开始上传') }}</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog
+      v-model="previewOpen"
+      :title="previewTitle"
+      width="min(960px, 94vw)"
+      top="4vh"
+      destroy-on-close
+      class="hr-preview-dialog"
+      @closed="revokePreviewUrl"
+    >
+      <div v-loading="previewLoading" class="hr-preview-body">
+        <iframe
+          v-if="previewKind === 'pdf' && previewUrl"
+          :src="previewUrl"
+          class="hr-preview-frame"
+          title="preview"
+        />
+        <img
+          v-else-if="previewKind === 'image' && previewUrl"
+          :src="previewUrl"
+          class="hr-preview-image"
+          alt="preview"
+        />
+        <div v-else-if="!previewLoading" class="hr-preview-fallback">
+          <p>{{ tr('当前文件类型暂不支持在线预览，请下载后查看。') }}</p>
+          <el-button type="primary" @click="downloadAttachment(previewItem)">{{ tr('下载文件') }}</el-button>
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="previewOpen = false">{{ tr('关闭') }}</el-button>
+        <el-button type="primary" :disabled="!previewItem?.ossId" @click="downloadAttachment(previewItem)">{{ tr('下载') }}</el-button>
+      </template>
+    </el-dialog>
 
     <el-drawer v-model="open" :title="title" size="55%" append-to-body>
       <el-alert
@@ -497,7 +592,7 @@
 </template>
 
 <script setup name="EmployeeArchive">
-import { ArrowDown, ArrowUp, InfoFilled, QuestionFilled } from '@element-plus/icons-vue'
+import { ArrowDown, ArrowUp, InfoFilled, QuestionFilled, UploadFilled } from '@element-plus/icons-vue'
 import { getToken } from '@/utils/auth'
 import axios from 'axios'
 import { blobValidate } from '@/utils/ruoyi'
@@ -569,7 +664,27 @@ const hrCapabilities = ref({})
 const permissionNoticeExpanded = ref(false)
 
 const uploadUrl = import.meta.env.VITE_APP_BASE_API + '/system/oss/upload'
-const uploadHeaders = { Authorization: 'Bearer ' + getToken() }
+const previewUrlApi = import.meta.env.VITE_APP_BASE_API + '/system/oss/preview/'
+
+const uploadDialogOpen = ref(false)
+const uploadDialogLoading = ref(false)
+const uploadDialogMultiple = ref(false)
+const uploadDialogAccept = ref('.pdf,application/pdf')
+const uploadDialogType = ref('')
+const uploadDialogTitle = ref('')
+const uploadDialogHelp = ref('')
+const uploadDialogDropText = ref('')
+const uploadDialogTip = ref('')
+const uploadDialogFileList = ref([])
+const uploadingType = ref('')
+const uploadProgress = ref(0)
+
+const previewOpen = ref(false)
+const previewLoading = ref(false)
+const previewUrl = ref('')
+const previewKind = ref('')
+const previewTitle = ref('')
+const previewItem = ref(null)
 
 const data = reactive({
   form: {},
@@ -837,7 +952,9 @@ function buildPermissionNotice() {
 
 function taxFormTitle(taxFormType) {
   const tax = taxFormType || '-'
-  return `${tax} ${tr('雇员必备文件')} (IRS / DHS)`
+  return isEn.value
+    ? `${tax} Required Employee Files (IRS / DHS)`
+    : `${tax} ${tr('雇员必备文件')} (IRS / DHS)`
 }
 
 function canUploadAttachment(card) {
@@ -1259,6 +1376,10 @@ function isPdfFile(file) {
   return name.endsWith('.pdf') || type === 'application/pdf'
 }
 
+function isUploadingType(type) {
+  return uploadingType.value === type && uploadProgress.value >= 0
+}
+
 function setRequiredUploadError(code, message) {
   requiredUploadErrors.value = { ...requiredUploadErrors.value, [code]: message }
 }
@@ -1270,13 +1391,6 @@ function clearRequiredUploadError(code) {
   requiredUploadErrors.value = next
 }
 
-function handleRequiredExceed(code) {
-  const msg = tr('每个类型仅限上传一个文件')
-  proxy.$modal.msgWarning(msg)
-  setRequiredUploadError(code, msg)
-  resetRequiredUpload(code)
-}
-
 function resetRequiredUpload(code) {
   requiredUploadKeys.value = {
     ...requiredUploadKeys.value,
@@ -1284,34 +1398,227 @@ function resetRequiredUpload(code) {
   }
 }
 
-function handleRequiredFileChange(uploadFile, code) {
-  const raw = uploadFile?.raw
-  if (!raw) return
-  if (uploadFile.status === 'success') return
-
-  if (!isPdfFile(raw)) {
-    const msg = tr('必备文件仅支持 PDF 格式，其他格式请上传到「其他文件」')
-    proxy.$modal.msgError(msg)
-    setRequiredUploadError(code, msg)
-    resetRequiredUpload(code)
-    return
-  }
-  clearRequiredUploadError(code)
-  submitRequiredFile(raw, code)
+function openRequiredUploadDialog(card) {
+  if (uploadDialogLoading.value || isUploadingType(card.code)) return
+  uploadDialogType.value = card.code
+  uploadDialogMultiple.value = false
+  uploadDialogAccept.value = '.pdf,application/pdf'
+  uploadDialogTitle.value = `${tr('上传')} - ${tr(card.label)}`
+  uploadDialogHelp.value = `${tr(card.desc || card.label)} · ${tr('仅支持 PDF，每个类型限一个文件')}`
+  uploadDialogDropText.value = tr('将文件拖到此处，或')
+  uploadDialogTip.value = tr('仅支持 PDF，每个类型限一个文件')
+  uploadDialogFileList.value = []
+  uploadDialogOpen.value = true
 }
 
-async function submitRequiredFile(file, attachmentType) {
+function openOtherUploadDialog() {
+  if (uploadDialogLoading.value || isUploadingType('OTHER')) return
+  uploadDialogType.value = 'OTHER'
+  uploadDialogMultiple.value = true
+  uploadDialogAccept.value = ''
+  uploadDialogTitle.value = tr('上传其他文件')
+  uploadDialogHelp.value = tr('其他文件支持多种格式，可批量上传；如需打包多个文件，可先压缩再上传。')
+  uploadDialogDropText.value = tr('将文件拖到此处，或')
+  uploadDialogTip.value = tr('其他文件支持多种格式，可批量上传；如需打包多个文件，可先压缩再上传。')
+  uploadDialogFileList.value = []
+  uploadDialogOpen.value = true
+}
+
+function cancelUploadDialog() {
+  if (uploadDialogLoading.value) return
+  uploadDialogOpen.value = false
+  uploadDialogFileList.value = []
+  uploadDialogType.value = ''
+}
+
+function handleUploadDialogFileChange(uploadFile, uploadFiles) {
+  if (uploadDialogType.value !== 'OTHER') {
+    const invalid = uploadFiles.filter(file => file.raw && !isPdfFile(file.raw))
+    if (invalid.length) {
+      proxy.$modal.msgWarning(tr('必备文件仅支持 PDF 格式，其他格式请上传到「其他文件」'))
+    }
+    uploadDialogFileList.value = uploadFiles.filter(file => !file.raw || isPdfFile(file.raw)).slice(-1)
+    return
+  }
+  uploadDialogFileList.value = uploadFiles
+}
+
+function handleUploadDialogFileRemove(uploadFile, uploadFiles) {
+  uploadDialogFileList.value = uploadFiles
+}
+
+function handleUploadDialogExceed() {
+  proxy.$modal.msgWarning(
+    uploadDialogMultiple.value
+      ? tr('一次最多选择 20 个文件')
+      : tr('每个类型仅限上传一个文件')
+  )
+}
+
+function handleRequiredCardDrop(event, card) {
+  if (uploadDialogLoading.value || isUploadingType(card.code)) return
+  const files = Array.from(event.dataTransfer?.files || [])
+  if (!files.length) return
+  const file = files[0]
+  if (!isPdfFile(file)) {
+    const msg = tr('必备文件仅支持 PDF 格式，其他格式请上传到「其他文件」')
+    proxy.$modal.msgError(msg)
+    setRequiredUploadError(card.code, msg)
+    return
+  }
+  clearRequiredUploadError(card.code)
+  submitFiles([file], card.code, { fromCard: true })
+}
+
+function handleOtherCardDrop(event) {
+  if (uploadDialogLoading.value || isUploadingType('OTHER')) return
+  const files = Array.from(event.dataTransfer?.files || [])
+  if (!files.length) return
+  submitFiles(files, 'OTHER', { fromCard: true })
+}
+
+async function submitUploadDialog() {
+  const files = uploadDialogFileList.value.map(item => item.raw).filter(Boolean)
+  if (!files.length) {
+    proxy.$modal.msgWarning(tr('请先选择要上传的文件'))
+    return
+  }
+  if (uploadDialogType.value !== 'OTHER') {
+    const invalid = files.filter(file => !isPdfFile(file))
+    if (invalid.length) {
+      proxy.$modal.msgError(tr('必备文件仅支持 PDF 格式，其他格式请上传到「其他文件」'))
+      return
+    }
+  }
+  await submitFiles(files, uploadDialogType.value, { fromDialog: true })
+}
+
+async function submitFiles(files, attachmentType, options = {}) {
+  if (!selectedEmployee.value?.id || !files?.length) return
+  const list = attachmentType === 'OTHER' ? files : files.slice(0, 1)
+  uploadingType.value = attachmentType
+  uploadProgress.value = 0
+  if (options.fromDialog) {
+    uploadDialogLoading.value = true
+  }
+  let successCount = 0
+  try {
+    for (let i = 0; i < list.length; i++) {
+      const file = list[i]
+      const base = Math.round((i / list.length) * 100)
+      const span = Math.round(100 / list.length)
+      await uploadSingleFile(file, attachmentType, (pct) => {
+        uploadProgress.value = Math.min(99, base + Math.round((pct / 100) * span))
+      })
+      successCount += 1
+    }
+    uploadProgress.value = 100
+    if (options.fromDialog) {
+      uploadDialogOpen.value = false
+      uploadDialogFileList.value = []
+    }
+    if (attachmentType !== 'OTHER') {
+      clearRequiredUploadError(attachmentType)
+      resetRequiredUpload(attachmentType)
+    }
+    proxy.$modal.msgSuccess(
+      successCount > 1
+        ? tr('上传成功') + ` (${successCount})`
+        : tr('上传成功')
+    )
+    await loadEmployeeDetail(selectedEmployee.value.id)
+    loadStats()
+    getList()
+  } catch (err) {
+    const msg = err?.response?.data?.msg || err?.msg || err?.message || tr('上传失败')
+    proxy.$modal.msgError(msg)
+    if (attachmentType !== 'OTHER') {
+      setRequiredUploadError(attachmentType, msg)
+    }
+  } finally {
+    uploadDialogLoading.value = false
+    uploadingType.value = ''
+    uploadProgress.value = 0
+  }
+}
+
+async function uploadSingleFile(file, attachmentType, onProgress) {
   const formData = new FormData()
   formData.append('file', file)
+  const { data } = await axios.post(uploadUrl, formData, {
+    headers: { Authorization: 'Bearer ' + getToken() },
+    onUploadProgress: (event) => {
+      if (!event.total) return
+      onProgress?.(Math.round((event.loaded / event.total) * 100))
+    }
+  })
+  if (data?.code !== 200) {
+    throw new Error(data?.msg || tr('上传失败'))
+  }
+  await saveEmployeeAttachment({
+    employeeId: selectedEmployee.value.id,
+    attachmentType,
+    ossId: data.data.ossId,
+    fileName: file.name
+  })
+}
+
+function guessPreviewKind(fileName = '', contentType = '') {
+  const name = String(fileName || '').toLowerCase()
+  const type = String(contentType || '').toLowerCase()
+  if (type.includes('pdf') || name.endsWith('.pdf')) return 'pdf'
+  if (type.startsWith('image/') || /\.(png|jpe?g|gif|webp|bmp)$/.test(name)) return 'image'
+  return 'other'
+}
+
+function revokePreviewUrl() {
+  if (previewUrl.value) {
+    URL.revokeObjectURL(previewUrl.value)
+  }
+  previewUrl.value = ''
+  previewKind.value = ''
+  previewItem.value = null
+  previewLoading.value = false
+}
+
+async function previewAttachment(item) {
+  if (!item?.ossId) {
+    proxy.$modal.msgError(tr('附件信息异常，请刷新页面后重试'))
+    return
+  }
+  revokePreviewUrl()
+  previewItem.value = item
+  previewTitle.value = item.fileName || tr(item.attachmentTypeLabel) || tr('文件预览')
+  previewOpen.value = true
+  previewLoading.value = true
   try {
-    const { data } = await axios.post(uploadUrl, formData, {
+    const res = await axios.get(previewUrlApi + item.ossId, {
+      responseType: 'blob',
       headers: { Authorization: 'Bearer ' + getToken() }
     })
-    handleAttachmentUploadSuccess(data, { name: file.name }, attachmentType)
+    const isBlob = blobValidate(res.data)
+    if (!isBlob) {
+      const resText = await res.data.text()
+      const rspObj = JSON.parse(resText)
+      throw new Error(rspObj?.msg || tr('预览失败'))
+    }
+    const contentType = res.headers?.['content-type'] || ''
+    const kind = guessPreviewKind(item.fileName, contentType)
+    previewKind.value = kind
+    if (kind === 'other') {
+      previewLoading.value = false
+      return
+    }
+    const blobType = contentType.includes('octet-stream')
+      ? (kind === 'pdf' ? 'application/pdf' : contentType)
+      : contentType
+    const blob = new Blob([res.data], { type: blobType || res.data.type })
+    previewUrl.value = URL.createObjectURL(blob)
   } catch (err) {
-    const msg = err?.response?.data?.msg || err?.message || tr('上传失败')
-    proxy.$modal.msgError(msg)
-    setRequiredUploadError(attachmentType, msg)
+    proxy.$modal.msgError(err?.message || tr('预览失败'))
+    previewKind.value = 'other'
+  } finally {
+    previewLoading.value = false
   }
 }
 
@@ -1344,27 +1651,6 @@ function removeAttachment(item) {
     if (err === 'cancel' || err === 'close') {
       return
     }
-  })
-}
-
-function handleAttachmentUploadSuccess(res, file, attachmentType) {
-  if (res.code !== 200) {
-    proxy.$modal.msgError(res.msg || tr('上传失败'))
-    return
-  }
-  saveEmployeeAttachment({
-    employeeId: selectedEmployee.value.id,
-    attachmentType,
-    ossId: res.data.ossId,
-    fileName: file.name
-  }).then(() => {
-    clearRequiredUploadError(attachmentType)
-    proxy.$modal.msgSuccess(tr('上传成功'))
-    loadEmployeeDetail(selectedEmployee.value.id)
-    loadStats()
-    getList()
-  }).catch(err => {
-    proxy.$modal.msgError(err?.msg || err?.message || tr('上传失败'))
   })
 }
 
@@ -1701,16 +1987,30 @@ loadCapabilities().then(() => {
   .required-upload,
   .other-upload {
     width: 100%;
-    :deep(.el-upload-dragger) {
+    cursor: pointer;
+    .el-upload-dragger {
       padding: 10px 12px;
       height: auto;
+      width: 100%;
+    }
+    &.is-uploading {
+      cursor: default;
+      .el-upload-dragger {
+        border-color: var(--el-color-primary-light-5, #a0cfff);
+        background: var(--el-color-primary-light-9, #ecf5ff);
+      }
     }
   }
   .required-upload.is-upload-error {
-    :deep(.el-upload-dragger) {
+    .el-upload-dragger {
       border-color: #f56c6c;
       background: #fef0f0;
     }
+  }
+  .upload-progress-label {
+    margin-bottom: 6px;
+    font-size: 12px;
+    color: #409eff;
   }
   .upload-error-text {
     margin-top: 4px;
@@ -1722,6 +2022,69 @@ loadCapabilities().then(() => {
     font-size: 12px;
     color: #606266;
     line-height: 1.5;
+  }
+  .mb16 {
+    margin-bottom: 16px;
+  }
+  .hr-upload-dialog-zone {
+    width: 100%;
+    :deep(.el-upload) {
+      width: 100%;
+    }
+    :deep(.el-upload-dragger) {
+      width: 100%;
+    }
+  }
+  .hr-upload-progress {
+    margin-top: 12px;
+  }
+  .hr-preview-body {
+    min-height: 420px;
+  }
+  .hr-preview-frame {
+    width: 100%;
+    height: 70vh;
+    border: 0;
+    background: #f5f7fa;
+  }
+  .hr-preview-image {
+    display: block;
+    max-width: 100%;
+    max-height: 70vh;
+    margin: 0 auto;
+  }
+  .hr-preview-fallback {
+    min-height: 240px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    color: #606266;
+  }
+  &.is-en {
+    .filter-bar {
+      .filter-item {
+        width: 190px;
+      }
+      .filter-dept-tree {
+        width: 210px;
+      }
+    }
+    .hero-actions {
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .detail-actions {
+      max-width: 100%;
+    }
+    .attachment-title {
+      line-height: 1.35;
+      word-break: break-word;
+    }
+    .required-upload-text {
+      word-break: break-word;
+    }
   }
   .other-files {
     margin-top: 12px;

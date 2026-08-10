@@ -92,6 +92,13 @@
       </el-descriptions>
 
       <el-table v-loading="detailLoading" :data="detail.lines || []" border stripe max-height="520">
+        <el-table-column :label="text('结算类型', 'Type')" width="105">
+          <template #default="{ row }">
+            <el-tag :type="row.settlementType === 'FORCED' ? 'warning' : 'success'" effect="plain">
+              {{ row.settlementType === 'FORCED' ? text('强制结算', 'Forced') : text('正常结算', 'Normal') }}
+            </el-tag>
+          </template>
+        </el-table-column>
         <el-table-column label="SKU" prop="skuCode" min-width="135" />
         <el-table-column :label="text('商品', 'Item')" prop="itemName" min-width="190" show-overflow-tooltip />
         <el-table-column :label="text('商品数量', 'Product qty')" width="110" align="right">
@@ -111,6 +118,9 @@
         </el-table-column>
         <el-table-column :label="text('本次结算金额', 'Current settlement')" width="140" align="right">
           <template #default="{ row }">{{ money(row.pendingSettlementAmount) }}</template>
+        </el-table-column>
+        <el-table-column :label="text('备注', 'Remark')" prop="remark" min-width="220" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.remark || '-' }}</template>
         </el-table-column>
       </el-table>
     </el-dialog>
