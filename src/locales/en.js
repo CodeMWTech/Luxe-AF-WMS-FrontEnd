@@ -489,6 +489,7 @@
     endBeforeStart: 'End time cannot be earlier than start time',
     copied: 'Copied',
     skuRequired: 'SKU cannot be empty',
+    skuNoSalesRecord: 'No sales record for this SKU on the platform. Please confirm with the relevant person whether it was an offline transaction or the seller note was forgotten.',
     skuUpdateSuccess: 'SKU updated',
     skuUpdateFailed: 'SKU update failed',
     loginExpired: 'Login expired, please log in again',
