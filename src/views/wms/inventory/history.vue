@@ -95,7 +95,7 @@
             <el-link
               v-if="canOpenSkuLink(row)"
               type="primary"
-              :underline="false"
+              :underline="true"
               class="sku-history-link"
               @click.stop="openSkuLink(row)"
             >{{ row.itemSku.skuCode }}</el-link>
@@ -299,9 +299,14 @@ function canOpenSkuLink(row) {
 function openSkuLink(row) {
   if (!canOpenSkuLink(row)) return
   const target = getSkuLinkTarget(row)
+  const query = { skuCode: getSkuCode(row) }
+  // 出库跳转平台订单时标记来源，便于无匹配时给出业务提示
+  if (Number(row?.orderType) === ORDER_TYPE_SHIPMENT) {
+    query.fromInventoryHistory = '1'
+  }
   router.push({
     ...target.route,
-    query: { skuCode: getSkuCode(row) }
+    query
   }).catch(() => {})
 }
 
@@ -442,6 +447,7 @@ onMounted(() => {
 
 .inventory-history-page .sku-history-link {
   font-weight: 600;
+  text-decoration: underline;
 }
 
 </style>

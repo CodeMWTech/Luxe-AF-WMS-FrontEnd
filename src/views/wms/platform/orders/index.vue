@@ -820,6 +820,7 @@ const queryParams = ref({
 })
 
 const appliedRouteFilterKey = ref('')
+const pendingSkuMissHint = ref(false)
 
 function applyRouteSkuFilter() {
   const skuCode = String(route.query.skuCode || '').trim()
@@ -830,6 +831,7 @@ function applyRouteSkuFilter() {
   if (orderStatus) queryParams.value.orderStatus = orderStatus
   queryParams.value.pageNum = 1
   appliedRouteFilterKey.value = filterKey
+  pendingSkuMissHint.value = String(route.query.fromInventoryHistory || '') === '1'
   return true
 }
 
@@ -909,7 +911,16 @@ async function getList() {
       await getList()
       return
     }
+    // 从库存记录（出库）跳转过来且未匹配到平台订单时给出业务提示
+    // 传中文原文，英文界面由 runtime-map 整句映射，避免被逐词乱译
+    if (pendingSkuMissHint.value) {
+      pendingSkuMissHint.value = false
+      if (!orderList.value.length && total.value === 0) {
+        proxy.$modal.msgWarning('该sku在平台中无销售记录，请和相关人员确认是否是线下交易或者忘记写seller note')
+      }
+    }
   } catch (e) {
+    pendingSkuMissHint.value = false
     handleApiError(e)
   } finally {
     loading.value = false
