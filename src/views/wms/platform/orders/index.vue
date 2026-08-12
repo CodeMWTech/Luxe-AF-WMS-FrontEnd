@@ -199,7 +199,7 @@
             <div class="summary-cell meta-cell">
               <span class="cell-label">{{ t('platformOrders.labelTime') }}</span>
               <span class="meta-time">{{ formatPlatformOrderTime(getCreateTime(order)) }}</span>
-              <span class="meta-shop">{{ displayValue(getShopName(order)) }} · {{ getPlatform(order) === 'TIKTOK' ? 'TikTok' : 'eBay' }}</span>
+              <span class="meta-shop">{{ formatOrderShopLabel(order) }}</span>
             </div>
 
             <div class="summary-cell platform-cell">
@@ -562,8 +562,7 @@
                     >
                       {{ shop.platform }}
                     </el-tag>
-                    <span>{{ shop.shopName || shop.shopId }}</span>
-                    <span v-if="shop.region" class="shop-region">({{ shop.region }})</span>
+                    <span>{{ formatShopLabel(shop) }}</span>
                     <el-tag
                       :type="shop.authStatus === 'AUTHORIZED' ? 'success' : 'warning'"
                       size="small"
@@ -1447,9 +1446,37 @@ function getStatusClass(status, platform) {
   return 'info'
 }
 
+const SHOP_ALIASES = [
+  { platform: 'TIKTOK', shopName: 'luxe af', alias: 'TK1' },
+  { platform: 'TIKTOK', shopName: '777 luxury', alias: 'TK2' },
+  { platform: 'EBAY', shopName: 'luxury_bagparty', alias: 'Ebay1' },
+  { platform: 'EBAY', shopName: 'the_attraction', alias: 'Ebay2' },
+  { platform: 'EBAY', shopName: 'truestluxury', alias: 'Ebay3' }
+]
+
+function normalizeShopName(value) {
+  return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ')
+}
+
+function getShopAlias(shop) {
+  if (!shop) return ''
+  const platform = String(shop.platform || '').toUpperCase()
+  const shopNames = [shop.shopName, shop.shopId, shop.platformShopId]
+    .map(normalizeShopName)
+    .filter(Boolean)
+  return SHOP_ALIASES.find(item => item.platform === platform && shopNames.includes(item.shopName))?.alias || ''
+}
+
 function formatShopLabel(shop) {
   const suffix = shop.region ? ` (${shop.region})` : ''
-  return `${shop.shopName || shop.shopId || shop.id}${suffix}`
+  const alias = getShopAlias(shop)
+  return `${shop.shopName || shop.shopId || shop.id}${suffix}${alias ? ` · ${alias}` : ''}`
+}
+
+function formatOrderShopLabel(order) {
+  const matchingShop = shopList.value.find(shop => String(shop.id) === String(order?.shopAuthId))
+  const alias = getShopAlias(matchingShop || order)
+  return `${displayValue(getShopName(order))}${alias ? ` · ${alias}` : ''}`
 }
 
 function copyTextSuccess() {
