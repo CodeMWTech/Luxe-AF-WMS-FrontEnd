@@ -280,6 +280,7 @@ const appliedRouteFilterKey = ref('')
 
 function applyRouteSkuFilter() {
   const skuCode = String(route.query.skuCode || '').trim()
+  const orderNo = String(route.query.orderNo || '').trim()
   const receiptType = String(route.query.receiptType || '').trim().toUpperCase()
   const returnTypeOption = receiptType === 'RETURN'
     ? (wms_receipt_type.value || []).find(option => {
@@ -288,14 +289,15 @@ function applyRouteSkuFilter() {
       })
     : undefined
   const routeOptType = receiptType === 'RETURN' ? returnTypeOption?.value : -1
-  const filterKey = `${skuCode}|${receiptType}|${routeOptType ?? 'PENDING'}`
+  const filterKey = `${skuCode}|${orderNo}|${receiptType}|${routeOptType ?? 'PENDING'}`
   const typeMatches = receiptType !== 'RETURN'
     ? queryParams.value.optType === -1
     : routeOptType === undefined
       ? queryParams.value.optType === -1
       : String(queryParams.value.optType) === String(routeOptType)
-  if (!skuCode || (filterKey === appliedRouteFilterKey.value && queryParams.value.skuCode === skuCode && typeMatches)) return false
-  queryParams.value.skuCode = skuCode
+  if ((!skuCode && !orderNo) || (filterKey === appliedRouteFilterKey.value && String(queryParams.value.skuCode || '') === skuCode && String(queryParams.value.orderNo || '') === orderNo && typeMatches)) return false
+  queryParams.value.skuCode = skuCode || undefined
+  queryParams.value.orderNo = orderNo || undefined
   queryParams.value.optType = routeOptType ?? -1
   queryParams.value.pageNum = 1
   appliedRouteFilterKey.value = filterKey
