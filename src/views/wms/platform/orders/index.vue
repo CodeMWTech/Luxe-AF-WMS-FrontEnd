@@ -1154,8 +1154,9 @@ function getPlatform(order) {
 
 function resolveTikTokSellerHost(region) {
   const key = String(region || '').toUpperCase()
+  // 注意：美区域名是 seller-us（连字符），不是 seller.us
   if (!key || key.includes('US') || key.includes('UNITED_STATES')) {
-    return 'https://seller.us.tiktok.com'
+    return 'https://seller-us.tiktok.com'
   }
   if (key.includes('GB') || key.includes('UK')) {
     return 'https://seller-uk.tiktok.com'
