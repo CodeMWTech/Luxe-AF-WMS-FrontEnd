@@ -8,14 +8,29 @@
         class="statistic-query-form mt12"
         @submit.prevent="handleQuery"
       >
-        <!-- 维度切换单独占一行 -->
+        <!-- 维度与库存快照日期 -->
         <el-row :gutter="16">
-          <el-col :span="24">
+          <el-col :xs="24" :sm="12">
             <el-form-item :label="tr('维度')" prop="itemId">
               <el-radio-group v-model="queryType" size="default" @change="handleSortTypeChange">
                 <el-radio-button label="item">{{ tr('商品') }}</el-radio-button>
                 <el-radio-button label="warehouse">{{ tr('仓库') }}</el-radio-button>
               </el-radio-group>
+            </el-form-item>
+          </el-col>
+          <el-col :xs="24" :sm="12">
+            <el-form-item :label="tr('库存日期')" prop="snapshotDate">
+              <el-date-picker
+                v-model="queryParams.snapshotDate"
+                type="date"
+                format="MM/DD/YYYY"
+                value-format="YYYY-MM-DD"
+                :placeholder="tr('为空时查询当前库存')"
+                :disabled-date="disableFutureSnapshotDate"
+                clearable
+                style="width: 100%"
+                @change="handleSnapshotDateChange"
+              />
             </el-form-item>
           </el-col>
         </el-row>
@@ -191,6 +206,9 @@
       <el-row :gutter="10" class="mb8" type="flex" justify="space-between">
         <el-col :span="12">
           <span class="page-title">{{ tr('库存统计') }}</span>
+          <el-tag v-if="queryParams.snapshotDate" class="ml10" type="info">
+            {{ tr('日终库存快照') }}：{{ queryParams.snapshotDate }}
+          </el-tag>
         </el-col>
         <el-col :span="12" class="toolbar-right">
           <el-checkbox v-model="filterable" :label="tr('过滤掉库存为0的商品')" size="large" @change="handleChangeFilterZero"/>
@@ -240,7 +258,8 @@
           <el-button
             type="success"
             icon="Upload"
-            :disabled="selectedRows.length === 0"
+            :disabled="selectedRows.length === 0 || !!queryParams.snapshotDate"
+            :title="queryParams.snapshotDate ? tr('历史快照不可用于批量上架') : ''"
             @click="handleBatchPublish"
           >
             {{ tr('批量上架') }}
@@ -605,7 +624,7 @@ import { useWmsStore } from '@/store/modules/wms'
 import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
 import { blobValidate } from '@/utils/ruoyi'
-import { formatDateTimeForQuery } from '@/utils/laTime'
+import { formatDateForQuery, formatDateTimeForQuery } from '@/utils/laTime'
 import { formatBrandNames } from '@/utils/itemBrand'
 import PublishDialog from '@/views/wms/platform/listings/components/PublishDialog.vue'
 const route = useRoute()
@@ -713,6 +732,7 @@ const queryParams = ref({
   consignInfo: undefined,
   createTimeRange: [],
   receiptTimeRange: [],
+  snapshotDate: undefined,
   costPriceMin: undefined,
   costPriceMax: undefined,
   sellingPriceMin: undefined,
@@ -1154,6 +1174,16 @@ const getCurrentQuery = () => {
     query.minQuantity = undefined
   }
   return query
+}
+
+const disableFutureSnapshotDate = (date) => {
+  const laToday = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Los_Angeles',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(new Date())
+  return formatDateForQuery(date) > laToday
 }
 
 const getExportLanguagePayload = () => {
@@ -1607,7 +1637,7 @@ async function handleBatchExportExcel() {
     }))
     const exportLanguage = getExportLanguagePayload()
     const blobData = await batchExportInventoryBoardExcel(
-      { rows },
+      { rows, snapshotDate: queryParams.value.snapshotDate },
       {
         headers: {
           'Content-Language': exportLanguage.contentLanguage,
@@ -1892,6 +1922,12 @@ function handleBatchExportPdf() {
 
 const handleQuery = () => {
   clearInventorySelectionWhenNotBatching()
+  queryParams.value.pageNum = 1
+  getList()
+}
+
+const handleSnapshotDateChange = () => {
+  clearInventorySelection()
   queryParams.value.pageNum = 1
   getList()
 }
