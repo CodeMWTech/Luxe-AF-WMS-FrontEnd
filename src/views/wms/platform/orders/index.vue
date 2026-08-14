@@ -1170,6 +1170,14 @@ function resolveTikTokSellerHost(region) {
   return 'https://seller.tiktok.com'
 }
 
+function resolveTikTokShopRegion(region) {
+  const key = String(region || '').trim().toUpperCase()
+  const normalizedKey = key.replace(/[\s-]+/g, '_')
+  if (!key || ['US', 'USA', 'UNITED_STATES'].includes(normalizedKey)) return 'US'
+  if (['UK', 'GB', 'UNITED_KINGDOM'].includes(normalizedKey)) return 'GB'
+  return key
+}
+
 function resolveEbaySiteHost(region) {
   const key = String(region || '').toUpperCase()
   if (key.includes('GB') || key.includes('UK')) return 'https://www.ebay.co.uk'
@@ -1182,23 +1190,34 @@ function resolveEbaySiteHost(region) {
   return 'https://www.ebay.com'
 }
 
-/** 根据平台订单构造外部跳转链接：eBay 优先商品详情页，TikTok 跳卖家中心订单详情 */
+/** 根据平台订单构造外部跳转链接：eBay 和 TikTok 均跳卖家中心订单详情 */
 function getPlatformOrderExternalUrl(order) {
   const orderId = String(getOrderId(order) || '').trim()
   if (!orderId) return ''
   const platform = String(getPlatform(order) || '').toUpperCase()
   const shop = shopList.value.find(item => String(item.id) === String(order?.shopAuthId))
   const region = shop?.region || order?.regionCode || ''
-  const productId = String(getFirstItem(order)?.productId || order?.productId || '').trim()
 
   if (platform === 'EBAY') {
     const host = resolveEbaySiteHost(region)
-    if (productId) return `${host}/itm/${encodeURIComponent(productId)}`
-    return `${host}/sh/ord/details?orderid=${encodeURIComponent(orderId)}`
+    const returnParams = new URLSearchParams({
+      search: `ordernumber:${orderId}`,
+      filter: 'status:ALL_ORDERS',
+      partialRefresh: 'true'
+    })
+    const returnUrl = `${host}/sh/ord/?${returnParams.toString()}`
+    const params = new URLSearchParams({
+      mode: 'SH',
+      orderid: orderId,
+      source: 'Orders',
+      ru: returnUrl
+    })
+    return `${host}/mesh/ord/details?${params.toString()}`
   }
   if (platform === 'TIKTOK') {
     const host = resolveTikTokSellerHost(region)
-    return `${host}/order/detail?order_id=${encodeURIComponent(orderId)}`
+    const shopRegion = resolveTikTokShopRegion(region)
+    return `${host}/order/detail?order_no=${encodeURIComponent(orderId)}&shop_region=${encodeURIComponent(shopRegion)}`
   }
   return ''
 }
