@@ -312,6 +312,7 @@
                 class="item-main-image"
                 :preview-src-list="[getItemImage(row)]"
                 preview-teleported
+                :hide-on-click-modal="true"
                 @show="setPreviewImageContext([{ url: getItemImage(row) }], 0, getPreviewImageTitle(row))"
                 @switch="setPreviewImageIndex"
               >
@@ -379,6 +380,7 @@
                 class="item-main-image"
                 :preview-src-list="[getItemImage(row)]"
                 preview-teleported
+                :hide-on-click-modal="true"
                 @show="setPreviewImageContext([{ url: getItemImage(row) }], 0, getPreviewImageTitle(row))"
                 @switch="setPreviewImageIndex"
               >
@@ -454,7 +456,7 @@
         <!-- ========== 新增列：周转天数 ========== -->
         <el-table-column :label="tr('周转天数')" prop="turnoverDays" :width="isEn ? 150 : 125" align="center" sortable="custom">
           <template #default="{ row }">
-            <span v-if="row.turnoverDays != null">{{ row.turnoverDays }}</span>
+            <span v-if="row.turnoverDays != null" :class="{ 'turnover-days-alert': isTurnoverDaysAlert(row.turnoverDays) }">{{ row.turnoverDays }}</span>
             <span v-else>--</span>
           </template>
         </el-table-column>
@@ -483,7 +485,7 @@
               - 有出库时显示历史累计利润
               - null 显示 --（兜底）
             -->
-            {{ formatProfit(row.totalProfit) }}
+            <span :class="{ 'profit-margin-alert': isHighProfitMargin(row) }">{{ formatProfit(row.totalProfit) }}</span>
           </template>
         </el-table-column>
       </el-table>
@@ -557,6 +559,7 @@
                   :preview-src-list="detailImagePreviewList"
                   :initial-index="idx"
                   preview-teleported
+                  :hide-on-click-modal="true"
                   fit="cover"
                   class="detail-image"
                   @show="setPreviewImageContext(detailImages, idx, getDetailPreviewImageTitle())"
@@ -1017,6 +1020,23 @@ function formatProfit(v) {
   const n = Number(v)
   if (!Number.isFinite(n)) return '--'
   return `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+}
+
+/** 周转天数 ≥ 30 高亮 */
+function isTurnoverDaysAlert(days) {
+  const n = Number(days)
+  return Number.isFinite(n) && n >= 30
+}
+
+/**
+ * 利润率 = (平均销售价 - 平均成本价) / 平均成本价
+ * 高于 40% 时高亮利润列
+ */
+function isHighProfitMargin(row) {
+  const cost = Number(row?.avgReceiptCost)
+  const sell = Number(row?.avgShipmentPrice)
+  if (!Number.isFinite(cost) || cost <= 0 || !Number.isFinite(sell)) return false
+  return (sell - cost) / cost > 0.4
 }
 
 /**
@@ -2218,6 +2238,16 @@ onActivated(() => {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
   gap: 14px;
+}
+
+.turnover-days-alert {
+  color: #f56c6c;
+  font-weight: 700;
+}
+
+.profit-margin-alert {
+  color: #e6a23c;
+  font-weight: 700;
 }
 
 :global(.el-image-viewer__actions) {

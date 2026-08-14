@@ -280,10 +280,12 @@ const appliedRouteFilterKey = ref('')
 
 function applyRouteSkuFilter() {
   const skuCode = String(route.query.skuCode || '').trim()
+  const orderNo = String(route.query.orderNo || '').trim()
   const orderStatus = String(route.query.orderStatus || '').trim()
-  const filterKey = `${skuCode}|${orderStatus}`
-  if (!skuCode || filterKey === appliedRouteFilterKey.value) return false
-  queryParams.value.skuCode = skuCode
+  const filterKey = `${skuCode}|${orderNo}|${orderStatus}`
+  if ((!skuCode && !orderNo) || filterKey === appliedRouteFilterKey.value) return false
+  queryParams.value.skuCode = skuCode || undefined
+  queryParams.value.orderNo = orderNo || undefined
   if (orderStatus) queryParams.value.orderStatus = Number(orderStatus)
   queryParams.value.pageNum = 1
   appliedRouteFilterKey.value = filterKey

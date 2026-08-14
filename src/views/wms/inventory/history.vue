@@ -67,7 +67,18 @@
         <el-button type="primary" icon="Download" :loading="exportLoading" :disabled="loading" @click="handleExportExcel">{{ tr('\u5bfc\u51faExcel') }}</el-button>
       </div>
       <el-table v-loading="loading" :data="inventoryHistoryList" border class="mt20" :empty-text="tr('暂无库存记录')" cell-class-name="vertical-top-cell">
-        <el-table-column :label="tr('操作单号')" prop="orderNo" width="220" show-overflow-tooltip header-class-name="nowrap-header" class-name="nowrap-cell"/>
+        <el-table-column :label="tr('操作单号')" prop="orderNo" width="220" show-overflow-tooltip header-class-name="nowrap-header" class-name="nowrap-cell">
+          <template #default="{ row }">
+            <el-link
+              v-if="canOpenOrderNoLink(row)"
+              type="primary"
+              :underline="true"
+              class="sku-history-link"
+              @click.stop="openOrderNoLink(row)"
+            >{{ row.orderNo }}</el-link>
+            <span v-else>{{ row.orderNo || '-' }}</span>
+          </template>
+        </el-table-column>
         <el-table-column :label="tr('商品名称')" min-width="180">
           <template #default="{ row }">
             <div class="item-name-two-line" :title="row.item?.itemName || ''">{{ row.item?.itemName || '-' }}</div>
@@ -308,6 +319,29 @@ function openSkuLink(row) {
     ...target.route,
     query
   }).catch(() => {})
+}
+
+function getOrderNo(row) {
+  return String(row?.orderNo || '').trim()
+}
+
+function canOpenOrderNoLink(row) {
+  const orderNo = getOrderNo(row)
+  const orderType = Number(row?.orderType)
+  return !!orderNo && (orderType === ORDER_TYPE_RECEIPT || orderType === ORDER_TYPE_SHIPMENT)
+}
+
+function openOrderNoLink(row) {
+  if (!canOpenOrderNoLink(row)) return
+  const orderNo = getOrderNo(row)
+  const orderType = Number(row?.orderType)
+  if (orderType === ORDER_TYPE_RECEIPT) {
+    router.push({ name: 'ReceiptOrder', query: { orderNo } }).catch(() => {})
+    return
+  }
+  if (orderType === ORDER_TYPE_SHIPMENT) {
+    router.push({ path: '/wms/order/shipmentOrder', query: { orderNo } }).catch(() => {})
+  }
 }
 
 onMounted(() => {
