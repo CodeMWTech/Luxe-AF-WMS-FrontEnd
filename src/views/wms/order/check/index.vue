@@ -228,6 +228,39 @@
       @handle-cancel-click="watchDetailObj.show = false"
     />
     <el-dialog
+      v-model="smartSnapshotDateVisible"
+      :title="isEn ? 'Select Inventory Baseline Date' : '选择库存对比日期'"
+      width="420px"
+      destroy-on-close
+      :close-on-click-modal="false"
+    >
+      <el-form label-position="top" @submit.prevent>
+        <el-form-item :label="isEn ? 'Compare counted quantities with end-of-day inventory on' : '将实盘数量与以下日期的日终库存进行对比'" required>
+          <el-date-picker
+            v-model="smartSnapshotDate"
+            type="date"
+            value-format="YYYY-MM-DD"
+            :format="isEn ? 'MM/DD/YYYY' : 'YYYY-MM-DD'"
+            :placeholder="isEn ? 'Select date' : '请选择日期'"
+            :disabled-date="disableFutureSnapshotDate"
+            style="width: 100%"
+          />
+        </el-form-item>
+        <el-alert
+          :title="isEn ? 'The selected date is fixed in the preview and generated AUDIT order.' : '所选日期会固定在预览和生成的核查单中。'"
+          type="info"
+          :closable="false"
+          show-icon
+        />
+      </el-form>
+      <template #footer>
+        <el-button @click="smartSnapshotDateVisible = false">{{ isEn ? 'Cancel' : '取消' }}</el-button>
+        <el-button type="primary" :loading="smartCheckLoading" @click="confirmSmartSnapshotDate">
+          {{ isEn ? 'Start Check' : '开始核查' }}
+        </el-button>
+      </template>
+    </el-dialog>
+    <el-dialog
       v-model="smartReportVisible"
       custom-class="smart-check-dialog"
       :title="isEn ? 'Smart Inventory Check Report' : '库存智能核查报告'"
@@ -358,6 +391,8 @@ const smartCheckMode = ref(false)
 const selectedSmartRows = ref([])
 const smartCheckLoading = ref(false)
 const smartConfirmLoading = ref(false)
+const smartSnapshotDateVisible = ref(false)
+const smartSnapshotDate = ref(getLocalDateString(new Date()))
 const smartReportVisible = ref(false)
 const smartCheckReport = ref(null)
 const smartReportSource = ref(null)
@@ -403,9 +438,10 @@ const smartReportSubtitle = computed(() => {
   const report = smartCheckReport.value || {}
   const orderCount = report.sourceOrderCount ?? '-'
   const skuCount = report.systemSkuCount ?? (report.details?.length || 0)
+  const snapshotDate = report.snapshotDate || smartSnapshotDate.value || '-'
   return isEn.value
-    ? `Checked ${orderCount} stocktake orders - System inventory baseline ${skuCount} SKUs`
-    : `已核查 ${orderCount} 个盘库单 · 系统库存基准 ${skuCount} 个 SKU`
+    ? `Inventory baseline ${snapshotDate} EOD - Checked ${orderCount} stocktake orders - ${skuCount} SKUs`
+    : `库存基准日 ${snapshotDate} 日终 · 已核查 ${orderCount} 个盘库单 · ${skuCount} 个 SKU`
 })
 const canConfirmSmartReport = computed(() => smartReportSource.value === 'preview' && smartCheckReport.value && !smartCheckReport.value.orderId)
 
@@ -607,18 +643,31 @@ function getRowClassName({ row }) {
   return isSmartCheckOrder(row) ? 'smart-audit-row' : ''
 }
 
-async function handleStartSmartCheck() {
+function handleStartSmartCheck() {
   if (!selectedSmartRows.value.length) {
     proxy.$modal.msgWarning(isEn.value ? 'Please select stocktake orders' : '请选择需要核查的盘库单')
     return
   }
+  smartSnapshotDate.value = smartSnapshotDate.value || getLocalDateString(new Date())
+  smartSnapshotDateVisible.value = true
+}
+
+async function confirmSmartSnapshotDate() {
+  if (!smartSnapshotDate.value) {
+    proxy.$modal.msgWarning(isEn.value ? 'Please select an inventory baseline date' : '请选择库存对比日期')
+    return
+  }
   smartCheckLoading.value = true
   try {
-    const res = await smartCheckPreview({ sourceOrderIds: selectedSmartRows.value.map(row => row.id) })
+    const res = await smartCheckPreview({
+      sourceOrderIds: selectedSmartRows.value.map(row => row.id),
+      snapshotDate: smartSnapshotDate.value
+    })
     smartCheckReport.value = res.data
     smartReportSource.value = 'preview'
     resetSmartReportPagination()
     await loadSmartReportDetails()
+    smartSnapshotDateVisible.value = false
     smartReportVisible.value = true
   } finally {
     smartCheckLoading.value = false
@@ -634,7 +683,8 @@ async function handleConfirmSmartCheck() {
   try {
     const res = await smartCheckConfirm({
       sourceOrderIds: selectedSmartRows.value.map(row => row.id),
-      previewToken: smartCheckReport.value?.previewToken
+      previewToken: smartCheckReport.value?.previewToken,
+      snapshotDate: smartCheckReport.value?.snapshotDate || smartSnapshotDate.value
     })
     smartCheckReport.value = res.data
     smartReportSource.value = 'audit'
@@ -719,6 +769,7 @@ function buildSmartReportFromOrder(order) {
   return {
     orderId: order?.id,
     orderNo: order?.orderNo,
+    snapshotDate: parseSnapshotDate(order?.remark),
     sourceOrderCount,
     systemSkuCount: summary ? summary.shortageCount + summary.surplusCount + summary.matchedCount : 0,
     shortageCount: summary?.shortageCount || 0,
@@ -728,6 +779,24 @@ function buildSmartReportFromOrder(order) {
     remark: order?.remark,
     details: []
   }
+}
+
+function parseSnapshotDate(remark) {
+  const match = String(remark || '').match(/库存基准日\s*(\d{4}-\d{2}-\d{2})/)
+  return match?.[1]
+}
+
+function getLocalDateString(date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function disableFutureSnapshotDate(date) {
+  const today = new Date()
+  today.setHours(23, 59, 59, 999)
+  return date.getTime() > today.getTime()
 }
 
 function isZeroQuantityMatched(row) {
