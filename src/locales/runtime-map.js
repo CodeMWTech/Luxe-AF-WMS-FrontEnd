@@ -349,6 +349,7 @@ const zhToEnMap = {
   出库时间: 'Outbound Time',
   出库平台: 'Outbound Platform',
   周转天数: 'Turnover Days',
+  最小周转天数: 'Minimum days',
   库存数量: 'Stock Qty',
   利润: 'Profit',
   平均成本价: 'Avg Cost Price',
