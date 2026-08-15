@@ -123,11 +123,24 @@
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="12" :md="6" :lg="6">
+            <el-form-item :label="tr('周转天数')" prop="turnoverDaysMin">
+              <el-input-number
+                v-model="queryParams.turnoverDaysMin"
+                :min="0"
+                :precision="0"
+                :controls="false"
+                :placeholder="tr('最小周转天数')"
+                style="width: 100%"
+                @keyup.enter="handleQuery"
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :xs="24" :sm="12" :md="6" :lg="6">
             <el-form-item :label="tr('已护理')" prop="cared">
               <el-switch v-model="queryParams.cared" active-text="Yes" inactive-text="No" :active-value="true" :inactive-value="false" />
             </el-form-item>
           </el-col>
-          <el-col :xs="24" :sm="24" :md="12" :lg="12">
+          <el-col :xs="24" :sm="12" :md="6" :lg="6">
             <el-form-item :label="tr('寄售信息')" prop="consignInfo">
               <el-input v-model="queryParams.consignInfo" clearable :placeholder="tr('请输入')" @keyup.enter="handleQuery" />
             </el-form-item>
@@ -737,6 +750,7 @@ const queryParams = ref({
   costPriceMax: undefined,
   sellingPriceMin: undefined,
   sellingPriceMax: undefined,
+  turnoverDaysMin: undefined,
   minQuantity: undefined,
   orderByColumn: DEFAULT_INVENTORY_SORT.prop,
   isAsc: DEFAULT_INVENTORY_SORT.order
