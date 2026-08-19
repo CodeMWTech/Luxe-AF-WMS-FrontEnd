@@ -785,6 +785,7 @@ const zhToEnMap = {
   '已选择 {count} 个商品': '{count} selected',
   '已选择全部 {count} 个商品': 'All {count} selected',
   '全部勾选': 'Select All',
+  '取消全选': 'Clear Selection',
   '全选失败': 'Select all failed',
   '没有可选择的库存记录': 'No inventory records available to select',
   '请先勾选商品': 'Please select products first',

@@ -224,13 +224,24 @@
           </span>
           <el-button
             v-if="!isAllFilteredSelected && total > 0"
-            link
             type="primary"
-            class="batch-select-all-link"
+            icon="CircleCheck"
+            class="batch-select-action-btn"
             :loading="selectAllLoading"
             @click="handleSelectAllFiltered"
           >
             {{ tr('全部勾选') }}
+          </el-button>
+          <el-button
+            v-if="selectedRows.length > 0"
+            type="warning"
+            plain
+            icon="Close"
+            class="batch-select-action-btn"
+            :disabled="selectAllLoading"
+            @click="clearInventorySelection"
+          >
+            {{ tr('取消全选') }}
           </el-button>
         </div>
         <div class="batch-action-right">
@@ -2110,6 +2121,7 @@ onActivated(() => {
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
+  flex-wrap: wrap;
 }
 
 .batch-action-icon {
@@ -2124,10 +2136,8 @@ onActivated(() => {
   white-space: nowrap;
 }
 
-.batch-select-all-link {
-  padding: 0;
-  font-size: 14px;
-  font-weight: 500;
+.batch-select-action-btn {
+  font-weight: 600;
 }
 
 .batch-action-right {
