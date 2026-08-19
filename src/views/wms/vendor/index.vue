@@ -242,7 +242,9 @@
         <el-descriptions-item :label="text('供货商', 'Supplier')">{{ settlementPreview.supplierName || text('多个供货商', 'Multiple suppliers') }}</el-descriptions-item>
         <el-descriptions-item label="SKU">{{ settlementPreview.skuCount || 0 }}</el-descriptions-item>
         <el-descriptions-item :label="text('全部商品数量', 'All product qty')">{{ quantity(settlementPreview.productQuantity) }}</el-descriptions-item>
-        <el-descriptions-item :label="text('已售数量', 'Delivered qty')">{{ quantity(settlementPreview.soldQuantity) }}</el-descriptions-item>
+        <el-descriptions-item :label="text('平台外已售数量', 'Off-platform sold qty')">{{ quantity(settlementPreview.offPlatformSoldQuantity) }}</el-descriptions-item>
+        <el-descriptions-item :label="text('平台已售数量', 'Platform sold qty')">{{ quantity(settlementPreview.platformSoldQuantity) }}</el-descriptions-item>
+        <el-descriptions-item :label="text('已售总数量', 'Total sold qty')">{{ quantity(settlementPreview.soldQuantity) }}</el-descriptions-item>
         <el-descriptions-item :label="text('退货数量', 'Returned qty')">{{ quantity(settlementPreview.returnedQuantity) }}</el-descriptions-item>
         <el-descriptions-item :label="text('销售成本总额', 'Gross cost')">{{ money(settlementPreview.grossAmount) }}</el-descriptions-item>
         <el-descriptions-item :label="text('退货抵扣', 'Return deduction')">{{ money(settlementPreview.returnDeductionAmount) }}</el-descriptions-item>
@@ -277,8 +279,17 @@
         <el-table-column :label="text('全部商品数量', 'All product qty')" align="right" width="125">
           <template #default="{ row }">{{ quantity(row.productQuantity) }}</template>
         </el-table-column>
-        <el-table-column :label="text('已售数量', 'Delivered')" align="right" width="100">
+        <el-table-column :label="text('平台外已售数量', 'Off-platform sold qty')" align="right" width="145">
+          <template #default="{ row }">{{ quantity(row.offPlatformSoldQuantity) }}</template>
+        </el-table-column>
+        <el-table-column :label="text('平台已售数量', 'Platform sold qty')" align="right" width="135">
+          <template #default="{ row }">{{ quantity(row.platformSoldQuantity) }}</template>
+        </el-table-column>
+        <el-table-column :label="text('已售总数量', 'Total sold qty')" align="right" width="125">
           <template #default="{ row }">{{ quantity(row.soldQuantity) }}</template>
+        </el-table-column>
+        <el-table-column :label="text('平台已售中订单编号', 'Platform sold order numbers')" prop="platformSoldOrderNumbers" min-width="230" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.platformSoldOrderNumbers || '-' }}</template>
         </el-table-column>
         <el-table-column :label="text('退货数量', 'Returned')" align="right" width="100">
           <template #default="{ row }">{{ quantity(row.returnedQuantity) }}</template>
@@ -523,7 +534,7 @@ const settlementPreview = computed(() => {
   const lines = selectedPreviewLines.value
   const result = { ...preview.value, lines, skuCount: lines.length }
   const aggregateFields = [
-    'productQuantity', 'soldQuantity', 'returnedQuantity', 'grossAmount',
+    'productQuantity', 'platformSoldQuantity', 'offPlatformSoldQuantity', 'soldQuantity', 'returnedQuantity', 'grossAmount',
     'returnDeductionAmount', 'totalSettlementAmount', 'settledAmount', 'pendingSettlementAmount'
   ]
   aggregateFields.forEach(field => {
@@ -612,7 +623,10 @@ function toForcedSettlementLine(row) {
     itemName: row.itemName,
     mainThumbUrl: row.mainThumbUrl,
     productQuantity: row.productQuantity,
+    platformSoldQuantity: row.platformSoldQuantity,
+    offPlatformSoldQuantity: row.offPlatformSoldQuantity,
     soldQuantity: row.soldQuantity,
+    platformSoldOrderNumbers: row.platformSoldOrderNumbers,
     returnedQuantity: row.returnedQuantity,
     settleableQuantity: Math.max(soldQuantity - returnedQuantity, 0).toFixed(2),
     unitPrice: row.unitCost,
