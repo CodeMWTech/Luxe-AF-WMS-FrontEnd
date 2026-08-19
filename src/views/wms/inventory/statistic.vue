@@ -215,7 +215,23 @@
       <div v-if="batchMode" class="batch-action-bar">
         <div class="batch-action-left">
           <el-icon class="batch-action-icon"><Select /></el-icon>
-          <span class="batch-action-info">{{ tr('已选择 {count} 个商品').replace('{count}', selectedRows.length) }}</span>
+          <span class="batch-action-info">
+            {{
+              isAllFilteredSelected
+                ? tr('已选择全部 {count} 个商品').replace('{count}', selectedRows.length)
+                : tr('已选择 {count} 个商品').replace('{count}', selectedRows.length)
+            }}
+          </span>
+          <el-button
+            v-if="!isAllFilteredSelected && total > 0"
+            link
+            type="primary"
+            class="batch-select-all-link"
+            :loading="selectAllLoading"
+            @click="handleSelectAllFiltered"
+          >
+            {{ tr('全部勾选') }}
+          </el-button>
         </div>
         <div class="batch-action-right">
           <el-button
@@ -627,7 +643,9 @@ const batchExportExcelLoading = ref(false)
 const batchExportPdfLoading = ref(false)
 const selectedRows = ref([])
 const selectedRowMap = ref(new Map())
+const selectAllLoading = ref(false)
 const total = ref(0)
+const isAllFilteredSelected = computed(() => total.value > 0 && selectedRows.value.length >= total.value)
 const tableRef = ref(null)
 let suppressInventorySelectionChange = false
 const rowSpanArray = ref(['itemGroupKey', 'skuGroupKey', 'skuWarehouseGroupKey'])
@@ -1440,6 +1458,48 @@ const openDetailDrawer = async (row) => {
   }
 }
 
+const SELECT_ALL_PAGE_SIZE = 500
+
+function filterInventoryBoardRows(rows) {
+  if (!filterable.value) return rows
+  return rows.filter(it => Number(it.quantity) !== 0)
+}
+
+function normalizeInventoryBoardRows(rows) {
+  rows.forEach(it => {
+    const warehouseKey = getWarehouseGroupKey(it)
+    const itemKey = String(it.itemName ?? '')
+    const skuKey = String(it.skuCode ?? '')
+
+    it.warehouseGroupKey = warehouseKey
+    it.itemGroupKey = itemKey
+    it.skuGroupKey = skuKey
+    it.warehouseItemGroupKey = `${warehouseKey}-${itemKey}`
+    it.skuWarehouseGroupKey = `${skuKey}-${warehouseKey}`
+  })
+  return rows
+}
+
+async function fetchAllInventoryBoardRows() {
+  const baseQuery = getCurrentQuery()
+  const allRows = []
+  let pageNum = 1
+  let totalCount = 0
+
+  while (true) {
+    const res = await listInventoryBoard(
+      { ...baseQuery, pageNum, pageSize: SELECT_ALL_PAGE_SIZE },
+      queryType.value
+    )
+    const rows = normalizeInventoryBoardRows(filterInventoryBoardRows(res.rows || []))
+    allRows.push(...rows)
+    totalCount = res.total ?? allRows.length
+    if (rows.length === 0 || allRows.length >= totalCount) break
+    pageNum += 1
+  }
+  return allRows
+}
+
 const getList = async () => {
   const query = getCurrentQuery()
   loading.value = true
@@ -1459,22 +1519,7 @@ const getList = async () => {
       warehouseSummaryMap.value = new Map()
       res = await listInventoryBoard(query, queryType.value)
     }
-    let rows = res.rows || []
-    if (filterable.value) {
-      rows = rows.filter(it => Number(it.quantity) !== 0)
-    }
-
-    rows.forEach(it => {
-      const warehouseKey = getWarehouseGroupKey(it)
-      const itemKey = String(it.itemName ?? '')
-      const skuKey = String(it.skuCode ?? '')
-
-      it.warehouseGroupKey = warehouseKey
-      it.itemGroupKey = itemKey
-      it.skuGroupKey = skuKey
-      it.warehouseItemGroupKey = `${warehouseKey}-${itemKey}`
-      it.skuWarehouseGroupKey = `${skuKey}-${warehouseKey}`
-    })
+    const rows = normalizeInventoryBoardRows(filterInventoryBoardRows(res.rows || []))
 
     suppressInventorySelectionChange = true
     inventoryList.value = rows
@@ -1572,6 +1617,29 @@ function handleSelectionChange(selection) {
     }
   })
   syncSelectedRows()
+}
+
+async function handleSelectAllFiltered() {
+  if (total.value === 0 || isAllFilteredSelected.value) return
+  try {
+    selectAllLoading.value = true
+    suppressInventorySelectionChange = true
+    const allRows = await fetchAllInventoryBoardRows()
+    selectedRowMap.value.clear()
+    allRows.forEach(row => {
+      const key = getInventorySelectionKey(row)
+      if (key) selectedRowMap.value.set(key, row)
+    })
+    syncSelectedRows()
+    await restoreInventorySelection()
+    if (selectedRows.value.length === 0) {
+      proxy.$modal.msgWarning(tr('没有可选择的库存记录'))
+    }
+  } catch (e) {
+    proxy.$modal.msgError(e?.message || tr('全选失败'))
+  } finally {
+    selectAllLoading.value = false
+  }
 }
 
 async function handleBatchExportExcel() {
@@ -2054,6 +2122,12 @@ onActivated(() => {
   font-size: 14px;
   font-weight: 500;
   white-space: nowrap;
+}
+
+.batch-select-all-link {
+  padding: 0;
+  font-size: 14px;
+  font-weight: 500;
 }
 
 .batch-action-right {
