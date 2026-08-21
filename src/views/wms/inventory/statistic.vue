@@ -25,8 +25,9 @@
                 type="date"
                 format="MM/DD/YYYY"
                 value-format="YYYY-MM-DD"
-                :placeholder="tr('为空时查询当前库存')"
+                :placeholder="snapshotDatePlaceholder"
                 :disabled-date="disableFutureSnapshotDate"
+                :editable="true"
                 clearable
                 style="width: 100%"
                 @change="handleSnapshotDateChange"
@@ -724,6 +725,18 @@ const DEFAULT_INVENTORY_SORT = {
   order: 'descending'
 }
 
+const getLosAngelesToday = () => new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'America/Los_Angeles',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit'
+}).format(new Date())
+
+const snapshotDatePlaceholder = (() => {
+  const [year, month, day] = getLosAngelesToday().split('-')
+  return `${month}/${day}/${year}`
+})()
+
 const filterable = ref(true)
 const batchMode = ref(false)
 const publishDialogRef = ref(null)
@@ -1191,13 +1204,7 @@ const getCurrentQuery = () => {
 }
 
 const disableFutureSnapshotDate = (date) => {
-  const laToday = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Los_Angeles',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit'
-  }).format(new Date())
-  return formatDateForQuery(date) > laToday
+  return formatDateForQuery(date) > getLosAngelesToday()
 }
 
 const getExportLanguagePayload = () => {
