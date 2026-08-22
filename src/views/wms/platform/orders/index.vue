@@ -938,7 +938,8 @@ function loadShops() {
   shopLoading.value = true
   return listAllPlatformShops().then(response => {
     const data = response.data || {}
-    shopList.value = response.rows || data.rows || data.records || (Array.isArray(data) ? data : [])
+    const shops = response.rows || data.rows || data.records || (Array.isArray(data) ? data : [])
+    shopList.value = sortShops(shops)
   }).catch(handleApiError).finally(() => {
     shopLoading.value = false
   })
@@ -1529,7 +1530,18 @@ const SHOP_ALIASES = [
   { platform: 'TIKTOK', shopName: '777 luxury', alias: 'TK2' },
   { platform: 'EBAY', shopName: 'luxury_bagparty', alias: 'Ebay1' },
   { platform: 'EBAY', shopName: 'the_attraction', alias: 'Ebay2' },
-  { platform: 'EBAY', shopName: 'truestluxury', alias: 'Ebay3' }
+  { platform: 'EBAY', shopName: 'truestluxury', alias: 'Ebay3' },
+  { platform: 'EBAY', shopName: 'luxeaf', alias: 'Ebay4' }
+]
+
+const SHOP_SORT_ORDER = [
+  ['EBAY', 'luxury_bagparty'],
+  ['EBAY', 'the_attraction'],
+  ['EBAY', 'truestluxury'],
+  ['EBAY', 'luxeaf'],
+  ['TIKTOK', 'luxe af'],
+  ['TIKTOK', '777 luxury'],
+  ['TIKTOK', 'truest luxury']
 ]
 
 function normalizeShopName(value) {
@@ -1543,6 +1555,29 @@ function getShopAlias(shop) {
     .map(normalizeShopName)
     .filter(Boolean)
   return SHOP_ALIASES.find(item => item.platform === platform && shopNames.includes(item.shopName))?.alias || ''
+}
+
+function getShopSortIndex(shop) {
+  const platform = String(shop?.platform || '').toUpperCase()
+  const shopNames = [shop?.shopName, shop?.shopId, shop?.platformShopId]
+    .map(normalizeShopName)
+    .filter(Boolean)
+  return SHOP_SORT_ORDER.findIndex(([itemPlatform, itemShopName]) => (
+    itemPlatform === platform && shopNames.includes(itemShopName)
+  ))
+}
+
+function sortShops(shops) {
+  return [...shops].sort((left, right) => {
+    const leftIndex = getShopSortIndex(left)
+    const rightIndex = getShopSortIndex(right)
+    if (leftIndex !== -1 || rightIndex !== -1) {
+      if (leftIndex === -1) return 1
+      if (rightIndex === -1) return -1
+      return leftIndex - rightIndex
+    }
+    return formatShopLabel(left).localeCompare(formatShopLabel(right), undefined, { sensitivity: 'base' })
+  })
 }
 
 function formatShopLabel(shop) {
