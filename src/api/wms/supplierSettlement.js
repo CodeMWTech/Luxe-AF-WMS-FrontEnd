@@ -46,3 +46,10 @@ export function getSupplierSettlementRecord(id) {
     method: 'get'
   })
 }
+
+export function deleteSupplierSettlementDraft(id) {
+  return request({
+    url: '/wms/supplier-settlement/settlement/records/' + id,
+    method: 'delete'
+  })
+}

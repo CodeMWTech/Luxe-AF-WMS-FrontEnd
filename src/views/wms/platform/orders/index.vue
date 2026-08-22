@@ -829,11 +829,34 @@ const queryParams = ref({
 const appliedRouteFilterKey = ref('')
 const pendingSkuMissHint = ref(false)
 
-function applyRouteSkuFilter() {
+function applyRouteFilter() {
+  const platformOrderId = String(route.query.platformOrderId || '').trim()
   const skuCode = String(route.query.skuCode || '').trim()
   const orderStatus = String(route.query.orderStatus || '').trim()
-  const filterKey = `${skuCode}|${orderStatus}`
+  if (platformOrderId) {
+    const filterKey = `order|${platformOrderId}`
+    if (filterKey === appliedRouteFilterKey.value
+      && queryParams.value.platformOrderId === platformOrderId
+      && !queryParams.value.sellerSku) return false
+    Object.assign(queryParams.value, {
+      pageNum: 1,
+      platform: '',
+      shopAuthId: undefined,
+      platformOrderId,
+      shipmentOrderNo: undefined,
+      orderStatus: undefined,
+      sellerSku: undefined,
+      skuMatched: '',
+      shipmentStatus: '',
+      orderCreateTimeRange: []
+    })
+    appliedRouteFilterKey.value = filterKey
+    pendingSkuMissHint.value = false
+    return true
+  }
+  const filterKey = `sku|${skuCode}|${orderStatus}`
   if (!skuCode || (filterKey === appliedRouteFilterKey.value && queryParams.value.sellerSku === skuCode && (!orderStatus || queryParams.value.orderStatus === orderStatus))) return false
+  queryParams.value.platformOrderId = undefined
   queryParams.value.sellerSku = skuCode
   if (orderStatus) queryParams.value.orderStatus = orderStatus
   queryParams.value.pageNum = 1
@@ -1826,7 +1849,7 @@ function loadStatusMap() {
 onMounted(() => {
   loadShops()
   loadStatusMap()
-  applyRouteSkuFilter()
+  applyRouteFilter()
   getList()
   if (canManageAutoCreateConfig.value) {
     fetchAutoCreateConfig()
@@ -1834,7 +1857,7 @@ onMounted(() => {
 })
 
 onActivated(() => {
-  if (applyRouteSkuFilter()) getList()
+  if (applyRouteFilter()) getList()
 })
 </script>
 
