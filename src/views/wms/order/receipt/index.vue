@@ -70,9 +70,16 @@
 
     <el-card class="mt20">
 
-      <el-row :gutter="10" class="mb8" type="flex" justify="space-between">
+      <el-row :gutter="10" class="mb8 receipt-toolbar" type="flex" justify="space-between" align="middle">
         <el-col :span="6"><span style="font-size: large">{{ tr('入库单') }}</span></el-col>
-        <el-col :span="1.5">
+        <el-col :span="18" class="receipt-toolbar-actions">
+          <el-button
+            v-if="isUnreceivedStatusFilter"
+            :type="batchMode ? 'warning' : 'default'"
+            icon="Operation"
+            @click="toggleBatchMode"
+            v-hasPermi="['wms:receipt:all']"
+          >{{ batchMode ? tr('取消批量操作') : tr('批量操作') }}</el-button>
           <el-button
             type="primary"
             plain
@@ -83,13 +90,64 @@
         </el-col>
       </el-row>
 
-      <el-table v-loading="loading" :data="receiptOrderList" border class="mt20"
+      <div v-if="batchMode && isUnreceivedStatusFilter" class="batch-action-bar">
+        <div class="batch-action-left">
+          <el-icon class="batch-action-icon"><Select /></el-icon>
+          <span class="batch-action-info">
+            {{
+              isAllFilteredSelected
+                ? tr('已选择全部 {count} 个入库单').replace('{count}', selectedOrders.length)
+                : tr('已选择 {count} 个入库单').replace('{count}', selectedOrders.length)
+            }}
+            <template v-if="getActiveSkuFilter()">
+              {{ tr('（SKU筛选：') }}{{ getActiveSkuFilter() }}）
+            </template>
+          </span>
+          <el-button
+            v-if="!isAllFilteredSelected && total > 0"
+            type="primary"
+            icon="CircleCheck"
+            class="batch-select-action-btn"
+            :loading="selectAllLoading"
+            @click="handleSelectAllFiltered"
+          >
+            {{ tr('全部勾选') }}
+          </el-button>
+          <el-button
+            v-if="selectedOrders.length > 0"
+            type="warning"
+            plain
+            icon="Close"
+            class="batch-select-action-btn"
+            :disabled="selectAllLoading"
+            @click="clearReceiptSelection"
+          >
+            {{ tr('取消全选') }}
+          </el-button>
+        </div>
+        <div class="batch-action-right">
+          <el-button
+            type="primary"
+            icon="Printer"
+            :loading="exportPdfLoading"
+            :disabled="selectedOrders.length === 0"
+            @click="handleExportUnreceivedPdf"
+            v-hasPermi="['wms:receipt:all']"
+          >
+            {{ tr('批量导出为PDF') }}
+          </el-button>
+        </div>
+      </div>
+
+      <el-table ref="tableRef" v-loading="loading" :data="receiptOrderList" border class="mt20"
                 @expand-change="handleExpandExchange"
+                @selection-change="handleReceiptSelectionChange"
                 :row-key="getRowKey"
                 :expand-row-keys="expandedRowKeys"
                 :empty-text="tr('暂无入库单')"
                 cell-class-name="vertical-top-cell"
       >
+        <el-table-column v-if="batchMode && isUnreceivedStatusFilter" type="selection" width="50" align="center" fixed="left" reserve-selection />
         <el-table-column type="expand">
           <template #default="props">
             <div style="padding: 0 50px 20px 50px">
@@ -240,6 +298,8 @@ import { createProgressLoading } from '@/utils/progressLoading'
 import { blobValidate } from '@/utils/ruoyi'
 import { downloadXlsx, getExportLanguageHeaders, prepareLanguageXlsx } from '@/utils/xlsxTranslate'
 import { useFixedDrag } from '@/utils/useFixedDrag'
+import { escapeHtml, formatMoney, openCatalogPdfExport } from '@/utils/catalogPdfExport'
+import { getItemImages } from '@/api/wms/item'
 const route = useRoute();
 
 const { proxy } = getCurrentInstance();
@@ -260,7 +320,16 @@ const matchedSkuRowCount = ref(0)
 const matchedSkuRowIndex = ref(0)
 const activeSkuCode = ref('')
 const skuFindLoading = ref(false)
+const exportPdfLoading = ref(false)
+const selectAllLoading = ref(false)
+const batchMode = ref(false)
+const tableRef = ref()
+const selectedOrders = ref([])
+const selectedOrderMap = ref(new Map())
+let suppressReceiptSelectionChange = false
 const { dragStyle: skuFindDragStyle, startDrag: startSkuFindDrag } = useFixedDrag()
+const canViewCostPrice = computed(() => proxy?.$auth?.hasPermi('wms:itemCostPrice:view'))
+const canViewSellingPrice = computed(() => proxy?.$auth?.hasPermi('wms:itemSellingPrice:view'))
 const data = reactive({
   queryParams: {
     pageNum: 1,
@@ -318,6 +387,15 @@ const skuFindCountText = computed(() => {
   return matchedSkuRowCount.value ? `${matchedSkuRowIndex.value + 1}/${matchedSkuRowCount.value}` : (isEn.value ? 'No match' : '无匹配')
 })
 const wmsStore = useWmsStore()
+const isUnreceivedStatusFilter = computed(() => Number(queryParams.value.orderStatus) === 0)
+const isAllFilteredSelected = computed(() => total.value > 0 && selectedOrders.value.length >= total.value)
+
+watch(isUnreceivedStatusFilter, (val) => {
+  if (!val) {
+    batchMode.value = false
+    clearReceiptSelection()
+  }
+})
 
 function getReceiptOrderStateLabel(row) {
   if (isEn.value) {
@@ -356,7 +434,7 @@ function getList() {
   if (query.optType === -1) {
     query.optType = null
   }
-  listReceiptOrder(query).then(response => {
+  listReceiptOrder(query).then(async response => {
     receiptOrderList.value = response.rows;
     total.value = response.total;
     detailLoading.value = receiptOrderList.value.map(() => false)
@@ -368,17 +446,26 @@ function getList() {
       skuFindLoading.value = false
     }
     loading.value = false;
+    await restoreReceiptSelection()
   });
+}
+
+function clearReceiptSelectionWhenNotBatching() {
+  if (!batchMode.value) {
+    clearReceiptSelection()
+  }
 }
 
 /** 搜索按钮操作 */
 function handleQuery() {
+  clearReceiptSelectionWhenNotBatching()
   queryParams.value.pageNum = 1;
   getList();
 }
 
 /** 重置按钮操作 */
 function resetQuery() {
+  clearReceiptSelectionWhenNotBatching()
   proxy.resetForm("queryRef");
   handleQuery();
 }
@@ -669,6 +756,314 @@ function initLookupOptions() {
   }
 }
 
+function getReceiptSelectionKey(row) {
+  return row?.id
+}
+
+function getActiveSkuFilter() {
+  return String(queryParams.value.skuCode || '').trim()
+}
+
+function filterReceiptDetailsBySku(details) {
+  const skuCode = getActiveSkuFilter()
+  if (!skuCode) return details
+  return details.filter(detail => getDetailSkuCode(detail) === skuCode)
+}
+
+function syncSelectedOrders() {
+  selectedOrders.value = Array.from(selectedOrderMap.value.values())
+}
+
+async function restoreReceiptSelection() {
+  await nextTick()
+  tableRef.value?.clearSelection()
+  if (batchMode.value) {
+    receiptOrderList.value.forEach(row => {
+      const key = getReceiptSelectionKey(row)
+      if (key && selectedOrderMap.value.has(key)) {
+        tableRef.value?.toggleRowSelection(row, true)
+      }
+    })
+  }
+  await nextTick()
+  suppressReceiptSelectionChange = false
+}
+
+function clearReceiptSelection() {
+  selectedOrderMap.value.clear()
+  selectedOrders.value = []
+  tableRef.value?.clearSelection()
+}
+
+function handleReceiptSelectionChange(selection) {
+  if (suppressReceiptSelectionChange) return
+  const selectedKeySet = new Set(selection.map(getReceiptSelectionKey))
+  receiptOrderList.value.forEach(row => {
+    const key = getReceiptSelectionKey(row)
+    if (!key) return
+    if (selectedKeySet.has(key)) {
+      selectedOrderMap.value.set(key, row)
+    } else {
+      selectedOrderMap.value.delete(key)
+    }
+  })
+  syncSelectedOrders()
+}
+
+async function handleSelectAllFiltered() {
+  if (total.value === 0 || isAllFilteredSelected.value) return
+  try {
+    selectAllLoading.value = true
+    suppressReceiptSelectionChange = true
+    const allOrders = await fetchAllUnreceivedOrders()
+    selectedOrderMap.value.clear()
+    allOrders.forEach(row => {
+      const key = getReceiptSelectionKey(row)
+      if (key) selectedOrderMap.value.set(key, row)
+    })
+    syncSelectedOrders()
+    await restoreReceiptSelection()
+    if (selectedOrders.value.length === 0) {
+      proxy.$modal.msgWarning(tr('没有可选择的入库单'))
+    }
+  } catch (e) {
+    proxy.$modal.msgError(e?.message || tr('全选失败'))
+  } finally {
+    selectAllLoading.value = false
+  }
+}
+
+function toggleBatchMode() {
+  batchMode.value = !batchMode.value
+  if (!batchMode.value) {
+    clearReceiptSelection()
+  } else {
+    suppressReceiptSelectionChange = true
+    restoreReceiptSelection()
+  }
+}
+
+function buildReceiptExportQuery() {
+  const query = { ...queryParams.value }
+  query.orderStatus = 0
+  query.orderNo = query.orderNo?.trim() || undefined
+  query.skuCode = query.skuCode?.trim() || undefined
+  if (query.optType === -1) {
+    query.optType = null
+  }
+  return query
+}
+
+async function fetchAllUnreceivedOrders() {
+  const pageSize = 100
+  let pageNum = 1
+  let allOrders = []
+  let totalCount = 0
+  do {
+    const response = await listReceiptOrder({ ...buildReceiptExportQuery(), pageNum, pageSize })
+    const rows = response.rows || []
+    allOrders = allOrders.concat(rows)
+    totalCount = response.total || 0
+    pageNum += 1
+  } while (allOrders.length < totalCount)
+  return allOrders
+}
+
+function getImageUrlFromList(images) {
+  const img = images?.[0]
+  return img?.thumbUrl || img?.url || ''
+}
+
+function getDetailImage(detail) {
+  return getImageUrlFromList(detail?.item?.images)
+}
+
+async function fetchItemImageMap(itemIds) {
+  const imageMap = new Map()
+  const ids = [...new Set(itemIds.filter(Boolean))]
+  const batchSize = 10
+  for (let i = 0; i < ids.length; i += batchSize) {
+    const batch = ids.slice(i, i + batchSize)
+    await Promise.all(batch.map(async itemId => {
+      try {
+        const res = await getItemImages(itemId)
+        const url = getImageUrlFromList(res.data)
+        if (url) {
+          imageMap.set(itemId, url)
+        }
+      } catch {
+        // ignore per-item image fetch failures
+      }
+    }))
+  }
+  return imageMap
+}
+
+async function enrichReceiptPdfRowImages(rows) {
+  const imageMap = await fetchItemImageMap(rows.map(row => row.itemId))
+  rows.forEach(row => {
+    if (!row.itemImage && row.itemId) {
+      row.itemImage = imageMap.get(row.itemId) || ''
+    }
+  })
+  return rows
+}
+
+function mapReceiptDetailToPdfRow(detail, order) {
+  const warehouseName = detail.warehouseName
+    || wmsStore.warehouseMap.get(detail.warehouseId)?.warehouseName
+    || wmsStore.warehouseMap.get(order.warehouseId)?.warehouseName
+  return {
+    itemId: detail?.item?.id || detail?.itemSku?.itemId,
+    itemImage: getDetailImage(detail),
+    itemName: detail?.item?.itemName,
+    skuCode: detail?.itemSku?.skuCode,
+    warehouseName,
+    quantity: detail.quantity,
+    orderNo: order.orderNo,
+    bizOrderNo: order.bizOrderNo,
+    optTypeLabel: tr(proxy.selectDictLabel(wms_receipt_type.value, order.optType)),
+    merchantName: wmsStore.merchantMap.get(order.merchantId)?.merchantName,
+    createTime: order.createTime,
+    amount: detail.amount,
+    costPrice: detail?.itemSku?.costPrice,
+    sellingPrice: detail?.itemSku?.sellingPrice,
+    itemCondition: detail?.item?.itemCondition,
+    defect: detail?.item?.defect,
+    remark: detail.remark || order.remark
+  }
+}
+
+async function fetchUnreceivedPdfRows(orders) {
+  const rows = []
+  const batchSize = 10
+  for (let i = 0; i < orders.length; i += batchSize) {
+    const batch = orders.slice(i, i + batchSize)
+    const batchRows = await Promise.all(batch.map(async order => {
+      const res = await listByReceiptOrderId(order.id)
+      const details = (res.data || []).map(detail => ({
+        ...detail,
+        warehouseName: wmsStore.warehouseMap.get(detail.warehouseId)?.warehouseName,
+      }))
+      return filterReceiptDetailsBySku(details).map(detail => mapReceiptDetailToPdfRow(detail, order))
+    }))
+    batchRows.forEach(items => rows.push(...items))
+  }
+  return rows
+}
+
+function formatReceiptPdfTime(value) {
+  if (value === null || value === undefined) return '--'
+  return proxy.parseTime(value) || '--'
+}
+
+function formatReceiptPdfProfit(row) {
+  const cost = Number(row.costPrice)
+  const selling = Number(row.sellingPrice)
+  if (!Number.isFinite(cost) || !Number.isFinite(selling)) return '--'
+  return formatMoney(selling - cost)
+}
+
+function buildReceiptPdfColumns() {
+  const canViewCost = canViewCostPrice.value
+  const canViewSelling = canViewSellingPrice.value
+  const columns = [
+    {
+      key: 'image',
+      label: tr('商品图片'),
+      className: 'image-cell',
+      render: row => {
+        const imgUrl = row.itemImage || ''
+        return imgUrl
+          ? `<img src="${escapeHtml(imgUrl)}" alt="" />`
+          : escapeHtml(tr('暂无图片'))
+      }
+    },
+    { key: 'itemName', label: tr('商品名称'), render: row => escapeHtml(row.itemName || '--') },
+    { key: 'skuCode', label: tr('SKU编号'), render: row => escapeHtml(row.skuCode || '--') },
+    { key: 'warehouse', label: tr('仓库'), render: row => escapeHtml(row.warehouseName || '--') },
+    { key: 'quantity', label: tr('数量'), className: 'number-cell', render: row => row.quantity != null ? escapeHtml(row.quantity) : '--' },
+    { key: 'orderNo', label: tr('入库单号'), render: row => escapeHtml(row.orderNo || '--') },
+    { key: 'bizOrderNo', label: tr('业务单号'), render: row => escapeHtml(row.bizOrderNo || '--') },
+    { key: 'optType', label: tr('入库类型'), render: row => escapeHtml(row.optTypeLabel || '--') },
+    { key: 'merchant', label: tr('供应商'), render: row => escapeHtml(row.merchantName || '--') },
+    { key: 'createTime', label: tr('创建时间'), render: row => escapeHtml(formatReceiptPdfTime(row.createTime)) },
+    { key: 'amount', label: tr('金额($USD)'), className: 'number-cell', render: row => escapeHtml(formatMoney(row.amount)) }
+  ]
+  if (canViewCost) {
+    columns.push({
+      key: 'costPrice',
+      label: tr('成本价'),
+      className: 'number-cell',
+      render: row => {
+        const rawCost = Number(row.costPrice)
+        const rawValue = row.costPrice !== null && row.costPrice !== undefined && Number.isFinite(rawCost)
+          ? String(rawCost)
+          : ''
+        return `<span data-cost-value="${escapeHtml(rawValue)}">${escapeHtml(formatMoney(row.costPrice))}</span>`
+      }
+    })
+  }
+  if (canViewSelling) {
+    columns.push({
+      key: 'sellingPrice',
+      label: tr('销售价'),
+      className: 'number-cell',
+      render: row => escapeHtml(formatMoney(row.sellingPrice))
+    })
+  }
+  if (canViewCost && canViewSelling) {
+    columns.push({
+      key: 'profit',
+      label: tr('利润'),
+      className: 'number-cell',
+      render: row => escapeHtml(formatReceiptPdfProfit(row))
+    })
+  }
+  columns.push(
+    { key: 'condition', label: tr('成色'), render: row => escapeHtml(row.itemCondition || '--') },
+    { key: 'defect', label: tr('瑕疵'), render: row => escapeHtml(row.defect || '--') },
+    { key: 'remark', label: tr('备注'), render: row => escapeHtml(row.remark || '--') }
+  )
+  return columns
+}
+
+async function handleExportUnreceivedPdf() {
+  if (!isUnreceivedStatusFilter.value || !batchMode.value) return
+  if (selectedOrders.value.length === 0) {
+    proxy.$modal.msgWarning(tr('请至少选择一条入库单'))
+    return
+  }
+  const progressLoading = createProgressLoading(tr('正在加载未入库商品数据'))
+  try {
+    exportPdfLoading.value = true
+    const rows = await enrichReceiptPdfRowImages(await fetchUnreceivedPdfRows(selectedOrders.value))
+    if (!rows.length) {
+      progressLoading.close()
+      proxy.$modal.msgWarning(tr('暂无未入库商品可导出'))
+      return
+    }
+    await progressLoading.finish()
+    const opened = openCatalogPdfExport({
+      title: tr('未入库商品报表'),
+      rows,
+      columns: buildReceiptPdfColumns(),
+      canViewCost: canViewCostPrice.value,
+      isEn: isEn.value
+    })
+    if (!opened) {
+      proxy.$modal.msgError(tr('批量导出失败'))
+      return
+    }
+    proxy.$modal.msgSuccess(tr('批量导出成功'))
+  } catch (e) {
+    progressLoading.close()
+    proxy.$modal.msgError(e?.message || tr('批量导出失败'))
+  } finally {
+    exportPdfLoading.value = false
+  }
+}
+
 onMounted(() => {
   initLookupOptions()
   applyRouteSkuFilter()
@@ -747,6 +1142,57 @@ onActivated(() => {
 .receipt-order-page .flex-space-between {
   gap: 8px;
   flex-wrap: nowrap;
+}
+
+.receipt-order-page .receipt-toolbar-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.receipt-order-page .batch-action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 10px 16px;
+  margin-bottom: 12px;
+  background: var(--el-color-primary-light-9, #ecf5ff);
+  border: 1px solid var(--el-color-primary-light-5, #c6e2ff);
+  border-radius: 6px;
+}
+
+.receipt-order-page .batch-action-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.receipt-order-page .batch-action-icon {
+  font-size: 18px;
+  color: var(--el-color-primary, #409eff);
+}
+
+.receipt-order-page .batch-action-info {
+  color: var(--el-text-color-primary, #303133);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.receipt-order-page .batch-select-action-btn {
+  font-weight: 600;
+}
+
+.receipt-order-page .batch-action-right {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .receipt-order-page .el-table .vertical-top-cell {
