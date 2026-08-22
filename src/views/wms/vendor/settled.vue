@@ -1,17 +1,23 @@
 <template>
   <div class="app-container">
     <el-alert
-      :title="text('这里展示已确认的供应商结算单。已确认表示结算单已落库且 SKU 累计已结算金额已更新，不代表外部付款完成。', 'This page shows confirmed supplier settlements. Confirmed means records were saved and SKU settled totals updated; it does not mean external payment completed.')"
+      :title="text('这里展示待结算和已确认的供应商结算单。待结算仅为草稿，不更新 SKU 累计金额；已确认才完成系统内部结算，不代表外部付款完成。', 'This page shows pending and confirmed settlements. Pending records are drafts; only confirmation updates SKU settled totals.')"
       type="info"
       show-icon
       :closable="false"
       class="page-alert"
     />
 
-    <el-form v-if="identityResolved && !isSupplierUser" :inline="true" class="query-form">
-      <el-form-item :label="text('供应商', 'Supplier')">
+    <el-form v-if="identityResolved" :inline="true" class="query-form">
+      <el-form-item v-if="!isSupplierUser" :label="text('供应商', 'Supplier')">
         <el-select v-model="queryParams.supplierId" :placeholder="text('全部供应商', 'All suppliers')" clearable filterable>
           <el-option v-for="supplier in supplierOptions" :key="supplier.id" :label="supplier.supplierName" :value="supplier.id" />
+        </el-select>
+      </el-form-item>
+      <el-form-item :label="text('状态', 'Status')">
+        <el-select v-model="queryParams.recordStatus" :placeholder="text('全部状态', 'All statuses')" clearable style="width: 180px">
+          <el-option :label="text('待结算', 'Pending')" value="DRAFT" />
+          <el-option :label="text('已确认', 'Confirmed')" value="CONFIRMED" />
         </el-select>
       </el-form-item>
       <el-form-item>
@@ -35,7 +41,7 @@
       <el-table-column :label="text('结算单号', 'Settlement no.')" prop="settlementNo" min-width="190" />
       <el-table-column :label="text('供应商', 'Supplier')" prop="supplierName" min-width="160" show-overflow-tooltip />
       <el-table-column :label="text('状态', 'Status')" width="110" align="center">
-        <template #default><el-tag type="success">{{ text('已确认', 'Confirmed') }}</el-tag></template>
+        <template #default="{ row }"><el-tag :type="statusTagType(row.recordStatus)">{{ statusText(row.recordStatus) }}</el-tag></template>
       </el-table-column>
       <el-table-column label="SKU" prop="skuCount" width="80" align="right" />
       <el-table-column :label="text('商品数量', 'Product qty')" width="105" align="right">
@@ -50,13 +56,15 @@
       <el-table-column :label="text('本次结算金额', 'Settlement amount')" width="145" align="right">
         <template #default="{ row }">{{ money(row.pendingSettlementAmount) }}</template>
       </el-table-column>
-      <el-table-column :label="text('确认人', 'Confirmed by')" prop="recordedBy" width="120" />
-      <el-table-column :label="text('确认时间', 'Confirmed at')" width="175">
+      <el-table-column :label="text('操作人', 'Operator')" prop="recordedBy" width="120" />
+      <el-table-column :label="text('操作时间', 'Operated at')" width="175">
         <template #default="{ row }">{{ displayTime(row.recordedAt) }}</template>
       </el-table-column>
-      <el-table-column :label="text('操作', 'Actions')" width="100" fixed="right">
+      <el-table-column :label="text('操作', 'Actions')" width="210" fixed="right">
         <template #default="{ row }">
           <el-button link type="primary" @click="viewRecord(row.id)">{{ text('明细', 'Details') }}</el-button>
+          <el-button v-if="row.recordStatus === 'DRAFT' && canSettleDraft" link type="warning" @click="goSettle(row)">{{ text('去结算', 'Settle') }}</el-button>
+          <el-button v-if="row.recordStatus === 'DRAFT' && canSettleDraft" link type="danger" @click="deleteDraft(row)">{{ text('删除', 'Delete') }}</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -80,8 +88,8 @@
       <el-descriptions :column="4" border class="detail-summary">
         <el-descriptions-item :label="text('结算单号', 'Settlement no.')">{{ detail.settlementNo || '-' }}</el-descriptions-item>
         <el-descriptions-item :label="text('供应商', 'Supplier')">{{ detail.supplierName || '-' }}</el-descriptions-item>
-        <el-descriptions-item :label="text('状态', 'Status')"><el-tag type="success">{{ text('已确认', 'Confirmed') }}</el-tag></el-descriptions-item>
-        <el-descriptions-item :label="text('确认时间', 'Confirmed at')">{{ displayTime(detail.recordedAt) }}</el-descriptions-item>
+        <el-descriptions-item :label="text('状态', 'Status')"><el-tag :type="statusTagType(detail.recordStatus)">{{ statusText(detail.recordStatus) }}</el-tag></el-descriptions-item>
+        <el-descriptions-item :label="text('操作时间', 'Operated at')">{{ displayTime(detail.recordedAt) }}</el-descriptions-item>
         <el-descriptions-item label="SKU">{{ detail.skuCount || 0 }}</el-descriptions-item>
         <el-descriptions-item :label="text('商品数量', 'Product qty')">{{ quantity(detail.productQuantity) }}</el-descriptions-item>
         <el-descriptions-item :label="text('已售数量', 'Delivered')">{{ quantity(detail.soldQuantity) }}</el-descriptions-item>
@@ -129,10 +137,12 @@
 
 <script setup name="SupplierSettled">
 import { computed, getCurrentInstance, onMounted, reactive, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { getCurrentSupplier, listSupplierNoPage } from '@/api/wms/supplier'
-import { getSupplierSettlementRecord, listSupplierSettlementRecords } from '@/api/wms/supplierSettlement'
+import { deleteSupplierSettlementDraft, getSupplierSettlementRecord, listSupplierSettlementRecords } from '@/api/wms/supplierSettlement'
 
 const { proxy } = getCurrentInstance()
+const router = useRouter()
 const loading = ref(false)
 const exportLoading = ref(false)
 const detailLoading = ref(false)
@@ -147,11 +157,13 @@ const detail = ref({ lines: [] })
 const queryParams = reactive({
   pageNum: 1,
   pageSize: 20,
-  supplierId: undefined
+  supplierId: undefined,
+  recordStatus: undefined
 })
 
 const isEnglish = computed(() => String(proxy?.$i18n?.locale || 'zh-cn').toLowerCase().startsWith('en'))
 const text = (zh, en) => isEnglish.value ? en : zh
+const canSettleDraft = computed(() => !isSupplierUser.value && !!proxy?.$auth?.hasPermi('wms:vendor:settlement:preview'))
 
 async function loadRecords() {
   loading.value = true
@@ -171,6 +183,7 @@ function handleQuery() {
 
 function resetQuery() {
   queryParams.supplierId = undefined
+  queryParams.recordStatus = undefined
   handleQuery()
 }
 
@@ -179,12 +192,42 @@ async function handleExport() {
   try {
     await proxy.download(
       'wms/supplier-settlement/settlement/records/export',
-      { supplierId: isSupplierUser.value ? undefined : queryParams.supplierId },
+      {
+        supplierId: isSupplierUser.value ? undefined : queryParams.supplierId,
+        recordStatus: queryParams.recordStatus
+      },
       `${text('\u5df2\u7ed3\u7b97\u8bb0\u5f55', 'Settled_Records')}_${new Date().toISOString().slice(0, 10)}.xlsx`
     )
   } finally {
     exportLoading.value = false
   }
+}
+
+function goSettle(row) {
+  router.push({ path: '/supplier-management/purchased', query: { settlementDraftId: row.id } }).catch(() => {})
+}
+
+function deleteDraft(row) {
+  proxy.$modal.confirm(
+    text(`确认删除待结算单“${row.settlementNo}”吗？删除后无法恢复。`, `Delete pending settlement "${row.settlementNo}"? This cannot be undone.`)
+  ).then(async () => {
+    await deleteSupplierSettlementDraft(row.id)
+    proxy.$modal.msgSuccess(text('删除成功', 'Deleted successfully'))
+    if (detail.value?.id === row.id) {
+      detailVisible.value = false
+      detail.value = { lines: [] }
+    }
+    if (rows.value.length === 1 && queryParams.pageNum > 1) queryParams.pageNum -= 1
+    await loadRecords()
+  }).catch(() => {})
+}
+
+function statusText(status) {
+  return status === 'DRAFT' ? text('待结算', 'Pending') : text('已确认', 'Confirmed')
+}
+
+function statusTagType(status) {
+  return status === 'DRAFT' ? 'warning' : 'success'
 }
 
 async function viewRecord(id) {
