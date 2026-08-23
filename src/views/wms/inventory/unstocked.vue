@@ -235,6 +235,13 @@
               </span>
             </div>
             <el-button
+              :type="batchMode ? 'warning' : 'default'"
+              icon="Operation"
+              @click="toggleBatchMode"
+            >
+              {{ batchMode ? tr('取消批量操作') : tr('批量操作') }}
+            </el-button>
+            <el-button
               type="primary"
               :loading="exportLoading"
               :disabled="loading"
@@ -245,6 +252,52 @@
           </div>
         </el-col>
       </el-row>
+
+      <div v-if="batchMode" class="batch-action-bar">
+        <div class="batch-action-left">
+          <el-icon class="batch-action-icon"><Select /></el-icon>
+          <span class="batch-action-info">
+            {{
+              isAllFilteredSelected
+                ? tr('已选择全部 {count} 个未入库商品').replace('{count}', selectedRows.length)
+                : tr('已选择 {count} 个未入库商品').replace('{count}', selectedRows.length)
+            }}
+          </span>
+          <el-button
+            v-if="!isAllFilteredSelected && total > 0"
+            type="primary"
+            icon="CircleCheck"
+            class="batch-select-action-btn"
+            :loading="selectAllLoading"
+            @click="handleSelectAllFiltered"
+          >
+            {{ tr('全部勾选') }}
+          </el-button>
+          <el-button
+            v-if="selectedRows.length > 0"
+            type="warning"
+            plain
+            icon="Close"
+            class="batch-select-action-btn"
+            :disabled="selectAllLoading"
+            @click="clearUnstockedSelection"
+          >
+            {{ tr('取消全选') }}
+          </el-button>
+        </div>
+        <div class="batch-action-right">
+          <el-button
+            type="primary"
+            icon="Printer"
+            :loading="batchExportPdfLoading"
+            :disabled="selectedRows.length === 0"
+            @click="handleBatchExportPdf"
+          >
+            {{ tr('批量导出为PDF') }}
+          </el-button>
+        </div>
+      </div>
+
       <el-table
         ref="tableRef"
         v-loading="loading"
@@ -255,7 +308,9 @@
         cell-class-name="vertical-top-cell"
         :row-key="rowKey"
         @sort-change="handleSortChange"
+        @selection-change="handleUnstockedSelectionChange"
       >
+        <el-table-column v-if="batchMode" type="selection" width="50" align="center" fixed="left" reserve-selection />
         <el-table-column :label="tr('商品名称')" prop="itemName" min-width="160" align="center" show-overflow-tooltip>
           <template #default="{ row }">{{ cellText(row.itemName) }}</template>
         </el-table-column>
@@ -383,13 +438,16 @@
 <script setup name="UnstockedSkus">
 import { QuestionFilled } from '@element-plus/icons-vue'
 import { exportUnstockedSkus, getUnstockedSkusTotalAmount, getUnstockedSkusTotalCount, listUnstockedSkus } from '@/api/wms/inventory'
-import { computed, getCurrentInstance, onMounted, ref } from 'vue'
+import { computed, getCurrentInstance, nextTick, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useWmsStore } from '@/store/modules/wms'
 import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
 import { blobValidate } from '@/utils/ruoyi'
 import { downloadXlsx, getExportLanguageHeaders, getExportLanguagePayload, prepareLanguageXlsx } from '@/utils/xlsxTranslate'
+import { escapeHtml, formatMoney as catalogFormatMoney, openCatalogPdfExport } from '@/utils/catalogPdfExport'
+
+const SELECT_ALL_PAGE_SIZE = 100
 
 const ITEM_CONDITION_OPTIONS = ['S', 'A', 'B', 'C', 'D']
 const AUTH_AGENCY_OPTIONS = ['Entrupy', 'Real Authentication', 'Legitmark', 'CheckCheck', 'N/A']
@@ -410,10 +468,18 @@ const itemCategoryTreeSelectList = computed(() => wmsStore.itemCategoryTreeList)
 const list = ref([])
 const loading = ref(true)
 const exportLoading = ref(false)
+const batchExportPdfLoading = ref(false)
+const selectAllLoading = ref(false)
+const batchMode = ref(false)
+const selectedRows = ref([])
+const selectedRowMap = ref(new Map())
+let suppressUnstockedSelectionChange = false
 const total = ref(0)
 const totalAmount = ref(null)
 const totalCount = ref(0)
 const tableRef = ref(null)
+
+const isAllFilteredSelected = computed(() => total.value > 0 && selectedRows.value.length >= total.value)
 
 const queryParams = ref({
   pageNum: 1,
@@ -436,10 +502,213 @@ const queryParams = ref({
 })
 
 function rowKey(row) {
-  const code = row.skuCode != null ? String(row.skuCode) : ''
-  const t = row.createTime != null ? String(row.createTime) : ''
-  const n = row.itemName != null ? String(row.itemName) : ''
-  return `${code}\0${t}\0${n}`
+  return row?.skuCode ? String(row.skuCode) : `${row?.itemName || ''}\0${row?.createTime || ''}`
+}
+
+function getUnstockedSelectionKey(row) {
+  return row?.skuCode ? String(row.skuCode) : ''
+}
+
+function syncSelectedRows() {
+  selectedRows.value = Array.from(selectedRowMap.value.values())
+}
+
+async function restoreUnstockedSelection() {
+  await nextTick()
+  tableRef.value?.clearSelection()
+  if (batchMode.value) {
+    list.value.forEach(row => {
+      const key = getUnstockedSelectionKey(row)
+      if (key && selectedRowMap.value.has(key)) {
+        tableRef.value?.toggleRowSelection(row, true)
+      }
+    })
+  }
+  await nextTick()
+  suppressUnstockedSelectionChange = false
+}
+
+function clearUnstockedSelection() {
+  selectedRowMap.value.clear()
+  selectedRows.value = []
+  tableRef.value?.clearSelection()
+}
+
+function clearUnstockedSelectionWhenNotBatching() {
+  if (!batchMode.value) {
+    clearUnstockedSelection()
+  }
+}
+
+function handleUnstockedSelectionChange(selection) {
+  if (suppressUnstockedSelectionChange) return
+  const selectedKeySet = new Set(selection.map(getUnstockedSelectionKey))
+  list.value.forEach(row => {
+    const key = getUnstockedSelectionKey(row)
+    if (!key) return
+    if (selectedKeySet.has(key)) {
+      selectedRowMap.value.set(key, row)
+    } else {
+      selectedRowMap.value.delete(key)
+    }
+  })
+  syncSelectedRows()
+}
+
+async function fetchAllUnstockedRows() {
+  const baseQuery = buildRequestQuery()
+  delete baseQuery.pageNum
+  delete baseQuery.pageSize
+  const allRows = []
+  let pageNum = 1
+  let totalCount = 0
+  while (true) {
+    const response = await listUnstockedSkus({ ...baseQuery, pageNum, pageSize: SELECT_ALL_PAGE_SIZE })
+    const rows = response.rows || []
+    allRows.push(...rows)
+    totalCount = response.total ?? allRows.length
+    if (rows.length === 0 || allRows.length >= totalCount) break
+    pageNum += 1
+  }
+  return allRows
+}
+
+async function handleSelectAllFiltered() {
+  if (total.value === 0 || isAllFilteredSelected.value) return
+  try {
+    selectAllLoading.value = true
+    suppressUnstockedSelectionChange = true
+    const allRows = await fetchAllUnstockedRows()
+    selectedRowMap.value.clear()
+    allRows.forEach(row => {
+      const key = getUnstockedSelectionKey(row)
+      if (key) selectedRowMap.value.set(key, row)
+    })
+    syncSelectedRows()
+    await restoreUnstockedSelection()
+    if (selectedRows.value.length === 0) {
+      proxy.$modal.msgWarning(tr('没有可选择的未入库商品'))
+    }
+  } catch (e) {
+    proxy.$modal.msgError(e?.message || tr('全选失败'))
+  } finally {
+    selectAllLoading.value = false
+  }
+}
+
+function toggleBatchMode() {
+  batchMode.value = !batchMode.value
+  if (!batchMode.value) {
+    clearUnstockedSelection()
+  } else {
+    suppressUnstockedSelectionChange = true
+    restoreUnstockedSelection()
+  }
+}
+
+function formatPdfCared(value) {
+  if (value === true) return tr('已护理')
+  if (value === false) return tr('未护理')
+  return '--'
+}
+
+function formatPdfProfit(row) {
+  const cost = Number(row.costPrice)
+  const selling = Number(row.sellingPrice)
+  if (!Number.isFinite(cost) || !Number.isFinite(selling)) return '--'
+  return catalogFormatMoney(selling - cost)
+}
+
+function buildUnstockedPdfColumns() {
+  const canViewCost = canViewCostPrice.value
+  const canViewSelling = canViewSellingPrice.value
+  const columns = [
+    {
+      key: 'image',
+      label: tr('商品图片'),
+      className: 'image-cell',
+      render: row => {
+        const imgUrl = row.thumbUrl || ''
+        return imgUrl
+          ? `<img src="${escapeHtml(imgUrl)}" alt="" />`
+          : escapeHtml(tr('暂无图片'))
+      }
+    },
+    { key: 'itemName', label: tr('商品名称'), render: row => escapeHtml(row.itemName || '--') },
+    { key: 'skuCode', label: tr('SKU编号'), render: row => escapeHtml(row.skuCode || '--') },
+    { key: 'category', label: tr('分类'), render: row => escapeHtml(row.categoryName || '--') },
+    { key: 'brand', label: tr('品牌'), render: row => escapeHtml(row.brandName || '--') },
+    { key: 'condition', label: tr('成色'), render: row => escapeHtml(row.itemCondition || '--') },
+    { key: 'year', label: tr('年份'), className: 'number-cell', render: row => row.year != null ? escapeHtml(row.year) : '--' },
+    { key: 'material', label: tr('材质'), render: row => escapeHtml(row.material || '--') },
+    { key: 'defect', label: tr('缺陷'), render: row => escapeHtml(row.defect || '--') },
+    { key: 'accessories', label: tr('配件'), render: row => escapeHtml(row.accessories || '--') },
+    { key: 'cared', label: tr('护理'), render: row => escapeHtml(formatPdfCared(row.cared)) },
+    { key: 'authAgency', label: tr('鉴定机构'), render: row => escapeHtml(row.authAgency || '--') },
+    { key: 'consignInfo', label: tr('寄售信息'), render: row => escapeHtml(row.consignInfo || '--') },
+    { key: 'defaultQty', label: tr('默认数量'), className: 'number-cell', render: row => row.defaultQty != null ? escapeHtml(row.defaultQty) : '--' },
+    { key: 'remark', label: tr('备注'), render: row => escapeHtml(row.remark || '--') },
+    { key: 'createBy', label: tr('创建人'), render: row => escapeHtml(row.createBy || '--') },
+    { key: 'createTime', label: tr('创建时间'), render: row => escapeHtml(row.createTime ? formatTime(row.createTime) : '--') }
+  ]
+  if (canViewCost) {
+    columns.push({
+      key: 'costPrice',
+      label: tr('成本价'),
+      className: 'number-cell',
+      render: row => {
+        const rawCost = Number(row.costPrice)
+        const rawValue = row.costPrice !== null && row.costPrice !== undefined && Number.isFinite(rawCost)
+          ? String(rawCost)
+          : ''
+        return `<span data-cost-value="${escapeHtml(rawValue)}">${escapeHtml(catalogFormatMoney(row.costPrice))}</span>`
+      }
+    })
+  }
+  if (canViewSelling) {
+    columns.push({
+      key: 'sellingPrice',
+      label: tr('销售价'),
+      className: 'number-cell',
+      render: row => escapeHtml(catalogFormatMoney(row.sellingPrice))
+    })
+  }
+  if (canViewCost && canViewSelling) {
+    columns.push({
+      key: 'profit',
+      label: tr('利润'),
+      className: 'number-cell',
+      render: row => escapeHtml(formatPdfProfit(row))
+    })
+  }
+  return columns
+}
+
+function handleBatchExportPdf() {
+  if (!batchMode.value) return
+  if (selectedRows.value.length === 0) {
+    proxy.$modal.msgWarning(tr('请至少选择一条未入库商品'))
+    return
+  }
+  try {
+    batchExportPdfLoading.value = true
+    const opened = openCatalogPdfExport({
+      title: tr('未入库商品报表'),
+      rows: selectedRows.value,
+      columns: buildUnstockedPdfColumns(),
+      canViewCost: canViewCostPrice.value,
+      isEn: isEn.value
+    })
+    if (!opened) {
+      proxy.$modal.msgError(tr('批量导出失败'))
+      return
+    }
+    proxy.$modal.msgSuccess(tr('批量导出成功'))
+  } catch (e) {
+    proxy.$modal.msgError(e?.message || tr('批量导出失败'))
+  } finally {
+    batchExportPdfLoading.value = false
+  }
 }
 
 function cellText(v) {
@@ -575,10 +844,11 @@ const totalCountDisplay = computed(() => {
 function getList() {
   loading.value = true
   listUnstockedSkus(buildRequestQuery())
-    .then((response) => {
+    .then(async (response) => {
       list.value = response.rows || []
       total.value = response.total ?? 0
       loading.value = false
+      await restoreUnstockedSelection()
     })
     .catch(() => {
       loading.value = false
@@ -610,6 +880,7 @@ function getTotalCount() {
 }
 
 function handleQuery() {
+  clearUnstockedSelectionWhenNotBatching()
   queryParams.value.pageNum = 1
   getList()
   getTotalAmount()
@@ -617,6 +888,7 @@ function handleQuery() {
 }
 
 function resetQuery() {
+  clearUnstockedSelectionWhenNotBatching()
   queryParams.value.orderByColumn = undefined
   queryParams.value.isAsc = undefined
   proxy.resetForm('queryRef')
@@ -625,6 +897,7 @@ function resetQuery() {
 }
 
 function handleSortChange({ prop, order }) {
+  clearUnstockedSelectionWhenNotBatching()
   queryParams.value.orderByColumn = prop
   queryParams.value.isAsc = order || undefined
   queryParams.value.pageNum = 1
@@ -801,5 +1074,48 @@ onMounted(() => {
   justify-content: center;
   color: var(--el-text-color-secondary, #909399);
   font-size: 12px;
+}
+
+.batch-action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 10px 16px;
+  margin-bottom: 12px;
+  background: var(--el-color-primary-light-9, #ecf5ff);
+  border: 1px solid var(--el-color-primary-light-5, #c6e2ff);
+  border-radius: 6px;
+}
+
+.batch-action-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.batch-action-icon {
+  font-size: 18px;
+  color: var(--el-color-primary, #409eff);
+}
+
+.batch-action-info {
+  color: var(--el-text-color-primary, #303133);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.batch-select-action-btn {
+  font-weight: 600;
+}
+
+.batch-action-right {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 </style>
