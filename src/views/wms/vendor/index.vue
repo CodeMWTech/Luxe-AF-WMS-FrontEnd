@@ -232,7 +232,7 @@
       destroy-on-close
     >
       <el-alert
-        :title="text('可取消勾选、手工添加强制结算 SKU，并为每条填写备注。确认后仅保存已勾选明细并更新对应 SKU 累计已结算金额；不会发起外部付款。', 'You can uncheck lines, add forced-settlement SKUs, and enter a remark for each line. Confirmation saves only selected lines and updates those SKU totals; no external payment is made.')"
+        :title="text('可取消勾选、同步或手工添加 SKU，并编辑本次待结算金额和备注。发起结算只保存为待结算草稿；确认结算后才更新对应 SKU 累计已结算金额。', 'You can select or add SKUs and edit the current amount and remark. Initiating saves a draft; confirming updates SKU settled totals.')"
         type="warning"
         show-icon
         :closable="false"
@@ -264,8 +264,17 @@
         </span>
       </div>
 
-      <el-table ref="previewTableRef" :data="preview.lines || []" row-key="skuId" border stripe max-height="520" @selection-change="handlePreviewSelectionChange">
-        <el-table-column type="selection" width="52" reserve-selection fixed="left" />
+      <el-table
+        ref="previewTableRef"
+        :data="previewPageLines"
+        row-key="skuId"
+        border
+        stripe
+        max-height="520"
+        @select="handlePreviewSelect"
+        @select-all="handlePreviewSelectAll"
+      >
+        <el-table-column type="selection" width="52" fixed="left" />
         <el-table-column :label="text('结算类型', 'Type')" width="105" fixed="left">
           <template #default="{ row }">
             <el-tag :type="row.settlementType === 'FORCED' ? 'warning' : 'success'" effect="plain">
@@ -288,8 +297,19 @@
         <el-table-column :label="text('已售总数量', 'Total sold qty')" align="right" width="125">
           <template #default="{ row }">{{ quantity(row.soldQuantity) }}</template>
         </el-table-column>
-        <el-table-column :label="text('平台已售中订单编号', 'Platform sold order numbers')" prop="platformSoldOrderNumbers" min-width="230" show-overflow-tooltip>
-          <template #default="{ row }">{{ row.platformSoldOrderNumbers || '-' }}</template>
+        <el-table-column v-if="!isSupplierUser" :label="text('平台已售中订单编号', 'Platform sold order numbers')" prop="platformSoldOrderNumbers" min-width="230">
+          <template #default="{ row }">
+            <template v-if="orderNumberLinks(row).length">
+              <el-link
+                v-for="orderNo in orderNumberLinks(row)"
+                :key="orderNo"
+                type="primary"
+                class="order-number-link"
+                @click="openPlatformOrder(orderNo)"
+              >{{ orderNo }}</el-link>
+            </template>
+            <span v-else>-</span>
+          </template>
         </el-table-column>
         <el-table-column :label="text('退货数量', 'Returned')" align="right" width="100">
           <template #default="{ row }">{{ quantity(row.returnedQuantity) }}</template>
@@ -297,7 +317,7 @@
         <el-table-column :label="text('净结算数量', 'Net qty')" align="right" width="115">
           <template #default="{ row }">{{ quantity(row.settleableQuantity) }}</template>
         </el-table-column>
-        <el-table-column :label="text('单价', 'Unit price')" align="right" width="130" class-name="amount-column">
+        <el-table-column :label="text('单价（商品管理 Cost）', 'Unit price (Item Cost)')" align="right" width="185" class-name="amount-column">
           <template #default="{ row }">{{ money(row.unitPrice) }}</template>
         </el-table-column>
         <el-table-column :label="text('总结算价格', 'Total settlement')" align="right" width="165" class-name="amount-column">
@@ -309,17 +329,15 @@
         <el-table-column :label="text('本次待结算', 'Pending')" align="right" width="165" class-name="amount-column">
           <template #default="{ row }">
             <el-input-number
-              v-if="row.settlementType === 'FORCED'"
               v-model="row.pendingSettlementAmount"
-              :min="0.01"
-              :max="forceRemainingAmount(row)"
+              :min="settlementAmountMin(row)"
+              :max="settlementAmountMax(row)"
               :precision="2"
               :controls="false"
               size="small"
               class="force-amount-input"
               :placeholder="text('输入金额', 'Amount')"
             />
-            <span v-else :class="Number(row.pendingSettlementAmount) < 0 ? 'danger-text' : ''">{{ money(row.pendingSettlementAmount) }}</span>
           </template>
         </el-table-column>
         <el-table-column :label="text('备注', 'Remark')" min-width="220">
@@ -341,13 +359,30 @@
           </template>
         </el-table-column>
       </el-table>
+      <div v-show="(preview.lines || []).length > 0" class="preview-pagination">
+        <pagination
+          :total="(preview.lines || []).length"
+          v-model:page="previewPagination.pageNum"
+          v-model:limit="previewPagination.pageSize"
+          :page-sizes="[20, 50, 100, 200]"
+          :auto-scroll="false"
+          @pagination="handlePreviewPagination"
+        />
+      </div>
       <template #footer>
         <el-button @click="previewVisible = false">{{ text('关闭', 'Close') }}</el-button>
+        <el-button
+          type="warning"
+          plain
+          :loading="confirmLoading"
+          :disabled="!selectedPreviewLines.length"
+          @click="confirmSettlement('DRAFT')"
+        >{{ text(`发起结算（${selectedPreviewLines.length}项）`, `Initiate (${selectedPreviewLines.length})`) }}</el-button>
         <el-button
           type="primary"
           :loading="confirmLoading"
           :disabled="!selectedPreviewLines.length"
-          @click="confirmSettlement"
+          @click="confirmSettlement('CONFIRMED')"
         >{{ text(`确认结算（${selectedPreviewLines.length}项）`, `Confirm (${selectedPreviewLines.length})`) }}</el-button>
       </template>
     </el-dialog>
@@ -361,7 +396,7 @@
       destroy-on-close
     >
       <el-alert
-        :title="text('仅可选择当前供货商的已采购 SKU；已在结算明细中的 SKU 不可重复添加。', 'Only purchased SKUs from the current supplier can be selected. Existing detail SKUs cannot be added twice.')"
+        :title="text('可勾选当前供货商的已采购 SKU；翻页或查询时会保留全部已选项。已在结算明细中的 SKU 会同步原行勾选状态，不会重复新增结算明细。', 'Select purchased SKUs for this supplier. Selections are retained across pages and searches. Existing preview SKUs sync their selection instead of creating duplicates.')"
         type="warning"
         show-icon
         :closable="false"
@@ -380,13 +415,15 @@
         </el-form-item>
       </el-form>
       <el-table
+        ref="forceSkuTableRef"
         v-loading="forceSkuLoading"
         :data="forceSkuRows"
         row-key="skuId"
         border
         stripe
         max-height="460"
-        @selection-change="handleForceSkuSelectionChange"
+        @select="handleForceSkuSelect"
+        @select-all="handleForceSkuSelectAll"
       >
         <el-table-column type="selection" width="52" :selectable="canSelectForceSku" />
         <el-table-column label="SKU" prop="skuCode" min-width="140" />
@@ -418,7 +455,7 @@
       <template #footer>
         <el-button @click="forceSkuVisible = false">{{ text('取消', 'Cancel') }}</el-button>
         <el-button type="warning" :disabled="!forceSkuSelected.length" @click="addForcedSkuLines">
-          {{ text(`添加（${forceSkuSelected.length}项）`, `Add (${forceSkuSelected.length})`) }}
+          {{ text(`同步/添加（${forceSkuSelected.length}项）`, `Sync/Add (${forceSkuSelected.length})`) }}
         </el-button>
       </template>
     </el-dialog>
@@ -428,10 +465,11 @@
 
 <script setup name="SupplierSettlement">
 import { computed, getCurrentInstance, nextTick, onMounted, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { getCurrentSupplier, listSupplierNoPage } from '@/api/wms/supplier'
 import {
   confirmSupplierSettlement,
+  getSupplierSettlementRecord,
   getSupplierSkuSummary,
   listSupplierSkuOverview,
   previewSupplierSettlement
@@ -439,6 +477,7 @@ import {
 
 const { proxy } = getCurrentInstance()
 const router = useRouter()
+const route = useRoute()
 const loading = ref(false)
 const exportLoading = ref(false)
 const previewLoading = ref(false)
@@ -455,12 +494,22 @@ const currentSupplierId = ref(null)
 const createdTimeRange = ref([])
 const preview = ref({ lines: [] })
 const previewTableRef = ref()
-const selectedPreviewLines = ref([])
+const previewSelectionCache = ref(new Map())
+const previewPagination = reactive({ pageNum: 1, pageSize: 50 })
+const previewPageLines = computed(() => {
+  const start = (previewPagination.pageNum - 1) * previewPagination.pageSize
+  return (preview.value.lines || []).slice(start, start + previewPagination.pageSize)
+})
+const selectedPreviewLines = computed(() => (preview.value.lines || [])
+  .filter(line => previewSelectionCache.value.has(String(line.skuId))))
 const forceSkuVisible = ref(false)
 const forceSkuLoading = ref(false)
 const forceSkuRows = ref([])
 const forceSkuTotal = ref(0)
-const forceSkuSelected = ref([])
+const forceSkuSelectionCache = ref(new Map())
+const forceSkuSelected = computed(() => Array.from(forceSkuSelectionCache.value.values()))
+const forceSkuTableRef = ref()
+let forceSkuRequestSequence = 0
 const forceSkuQuery = reactive({
   pageNum: 1,
   pageSize: 10,
@@ -537,25 +586,85 @@ const settlementPreview = computed(() => {
     'productQuantity', 'platformSoldQuantity', 'offPlatformSoldQuantity', 'soldQuantity', 'returnedQuantity', 'grossAmount',
     'returnDeductionAmount', 'totalSettlementAmount', 'settledAmount', 'pendingSettlementAmount'
   ]
-  aggregateFields.forEach(field => {
-    result[field] = lines.reduce((sum, line) => sum + Number(line?.[field] || 0), 0).toFixed(2)
-  })
+  const totals = Object.fromEntries(aggregateFields.map(field => [field, 0]))
+  for (const line of lines) {
+    for (const field of aggregateFields) totals[field] += Number(line?.[field] || 0)
+  }
+  aggregateFields.forEach(field => { result[field] = totals[field].toFixed(2) })
   return result
 })
 
-function handlePreviewSelectionChange(lines) {
-  selectedPreviewLines.value = lines || []
+function updatePreviewSelectionCache(candidates, lines) {
+  const selectedSkuIds = new Set((lines || []).map(line => String(line.skuId)))
+  const nextCache = new Map(previewSelectionCache.value)
+  for (const candidate of candidates) {
+    const skuId = String(candidate.skuId)
+    if (selectedSkuIds.has(skuId)) nextCache.set(skuId, candidate)
+    else nextCache.delete(skuId)
+  }
+  previewSelectionCache.value = nextCache
 }
 
-function selectAllPreviewLines() {
+function handlePreviewSelect(lines, row) {
+  updatePreviewSelectionCache([row], lines)
+}
+
+function handlePreviewSelectAll(lines) {
+  updatePreviewSelectionCache(previewPageLines.value, lines)
+}
+
+async function restorePreviewPageSelection() {
+  await nextTick()
   previewTableRef.value?.clearSelection()
-  for (const line of preview.value.lines || []) {
-    previewTableRef.value?.toggleRowSelection(line, true)
+  for (const line of previewPageLines.value) {
+    previewTableRef.value?.toggleRowSelection(
+      line,
+      previewSelectionCache.value.has(String(line.skuId))
+    )
   }
+}
+
+async function handlePreviewPagination() {
+  await restorePreviewPageSelection()
+}
+
+async function selectAllPreviewLines() {
+  previewSelectionCache.value = new Map(
+    (preview.value.lines || []).map(line => [String(line.skuId), line])
+  )
+  previewPagination.pageNum = 1
+  await restorePreviewPageSelection()
 }
 
 function forceRemainingAmount(row) {
   return Math.max(Number(row?.totalSettlementAmount || 0) - Number(row?.settledAmount || 0), 0)
+}
+
+function settlementAvailableAmount(row) {
+  const calculated = row?.settlementType === 'FORCED'
+    ? forceRemainingAmount(row)
+    : (Number(row?.soldQuantity || 0) - Number(row?.returnedQuantity || 0)) * Number(row?.unitPrice || 0)
+      - Number(row?.settledAmount || 0)
+  const value = Number(row?.availableSettlementAmount ?? calculated)
+  return Number.isFinite(value) ? value : 0
+}
+
+function settlementAmountMin(row) {
+  const available = settlementAvailableAmount(row)
+  return available < 0 ? available : 0.01
+}
+
+function settlementAmountMax(row) {
+  const available = settlementAvailableAmount(row)
+  return available < 0 ? -0.01 : available
+}
+
+function validSettlementAmount(row) {
+  const amount = Number(row?.pendingSettlementAmount)
+  const available = settlementAvailableAmount(row)
+  return Number.isFinite(amount) && amount !== 0 && available !== 0
+    && Math.sign(amount) === Math.sign(available)
+    && Math.abs(amount) <= Math.abs(available) + 0.000001
 }
 
 function forceCandidateRemainingAmount(row) {
@@ -564,23 +673,48 @@ function forceCandidateRemainingAmount(row) {
 
 function canSelectForceSku(row) {
   const alreadyAdded = (preview.value.lines || []).some(line => String(line.skuId) === String(row.skuId))
-  return !alreadyAdded && forceCandidateRemainingAmount(row) > 0
+  return alreadyAdded || forceCandidateRemainingAmount(row) > 0
 }
 
-function handleForceSkuSelectionChange(lines) {
-  forceSkuSelected.value = lines || []
+function updateForceSkuSelectionCache(candidates, lines) {
+  const selectedSkuIds = new Set((lines || []).map(row => String(row.skuId)))
+  const nextCache = new Map(forceSkuSelectionCache.value)
+  const nextPreviewCache = new Map(previewSelectionCache.value)
+  for (const candidate of candidates) {
+    const skuId = String(candidate.skuId)
+    if (selectedSkuIds.has(skuId)) nextCache.set(skuId, candidate)
+    else nextCache.delete(skuId)
+    const existingLine = (preview.value.lines || []).find(line => String(line.skuId) === String(candidate.skuId))
+    if (existingLine) {
+      if (selectedSkuIds.has(skuId)) nextPreviewCache.set(skuId, existingLine)
+      else nextPreviewCache.delete(skuId)
+    }
+  }
+  forceSkuSelectionCache.value = nextCache
+  previewSelectionCache.value = nextPreviewCache
+}
+
+function handleForceSkuSelect(lines, row) {
+  updateForceSkuSelectionCache([row], lines)
+}
+
+function handleForceSkuSelectAll(lines) {
+  updateForceSkuSelectionCache(forceSkuRows.value, lines)
 }
 
 async function openForceSkuDialog() {
   forceSkuQuery.pageNum = 1
   forceSkuQuery.skuCode = undefined
   forceSkuQuery.itemName = undefined
-  forceSkuSelected.value = []
+  forceSkuSelectionCache.value = new Map(
+    selectedPreviewLines.value.map(row => [String(row.skuId), row])
+  )
   forceSkuVisible.value = true
   await loadForceSkuCandidates()
 }
 
 async function loadForceSkuCandidates() {
+  const requestSequence = ++forceSkuRequestSequence
   forceSkuLoading.value = true
   try {
     const response = await listSupplierSkuOverview({
@@ -590,11 +724,19 @@ async function loadForceSkuCandidates() {
       pageNum: forceSkuQuery.pageNum,
       pageSize: forceSkuQuery.pageSize
     })
+    if (requestSequence !== forceSkuRequestSequence) return
     forceSkuRows.value = response.rows || []
     forceSkuTotal.value = Number(response.total || 0)
-    forceSkuSelected.value = []
+    await nextTick()
+    forceSkuTableRef.value?.clearSelection()
+    for (const row of forceSkuRows.value) {
+      forceSkuTableRef.value?.toggleRowSelection(
+        row,
+        forceSkuSelectionCache.value.has(String(row.skuId))
+      )
+    }
   } finally {
-    forceSkuLoading.value = false
+    if (requestSequence === forceSkuRequestSequence) forceSkuLoading.value = false
   }
 }
 
@@ -635,26 +777,55 @@ function toForcedSettlementLine(row) {
     totalSettlementAmount: row.totalSettlementAmount,
     settledAmount: row.settledAmount,
     pendingSettlementAmount: undefined,
+    availableSettlementAmount: forceRemainingAmount(row),
     settlementType: 'FORCED',
     remark: ''
   }
 }
 
 async function addForcedSkuLines() {
+  const existingBySku = new Map((preview.value.lines || []).map(line => [String(line.skuId), line]))
+  const selectedSkuIds = new Set(forceSkuSelected.value.map(row => String(row.skuId)))
   const addedLines = forceSkuSelected.value
-    .filter(canSelectForceSku)
+    .filter(row => !existingBySku.has(String(row.skuId)) && canSelectForceSku(row))
     .map(toForcedSettlementLine)
-  if (!addedLines.length) return
   preview.value.lines.push(...addedLines)
+  const nextPreviewCache = new Map(previewSelectionCache.value)
+  for (const line of addedLines) nextPreviewCache.set(String(line.skuId), line)
+  for (const [skuId, existingLine] of existingBySku) {
+    if (selectedSkuIds.has(skuId)) nextPreviewCache.set(skuId, existingLine)
+    else nextPreviewCache.delete(skuId)
+  }
+  previewSelectionCache.value = nextPreviewCache
   forceSkuVisible.value = false
-  await nextTick()
-  addedLines.forEach(line => previewTableRef.value?.toggleRowSelection(line, true))
+  await restorePreviewPageSelection()
+}
+
+function orderNumberLinks(row) {
+  return String(row?.platformSoldOrderNumbers || '')
+    .split(',')
+    .map(value => value.trim())
+    .filter(Boolean)
+}
+
+function openPlatformOrder(orderNo) {
+  const platformOrderId = String(orderNo || '').trim()
+  if (isSupplierUser.value || !platformOrderId || !proxy?.$auth?.hasPermi('wms:platform:list')) return
+  const { href } = router.resolve({
+    name: 'PlatformOrders',
+    query: { platformOrderId }
+  })
+  window.open(href, '_blank', 'noopener,noreferrer')
 }
 
 function removeForcedLine(row) {
-  previewTableRef.value?.toggleRowSelection(row, false)
+  const nextCache = new Map(previewSelectionCache.value)
+  nextCache.delete(String(row.skuId))
+  previewSelectionCache.value = nextCache
   preview.value.lines = (preview.value.lines || []).filter(line => String(line.skuId) !== String(row.skuId))
-  selectedPreviewLines.value = selectedPreviewLines.value.filter(line => String(line.skuId) !== String(row.skuId))
+  const maxPage = Math.max(1, Math.ceil(preview.value.lines.length / previewPagination.pageSize))
+  previewPagination.pageNum = Math.min(previewPagination.pageNum, maxPage)
+  restorePreviewPageSelection()
 }
 const skuPageTargets = {
   product: {
@@ -788,63 +959,99 @@ async function loadSettlementPreview() {
       ...result,
       lines: (result.lines || []).map(line => ({
         ...line,
+        availableSettlementAmount: line.pendingSettlementAmount,
         settlementType: line.settlementType || 'NORMAL',
         remark: line.remark || ''
       }))
     }
-    selectedPreviewLines.value = []
+    previewSelectionCache.value = new Map()
     supplierSelectVisible.value = false
     previewVisible.value = true
     await nextTick()
-    selectAllPreviewLines()
+    await selectAllPreviewLines()
   } finally {
     previewLoading.value = false
   }
 }
 
-async function confirmSettlement() {
+function settlementRequest(recordStatus) {
   const detail = settlementPreview.value || {}
-  const invalidForcedLine = (detail.lines || []).find(line => line.settlementType === 'FORCED'
-    && (Number(line.pendingSettlementAmount || 0) <= 0
-      || Number(line.pendingSettlementAmount || 0) > forceRemainingAmount(line)))
-  if (invalidForcedLine) {
+  return {
+    recordStatus,
+    previewId: detail.previewId,
+    contractVersion: detail.contractVersion,
+    supplierId: detail.supplierId,
+    previewGeneratedAt: detail.generatedAt,
+    productQuantity: detail.productQuantity,
+    soldQuantity: detail.soldQuantity,
+    returnedQuantity: detail.returnedQuantity,
+    totalSettlementAmount: detail.totalSettlementAmount,
+    settledAmount: detail.settledAmount,
+    pendingSettlementAmount: detail.pendingSettlementAmount,
+    lines: (detail.lines || []).map(line => ({
+      skuId: line.skuId,
+      productQuantity: line.productQuantity,
+      soldQuantity: line.soldQuantity,
+      returnedQuantity: line.returnedQuantity,
+      unitPrice: line.unitPrice,
+      totalSettlementAmount: line.totalSettlementAmount,
+      settledAmount: line.settledAmount,
+      pendingSettlementAmount: line.pendingSettlementAmount,
+      settlementType: line.settlementType || 'NORMAL',
+      remark: line.remark?.trim() || undefined
+    }))
+  }
+}
+
+async function confirmSettlement(recordStatus = 'CONFIRMED') {
+  const detail = settlementPreview.value || {}
+  const invalidLine = (detail.lines || []).find(line => !validSettlementAmount(line))
+  if (invalidLine) {
     proxy.$modal.msgWarning(text(
-      `请为 SKU ${invalidForcedLine.skuCode || invalidForcedLine.skuId} 填写有效的强制结算金额`,
-      `Enter a valid forced settlement amount for SKU ${invalidForcedLine.skuCode || invalidForcedLine.skuId}`
+      `请为 SKU ${invalidLine.skuCode || invalidLine.skuId} 填写不超过可结算范围的本次待结算金额`,
+      `Enter a current amount within the available range for SKU ${invalidLine.skuCode || invalidLine.skuId}`
     ))
     return
   }
   confirmLoading.value = true
   try {
-    await confirmSupplierSettlement({
-      previewId: detail.previewId,
-      contractVersion: detail.contractVersion,
-      supplierId: detail.supplierId,
-      previewGeneratedAt: detail.generatedAt,
-      productQuantity: detail.productQuantity,
-      soldQuantity: detail.soldQuantity,
-      returnedQuantity: detail.returnedQuantity,
-      totalSettlementAmount: detail.totalSettlementAmount,
-      settledAmount: detail.settledAmount,
-      pendingSettlementAmount: detail.pendingSettlementAmount,
-      lines: (detail.lines || []).map(line => ({
-        skuId: line.skuId,
-        productQuantity: line.productQuantity,
-        soldQuantity: line.soldQuantity,
-        returnedQuantity: line.returnedQuantity,
-        unitPrice: line.unitPrice,
-        totalSettlementAmount: line.totalSettlementAmount,
-        settledAmount: line.settledAmount,
-        pendingSettlementAmount: line.pendingSettlementAmount,
-        settlementType: line.settlementType || 'NORMAL',
-        remark: line.remark?.trim() || undefined
-      }))
-    })
-    proxy.$modal.msgSuccess(text('结算单已保存，SKU 累计已结算金额已更新', 'Settlement saved and SKU settled totals updated'))
+    await confirmSupplierSettlement(settlementRequest(recordStatus))
+    proxy.$modal.msgSuccess(recordStatus === 'DRAFT'
+      ? text('结算单已发起并保存为待结算', 'Settlement initiated and saved as pending')
+      : text('结算单已确认，SKU 累计已结算金额已更新', 'Settlement confirmed and SKU settled totals updated'))
     previewVisible.value = false
     await loadData()
   } finally {
     confirmLoading.value = false
+  }
+}
+
+async function openDraftFromRoute() {
+  const draftId = route.query.settlementDraftId
+  if (!draftId || isSupplierUser.value) return
+  previewLoading.value = true
+  try {
+    const response = await getSupplierSettlementRecord(draftId)
+    const record = response.data
+    if (!record || record.recordStatus !== 'DRAFT') return
+    preview.value = {
+      ...record,
+      generatedAt: record.previewGeneratedAt,
+      lines: (record.lines || []).map(line => ({
+        ...line,
+        availableSettlementAmount: line.settlementType === 'FORCED'
+          ? forceRemainingAmount(line)
+          : (Number(line.soldQuantity || 0) - Number(line.returnedQuantity || 0)) * Number(line.unitPrice || 0)
+            - Number(line.settledAmount || 0),
+        remark: line.remark || ''
+      }))
+    }
+    previewSelectionCache.value = new Map()
+    previewVisible.value = true
+    await nextTick()
+    await selectAllPreviewLines()
+  } finally {
+    previewLoading.value = false
   }
 }
 
@@ -893,6 +1100,7 @@ async function resolveIdentity() {
 onMounted(async () => {
   await resolveIdentity()
   await loadData()
+  await openDraftFromRoute()
 })
 </script>
 
@@ -1065,6 +1273,7 @@ onMounted(async () => {
   margin-bottom: 4px;
 }
 
+.preview-pagination,
 .force-sku-pagination {
   display: flex;
   justify-content: flex-end;
@@ -1074,6 +1283,7 @@ onMounted(async () => {
   box-sizing: border-box;
 }
 
+.preview-pagination :deep(.pagination-container),
 .force-sku-pagination :deep(.pagination-container) {
   position: static !important;
   flex: 0 0 auto;
@@ -1085,6 +1295,7 @@ onMounted(async () => {
   background: transparent;
 }
 
+.preview-pagination :deep(.el-pagination),
 .force-sku-pagination :deep(.el-pagination) {
   position: static !important;
   right: auto !important;
@@ -1094,6 +1305,11 @@ onMounted(async () => {
 
 .force-amount-input {
   width: 135px;
+}
+
+.order-number-link {
+  margin-right: 10px;
+  text-decoration: underline;
 }
 
 .supplier-settlement-page :deep(.amount-column .cell) {

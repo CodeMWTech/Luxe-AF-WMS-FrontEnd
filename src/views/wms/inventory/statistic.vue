@@ -225,6 +225,7 @@
           </el-tag>
         </el-col>
         <el-col :span="12" class="toolbar-right">
+          <el-checkbox v-model="filterNonZero" :label="tr('过滤掉库存不为0的商品')" size="large" @change="handleChangeFilterNonZero"/>
           <el-checkbox v-model="filterable" :label="tr('过滤掉库存为0的商品')" size="large" @change="handleChangeFilterZero"/>
           <el-button
             :type="batchMode ? 'warning' : 'default'"
@@ -767,6 +768,7 @@ const snapshotDatePlaceholder = (() => {
 })()
 
 const filterable = ref(true)
+const filterNonZero = ref(false)
 const batchMode = ref(false)
 const publishDialogRef = ref(null)
 const queryType = ref('item')
@@ -794,6 +796,7 @@ const queryParams = ref({
   sellingPriceMax: undefined,
   turnoverDaysMin: undefined,
   minQuantity: undefined,
+  maxQuantity: undefined,
   orderByColumn: DEFAULT_INVENTORY_SORT.prop,
   isAsc: DEFAULT_INVENTORY_SORT.order
 })
@@ -806,7 +809,10 @@ function applyRouteSkuFilter() {
   const filterKey = `${skuCode}|${inStockOnly}`
   if (!skuCode || (filterKey === appliedRouteFilterKey.value && queryParams.value.skuCode === skuCode && (!inStockOnly || filterable.value))) return false
   queryParams.value.skuCode = skuCode
-  if (inStockOnly) filterable.value = true
+  if (inStockOnly) {
+    filterable.value = true
+    filterNonZero.value = false
+  }
   queryParams.value.pageNum = 1
   appliedRouteFilterKey.value = filterKey
   return true
@@ -1224,10 +1230,15 @@ const getCurrentQuery = () => {
     query.receiptEndTime = formatDateTimeForQuery(query.receiptTimeRange[1])
   }
   delete query.receiptTimeRange
-  if (filterable.value) {
+  if (filterNonZero.value) {
+    query.minQuantity = 0
+    query.maxQuantity = 0
+  } else if (filterable.value) {
     query.minQuantity = 1
+    query.maxQuantity = undefined
   } else {
     query.minQuantity = undefined
+    query.maxQuantity = undefined
   }
   return query
 }
@@ -1543,8 +1554,9 @@ const openDetailDrawer = async (row) => {
 const SELECT_ALL_PAGE_SIZE = 500
 
 function filterInventoryBoardRows(rows) {
-  if (!filterable.value) return rows
-  return rows.filter(it => Number(it.quantity) !== 0)
+  if (filterNonZero.value) return rows.filter(it => Number(it.quantity) === 0)
+  if (filterable.value) return rows.filter(it => Number(it.quantity) !== 0)
+  return rows
 }
 
 function normalizeInventoryBoardRows(rows) {
@@ -2042,6 +2054,7 @@ const applyDefaultInventorySort = () => {
 const resetQuery = () => {
   clearInventorySelectionWhenNotBatching()
   filterable.value = true
+  filterNonZero.value = false
   proxy.resetForm('queryRef')
   applyDefaultInventorySort()
   queryParams.value.pageNum = 1
@@ -2073,10 +2086,20 @@ const handleSortTypeChange = (e) => {
   getList()
 }
 
-const handleChangeFilterZero = () => {
+const refreshInventoryFilter = () => {
   clearInventorySelectionWhenNotBatching()
   queryParams.value.pageNum = 1
   getList()
+}
+
+const handleChangeFilterNonZero = (checked) => {
+  if (checked) filterable.value = false
+  refreshInventoryFilter()
+}
+
+const handleChangeFilterZero = (checked) => {
+  if (checked) filterNonZero.value = false
+  refreshInventoryFilter()
 }
 
 const toggleBatchMode = () => {
@@ -2177,6 +2200,7 @@ onActivated(() => {
   display: flex;
   justify-content: flex-end;
   align-items: center;
+  flex-wrap: wrap;
   gap: 12px;
 }
 

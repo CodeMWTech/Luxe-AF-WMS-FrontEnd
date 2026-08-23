@@ -239,6 +239,7 @@ const zhToEnMap = {
   盘库: 'Stocktake',
   盘库单: 'Stocktake Order',
   维度: 'Dimension',
+  过滤掉库存不为0的商品: 'Hide items with non-zero inventory',
   过滤掉库存为0的商品: 'Hide items with zero inventory',
   暂无库存: 'No inventory',
   库存记录: 'Inventory History',
