@@ -544,7 +544,7 @@ const ensureMainImageLoaded = (row) => {
   listMainImageLoadingSet.value.add(itemId)
   ;(async () => {
     try {
-      const res = await getItemImages(itemId)
+      const res = await getItemImages(itemId, { silentError: true })
       const imageList = getImageListFromResponse(res) || []
       if (!imageList.length) {
         listMainImageNoImageSet.value.add(itemId)
@@ -774,7 +774,7 @@ watch(
     }
   }
 )
-const getList = async () => {
+const getList = async (requestConfig = {}) => {
   const query = { ...queryParams.value };
   if (!canViewSellingPrice.value) {
     delete query.sellingPriceMin;
@@ -785,15 +785,34 @@ const getList = async () => {
     query.endTime = formatDateTimeForQuery(query.createTimeRange[1]);
   }
   loading.value = true;
-  const res = await listItemSkuPage(query);
-  const content = [...res.rows];
-  itemList.value = content.map((it) => ({...it, id: it.skuId,itemId: it?.item?.id}));
-  listMainImageLoadingSet.value.clear()
-  listMainImageNoImageSet.value.clear()
-  listMainImageErrorAtMap.value.clear()
-  preloadMainImages(itemList.value)
-  total.value = res.total;
-  loading.value = false;
+  try {
+    const res = await listItemSkuPage(query, requestConfig);
+    const content = [...res.rows];
+    itemList.value = content.map((it) => ({...it, id: it.skuId,itemId: it?.item?.id}));
+    listMainImageLoadingSet.value.clear()
+    listMainImageNoImageSet.value.clear()
+    listMainImageErrorAtMap.value.clear()
+    preloadMainImages(itemList.value)
+    total.value = res.total;
+  } finally {
+    loading.value = false;
+  }
+}
+
+/** 保存已经成功后再刷新列表；刷新失败不能反向误报为保存失败 */
+async function refreshListAfterSave(uploadTasks = []) {
+  if (uploadTasks.length) {
+    const results = await Promise.allSettled(uploadTasks)
+    if (results.some((result) => result.status === 'rejected')) {
+      proxy?.$modal.msgWarning('商品已保存，但部分图片上传失败，可在修改中重新上传')
+    }
+  }
+  try {
+    await getList({ timeout: 30000, silentError: true })
+  } catch (error) {
+    console.warn('商品已保存，但列表自动刷新失败', error)
+    proxy?.$modal.msgWarning('商品已保存，列表刷新较慢，请稍后手动刷新查看')
+  }
 }
 const {
   categoryDialog,
@@ -1278,21 +1297,19 @@ const submitForm = async () => {
       }
     }
 
-    // 如果有待上传图片，后台入队上传，不阻塞界面
+    // 如果有待上传图片，后台入队上传，不阻塞界面；上传完成后再刷新列表，
+    // 避免列表查询和图片处理并发导致查询超时并被误认为提交失败。
+    let uploadTasks = []
     if (itemId && pendingImageFiles.value.length) {
       ElMessage({ type: 'success', message: '图片在上传队列中（后台异步上传请勿重复提交）', duration: 5000 })
       const files = [...pendingImageFiles.value];
-      files.forEach((item, index) => {
-        uploadItemImage(itemId, item.file, index === 0, index).catch(() => {
-          proxy?.$modal.msgWarning('商品已保存，但部分图片未能加入上传队列，可在修改中重新上传');
-        });
-      });
+      uploadTasks = files.map((item, index) => uploadItemImage(itemId, item.file, index === 0, index))
     }
 
-      proxy?.$modal.msgSuccess(tr('修改成功'));
+    proxy?.$modal.msgSuccess(tr('修改成功'));
     dialog.visible = false;
     pendingImageFiles.value = [];
-    await getList();
+    refreshListAfterSave(uploadTasks)
   } catch (err) {
     proxy?.$modal.msgError(err?.message || err?.msg || tr('失败'));
   } finally {
@@ -1321,7 +1338,7 @@ async function pollItemImagesIfNeeded() {
     return
   }
   try {
-    const res = await getItemImages(form.value.id)
+    const res = await getItemImages(form.value.id, { silentError: true })
     const serverList = getImageListFromResponse(res)
     if (!serverList || !serverList.length) {
       form.value.imageList.forEach((img) => {

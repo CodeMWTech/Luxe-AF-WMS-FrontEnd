@@ -7,11 +7,12 @@ import { tansParams } from '@/utils/ruoyi'
  * @returns {*}
  */
 
-export function listItemSkuPage(query) {
+export function listItemSkuPage(query, config = {}) {
   return request({
     url: '/wms/itemSku/list',
     method: 'get',
-    params: query
+    params: query,
+    ...config
   });
 };
 

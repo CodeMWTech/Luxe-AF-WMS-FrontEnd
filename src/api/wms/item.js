@@ -55,7 +55,8 @@ export function addItem(data) {
   return request({
     url: '/wms/item',
     method: 'post',
-    data: data
+    data: data,
+    timeout: 120000
   });
 };
 
@@ -67,7 +68,8 @@ export function updateItem(data) {
   return request({
     url: '/wms/item',
     method: 'put',
-    data: data
+    data: data,
+    timeout: 120000
   });
 };
 
@@ -109,10 +111,11 @@ export function uploadItemImage(itemId, file, isMain, sort) {
  * 查询商品图片列表（异步上传完成后会带 url）
  * @param itemId 商品ID
  */
-export function getItemImages(itemId) {
+export function getItemImages(itemId, config = {}) {
   return request({
     url: `/wms/item/${itemId}/images`,
-    method: 'get'
+    method: 'get',
+    ...config
   });
 }
 
