@@ -31,6 +31,15 @@
               {{ t('overviewDashboard.aboutStudio') }}
               <el-icon class="btn-arrow"><ArrowRight /></el-icon>
             </el-button>
+            <el-button
+              class="hero-btn hero-btn-secondary hero-btn-external"
+              :title="t('overviewDashboard.hostHoursLinkHint')"
+              @click="openHostHours"
+            >
+              <el-icon class="external-link-icon"><Link /></el-icon>
+              {{ t('overviewDashboard.hostHoursLink') }}
+              <el-icon class="btn-arrow"><TopRight /></el-icon>
+            </el-button>
           </div>
           <div class="hero-tags-title">{{ t('overviewDashboard.advantageTitle') }}</div>
           <div class="hero-tags">
@@ -207,10 +216,12 @@ import {
   DataLine,
   Goods,
   Iphone,
+  Link,
   ShoppingCart,
   SoldOut,
   Star,
   Timer,
+  TopRight,
   TrendCharts,
   Wallet
 } from '@element-plus/icons-vue'
@@ -588,6 +599,10 @@ function setTimelineIndex(index) {
 
 function openLuxeAf() {
   window.open('https://www.codemw.com/', '_blank', 'noopener,noreferrer')
+}
+
+function openHostHours() {
+  window.open('https://luxeaflive.readdy.co/', '_blank', 'noopener,noreferrer')
 }
 
 async function scrollTo(id) {
@@ -1692,7 +1707,7 @@ function navigateTo(path) {
 
 .hero-actions {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
   margin-top: 30px;
 }
@@ -1746,6 +1761,16 @@ function navigateTo(path) {
   border-color: #a0cfff;
   color: #1677ff;
   box-shadow: none;
+}
+
+.hero-btn-external {
+  border-color: #91caff;
+  color: #0958d9;
+  background: #f0f7ff;
+}
+
+.external-link-icon {
+  margin-right: 5px;
 }
 
 .hero-tags {
@@ -2297,7 +2322,7 @@ function navigateTo(path) {
 
   .hero-actions {
     width: 100%;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
     margin-top: 22px;
   }
