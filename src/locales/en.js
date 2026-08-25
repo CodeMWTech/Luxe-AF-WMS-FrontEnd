@@ -347,6 +347,7 @@
     salePrice: 'Price',
     cost: 'Item Cost',
     grossProfit: 'Profit',
+    netProfit: 'Net Profit',
     status: 'Status',
     buyerNote: 'Buyer Note',
     remark: 'Remark',

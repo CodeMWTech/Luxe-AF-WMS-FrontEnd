@@ -776,7 +776,7 @@ function toForcedSettlementLine(row) {
     returnDeductionAmount: (returnedQuantity * unitPrice).toFixed(2),
     totalSettlementAmount: row.totalSettlementAmount,
     settledAmount: row.settledAmount,
-    pendingSettlementAmount: undefined,
+    pendingSettlementAmount: forceRemainingAmount(row),
     availableSettlementAmount: forceRemainingAmount(row),
     settlementType: 'FORCED',
     remark: ''

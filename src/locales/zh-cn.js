@@ -347,6 +347,7 @@
     salePrice: '售价',
     cost: '商品成本',
     grossProfit: '毛利',
+    netProfit: '净毛利',
     status: '状态',
     buyerNote: '买家备注',
     remark: '备注',
