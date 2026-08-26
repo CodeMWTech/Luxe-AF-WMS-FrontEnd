@@ -291,7 +291,7 @@
       movement: '跨仓库调拨与库存转移',
       check: '定期盘点与库存差异核对',
       platform: '多平台上架、订单同步与出库',
-      platformOrder: 'TikTok / eBay 订单同步与出库联动',
+      platformOrder: 'TikTok / eBay / Whatnot 订单同步与出库联动',
       listing: '多平台商品上架与模板管理',
       vendor: '供货商 SKU 供货、入库、库存、销售、退货与结算统计',
       vendorManage: '供货商商品数据与智能结算预览',
@@ -313,7 +313,7 @@
   },
   platformOrders: {
     title: '平台订单',
-    subtitle: 'TikTok + eBay 订单卡片列表',
+    subtitle: 'TikTok + eBay + Whatnot 订单卡片列表',
     shipmentHint: '导入 Note 后需要点击「创建出库单」按钮才会生成出库单',
     filterShop: '店铺',
     filterPlatform: '平台',

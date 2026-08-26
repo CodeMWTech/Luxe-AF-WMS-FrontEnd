@@ -291,7 +291,7 @@
       movement: 'Cross-warehouse transfers',
       check: 'Periodic stocktake and variance review',
       platform: 'Multi-platform listing, orders, and outbound',
-      platformOrder: 'TikTok / eBay order sync and outbound linkage',
+      platformOrder: 'TikTok / eBay / Whatnot order sync and outbound linkage',
       listing: 'Multi-platform listing and template management',
       vendor: 'Supplier SKU supply, inbound, stock, sales, returns, and settlement metrics',
       vendorManage: 'Supplier SKU data and smart settlement preview',
@@ -313,7 +313,7 @@
   },
   platformOrders: {
     title: 'Platform Orders',
-    subtitle: 'TikTok + eBay Order List',
+    subtitle: 'TikTok + eBay + Whatnot Order List',
     shipmentHint: 'After importing Notes, click "Create Shipment" to generate shipment orders',
     filterShop: 'Shop',
     filterPlatform: 'Platform',
