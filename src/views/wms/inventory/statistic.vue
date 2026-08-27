@@ -234,17 +234,17 @@
             {{ batchMode ? tr('取消批量操作') : tr('批量操作') }}
           </el-button>
           <el-button
-            @click="openExportTaskDialog"
-          >
-            {{ tr('导出记录') }}
-          </el-button>
-          <el-button
             type="primary"
             :loading="exportLoading"
             :disabled="loading"
             @click="handleExportExcel"
           >
             {{ tr('导出Excel') }}
+          </el-button>
+          <el-button
+            @click="openExportTaskDialog"
+          >
+            {{ tr('导出记录') }}
           </el-button>
         </el-col>
       </el-row>
