@@ -85,6 +85,16 @@ export function exportInventoryBoardItem(data, config = {}) {
   })
 }
 
+// 提交库存看板商品维度异步导出任务
+export function submitInventoryBoardExportTask(data, config = {}) {
+  return request({
+    url: '/wms/inventory/boardList/item/export/task',
+    method: 'post',
+    data,
+    ...config
+  })
+}
+
 // 批量导出库存看板 Excel（勾选行导出，含商品图片、成色、瑕疵）
 export function batchExportInventoryBoardExcel(data, config = {}) {
   return request({
@@ -92,6 +102,55 @@ export function batchExportInventoryBoardExcel(data, config = {}) {
     method: 'post',
     data: data,
     responseType: 'blob',
+    ...config
+  })
+}
+
+// 提交库存看板批量异步导出任务（含商品图片）
+export function submitInventoryBoardBatchExportTask(data, config = {}) {
+  return request({
+    url: '/wms/inventory/boardList/item/batch-export/excel/task',
+    method: 'post',
+    data,
+    ...config
+  })
+}
+
+// 查询库存导出任务状态
+export function getInventoryExportTask(taskId, config = {}) {
+  return request({
+    url: `/wms/inventory/export/tasks/${taskId}`,
+    method: 'get',
+    ...config
+  })
+}
+
+// 查询当前用户最近的库存导出任务
+export function listInventoryExportTasks(query, config = {}) {
+  return request({
+    url: '/wms/inventory/export/tasks',
+    method: 'get',
+    params: query,
+    ...config
+  })
+}
+
+// 下载已经生成的库存导出文件；只传输文件，不包含查询和 Excel 生成时间
+export function downloadInventoryExportTask(taskId, config = {}) {
+  return request({
+    url: `/wms/inventory/export/tasks/${taskId}/download`,
+    method: 'get',
+    responseType: 'blob',
+    timeout: 0,
+    ...config
+  })
+}
+
+// 删除当前用户的导出记录及对应对象存储文件
+export function deleteInventoryExportTask(taskId, config = {}) {
+  return request({
+    url: `/wms/inventory/export/tasks/${taskId}`,
+    method: 'delete',
     ...config
   })
 }

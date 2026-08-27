@@ -234,6 +234,11 @@
             {{ batchMode ? tr('取消批量操作') : tr('批量操作') }}
           </el-button>
           <el-button
+            @click="openExportTaskDialog"
+          >
+            {{ tr('导出记录') }}
+          </el-button>
+          <el-button
             type="primary"
             :loading="exportLoading"
             :disabled="loading"
@@ -646,6 +651,49 @@
       </div>
     </el-drawer>
 
+    <el-dialog v-model="exportTaskDialogVisible" :title="tr('导出记录')" width="860px">
+      <el-table :data="exportTaskList" v-loading="exportTaskListLoading" border>
+        <el-table-column prop="fileName" :label="tr('文件名')" min-width="250">
+          <template #default="{ row }">
+            {{ row.fileName || (row.exportType === 'BATCH' ? tr('库存统计批量导出') : tr('库存统计')) }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="rowCount" :label="tr('数据量')" width="90" align="center">
+          <template #default="{ row }">{{ row.rowCount ?? '--' }}</template>
+        </el-table-column>
+        <el-table-column :label="tr('状态')" width="110" align="center">
+          <template #default="{ row }">
+            <el-tag :type="exportTaskStatusType(row.status)">{{ exportTaskStatusText(row.status) }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="createTime" :label="tr('创建时间')" width="170" />
+        <el-table-column :label="tr('操作')" width="150" align="center" fixed="right">
+          <template #default="{ row }">
+            <el-button
+              link
+              type="primary"
+              :disabled="row.status !== EXPORT_TASK_STATUS_SUCCESS"
+              @click="downloadCompletedExportTask(row)"
+            >
+              {{ tr('下载') }}
+            </el-button>
+            <el-button
+              link
+              type="danger"
+              :loading="deletingExportTaskId === row.id"
+              @click="deleteExportTaskRecord(row)"
+            >
+              {{ tr('删除') }}
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+      <template #footer>
+        <el-button :loading="exportTaskListLoading" @click="loadExportTaskList">{{ tr('刷新') }}</el-button>
+        <el-button type="primary" @click="exportTaskDialogVisible = false">{{ tr('关闭') }}</el-button>
+      </template>
+    </el-dialog>
+
     <!-- 批量上架对话框 -->
     <PublishDialog ref="publishDialogRef" @success="getList" />
   </div>
@@ -653,10 +701,14 @@
 
 <script setup name="Inventory">
 import {
-  batchExportInventoryBoardExcel,
-  exportInventoryBoardItem,
+  deleteInventoryExportTask,
+  downloadInventoryExportTask,
+  getInventoryExportTask,
   listInventoryBoard,
-  listInventoryBoardWarehouseSummary
+  listInventoryExportTasks,
+  listInventoryBoardWarehouseSummary,
+  submitInventoryBoardBatchExportTask,
+  submitInventoryBoardExportTask
 } from '@/api/wms/inventory'
 import { downloadItemImage, getItemImages } from '@/api/wms/item'
 import { computed, getCurrentInstance, nextTick, onActivated, onMounted, ref } from 'vue'
@@ -689,6 +741,10 @@ const loading = ref(true)
 const exportLoading = ref(false)
 const batchExportExcelLoading = ref(false)
 const batchExportPdfLoading = ref(false)
+const exportTaskDialogVisible = ref(false)
+const exportTaskListLoading = ref(false)
+const exportTaskList = ref([])
+const deletingExportTaskId = ref(null)
 const selectedRows = ref([])
 const selectedRowMap = ref(new Map())
 const selectAllLoading = ref(false)
@@ -1258,235 +1314,6 @@ const getExportLanguagePayload = () => {
   }
 }
 
-const INVENTORY_EXPORT_HEADER_MAP = {
-  商品名称: 'Item Name',
-  SKU编号: 'SKU Code',
-  仓库: 'Warehouse',
-  库存数量: 'Stock Qty',
-  入库时间: 'Inbound Time',
-  出库时间: 'Outbound Time',
-  出库平台: 'Outbound Platform',
-  周转天数: 'Turnover Days',
-  平均成本价: 'Avg Cost Price',
-  平均销售价: 'Avg Selling Price',
-  利润: 'Profit',
-  商品图片: 'Item Image'
-}
-
-const crcTable = (() => {
-  const table = new Uint32Array(256)
-  for (let i = 0; i < 256; i++) {
-    let c = i
-    for (let k = 0; k < 8; k++) {
-      c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1)
-    }
-    table[i] = c >>> 0
-  }
-  return table
-})()
-
-function crc32(data) {
-  let crc = 0xffffffff
-  for (let i = 0; i < data.length; i++) {
-    crc = crcTable[(crc ^ data[i]) & 0xff] ^ (crc >>> 8)
-  }
-  return (crc ^ 0xffffffff) >>> 0
-}
-
-function readUInt16(data, offset) {
-  return data[offset] | (data[offset + 1] << 8)
-}
-
-function readUInt32(data, offset) {
-  return (data[offset] | (data[offset + 1] << 8) | (data[offset + 2] << 16) | (data[offset + 3] << 24)) >>> 0
-}
-
-function writeUInt16(target, offset, value) {
-  target[offset] = value & 0xff
-  target[offset + 1] = (value >>> 8) & 0xff
-}
-
-function writeUInt32(target, offset, value) {
-  target[offset] = value & 0xff
-  target[offset + 1] = (value >>> 8) & 0xff
-  target[offset + 2] = (value >>> 16) & 0xff
-  target[offset + 3] = (value >>> 24) & 0xff
-}
-
-function findEndOfCentralDirectory(data) {
-  const minOffset = Math.max(0, data.length - 0xffff - 22)
-  for (let offset = data.length - 22; offset >= minOffset; offset--) {
-    if (readUInt32(data, offset) === 0x06054b50) return offset
-  }
-  return -1
-}
-
-async function inflateRaw(data) {
-  if (typeof DecompressionStream === 'undefined') {
-    throw new Error(tr('导出失败'))
-  }
-  const stream = new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'))
-  return new Uint8Array(await new Response(stream).arrayBuffer())
-}
-
-async function getZipEntryContent(zipData, entry) {
-  const compressed = zipData.slice(entry.dataOffset, entry.dataOffset + entry.compressedSize)
-  if (entry.method === 0) return compressed
-  if (entry.method === 8) return inflateRaw(compressed)
-  throw new Error(tr('导出失败'))
-}
-
-function replaceInventoryHeaderText(xmlText) {
-  let next = xmlText
-  Object.entries(INVENTORY_EXPORT_HEADER_MAP).forEach(([zh, en]) => {
-    next = next.split(zh).join(en)
-  })
-  return next
-}
-
-function parseZipEntries(zipData) {
-  const decoder = new TextDecoder()
-  const endOffset = findEndOfCentralDirectory(zipData)
-  if (endOffset < 0) throw new Error(tr('导出失败'))
-
-  const entryCount = readUInt16(zipData, endOffset + 10)
-  let centralOffset = readUInt32(zipData, endOffset + 16)
-  const entries = []
-
-  for (let i = 0; i < entryCount; i++) {
-    if (readUInt32(zipData, centralOffset) !== 0x02014b50) throw new Error(tr('导出失败'))
-
-    const flags = readUInt16(zipData, centralOffset + 8)
-    const method = readUInt16(zipData, centralOffset + 10)
-    const crc = readUInt32(zipData, centralOffset + 16)
-    const compressedSize = readUInt32(zipData, centralOffset + 20)
-    const uncompressedSize = readUInt32(zipData, centralOffset + 24)
-    const nameLength = readUInt16(zipData, centralOffset + 28)
-    const extraLength = readUInt16(zipData, centralOffset + 30)
-    const commentLength = readUInt16(zipData, centralOffset + 32)
-    const localHeaderOffset = readUInt32(zipData, centralOffset + 42)
-    const nameBytes = zipData.slice(centralOffset + 46, centralOffset + 46 + nameLength)
-    const name = decoder.decode(nameBytes)
-
-    if (readUInt32(zipData, localHeaderOffset) !== 0x04034b50) throw new Error(tr('导出失败'))
-    const localNameLength = readUInt16(zipData, localHeaderOffset + 26)
-    const localExtraLength = readUInt16(zipData, localHeaderOffset + 28)
-    const dataOffset = localHeaderOffset + 30 + localNameLength + localExtraLength
-
-    entries.push({
-      name,
-      nameBytes,
-      flags,
-      method,
-      crc,
-      compressedSize,
-      uncompressedSize,
-      dataOffset
-    })
-
-    centralOffset += 46 + nameLength + extraLength + commentLength
-  }
-
-  return entries
-}
-
-function concatUint8Arrays(parts, totalLength) {
-  const result = new Uint8Array(totalLength)
-  let offset = 0
-  parts.forEach(part => {
-    result.set(part, offset)
-    offset += part.length
-  })
-  return result
-}
-
-function buildZip(entries) {
-  const localParts = []
-  const centralParts = []
-  let offset = 0
-
-  entries.forEach(entry => {
-    const localHeader = new Uint8Array(30 + entry.nameBytes.length)
-    writeUInt32(localHeader, 0, 0x04034b50)
-    writeUInt16(localHeader, 4, 20)
-    writeUInt16(localHeader, 6, entry.flags & ~0x08)
-    writeUInt16(localHeader, 8, entry.method)
-    writeUInt32(localHeader, 14, entry.crc)
-    writeUInt32(localHeader, 18, entry.compressedSize)
-    writeUInt32(localHeader, 22, entry.uncompressedSize)
-    writeUInt16(localHeader, 26, entry.nameBytes.length)
-    localHeader.set(entry.nameBytes, 30)
-    localParts.push(localHeader, entry.compressedData)
-
-    const centralHeader = new Uint8Array(46 + entry.nameBytes.length)
-    writeUInt32(centralHeader, 0, 0x02014b50)
-    writeUInt16(centralHeader, 4, 20)
-    writeUInt16(centralHeader, 6, 20)
-    writeUInt16(centralHeader, 8, entry.flags & ~0x08)
-    writeUInt16(centralHeader, 10, entry.method)
-    writeUInt32(centralHeader, 16, entry.crc)
-    writeUInt32(centralHeader, 20, entry.compressedSize)
-    writeUInt32(centralHeader, 24, entry.uncompressedSize)
-    writeUInt16(centralHeader, 28, entry.nameBytes.length)
-    writeUInt32(centralHeader, 42, offset)
-    centralHeader.set(entry.nameBytes, 46)
-    centralParts.push(centralHeader)
-
-    offset += localHeader.length + entry.compressedData.length
-  })
-
-  const centralOffset = offset
-  const centralSize = centralParts.reduce((sum, part) => sum + part.length, 0)
-  const endHeader = new Uint8Array(22)
-  writeUInt32(endHeader, 0, 0x06054b50)
-  writeUInt16(endHeader, 8, entries.length)
-  writeUInt16(endHeader, 10, entries.length)
-  writeUInt32(endHeader, 12, centralSize)
-  writeUInt32(endHeader, 16, centralOffset)
-
-  const totalLength = offset + centralSize + endHeader.length
-  return concatUint8Arrays([...localParts, ...centralParts, endHeader], totalLength)
-}
-
-async function translateInventoryExportXlsx(blobData) {
-  const zipData = new Uint8Array(await blobData.arrayBuffer())
-  const encoder = new TextEncoder()
-  const decoder = new TextDecoder()
-  const entries = parseZipEntries(zipData)
-
-  const translatedEntries = await Promise.all(entries.map(async entry => {
-    const shouldTranslate = /^xl\/(sharedStrings|worksheets\/.*)\.xml$/i.test(entry.name)
-    if (!shouldTranslate) {
-      return {
-        ...entry,
-        compressedData: zipData.slice(entry.dataOffset, entry.dataOffset + entry.compressedSize)
-      }
-    }
-
-    const content = await getZipEntryContent(zipData, entry)
-    const xmlText = decoder.decode(content)
-    const translatedText = replaceInventoryHeaderText(xmlText)
-    if (translatedText === xmlText) {
-      return {
-        ...entry,
-        compressedData: zipData.slice(entry.dataOffset, entry.dataOffset + entry.compressedSize)
-      }
-    }
-
-    const translatedData = encoder.encode(translatedText)
-    return {
-      ...entry,
-      method: 0,
-      crc: crc32(translatedData),
-      compressedSize: translatedData.length,
-      uncompressedSize: translatedData.length,
-      compressedData: translatedData
-    }
-  }))
-
-  return buildZip(translatedEntries)
-}
-
 /** 与列表筛选项一致，不传分页、排序（汇总无分页） */
 const getWarehouseSummaryQuery = () => {
   const full = getCurrentQuery()
@@ -1628,7 +1455,7 @@ const handleExportExcel = async () => {
   try {
     exportLoading.value = true
     const exportLanguage = getExportLanguagePayload()
-    const blobData = await exportInventoryBoardItem(
+    const response = await submitInventoryBoardExportTask(
       {
         ...getCurrentQuery(),
         ...exportLanguage
@@ -1640,28 +1467,126 @@ const handleExportExcel = async () => {
         }
       }
     )
-    const isBlob = blobValidate(blobData)
-    if (!isBlob) {
-      const resText = await blobData.text()
-      const rspObj = JSON.parse(resText)
-      const errMsg = rspObj?.msg || tr('导出失败')
-      throw new Error(errMsg)
-    }
-    const excelData = isEn.value ? await translateInventoryExportXlsx(blobData) : blobData
-    const blob = new Blob([excelData], {
-      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    })
-    const url = window.URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = isEn.value ? 'LuxeAFWMS-Inventory Statistics.xlsx' : 'LuxeAFWMS-库存统计.xlsx'
-    a.click()
-    window.URL.revokeObjectURL(url)
+    proxy.$modal.msgSuccess(tr('导出任务已提交，文件正在后台生成'))
+    await waitForInventoryExportTask(
+      response.data,
+      isEn.value ? 'LuxeAFWMS-Inventory Statistics.xlsx' : 'LuxeAFWMS-库存统计.xlsx'
+    )
     proxy.$modal.msgSuccess(tr('导出成功'))
   } catch (e) {
     proxy.$modal.msgError(e?.message || tr('导出失败'))
   } finally {
     exportLoading.value = false
+  }
+}
+
+const EXPORT_TASK_STATUS_SUCCESS = 2
+const EXPORT_TASK_STATUS_FAILED = 3
+const EXPORT_TASK_STATUS_EXPIRED = 4
+const EXPORT_TASK_POLL_INTERVAL = 2000
+const EXPORT_TASK_MAX_WAIT = 30 * 60 * 1000
+
+const delay = milliseconds => new Promise(resolve => window.setTimeout(resolve, milliseconds))
+
+async function waitForInventoryExportTask(taskId, fallbackFileName) {
+  const startedAt = Date.now()
+  while (Date.now() - startedAt < EXPORT_TASK_MAX_WAIT) {
+    const response = await getInventoryExportTask(taskId, { silentError: true })
+    const task = response.data || {}
+    if (task.status === EXPORT_TASK_STATUS_SUCCESS) {
+      await downloadInventoryTaskFile(taskId, task.fileName || fallbackFileName)
+      return
+    }
+    if (task.status === EXPORT_TASK_STATUS_FAILED) {
+      throw new Error(task.errorMsg || tr('导出失败'))
+    }
+    if (task.status === EXPORT_TASK_STATUS_EXPIRED) {
+      throw new Error(tr('导出文件已过期，请重新导出'))
+    }
+    await delay(EXPORT_TASK_POLL_INTERVAL)
+  }
+  throw new Error(tr('导出任务仍在后台生成，请稍后重试'))
+}
+
+async function downloadInventoryTaskFile(taskId, fileName) {
+  const blobData = await downloadInventoryExportTask(taskId, { silentError: true })
+  if (!blobValidate(blobData)) {
+    const responseText = await blobData.text()
+    const responseBody = JSON.parse(responseText)
+    throw new Error(responseBody?.msg || tr('导出失败'))
+  }
+  const blob = new Blob([blobData], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  })
+  const url = window.URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = fileName || 'inventory-export.xlsx'
+  anchor.click()
+  window.URL.revokeObjectURL(url)
+}
+
+function exportTaskStatusText(status) {
+  return {
+    0: tr('待处理'),
+    1: tr('生成中'),
+    2: tr('已完成'),
+    3: tr('失败'),
+    4: tr('已过期')
+  }[status] || '--'
+}
+
+function exportTaskStatusType(status) {
+  return {
+    0: 'info',
+    1: 'warning',
+    2: 'success',
+    3: 'danger',
+    4: 'info'
+  }[status] || 'info'
+}
+
+async function loadExportTaskList() {
+  try {
+    exportTaskListLoading.value = true
+    const response = await listInventoryExportTasks({ pageNum: 1, pageSize: 20 }, { silentError: true })
+    exportTaskList.value = response.rows || []
+  } catch (error) {
+    proxy.$modal.msgError(error?.message || tr('查询导出记录失败'))
+  } finally {
+    exportTaskListLoading.value = false
+  }
+}
+
+function openExportTaskDialog() {
+  exportTaskDialogVisible.value = true
+  loadExportTaskList()
+}
+
+async function downloadCompletedExportTask(task) {
+  try {
+    await downloadInventoryTaskFile(task.id, task.fileName)
+  } catch (error) {
+    proxy.$modal.msgError(error?.message || tr('导出失败'))
+    await loadExportTaskList()
+  }
+}
+
+async function deleteExportTaskRecord(task) {
+  try {
+    await proxy.$modal.confirm(tr('确认删除该导出记录吗？删除后文件将无法恢复。'))
+  } catch {
+    return
+  }
+  try {
+    deletingExportTaskId.value = task.id
+    await deleteInventoryExportTask(task.id, { silentError: true })
+    proxy.$modal.msgSuccess(tr('删除成功'))
+    await loadExportTaskList()
+  } catch (error) {
+    proxy.$modal.msgError(error?.message || tr('删除失败'))
+  } finally {
+    deletingExportTaskId.value = null
   }
 }
 
@@ -1748,7 +1673,7 @@ async function handleBatchExportExcel() {
       warehouseId: row.warehouseId
     }))
     const exportLanguage = getExportLanguagePayload()
-    const blobData = await batchExportInventoryBoardExcel(
+    const response = await submitInventoryBoardBatchExportTask(
       { rows, snapshotDate: queryParams.value.snapshotDate },
       {
         headers: {
@@ -1757,22 +1682,11 @@ async function handleBatchExportExcel() {
         }
       }
     )
-    const isBlob = blobValidate(blobData)
-    if (!isBlob) {
-      const resText = await blobData.text()
-      const rspObj = JSON.parse(resText)
-      throw new Error(rspObj?.msg || tr('批量导出失败'))
-    }
-    const excelData = isEn.value ? await translateInventoryExportXlsx(blobData) : blobData
-    const blob = new Blob([excelData], {
-      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    })
-    const url = window.URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = isEn.value ? 'LuxeAFWMS-Inventory Batch Export.xlsx' : 'LuxeAFWMS-库存统计批量导出.xlsx'
-    a.click()
-    window.URL.revokeObjectURL(url)
+    proxy.$modal.msgSuccess(tr('导出任务已提交，文件正在后台生成'))
+    await waitForInventoryExportTask(
+      response.data,
+      isEn.value ? 'LuxeAFWMS-Inventory Batch Export.xlsx' : 'LuxeAFWMS-库存统计批量导出.xlsx'
+    )
     proxy.$modal.msgSuccess(tr('批量导出成功'))
   } catch (e) {
     proxy.$modal.msgError(e?.message || tr('批量导出失败'))
