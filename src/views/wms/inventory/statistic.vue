@@ -241,6 +241,11 @@
           >
             {{ tr('导出Excel') }}
           </el-button>
+          <el-button
+            @click="openExportTaskDialog"
+          >
+            {{ tr('导出记录') }}
+          </el-button>
         </el-col>
       </el-row>
 
