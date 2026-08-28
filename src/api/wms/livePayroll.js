@@ -17,6 +17,12 @@ export function getLiveOptions(includeDisabledAccounts = false) {
 }
 
 export const getDashboard = params => request({ url: `${base}/dashboard`, method: 'get', params })
+export const importAttendance = data => request({
+  url: `${base}/attendance/import`,
+  method: 'post',
+  data,
+  headers: { 'Content-Type': 'multipart/form-data' }
+})
 
 export const listSchedules = params => request({ url: `${base}/schedules/list`, method: 'get', params })
 export const listScheduleCalendar = params => request({ url: `${base}/schedules/calendar`, method: 'get', params })

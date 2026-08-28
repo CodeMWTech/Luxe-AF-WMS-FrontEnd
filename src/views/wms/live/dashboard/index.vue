@@ -2,7 +2,18 @@
   <div class="live-page">
     <div class="live-hero">
       <div><h2>汇总看板</h2><p>查看核心运营指标与主播产出</p></div>
-      <el-button type="primary" @click="exportSummary">导出 CSV</el-button>
+      <div class="live-actions">
+        <el-upload
+          ref="attendanceUploadRef"
+          :auto-upload="false"
+          :show-file-list="false"
+          accept=".xls,.xlsx"
+          :on-change="handleAttendanceFile"
+        >
+          <el-button v-hasPermi="['wms:live:dashboard:import']" :loading="attendanceImporting">导入打卡 Excel</el-button>
+        </el-upload>
+        <el-button type="primary" @click="exportSummary">导出 CSV</el-button>
+      </div>
     </div>
     <el-card class="live-filter" shadow="never">
       <el-form :inline="true">
@@ -37,6 +48,49 @@
         <el-table :data="data.attendance" stripe><el-table-column prop="employeeName" label="主播" /><el-table-column prop="planned" label="计划场次" /><el-table-column prop="actual" label="实际场次" /><el-table-column prop="difference" label="差异"><template #default="s"><span :class="s.row.difference >= 0 ? 'positive' : 'negative'">{{ s.row.difference > 0 ? '+' : '' }}{{ s.row.difference }}</span></template></el-table-column><el-table-column label="状态"><template #default="s">{{ tr(s.row.status) }}</template></el-table-column></el-table>
       </el-card>
     </div>
+    <el-card class="live-card checklist-card" shadow="never">
+      <template #header>
+        <div class="checklist-header">
+          <div>
+            <strong>每日核对清单</strong>
+            <div class="muted checklist-subtitle">按天核对排班和开播记录，打卡结果仅来自上传的打卡 Excel</div>
+          </div>
+          <div class="checklist-actions">
+            <el-switch v-model="checklistOnlyAbnormal" active-text="仅看异常" />
+            <el-select v-model="checklistStatus" clearable placeholder="全部状态" style="width:130px">
+              <el-option v-for="status in checklistStatuses" :key="status" :label="status" :value="status" />
+            </el-select>
+            <el-button @click="exportChecklist">导出清单</el-button>
+          </div>
+        </div>
+      </template>
+      <div class="checklist-summary">
+        <el-tag type="success" effect="plain">已录 {{ checklistStats['已录'] }}</el-tag>
+        <el-tag type="warning" effect="plain">时间不符 {{ checklistStats['时间不符'] }}</el-tag>
+        <el-tag type="danger" effect="plain">未录 {{ checklistStats['未录'] }}</el-tag>
+        <el-tag type="info" effect="plain">多录 {{ checklistStats['多录'] }}</el-tag>
+        <el-tag type="success" effect="plain">已打卡 {{ checklistStats.clocked }}</el-tag>
+        <el-tag type="danger" effect="plain">未打卡 {{ checklistStats.notClocked }}</el-tag>
+      </div>
+      <el-table :data="filteredChecklist" stripe empty-text="当前筛选范围内没有核对记录">
+        <el-table-column prop="date" label="日期" width="120" sortable />
+        <el-table-column prop="employeeName" label="主播" min-width="110" />
+        <el-table-column label="账号" min-width="220">
+          <template #default="s">{{ s.row.accountLabel }}<span v-if="s.row.platform" class="muted"> ({{ s.row.platform }})</span></template>
+        </el-table-column>
+        <el-table-column label="计划时间" width="130"><template #default="s">{{ timeRange(s.row.plannedStartTime, s.row.plannedEndTime) }}</template></el-table-column>
+        <el-table-column label="实际时间" width="130"><template #default="s">{{ timeRange(s.row.actualStartTime, s.row.actualEndTime) }}</template></el-table-column>
+        <el-table-column label="是否打卡" width="100" align="center">
+          <template #default="s"><el-tag :type="s.row.clocked ? 'success' : 'danger'" effect="light">{{ s.row.clocked ? '是' : '否' }}</el-tag></template>
+        </el-table-column>
+        <el-table-column label="状态" width="110" align="center">
+          <template #default="s"><el-tag :type="statusTagType(s.row.status)" effect="plain">{{ s.row.status }}</el-tag></template>
+        </el-table-column>
+        <el-table-column label="操作" width="80" align="center">
+          <template #default="s"><el-button link type="primary" @click="goToRecord(s.row)">查看</el-button></template>
+        </el-table-column>
+      </el-table>
+    </el-card>
     <el-card class="live-card" shadow="never">
       <template #header>主播汇总 · 总薪酬 = 开播薪酬 + 佣金收入</template>
       <el-table :data="data.employeeSummary" stripe>
@@ -48,20 +102,39 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import * as echarts from 'echarts'
-import { getDashboard, getLiveOptions } from '@/api/wms/livePayroll'
+import { getDashboard, getLiveOptions, importAttendance } from '@/api/wms/livePayroll'
 import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
 import { accountLabel, downloadCsv, money, monthRange } from '../shared'
 
 const settingsStore = useSettingsStore()
+const router = useRouter()
 const tr = (text) => translateByMap(text, settingsStore.language || 'zh-cn')
 const loading = ref(false)
 const dateRange = ref(monthRange())
 const filters = reactive({ employeeId: null, accountId: null, rateTypeId: null })
 const options = reactive({ employees: [], accounts: [], rateTypes: [] })
-const data = reactive({ overview: {}, rateStats: [], dailyTrend: [], platformStats: [], employeeSummary: [], attendance: [] })
+const data = reactive({ overview: {}, rateStats: [], dailyTrend: [], platformStats: [], employeeSummary: [], attendance: [], dailyChecklist: [] })
 const overview = computed(() => data.overview || {})
+const attendanceUploadRef = ref()
+const attendanceImporting = ref(false)
+const checklistOnlyAbnormal = ref(false)
+const checklistStatus = ref('')
+const checklistStatuses = ['已录', '时间不符', '未录', '多录']
+const checklistStats = computed(() => {
+  const stats = { '已录': 0, '时间不符': 0, '未录': 0, '多录': 0, clocked: 0, notClocked: 0 }
+  ;(data.dailyChecklist || []).forEach(row => {
+    if (stats[row.status] !== undefined) stats[row.status]++
+    row.clocked ? stats.clocked++ : stats.notClocked++
+  })
+  return stats
+})
+const filteredChecklist = computed(() => (data.dailyChecklist || []).filter(row => {
+  if (checklistOnlyAbnormal.value && row.status === '已录' && row.clocked) return false
+  return !checklistStatus.value || row.status === checklistStatus.value
+}))
 const trendEl = ref(), platformEl = ref()
 let trendChart, platformChart
 const metrics = computed(() => [
@@ -88,10 +161,65 @@ function renderCharts() {
   trendChart.setOption({ tooltip: { trigger: 'axis' }, grid: { left: 42, right: 18, top: 24, bottom: 36 }, xAxis: { type: 'category', data: data.dailyTrend.map(v => v.name) }, yAxis: { type: 'value' }, series: [{ type: 'line', smooth: true, areaStyle: { opacity: .12 }, itemStyle: { color: '#3563e9' }, data: data.dailyTrend.map(v => Number(v.hours || 0)) }] })
   platformChart.setOption({ tooltip: { trigger: 'axis' }, grid: { left: 56, right: 18, top: 24, bottom: 36 }, xAxis: { type: 'category', data: data.platformStats.map(v => v.name) }, yAxis: { type: 'value' }, series: [{ type: 'bar', barWidth: 36, itemStyle: { color: '#6c8df4', borderRadius: [7, 7, 0, 0] }, data: data.platformStats.map(v => Number(v.compensation || 0)) }] })
 }
+async function handleAttendanceFile(uploadFile) {
+  if (!uploadFile.raw) return
+  attendanceImporting.value = true
+  try {
+    const form = new FormData()
+    form.append('file', uploadFile.raw)
+    const res = await importAttendance(form)
+    const result = res.data || {}
+    ElMessage.success(`打卡导入完成：${result.imported || 0} 条（新增 ${result.created || 0}，更新 ${result.updated || 0}）`)
+    if (result.unmatchedEmployees?.length) {
+      ElMessage.warning(`未匹配员工：${result.unmatchedEmployees.join('、')}`)
+    }
+    await load()
+  } finally {
+    attendanceImporting.value = false
+    attendanceUploadRef.value?.clearFiles()
+  }
+}
+function timeRange(start, end) {
+  if (!start && !end) return '—'
+  const display = value => value ? String(value).slice(0, 5) : '—'
+  return `${display(start)}-${display(end)}`
+}
+function statusTagType(status) {
+  return status === '已录' ? 'success' : status === '时间不符' ? 'warning' : status === '未录' ? 'danger' : 'info'
+}
+function goToRecord(row) {
+  const path = row.status === '多录' ? '/live-payroll/streams' : '/live-payroll/schedule'
+  router.push({ path, query: { date: row.date, employeeId: row.employeeId, accountId: row.accountId } })
+}
 function exportSummary() { downloadCsv(`主播薪酬汇总-${dateRange.value[0]}-${dateRange.value[1]}.csv`, [{ key: 'employeeName', label: '主播' }, { key: 'sessions', label: '场次' }, { key: 'hours', label: '工时' }, { key: 'streamCompensation', label: '开播薪酬' }, { key: 'commissionIncome', label: '佣金' }, { key: 'totalCompensation', label: '总薪酬' }], data.employeeSummary) }
+function exportChecklist() {
+  const rows = filteredChecklist.value.map(row => ({
+    ...row,
+    plannedTime: timeRange(row.plannedStartTime, row.plannedEndTime),
+    actualTime: timeRange(row.actualStartTime, row.actualEndTime),
+    clockedLabel: row.clocked ? '是' : '否'
+  }))
+  downloadCsv(`每日核对清单-${dateRange.value[0]}-${dateRange.value[1]}.csv`, [
+    { key: 'date', label: '日期' }, { key: 'employeeName', label: '主播' }, { key: 'accountLabel', label: '账号' },
+    { key: 'plannedTime', label: '计划时间' }, { key: 'actualTime', label: '实际时间' },
+    { key: 'clockedLabel', label: '是否打卡' }, { key: 'status', label: '状态' }
+  ], rows)
+}
 function resize() { trendChart?.resize(); platformChart?.resize() }
 onMounted(async () => { Object.assign(options, await getLiveOptions()); await load(); window.addEventListener('resize', resize) })
 onBeforeUnmount(() => { window.removeEventListener('resize', resize); trendChart?.dispose(); platformChart?.dispose() })
 </script>
 
-<style scoped lang="scss">@import '../live.scss';</style>
+<style scoped lang="scss">
+@import '../live.scss';
+
+.checklist-card { margin-bottom: 16px; }
+.checklist-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.checklist-subtitle { margin-top: 5px; font-size: 12px; font-weight: 400; }
+.checklist-actions, .checklist-summary { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.checklist-summary { margin-bottom: 14px; }
+
+@media (max-width: 780px) {
+  .checklist-header { align-items: flex-start; flex-direction: column; }
+}
+</style>
