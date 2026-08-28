@@ -40,3 +40,12 @@ export function getGrossProfitTrend(params = {}) {
     params
   }).then((res) => res.data)
 }
+
+/** 已连接平台店铺最近 52 个自然周的 Gross Sales，支持 startDate/endDate */
+export function getShopSalesTrend(params = {}) {
+  return request({
+    url: '/wms/analytics/shop-sales-trend',
+    method: 'get',
+    params
+  }).then((res) => res.data)
+}

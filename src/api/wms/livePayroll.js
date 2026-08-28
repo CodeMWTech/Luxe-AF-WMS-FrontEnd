@@ -2,10 +2,10 @@ import request from '@/utils/request'
 
 const base = '/wms/live'
 
-export function getLiveOptions() {
+export function getLiveOptions(includeDisabledAccounts = false) {
   return Promise.all([
     request({ url: `${base}/options/employees`, method: 'get' }),
-    request({ url: `${base}/options/accounts`, method: 'get' }),
+    request({ url: `${base}/options/accounts`, method: 'get', params: { includeDisabled: includeDisabledAccounts } }),
     request({ url: `${base}/options/rate-types`, method: 'get' }),
     request({ url: `${base}/options/special-types`, method: 'get' })
   ]).then(([employees, accounts, rateTypes, specialTypes]) => ({
@@ -48,6 +48,11 @@ export const updateRate = data => request({ url: `${base}/rates`, method: 'put',
 export const batchRates = data => request({ url: `${base}/rates/batch`, method: 'post', data })
 export const deleteRate = id => request({ url: `${base}/rates/${id}`, method: 'delete' })
 export const recalculateStreams = params => request({ url: `${base}/rates/recalculate`, method: 'post', params })
+export const listRateAccountGroups = employeeId => request({ url: `${base}/rates/account-groups`, method: 'get', params: { employeeId } })
+export const updateRateAccountGroupStatus = data => request({ url: `${base}/rates/account-groups/status`, method: 'put', data })
+export const updateAllRateAccountGroupStatuses = params => request({ url: `${base}/rates/account-groups/status/all`, method: 'put', params })
+export const syncRateAccountGroup = data => request({ url: `${base}/rates/account-groups/sync`, method: 'post', data })
+export const deleteRateAccountGroup = params => request({ url: `${base}/rates/account-groups`, method: 'delete', params })
 
 export const getLiveSetting = () => request({ url: `${base}/settings`, method: 'get' })
 export const updateLiveSetting = data => request({ url: `${base}/settings`, method: 'put', data })

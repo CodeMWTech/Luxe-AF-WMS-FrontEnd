@@ -24,6 +24,21 @@
       </el-card>
     </div>
 
+    <el-card shadow="never" class="panel-card brand-analysis-card shop-sales-card">
+      <div class="brand-card-head shop-sales-head">
+        <div>
+          <div class="brand-title">
+            <span>{{ tr('各平台店铺周销售趋势') }}</span>
+          </div>
+          <div class="brand-subtitle">
+            {{ tr('按自然周对比全部已连接店铺的 Gross Sales；同一店铺在无销售的周按 0 展示') }}
+          </div>
+        </div>
+        <el-tag type="primary" effect="plain">{{ tr('最近52周') }}</el-tag>
+      </div>
+      <div ref="shopSalesLineRef" class="shop-sales-chart"></div>
+    </el-card>
+
     <div class="panel-grid">
       <el-card shadow="never" class="panel-card brand-analysis-card">
         <div class="brand-card-head">
@@ -269,6 +284,7 @@ import {
   getAnalyticsOverview,
   getBrandInventoryRatio,
   getGrossProfitTrend,
+  getShopSalesTrend,
   getTurnoverDaysDistribution,
   getValueRangeDistribution
 } from '@/api/wms/analytics'
@@ -279,12 +295,16 @@ const brandPieRef = ref(null)
 const turnoverBarRef = ref(null)
 const valueBarRef = ref(null)
 const profitLineRef = ref(null)
+const shopSalesLineRef = ref(null)
 let brandPieChart = null
 let turnoverBarChart = null
 let valueBarChart = null
 let profitLineChart = null
+let shopSalesLineChart = null
 
 const BRAND_COLORS = ['#2478ff', '#22c4cf', '#44c77d', '#ffbd2e', '#7256ed', '#8492a6', '#ef4f4f', '#24b989', '#745df0', '#2f80ed']
+const SHOP_SALES_COLORS = ['#2563eb', '#dc2626', '#059669', '#7c3aed', '#ea580c', '#0891b2', '#c026d3', '#4d7c0f', '#0f766e', '#9333ea']
+const SHOP_SALES_LINE_TYPES = ['solid', 'dashed', 'dotted', [10, 4, 2, 4], [14, 5], [3, 4], [12, 4, 4, 4], [16, 5, 3, 5]]
 const OTHER_BRAND_COLOR = '#dce3ec'
 const ALL_BRAND_PAGE_SIZE = 12
 
@@ -366,6 +386,7 @@ const brandRatioList = ref([])
 const turnoverDistList = ref([])
 const valueDistList = ref([])
 const profitTrendList = ref([])
+const shopSalesTrendList = ref([])
 
 function buildProfitTrendQuery() {
   if (hasCompleteCompareRange()) {
@@ -623,11 +644,45 @@ const slowMovingInsight = computed(() => {
   }
 })
 
+function platformDisplayName(platform) {
+  const names = { EBAY: 'eBay', TIKTOK: 'TikTok', SHOPIFY: 'Shopify', WHATNOT: 'Whatnot' }
+  return names[String(platform || '').toUpperCase()] || platform || tr('未知平台')
+}
+
+function weekLabel(value) {
+  const parts = String(value || '').split('-')
+  return parts.length === 3 ? `${parts[1]}/${parts[2]}` : value
+}
+
+function monthLabel(value) {
+  const parts = String(value || '').split('-')
+  if (parts.length < 2) return value
+  if (isEn.value) {
+    const month = new Date(Number(parts[0]), Number(parts[1]) - 1, 1).toLocaleString('en-US', { month: 'short' })
+    return `${month} ${parts[0]}`
+  }
+  return `${parts[0]}年${Number(parts[1])}月`
+}
+
+function weekEndLabel(value) {
+  const parts = String(value || '').split('-').map(Number)
+  if (parts.length !== 3 || parts.some((part) => !Number.isFinite(part))) return value
+  const date = new Date(parts[0], parts[1] - 1, parts[2])
+  date.setDate(date.getDate() + 6)
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+function compactDollar(value) {
+  const amount = parseNum(value)
+  return `$${new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(amount)}`
+}
+
 const handleResize = () => {
   brandPieChart?.resize()
   turnoverBarChart?.resize()
   valueBarChart?.resize()
   profitLineChart?.resize()
+  shopSalesLineChart?.resize()
 }
 
 function ensureBrandPie() {
@@ -648,6 +703,128 @@ function ensureValueBar() {
 function ensureProfitLine() {
   if (!profitLineRef.value) return
   if (!profitLineChart) profitLineChart = echarts.init(profitLineRef.value)
+}
+
+function ensureShopSalesLine() {
+  if (!shopSalesLineRef.value) return
+  if (!shopSalesLineChart) shopSalesLineChart = echarts.init(shopSalesLineRef.value)
+}
+
+function refreshShopSalesLine() {
+  ensureShopSalesLine()
+  if (!shopSalesLineChart) return
+
+  const rows = shopSalesTrendList.value || []
+  const weeks = [...new Set(rows.map((row) => row.weekStart).filter(Boolean))].sort()
+  const shops = new Map()
+  rows.forEach((row) => {
+    const key = String(row.shopId)
+    if (!shops.has(key)) {
+      shops.set(key, {
+        key,
+        name: `${platformDisplayName(row.platform)} · ${row.shopName || row.shopId}`,
+        values: new Map()
+      })
+    }
+    shops.get(key).values.set(row.weekStart, parseNum(row.grossSales))
+  })
+
+  const monthMarkers = weeks.map((week, index) => {
+    const month = week.slice(0, 7)
+    return index === 0 || weeks[index - 1].slice(0, 7) !== month ? monthLabel(week) : ''
+  })
+  const series = [...shops.values()].map((shop, index) => ({
+    name: shop.name,
+    type: 'line',
+    smooth: 0.18,
+    showSymbol: false,
+    symbol: 'circle',
+    connectNulls: false,
+    emphasis: { focus: 'series', lineStyle: { width: 4 } },
+    lineStyle: {
+      width: index % 3 === 0 ? 3 : 2.4,
+      type: SHOP_SALES_LINE_TYPES[index % SHOP_SALES_LINE_TYPES.length]
+    },
+    itemStyle: { color: SHOP_SALES_COLORS[index % SHOP_SALES_COLORS.length] },
+    data: weeks.map((week) => shop.values.get(week) ?? 0)
+  }))
+
+  shopSalesLineChart.setOption(
+    {
+      color: SHOP_SALES_COLORS,
+      tooltip: {
+        trigger: 'axis',
+        confine: true,
+        order: 'valueDesc',
+        formatter: (params) => {
+          if (!params?.length) return ''
+          const week = weeks[params[0].dataIndex]
+          const detail = params
+            .map((item) => `${item.marker}${item.seriesName}：<b>${formatMoneyStr(item.value)}</b>`)
+            .join('<br/>')
+          return `<b>${week} — ${weekEndLabel(week)}</b><br/>${detail}`
+        }
+      },
+      legend: {
+        type: 'scroll',
+        top: 4,
+        left: 18,
+        right: 18,
+        itemWidth: 28,
+        itemHeight: 4,
+        textStyle: { color: '#344054', fontSize: 12 },
+        data: series.map((item) => item.name)
+      },
+      grid: { top: 72, left: 76, right: 28, bottom: 94, containLabel: false },
+      xAxis: [
+        {
+          type: 'category',
+          boundaryGap: false,
+          data: weeks,
+          axisTick: { show: true, alignWithLabel: true, lineStyle: { color: '#d0d5dd' } },
+          axisLine: { lineStyle: { color: '#d0d5dd' } },
+          axisLabel: {
+            color: '#667085',
+            interval: 1,
+            margin: 12,
+            formatter: (value) => weekLabel(value)
+          }
+        },
+        {
+          type: 'category',
+          position: 'bottom',
+          offset: 34,
+          boundaryGap: false,
+          data: weeks,
+          axisTick: { show: false },
+          axisLine: { show: false },
+          axisLabel: {
+            color: '#344054',
+            fontWeight: 700,
+            interval: 0,
+            margin: 8,
+            formatter: (_value, index) => monthMarkers[index]
+          }
+        }
+      ],
+      yAxis: {
+        type: 'value',
+        name: 'Gross Sales',
+        nameLocation: 'middle',
+        nameGap: 58,
+        nameTextStyle: { color: '#475467', fontWeight: 700 },
+        splitLine: { lineStyle: { color: '#eef2f7' } },
+        axisLine: { show: false },
+        axisTick: { show: false },
+        axisLabel: { color: '#667085', formatter: (value) => compactDollar(value) }
+      },
+      graphic: rows.length
+        ? []
+        : [{ type: 'text', left: 'center', top: 'middle', style: { text: tr('暂无店铺销售数据'), fill: '#98a2b3', fontSize: 14 } }],
+      series
+    },
+    true
+  )
 }
 
 function refreshBrandPie() {
@@ -935,23 +1112,26 @@ async function loadDashboard() {
   const trendQ = buildProfitTrendQuery()
   const shouldLoadTrend = filters.profitMode === 'preset' || hasCompleteCompareRange()
   try {
-    const [overview, brands, turnover, valueDist, trend] = await Promise.all([
+    const [overview, brands, turnover, valueDist, trend, shopSalesTrend] = await Promise.all([
       getAnalyticsOverview(),
       getBrandInventoryRatio(),
       getTurnoverDaysDistribution(),
       getValueRangeDistribution(),
-      shouldLoadTrend ? getGrossProfitTrend(trendQ) : Promise.resolve([])
+      shouldLoadTrend ? getGrossProfitTrend(trendQ) : Promise.resolve([]),
+      getShopSalesTrend()
     ])
     overviewVo.value = overview
     brandRatioList.value = Array.isArray(brands) ? brands : []
     turnoverDistList.value = Array.isArray(turnover) ? turnover : []
     valueDistList.value = Array.isArray(valueDist) ? valueDist : []
     profitTrendList.value = Array.isArray(trend) ? trend : []
+    shopSalesTrendList.value = Array.isArray(shopSalesTrend) ? shopSalesTrend : []
     await nextTick()
     refreshBrandPie()
     refreshTurnoverBar()
     refreshValueBar()
     refreshProfitLine()
+    refreshShopSalesLine()
   } catch {
     /* 错误提示由 request 拦截器统一处理 */
   } finally {
@@ -986,6 +1166,7 @@ watch(
       refreshTurnoverBar()
       refreshValueBar()
       refreshProfitLine()
+      refreshShopSalesLine()
     })
   }
 )
@@ -1004,6 +1185,7 @@ onMounted(() => {
     ensureTurnoverBar()
     ensureValueBar()
     ensureProfitLine()
+    ensureShopSalesLine()
     window.addEventListener('resize', handleResize)
     loadDashboard()
   })
@@ -1016,10 +1198,12 @@ onBeforeUnmount(() => {
   turnoverBarChart?.dispose()
   valueBarChart?.dispose()
   profitLineChart?.dispose()
+  shopSalesLineChart?.dispose()
   brandPieChart = null
   turnoverBarChart = null
   valueBarChart = null
   profitLineChart = null
+  shopSalesLineChart = null
 })
 </script>
 
@@ -1032,6 +1216,20 @@ onBeforeUnmount(() => {
 
 .analytics-filter {
   margin-bottom: -8px;
+}
+
+.shop-sales-card {
+  margin-bottom: 12px;
+}
+
+.shop-sales-head {
+  align-items: center;
+}
+
+.shop-sales-chart {
+  width: 100%;
+  height: 430px;
+  min-height: 430px;
 }
 
 .kpi-grid {
