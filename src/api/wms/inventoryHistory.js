@@ -9,12 +9,16 @@ export function listInventoryHistory(query) {
   })
 }
 
-export function exportInventoryHistory(data) {
+export function exportInventoryHistory(data, config = {}) {
   return request({
     url: '/wms/inventoryHistory/export',
     method: 'post',
     data: data,
-    responseType: 'blob'
+    responseType: 'blob',
+    ...config,
+    headers: {
+      ...(config.headers || {})
+    }
   })
 }
 

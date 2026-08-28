@@ -180,6 +180,7 @@ import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
 import { formatDateTimeForQuery, formatLosAngelesTime } from '@/utils/laTime'
 import { blobValidate } from '@/utils/ruoyi'
+import { downloadXlsx, getExportLanguageHeaders, prepareLanguageXlsx } from '@/utils/xlsxTranslate'
 
 const ORDER_TYPE_RECEIPT = 1
 const ORDER_TYPE_SHIPMENT = 2
@@ -258,25 +259,20 @@ async function handleExportExcel() {
     const query = buildRequestQuery()
     delete query.pageNum
     delete query.pageSize
-    const blobData = await exportInventoryHistory(query)
+    const blobData = await exportInventoryHistory(query, {
+      headers: getExportLanguageHeaders(isEn.value)
+    })
     const isBlob = blobValidate(blobData)
     if (!isBlob) {
       const resText = await blobData.text()
       const rspObj = JSON.parse(resText)
-      throw new Error(rspObj?.msg || tr('\u5bfc\u51fa\u5931\u8d25'))
+      throw new Error(rspObj?.msg || tr('导出失败'))
     }
-    const blob = new Blob([blobData], {
-      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    })
-    const url = window.URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = 'LuxeAFWMS-\u5e93\u5b58\u8bb0\u5f55.xlsx'
-    a.click()
-    window.URL.revokeObjectURL(url)
-    proxy.$modal.msgSuccess(tr('\u5bfc\u51fa\u6210\u529f'))
+    const excelData = await prepareLanguageXlsx(blobData, isEn.value)
+    downloadXlsx(excelData, isEn.value ? 'LuxeAFWMS-Inventory History.xlsx' : 'LuxeAFWMS-库存记录.xlsx')
+    proxy.$modal.msgSuccess(tr('导出成功'))
   } catch (e) {
-    proxy.$modal.msgError(e?.message || tr('\u5bfc\u51fa\u5931\u8d25'))
+    proxy.$modal.msgError(e?.message || tr('导出失败'))
   } finally {
     exportLoading.value = false
   }

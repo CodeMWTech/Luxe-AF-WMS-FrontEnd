@@ -150,6 +150,37 @@ export function saveEmployeeAttachment(data) {
   })
 }
 
+export function saveOtherAttachmentBatch(data) {
+  return request({
+    url: '/wms/employee/attachments/otherBatch',
+    method: 'post',
+    data
+  })
+}
+
+export function groupOtherAttachmentBatch(data) {
+  return request({
+    url: '/wms/employee/attachments/otherBatch/group',
+    method: 'post',
+    data
+  })
+}
+
+export function renameOtherAttachmentBatch(batchId, data) {
+  return request({
+    url: '/wms/employee/attachments/batch/' + batchId,
+    method: 'put',
+    data
+  })
+}
+
+export function delOtherAttachmentBatch(batchId) {
+  return request({
+    url: '/wms/employee/attachments/batch/' + batchId,
+    method: 'delete'
+  })
+}
+
 export function delEmployeeAttachment(id) {
   return request({
     url: '/wms/employee/attachments/' + id,
