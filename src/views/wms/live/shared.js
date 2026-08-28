@@ -40,30 +40,3 @@ export function downloadCsv(filename, headers, rows) {
   link.click()
   URL.revokeObjectURL(url)
 }
-
-export function parseCsv(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onerror = reject
-    reader.onload = event => {
-      const lines = String(event.target.result || '').replace(/^\uFEFF/, '').split(/\r?\n/).filter(Boolean)
-      if (!lines.length) return resolve([])
-      const split = line => {
-        const result = []
-        let value = '', quoted = false
-        for (let i = 0; i < line.length; i++) {
-          const char = line[i]
-          if (char === '"' && quoted && line[i + 1] === '"') { value += '"'; i++ }
-          else if (char === '"') quoted = !quoted
-          else if (char === ',' && !quoted) { result.push(value.trim()); value = '' }
-          else value += char
-        }
-        result.push(value.trim())
-        return result
-      }
-      const keys = split(lines[0])
-      resolve(lines.slice(1).map(line => Object.fromEntries(split(line).map((value, index) => [keys[index], value]))))
-    }
-    reader.readAsText(file, 'utf-8')
-  })
-}

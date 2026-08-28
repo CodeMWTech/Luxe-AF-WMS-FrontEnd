@@ -4,7 +4,6 @@
       <div><h2>费率配置</h2><p>按主播 / 直播运营与账号配置时薪规则</p></div>
       <div class="live-actions">
         <el-button @click="exportRows">批量导出</el-button>
-        <el-upload :show-file-list="false" accept=".csv" :auto-upload="false" :on-change="importCsv"><el-button>批量导入</el-button></el-upload>
         <el-button @click="recalculate">重算开播记录</el-button>
         <el-button type="primary" :disabled="!selectedEmployee" @click="openDialog()">新增费率</el-button>
       </div>
@@ -142,10 +141,10 @@
 <script setup>
 import { computed, getCurrentInstance, onMounted, reactive, ref } from 'vue'
 import { ArrowDown, ArrowRight, Connection, Delete, Edit, Search } from '@element-plus/icons-vue'
-import { addRate, batchRates, deleteRate, deleteRateAccountGroup, getLiveOptions, listRateAccountGroups, listRates, recalculateStreams, syncRateAccountGroup, updateAllRateAccountGroupStatuses, updateRate, updateRateAccountGroupStatus } from '@/api/wms/livePayroll'
+import { addRate, deleteRate, deleteRateAccountGroup, getLiveOptions, listRateAccountGroups, listRates, recalculateStreams, syncRateAccountGroup, updateAllRateAccountGroupStatuses, updateRate, updateRateAccountGroupStatus } from '@/api/wms/livePayroll'
 import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
-import { accountLabel, downloadCsv, isoDate, money, parseCsv } from '../shared'
+import { accountLabel, downloadCsv, isoDate, money } from '../shared'
 
 const settingsStore = useSettingsStore(), isEn = computed(() => (settingsStore.language || 'zh-cn') === 'en'), tr = text => translateByMap(text, settingsStore.language || 'zh-cn')
 const { proxy } = getCurrentInstance(), loading = ref(false), groupLoading = ref(false), rows = ref([]), formRef = ref()
@@ -191,7 +190,6 @@ async function submitSync() { syncDialog.loading = true; try { const res = await
 async function recalculate() { await proxy.$modal.confirm('将按当前费率重新计算所有非手工时薪的开播记录，是否继续？'); const res = await recalculateStreams({}); proxy.$modal.msgSuccess(`已重算 ${res.data || 0} 条记录`) }
 function headers() { return [{ key: 'employeeName', label: '主播/运营' }, { key: 'accountLabel', label: '账号' }, { key: 'rateTypeName', label: '费率类型' }, { key: 'hourlyRate', label: '时薪' }, { key: 'effectiveDate', label: '生效日期' }, { key: 'expiryDate', label: '失效日期' }, { key: 'status', label: '状态' }, { key: 'remark', label: '备注' }] }
 function exportRows() { downloadCsv('主播费率配置.csv', headers(), rows.value) }
-async function importCsv(uploadFile) { try { const raw = await parseCsv(uploadFile.raw); const payload = raw.map(v => ({ employeeId: options.employees.find(e => e.label === (v['主播/运营'] || v['主播']))?.value, accountId: options.accounts.find(a => accountLabel(a) === v['账号'] || a.accountCode === v['账号'])?.id, rateTypeId: options.rateTypes.find(t => t.typeName === v['费率类型'])?.id, hourlyRate: Number(v['时薪'] || 0), effectiveDate: v['生效日期'], expiryDate: v['失效日期'] || null, status: v['状态'] === '停用' ? 1 : 0, remark: v['备注'] || '' })); await batchRates(payload); proxy.$modal.msgSuccess(`成功导入 ${payload.length} 条`); await loadRates() } catch (e) { proxy.$modal.msgError(e.message || '导入失败') } }
 onMounted(loadAll)
 </script>
 

@@ -33,13 +33,11 @@ export const deleteSchedule = id => request({ url: `${base}/schedules/${id}`, me
 export const listStreams = params => request({ url: `${base}/streams/list`, method: 'get', params })
 export const addStream = data => request({ url: `${base}/streams`, method: 'post', data })
 export const updateStream = data => request({ url: `${base}/streams`, method: 'put', data })
-export const batchStreams = data => request({ url: `${base}/streams/batch`, method: 'post', data })
 export const deleteStream = id => request({ url: `${base}/streams/${id}`, method: 'delete' })
 
 export const listCommissions = params => request({ url: `${base}/commissions/list`, method: 'get', params })
 export const addCommission = data => request({ url: `${base}/commissions`, method: 'post', data })
 export const updateCommission = data => request({ url: `${base}/commissions`, method: 'put', data })
-export const batchCommissions = data => request({ url: `${base}/commissions/batch`, method: 'post', data })
 export const deleteCommission = id => request({ url: `${base}/commissions/${id}`, method: 'delete' })
 
 export const listAccounts = params => request({ url: `${base}/accounts/list`, method: 'get', params })
@@ -51,7 +49,6 @@ export const syncAccounts = () => request({ url: `${base}/accounts/sync-shops`, 
 export const listRates = params => request({ url: `${base}/rates/list`, method: 'get', params })
 export const addRate = data => request({ url: `${base}/rates`, method: 'post', data })
 export const updateRate = data => request({ url: `${base}/rates`, method: 'put', data })
-export const batchRates = data => request({ url: `${base}/rates/batch`, method: 'post', data })
 export const deleteRate = id => request({ url: `${base}/rates/${id}`, method: 'delete' })
 export const recalculateStreams = params => request({ url: `${base}/rates/recalculate`, method: 'post', params })
 export const listRateAccountGroups = employeeId => request({ url: `${base}/rates/account-groups`, method: 'get', params: { employeeId } })

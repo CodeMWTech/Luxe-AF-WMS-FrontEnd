@@ -1,6 +1,6 @@
 <template>
   <div class="live-page">
-    <div class="live-hero"><div><h2>佣金管理</h2><p>导入销售订单并汇总主播佣金</p></div><div class="live-actions"><el-button @click="exportRows">导出 CSV</el-button><el-button @click="downloadTemplate">下载模板</el-button><el-upload :show-file-list="false" accept=".csv" :auto-upload="false" :on-change="importCsv"><el-button>上传文件</el-button></el-upload><el-button type="primary" @click="openDialog()">新增佣金</el-button></div></div>
+    <div class="live-hero"><div><h2>佣金管理</h2><p>记录销售订单并汇总主播佣金</p></div><div class="live-actions"><el-button @click="exportRows">导出 CSV</el-button><el-button type="primary" @click="openDialog()">新增佣金</el-button></div></div>
     <el-card class="live-filter" shadow="never"><el-form :inline="true"><el-form-item label="结算月份"><el-date-picker v-model="query.settlementMonth" type="month" value-format="YYYY-MM" clearable /></el-form-item><el-form-item label="平台"><el-select v-model="query.platform" clearable placeholder="全部平台"><el-option v-for="v in platforms" :key="v" :label="v" :value="v" /></el-select></el-form-item><el-form-item label="主播"><el-select v-model="query.employeeId" clearable filterable placeholder="全部主播"><el-option v-for="v in options.employees" :key="v.value" :label="v.label" :value="v.value" /></el-select></el-form-item><el-form-item label="状态"><el-select v-model="query.status" clearable placeholder="全部状态"><el-option :label="tr('正常销售')" value="NORMAL" /><el-option :label="tr('已退款')" value="REFUNDED" /></el-select></el-form-item><el-form-item><el-button type="primary" @click="load">查询</el-button></el-form-item></el-form></el-card>
     <div class="metric-grid"><el-card class="metric-card" shadow="never"><div class="metric-label">佣金订单数</div><div class="metric-value">{{ total }}</div></el-card><el-card class="metric-card" shadow="never"><div class="metric-label">当前页销售额</div><div class="metric-value">{{ money(summary.sales) }}</div></el-card><el-card class="metric-card" shadow="never"><div class="metric-label">当前页佣金</div><div class="metric-value">{{ money(summary.commission) }}</div></el-card><el-card class="metric-card" shadow="never"><div class="metric-label">正常 / 退款</div><div class="metric-value">{{ summary.normal }} / {{ summary.refunded }}</div></el-card></div>
     <el-card class="live-card" shadow="never"><el-table v-loading="loading" :data="rows" stripe><el-table-column prop="settlementMonth" label="结算月" /><el-table-column prop="platform" label="平台" /><el-table-column prop="accountLabel" label="账号" min-width="180" /><el-table-column prop="employeeName" label="主播" /><el-table-column prop="orderNo" label="订单号" min-width="160" /><el-table-column prop="orderDate" label="订单日期" /><el-table-column label="销售额"><template #default="s">{{ money(s.row.saleAmount) }}</template></el-table-column><el-table-column label="佣金率"><template #default="s">{{ s.row.commissionRate }}%</template></el-table-column><el-table-column label="佣金"><template #default="s"><strong>{{ money(s.row.commissionAmount) }}</strong></template></el-table-column><el-table-column label="状态"><template #default="s"><el-tag :type="s.row.status==='REFUNDED'?'danger':'success'">{{ tr(s.row.status==='REFUNDED'?'已退款':'正常销售') }}</el-tag></template></el-table-column><el-table-column label="操作" width="130" fixed="right"><template #default="s"><el-button link type="primary" @click="openDialog(s.row)">{{ tr('编辑') }}</el-button><el-button link type="danger" @click="remove(s.row)">{{ tr('删除') }}</el-button></template></el-table-column></el-table><pagination v-show="total>0" :total="total" v-model:page="query.pageNum" v-model:limit="query.pageSize" @pagination="load" /></el-card>
@@ -9,10 +9,10 @@
 </template>
 <script setup>
 import { computed, getCurrentInstance, onMounted, reactive, ref } from 'vue'
-import { addCommission, batchCommissions, deleteCommission, getLiveOptions, listCommissions, updateCommission } from '@/api/wms/livePayroll'
+import { addCommission, deleteCommission, getLiveOptions, listCommissions, updateCommission } from '@/api/wms/livePayroll'
 import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
-import { accountLabel, downloadCsv, isoDate, money, parseCsv } from '../shared'
+import { accountLabel, downloadCsv, isoDate, money } from '../shared'
 const settingsStore=useSettingsStore(),tr=(text)=>translateByMap(text,settingsStore.language||'zh-cn')
 const { proxy } = getCurrentInstance()
 const loading=ref(false), rows=ref([]), total=ref(0), formRef=ref()
@@ -28,9 +28,6 @@ async function submit(){await formRef.value.validate();await(dialog.form.id?upda
 async function remove(row){await proxy.$modal.confirm(`确认删除订单 ${row.orderNo} 的佣金？`);await deleteCommission(row.id);proxy.$modal.msgSuccess('删除成功');load()}
 function headers(){return[{key:'settlementMonth',label:'结算月份'},{key:'platform',label:'平台'},{key:'accountLabel',label:'账号'},{key:'employeeName',label:'主播'},{key:'orderNo',label:'订单号'},{key:'orderDate',label:'订单日期'},{key:'saleAmount',label:'销售额'},{key:'commissionRate',label:'佣金率'},{key:'commissionAmount',label:'佣金金额'},{key:'status',label:'状态'},{key:'remark',label:'备注'}]}
 function exportRows(){downloadCsv(`主播佣金-${query.settlementMonth||'全部'}.csv`,headers(),rows.value)}
-function downloadTemplate(){downloadCsv('主播佣金导入模板.csv',headers(),[])}
-async function importCsv(uploadFile){try{const raw=await parseCsv(uploadFile.raw);const payload=raw.map(v=>({settlementMonth:v['结算月份'],platform:v['平台'],accountId:options.accounts.find(a=>accountLabel(a)===v['账号']||a.accountCode===v['账号'])?.id,employeeId:options.employees.find(e=>e.label===v['主播'])?.value,orderNo:v['订单号'],orderDate:v['订单日期'],saleAmount:Number(v['销售额']||0),commissionRate:Number(v['佣金率']||0),commissionAmount:v['佣金金额']?Number(v['佣金金额']):null,status:v['状态']==='已退款'||v['状态']==='REFUNDED'?'REFUNDED':'NORMAL',remark:v['备注']||''}));await batchCommissions(payload);proxy.$modal.msgSuccess(`成功导入 ${payload.length} 条`);load()}catch(e){proxy.$modal.msgError(e.message||'导入失败')}}
 onMounted(async()=>{Object.assign(options,await getLiveOptions());load()})
 </script>
 <style scoped lang="scss">@import '../live.scss';</style>
-
