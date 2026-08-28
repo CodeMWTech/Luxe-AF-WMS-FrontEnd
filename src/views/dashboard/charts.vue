@@ -28,10 +28,10 @@
       <div class="brand-card-head shop-sales-head">
         <div>
           <div class="brand-title">
-            <span>{{ tr('各平台店铺周销售趋势') }}</span>
+            <span>{{ tr('eBay / TikTok 店铺周销售趋势') }}</span>
           </div>
           <div class="brand-subtitle">
-            {{ tr('按自然周对比全部已连接店铺的 Gross Sales；同一店铺在无销售的周按 0 展示') }}
+            {{ tr('按自然周对比全部已连接 eBay、TikTok 店铺的 Gross Sales；同一店铺在无销售的周按 0 展示') }}
           </div>
         </div>
         <el-tag type="primary" effect="plain">{{ tr('最近52周') }}</el-tag>
