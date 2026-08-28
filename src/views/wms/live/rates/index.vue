@@ -67,7 +67,7 @@
 
               <div v-show="isExpanded(account.id)" class="rate-type-list">
                 <div v-for="type in options.rateTypes" :key="type.id" class="rate-type-row">
-                  <div class="rate-type-name"><strong>{{ tr(type.typeName) }}</strong><small>×{{ type.multiplier }}</small></div>
+                  <div class="rate-type-name"><strong>{{ tr(type.typeName) }}</strong></div>
                   <template v-if="rateFor(account.id, type.id)">
                     <div class="rate-value">
                       <el-tag size="small" :type="rateFor(account.id, type.id).status === 0 ? 'success' : 'info'">{{ rateFor(account.id, type.id).status === 0 ? '生效中' : '已停用' }}</el-tag>
