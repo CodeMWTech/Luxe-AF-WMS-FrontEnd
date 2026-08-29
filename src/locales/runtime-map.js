@@ -1190,7 +1190,6 @@ Object.assign(zhToEnMap, {
   '同步授权店铺': 'Sync Authorized Shops',
   '如 TK 01': 'e.g. TK 01',
   '排序': 'Sort Order',
-  '重算开播记录': 'Recalculate Stream Records',
   '生效日期': 'Effective Date',
   '失效日期': 'Expiration Date',
   '长期': 'No Expiration',

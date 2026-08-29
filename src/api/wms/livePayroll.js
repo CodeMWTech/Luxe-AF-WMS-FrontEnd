@@ -50,7 +50,6 @@ export const listRates = params => request({ url: `${base}/rates/list`, method: 
 export const addRate = data => request({ url: `${base}/rates`, method: 'post', data })
 export const updateRate = data => request({ url: `${base}/rates`, method: 'put', data })
 export const deleteRate = id => request({ url: `${base}/rates/${id}`, method: 'delete' })
-export const recalculateStreams = params => request({ url: `${base}/rates/recalculate`, method: 'post', params })
 export const listRateAccountGroups = employeeId => request({ url: `${base}/rates/account-groups`, method: 'get', params: { employeeId } })
 export const updateRateAccountGroupStatus = data => request({ url: `${base}/rates/account-groups/status`, method: 'put', data })
 export const updateAllRateAccountGroupStatuses = params => request({ url: `${base}/rates/account-groups/status/all`, method: 'put', params })

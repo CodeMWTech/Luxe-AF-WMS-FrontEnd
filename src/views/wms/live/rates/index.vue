@@ -4,8 +4,6 @@
       <div><h2>费率配置</h2><p>按主播 / 直播运营与账号配置时薪规则</p></div>
       <div class="live-actions">
         <el-button @click="exportRows">批量导出</el-button>
-        <el-button @click="recalculate">重算开播记录</el-button>
-        <el-button type="primary" :disabled="!canCreateRate" @click="openDialog()">新增费率</el-button>
       </div>
     </div>
 
@@ -43,7 +41,6 @@
             <div class="live-actions">
               <el-button size="small" @click="setAllGroups(0)">全部启用</el-button>
               <el-button size="small" @click="setAllGroups(1)">全部禁用</el-button>
-              <el-button size="small" type="primary" :disabled="!canCreateRate" @click="openDialog()">新增费率</el-button>
             </div>
           </div>
 
@@ -141,7 +138,7 @@
 <script setup>
 import { computed, getCurrentInstance, onMounted, reactive, ref } from 'vue'
 import { ArrowDown, ArrowRight, Connection, Delete, Edit, Search } from '@element-plus/icons-vue'
-import { addRate, deleteRate, deleteRateAccountGroup, getLiveOptions, listRateAccountGroups, listRates, recalculateStreams, syncRateAccountGroup, updateAllRateAccountGroupStatuses, updateRate, updateRateAccountGroupStatus } from '@/api/wms/livePayroll'
+import { addRate, deleteRate, deleteRateAccountGroup, getLiveOptions, listRateAccountGroups, listRates, syncRateAccountGroup, updateAllRateAccountGroupStatuses, updateRate, updateRateAccountGroupStatus } from '@/api/wms/livePayroll'
 import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
 import { accountLabel, downloadCsv, isoDate, money } from '../shared'
@@ -159,7 +156,6 @@ const selectedEmployeeRates = computed(() => rows.value.filter(v => v.employeeId
 const sortedAccounts = computed(() => [...options.accounts].sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0) || String(a.platform).localeCompare(String(b.platform)) || String(a.accountCode).localeCompare(String(b.accountCode))))
 const activeAccounts = computed(() => sortedAccounts.value.filter(v => v.status === 0))
 const configurableAccounts = computed(() => activeAccounts.value.filter(v => isGroupEnabled(v.id)))
-const canCreateRate = computed(() => Boolean(selectedEmployee.value) && configurableAccounts.value.length > 0)
 const enabledGroupCount = computed(() => activeAccounts.value.filter(v => isGroupEnabled(v.id)).length)
 const syncTargets = computed(() => activeAccounts.value.filter(v => v.id !== syncDialog.source?.id))
 const rateMatrix = computed(() => { const result = new Map(); selectedEmployeeRates.value.forEach(rate => { const key = `${rate.accountId}:${rate.rateTypeId}`; if (!result.has(key)) result.set(key, rate) }); return result })
@@ -189,7 +185,6 @@ async function removeAccountGroup(account) { await proxy.$modal.confirm(`确认�
 function openSync(account) { syncDialog.source = account; syncDialog.mode = 'OVERWRITE'; syncDialog.targetAccountIds = []; syncDialog.open = true }
 function selectAllSyncTargets() { syncDialog.targetAccountIds = syncTargets.value.map(v => v.id) }
 async function submitSync() { syncDialog.loading = true; try { const res = await syncRateAccountGroup({ employeeId: selectedEmployeeId.value, sourceAccountId: syncDialog.source.id, targetAccountIds: syncDialog.targetAccountIds, mode: syncDialog.mode }); proxy.$modal.msgSuccess(`已同步 ${res.data || 0} 条费率，目标账号分组已启用`); syncDialog.open = false; await Promise.all([loadRates(), loadGroups()]) } finally { syncDialog.loading = false } }
-async function recalculate() { await proxy.$modal.confirm('将按当前费率重新计算所有非手工时薪的开播记录，是否继续？'); const res = await recalculateStreams({}); proxy.$modal.msgSuccess(`已重算 ${res.data || 0} 条记录`) }
 function headers() { return [{ key: 'employeeName', label: '主播/运营' }, { key: 'accountLabel', label: '账号' }, { key: 'rateTypeName', label: '费率类型' }, { key: 'hourlyRate', label: '时薪' }, { key: 'effectiveDate', label: '生效日期' }, { key: 'expiryDate', label: '失效日期' }, { key: 'status', label: '状态' }, { key: 'remark', label: '备注' }] }
 function exportRows() { downloadCsv('主播费率配置.csv', headers(), rows.value) }
 onMounted(loadAll)
@@ -201,7 +196,7 @@ onMounted(loadAll)
 .employee-panel, .rate-detail-panel { background: #fff; border: 1px solid #e9eaf1; border-radius: 14px; box-shadow: 0 4px 20px rgba(37, 48, 74, .05); }
 .employee-panel { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
 .employee-search { padding: 14px 12px 10px; border-bottom: 1px solid #f0f1f5; }
-.employee-list { flex: 1; max-height: calc(100vh - 240px); min-height: 560px; padding: 8px; overflow-y: auto; }
+.employee-list { flex: 1; padding: 8px; }
 .employee-item { width: 100%; display: flex; align-items: center; gap: 10px; padding: 10px; border: 1px solid transparent; border-radius: 10px; background: transparent; color: #30364a; text-align: left; cursor: pointer; transition: .18s ease; }
 .employee-item:hover { background: #f5f7fb; }
 .employee-item.active { border-color: #cbd9ff; background: #edf3ff; }
@@ -244,7 +239,7 @@ onMounted(loadAll)
 .sync-targets :deep(.el-checkbox) { display: flex; align-items: center; height: auto; min-height: 44px; margin: 0; padding: 8px 10px; border: 1px solid #e8eaf0; border-radius: 8px; }
 .sync-targets :deep(.el-checkbox__label) { display: flex; min-width: 0; flex: 1; justify-content: space-between; gap: 8px; }
 @media (max-width: 1050px) { .rate-config-shell { grid-template-columns: 230px minmax(0, 1fr); } .rate-type-row { grid-template-columns: minmax(140px, 1fr) minmax(210px, 1.2fr) 72px; } }
-@media (max-width: 760px) { .rate-config-shell { grid-template-columns: 1fr; } .employee-list { min-height: auto; max-height: 320px; } .employee-summary { align-items: flex-start; flex-direction: column; } .rate-type-row { grid-template-columns: 1fr auto; } .rate-value { grid-column: 1 / -1; grid-row: 2; flex-wrap: wrap; } .rate-actions { grid-column: 2; grid-row: 1; } .sync-targets :deep(.el-checkbox-group) { grid-template-columns: 1fr; } }
+@media (max-width: 760px) { .rate-config-shell { grid-template-columns: 1fr; } .employee-summary { align-items: flex-start; flex-direction: column; } .rate-type-row { grid-template-columns: 1fr auto; } .rate-value { grid-column: 1 / -1; grid-row: 2; flex-wrap: wrap; } .rate-actions { grid-column: 2; grid-row: 1; } .sync-targets :deep(.el-checkbox-group) { grid-template-columns: 1fr; } }
 </style>
 
 <style lang="scss">
