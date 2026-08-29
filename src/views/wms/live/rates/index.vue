@@ -114,7 +114,27 @@
           <el-form-item class="wide" label="备注"><el-input v-model="dialog.form.remark" /></el-form-item>
         </div>
       </el-form>
-      <template #footer><el-button @click="dialog.open = false">取消</el-button><el-button type="primary" @click="submit">保存</el-button></template>
+      <template #footer><el-button @click="dialog.open = false">取消</el-button><el-button type="primary" :loading="dialog.loading" @click="submit">保存</el-button></template>
+    </el-dialog>
+
+    <el-dialog v-model="impactDialog.open" class="rate-impact-dialog" title="确认费率修改影响" width="1040px" append-to-body :close-on-click-modal="false">
+      <div class="impact-notice">
+        <el-icon><WarningFilled /></el-icon>
+        <div>
+          <strong>{{ impactDialog.rows.length ? `本次修改将同步更新 ${impactDialog.rows.length} 条开播记录` : '本次修改不会影响已有开播记录' }}</strong>
+          <p>{{ impactDialog.rows.length ? '请核对以下工资变化，确认后将保存费率并立即更新开播录入数据。' : '确认后将仅保存费率配置。' }} 影响范围仅限当前账号，不会自动覆盖其他账号。</p>
+        </div>
+      </div>
+      <el-table v-if="impactDialog.rows.length" :data="impactDialog.rows" max-height="440" stripe border>
+        <el-table-column prop="streamDate" label="开播日期" width="112" />
+        <el-table-column prop="accountLabel" label="账号" min-width="170" show-overflow-tooltip />
+        <el-table-column prop="rateTypeName" label="费率类型" width="110"><template #default="s">{{ tr(s.row.rateTypeName) }}</template></el-table-column>
+        <el-table-column label="时段" width="116"><template #default="s">{{ timeRange(s.row) }}</template></el-table-column>
+        <el-table-column label="时薪变化" min-width="150"><template #default="s"><div class="amount-change"><span>{{ money(s.row.oldHourlyRate) }}/h</span><b>→</b><strong>{{ money(s.row.newHourlyRate) }}/h</strong></div></template></el-table-column>
+        <el-table-column label="基础工资" min-width="150"><template #default="s"><div class="amount-change"><span>{{ money(s.row.oldBaseAmount) }}</span><b>→</b><strong>{{ money(s.row.newBaseAmount) }}</strong></div></template></el-table-column>
+        <el-table-column label="总工资" min-width="150"><template #default="s"><div class="amount-change"><span>{{ money(s.row.oldTotalAmount) }}</span><b>→</b><strong>{{ money(s.row.newTotalAmount) }}</strong></div></template></el-table-column>
+      </el-table>
+      <template #footer><el-button :disabled="impactDialog.saving" @click="impactDialog.open = false">返回修改</el-button><el-button type="primary" :loading="impactDialog.saving" @click="confirmSubmit">确认修改</el-button></template>
     </el-dialog>
 
     <el-dialog v-model="syncDialog.open" title="同步费率到其他账号" width="620px" append-to-body>
@@ -137,8 +157,8 @@
 
 <script setup>
 import { computed, getCurrentInstance, onMounted, reactive, ref } from 'vue'
-import { ArrowDown, ArrowRight, Connection, Delete, Edit, Search } from '@element-plus/icons-vue'
-import { addRate, deleteRate, deleteRateAccountGroup, getLiveOptions, listRateAccountGroups, listRates, syncRateAccountGroup, updateAllRateAccountGroupStatuses, updateRate, updateRateAccountGroupStatus } from '@/api/wms/livePayroll'
+import { ArrowDown, ArrowRight, Connection, Delete, Edit, Search, WarningFilled } from '@element-plus/icons-vue'
+import { addRate, deleteRate, deleteRateAccountGroup, getLiveOptions, listRateAccountGroups, listRates, previewRateImpact, syncRateAccountGroup, updateAllRateAccountGroupStatuses, updateRate, updateRateAccountGroupStatus } from '@/api/wms/livePayroll'
 import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
 import { accountLabel, downloadCsv, isoDate, money } from '../shared'
@@ -146,7 +166,8 @@ import { accountLabel, downloadCsv, isoDate, money } from '../shared'
 const settingsStore = useSettingsStore(), isEn = computed(() => (settingsStore.language || 'zh-cn') === 'en'), tr = text => translateByMap(text, settingsStore.language || 'zh-cn')
 const { proxy } = getCurrentInstance(), loading = ref(false), groupLoading = ref(false), rows = ref([]), formRef = ref()
 const options = reactive({ employees: [], accounts: [], rateTypes: [] }), employeeKeyword = ref(''), selectedEmployeeId = ref(null), viewMode = ref('detail')
-const groupLinks = ref([]), expandedAccounts = ref(new Set()), statusBusy = ref(null), dialog = reactive({ open: false, form: {} })
+const groupLinks = ref([]), expandedAccounts = ref(new Set()), statusBusy = ref(null), dialog = reactive({ open: false, form: {}, loading: false })
+const impactDialog = reactive({ open: false, rows: [], pendingForm: null, saving: false })
 const syncDialog = reactive({ open: false, source: null, mode: 'OVERWRITE', targetAccountIds: [], loading: false })
 const rules = { employeeId: [{ required: true, message: '请选择主播或直播运营' }], accountId: [{ required: true, message: '请选择账号' }], rateTypeId: [{ required: true, message: '请选择费率类型' }], hourlyRate: [{ required: true, message: '请输入时薪' }], effectiveDate: [{ required: true, message: '请选择生效日期' }] }
 
@@ -169,6 +190,7 @@ function hasAccountGroup(accountId) { return groupLinks.value.some(v => v.accoun
 function isGroupEnabled(accountId) { return groupLinks.value.find(v => v.accountId === accountId)?.status === 0 }
 function canConfigure(account) { return account.status === 0 && isGroupEnabled(account.id) }
 function toggleExpanded(accountId) { const next = new Set(expandedAccounts.value); next.has(accountId) ? next.delete(accountId) : next.add(accountId); expandedAccounts.value = next }
+function timeRange(row) { return `${String(row.startTime || '').slice(0, 5)}–${String(row.endTime || '').slice(0, 5)}` }
 
 async function loadRates() { const res = await listRates({}); rows.value = res.rows || [] }
 async function loadGroups() { if (!selectedEmployeeId.value) { groupLinks.value = []; return } groupLoading.value = true; try { const res = await listRateAccountGroups(selectedEmployeeId.value); groupLinks.value = res.data || [] } finally { groupLoading.value = false } }
@@ -178,7 +200,8 @@ async function toggleGroupStatus(account, enabled) { statusBusy.value = account.
 async function setAllGroups(status) { await updateAllRateAccountGroupStatuses({ employeeId: selectedEmployeeId.value, status }); await loadGroups(); proxy.$modal.msgSuccess(status === 0 ? '全部账号已启用' : '全部账号已禁用') }
 
 function openDialog(row = {}, accountId = null, rateTypeId = null) { const targetAccountId = row.accountId || accountId; if (targetAccountId && !isGroupEnabled(targetAccountId)) { proxy.$modal.msgWarning('请先启用该账号分组'); return } if (!targetAccountId && !configurableAccounts.value.length) { proxy.$modal.msgWarning('请先启用至少一个账号分组'); return } dialog.form = { id: row.id, employeeId: row.employeeId || selectedEmployeeId.value, accountId: targetAccountId, rateTypeId: row.rateTypeId || rateTypeId, hourlyRate: Number(row.hourlyRate || 0), effectiveDate: row.effectiveDate || isoDate(), expiryDate: row.expiryDate || null, status: row.status ?? 0, remark: row.remark || '' }; dialog.open = true }
-async function submit() { await formRef.value.validate(); if (!isGroupEnabled(dialog.form.accountId)) { proxy.$modal.msgWarning('账号分组未启用，不能维护费率'); return } await (dialog.form.id ? updateRate(dialog.form) : addRate(dialog.form)); proxy.$modal.msgSuccess('保存成功'); dialog.open = false; await loadRates() }
+async function submit() { await formRef.value.validate(); if (!isGroupEnabled(dialog.form.accountId)) { proxy.$modal.msgWarning('账号分组未启用，不能维护费率'); return } dialog.loading = true; try { const pendingForm = { ...dialog.form }; const res = await previewRateImpact(pendingForm); impactDialog.rows = res.data || []; impactDialog.pendingForm = pendingForm; impactDialog.open = true } finally { dialog.loading = false } }
+async function confirmSubmit() { if (!impactDialog.pendingForm) return; impactDialog.saving = true; try { const form = impactDialog.pendingForm; await (form.id ? updateRate(form) : addRate(form)); proxy.$modal.msgSuccess(`保存成功${impactDialog.rows.length ? `，已同步更新 ${impactDialog.rows.length} 条开播记录` : ''}`); impactDialog.open = false; dialog.open = false; impactDialog.pendingForm = null; await loadRates() } finally { impactDialog.saving = false } }
 async function remove(row) { await proxy.$modal.confirm(`确认删除 ${row.employeeName} 在 ${row.accountLabel} 的这条费率？`); await deleteRate(row.id); proxy.$modal.msgSuccess('删除成功'); await loadRates() }
 async function removeAccountGroup(account) { await proxy.$modal.confirm(`确认删除 ${selectedEmployee.value.label} 的 ${accountLabel(account)} 账号分组及其下全部费率？`); await deleteRateAccountGroup({ employeeId: selectedEmployeeId.value, accountId: account.id }); proxy.$modal.msgSuccess('账号分组及费率已删除'); await Promise.all([loadRates(), loadGroups()]) }
 
@@ -238,6 +261,14 @@ onMounted(loadAll)
 .sync-targets :deep(.el-checkbox-group) { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .sync-targets :deep(.el-checkbox) { display: flex; align-items: center; height: auto; min-height: 44px; margin: 0; padding: 8px 10px; border: 1px solid #e8eaf0; border-radius: 8px; }
 .sync-targets :deep(.el-checkbox__label) { display: flex; min-width: 0; flex: 1; justify-content: space-between; gap: 8px; }
+.impact-notice { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 16px; padding: 14px 16px; border: 1px solid #cbd9ff; border-radius: 10px; background: #f3f7ff; color: #30364a; }
+.impact-notice .el-icon { flex: 0 0 auto; margin-top: 2px; color: #3563e9; font-size: 20px; }
+.impact-notice strong { font-size: 15px; }
+.impact-notice p { margin: 5px 0 0; color: #747d91; font-size: 13px; }
+.amount-change { display: flex; align-items: center; gap: 7px; white-space: nowrap; }
+.amount-change span { color: #8b93a5; text-decoration: line-through; }
+.amount-change b { color: #a4abbb; font-weight: 400; }
+.amount-change strong { color: #3563e9; }
 @media (max-width: 1050px) { .rate-config-shell { grid-template-columns: 230px minmax(0, 1fr); } .rate-type-row { grid-template-columns: minmax(140px, 1fr) minmax(210px, 1.2fr) 72px; } }
 @media (max-width: 760px) { .rate-config-shell { grid-template-columns: 1fr; } .employee-summary { align-items: flex-start; flex-direction: column; } .rate-type-row { grid-template-columns: 1fr auto; } .rate-value { grid-column: 1 / -1; grid-row: 2; flex-wrap: wrap; } .rate-actions { grid-column: 2; grid-row: 1; } .sync-targets :deep(.el-checkbox-group) { grid-template-columns: 1fr; } }
 </style>

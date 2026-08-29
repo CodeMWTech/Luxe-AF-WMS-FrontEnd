@@ -47,6 +47,7 @@ export const deleteAccount = id => request({ url: `${base}/accounts/${id}`, meth
 export const syncAccounts = () => request({ url: `${base}/accounts/sync-shops`, method: 'post' })
 
 export const listRates = params => request({ url: `${base}/rates/list`, method: 'get', params })
+export const previewRateImpact = data => request({ url: `${base}/rates/impact-preview`, method: 'post', data })
 export const addRate = data => request({ url: `${base}/rates`, method: 'post', data })
 export const updateRate = data => request({ url: `${base}/rates`, method: 'put', data })
 export const deleteRate = id => request({ url: `${base}/rates/${id}`, method: 'delete' })
