@@ -384,18 +384,31 @@ function handleAdd() {
   proxy.$router.push({ path: "/shipmentOrderEdit" });
 }
 
-/** 删除按钮操作 */
-function handleDelete(row) {
+/** 删除按钮操作：先读取服务端最新状态，避免旧标签页继续展示可删除状态 */
+async function handleDelete(row) {
   const _ids = row.id || ids.value;
-  proxy.$modal.confirm('确认删除出库单【' + row.orderNo + '】吗？').then(function() {
+  try {
+    const latest = await getShipmentOrder(_ids);
+    if (Number(latest?.data?.orderStatus) === 1) {
+      await proxy.$modal.alertWarning(
+        '出库单【' + row.orderNo + '】已在其他页面完成出库，当前页面数据已过期，无法删除。列表将自动刷新。'
+      );
+      return;
+    }
+
+    await proxy.$modal.confirm('确认删除出库单【' + row.orderNo + '】吗？');
     loading.value = true;
-    return delShipmentOrder(_ids);
-  }).then(() => {
+    await delShipmentOrder(_ids);
     proxy.$modal.msgSuccess("删除成功");
-  }).finally(() => {
+  } catch (error) {
+    // 409 由全局响应拦截器显示后端的并发状态提示；取消确认无需额外提示。
+    if (error !== 409 && error !== 'cancel' && error !== 'close') {
+      console.error(error);
+    }
+  } finally {
     loading.value = false;
-    getList();
-  });
+    await getList();
+  }
 }
 
 function handleUpdate(row) {
