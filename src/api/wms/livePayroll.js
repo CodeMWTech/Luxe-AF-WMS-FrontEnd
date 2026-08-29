@@ -57,8 +57,6 @@ export const updateAllRateAccountGroupStatuses = params => request({ url: `${bas
 export const syncRateAccountGroup = data => request({ url: `${base}/rates/account-groups/sync`, method: 'post', data })
 export const deleteRateAccountGroup = params => request({ url: `${base}/rates/account-groups`, method: 'delete', params })
 
-export const getLiveSetting = () => request({ url: `${base}/settings`, method: 'get' })
-export const updateLiveSetting = data => request({ url: `${base}/settings`, method: 'put', data })
 export const listRateTypes = () => request({ url: `${base}/settings/rate-types`, method: 'get' })
 export const addRateType = data => request({ url: `${base}/settings/rate-types`, method: 'post', data })
 export const updateRateType = data => request({ url: `${base}/settings/rate-types`, method: 'put', data })

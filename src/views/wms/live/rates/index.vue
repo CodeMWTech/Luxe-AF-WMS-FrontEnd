@@ -5,7 +5,7 @@
       <div class="live-actions">
         <el-button @click="exportRows">批量导出</el-button>
         <el-button @click="recalculate">重算开播记录</el-button>
-        <el-button type="primary" :disabled="!selectedEmployee" @click="openDialog()">新增费率</el-button>
+        <el-button type="primary" :disabled="!canCreateRate" @click="openDialog()">新增费率</el-button>
       </div>
     </div>
 
@@ -43,7 +43,7 @@
             <div class="live-actions">
               <el-button size="small" @click="setAllGroups(0)">全部启用</el-button>
               <el-button size="small" @click="setAllGroups(1)">全部禁用</el-button>
-              <el-button size="small" type="primary" @click="openDialog()">新增费率</el-button>
+              <el-button size="small" type="primary" :disabled="!canCreateRate" @click="openDialog()">新增费率</el-button>
             </div>
           </div>
 
@@ -74,7 +74,7 @@
                       <span>{{ rateFor(account.id, type.id).effectiveDate }} 起</span>
                     </div>
                     <div class="rate-actions">
-                      <el-button link :icon="Edit" title="编辑" @click="openDialog(rateFor(account.id, type.id))" />
+                      <el-button link :icon="Edit" title="编辑" :disabled="!isGroupEnabled(account.id)" @click="openDialog(rateFor(account.id, type.id))" />
                       <el-button link type="danger" :icon="Delete" title="删除" @click="remove(rateFor(account.id, type.id))" />
                     </div>
                   </template>
@@ -96,7 +96,7 @@
               <el-table-column prop="expiryDate" label="失效日期"><template #default="s">{{ s.row.expiryDate || tr('长期') }}</template></el-table-column>
               <el-table-column label="状态"><template #default="s"><el-tag :type="s.row.status === 0 ? 'success' : 'info'">{{ s.row.status === 0 ? '生效中' : '已停用' }}</el-tag></template></el-table-column>
               <el-table-column prop="remark" label="备注" />
-              <el-table-column label="操作" width="140" fixed="right"><template #default="s"><el-button link type="primary" @click="openDialog(s.row)">{{ tr('编辑') }}</el-button><el-button link type="danger" @click="remove(s.row)">{{ tr('删除') }}</el-button></template></el-table-column>
+              <el-table-column label="操作" width="140" fixed="right"><template #default="s"><el-button link type="primary" :disabled="!isGroupEnabled(s.row.accountId)" @click="openDialog(s.row)">{{ tr('编辑') }}</el-button><el-button link type="danger" @click="remove(s.row)">{{ tr('删除') }}</el-button></template></el-table-column>
             </el-table>
           </div>
         </template>
@@ -107,8 +107,8 @@
     <el-dialog v-model="dialog.open" class="rate-dialog" :title="tr(dialog.form.id ? '编辑费率' : '新增费率')" width="760px" append-to-body>
       <el-form ref="formRef" :model="dialog.form" :rules="rules" :label-width="isEn ? '126px' : '90px'">
         <div class="dialog-grid">
-          <el-form-item label="主播/运营" prop="employeeId"><el-select v-model="dialog.form.employeeId" filterable><el-option v-for="v in options.employees" :key="v.value" :label="v.label" :value="v.value" /></el-select></el-form-item>
-          <el-form-item label="账号" prop="accountId"><el-select v-model="dialog.form.accountId"><el-option v-for="v in activeAccounts" :key="v.id" :label="accountLabel(v)" :value="v.id" /></el-select></el-form-item>
+          <el-form-item label="主播/运营" prop="employeeId"><el-select v-model="dialog.form.employeeId" disabled><el-option v-for="v in options.employees" :key="v.value" :label="v.label" :value="v.value" /></el-select></el-form-item>
+          <el-form-item label="账号" prop="accountId"><el-select v-model="dialog.form.accountId"><el-option v-for="v in configurableAccounts" :key="v.id" :label="accountLabel(v)" :value="v.id" /></el-select></el-form-item>
           <el-form-item label="费率类型" prop="rateTypeId"><el-select v-model="dialog.form.rateTypeId"><el-option v-for="v in options.rateTypes" :key="v.id" :label="tr(v.typeName)" :value="v.id" /></el-select></el-form-item>
           <el-form-item label="时薪" prop="hourlyRate"><el-input-number v-model="dialog.form.hourlyRate" :precision="2" :min="0" /></el-form-item>
           <el-form-item label="生效日期" prop="effectiveDate"><el-date-picker v-model="dialog.form.effectiveDate" type="date" value-format="YYYY-MM-DD" /></el-form-item>
@@ -158,6 +158,8 @@ const selectedEmployee = computed(() => options.employees.find(v => v.value === 
 const selectedEmployeeRates = computed(() => rows.value.filter(v => v.employeeId === selectedEmployeeId.value))
 const sortedAccounts = computed(() => [...options.accounts].sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0) || String(a.platform).localeCompare(String(b.platform)) || String(a.accountCode).localeCompare(String(b.accountCode))))
 const activeAccounts = computed(() => sortedAccounts.value.filter(v => v.status === 0))
+const configurableAccounts = computed(() => activeAccounts.value.filter(v => isGroupEnabled(v.id)))
+const canCreateRate = computed(() => Boolean(selectedEmployee.value) && configurableAccounts.value.length > 0)
 const enabledGroupCount = computed(() => activeAccounts.value.filter(v => isGroupEnabled(v.id)).length)
 const syncTargets = computed(() => activeAccounts.value.filter(v => v.id !== syncDialog.source?.id))
 const rateMatrix = computed(() => { const result = new Map(); selectedEmployeeRates.value.forEach(rate => { const key = `${rate.accountId}:${rate.rateTypeId}`; if (!result.has(key)) result.set(key, rate) }); return result })
@@ -179,14 +181,14 @@ async function selectEmployee(employeeId) { if (selectedEmployeeId.value === emp
 async function toggleGroupStatus(account, enabled) { statusBusy.value = account.id; try { await updateRateAccountGroupStatus({ employeeId: selectedEmployeeId.value, accountId: account.id, status: enabled ? 0 : 1 }); await loadGroups(); proxy.$modal.msgSuccess(enabled ? '账号分组已启用' : '账号分组已禁用') } finally { statusBusy.value = null } }
 async function setAllGroups(status) { await updateAllRateAccountGroupStatuses({ employeeId: selectedEmployeeId.value, status }); await loadGroups(); proxy.$modal.msgSuccess(status === 0 ? '全部账号已启用' : '全部账号已禁用') }
 
-function openDialog(row = {}, accountId = null, rateTypeId = null) { dialog.form = { id: row.id, employeeId: row.employeeId || selectedEmployeeId.value, accountId: row.accountId || accountId, rateTypeId: row.rateTypeId || rateTypeId, hourlyRate: Number(row.hourlyRate || 0), effectiveDate: row.effectiveDate || isoDate(), expiryDate: row.expiryDate || null, status: row.status ?? 0, remark: row.remark || '' }; dialog.open = true }
-async function submit() { await formRef.value.validate(); await (dialog.form.id ? updateRate(dialog.form) : addRate(dialog.form)); proxy.$modal.msgSuccess('保存成功'); dialog.open = false; await loadRates() }
+function openDialog(row = {}, accountId = null, rateTypeId = null) { const targetAccountId = row.accountId || accountId; if (targetAccountId && !isGroupEnabled(targetAccountId)) { proxy.$modal.msgWarning('请先启用该账号分组'); return } if (!targetAccountId && !configurableAccounts.value.length) { proxy.$modal.msgWarning('请先启用至少一个账号分组'); return } dialog.form = { id: row.id, employeeId: row.employeeId || selectedEmployeeId.value, accountId: targetAccountId, rateTypeId: row.rateTypeId || rateTypeId, hourlyRate: Number(row.hourlyRate || 0), effectiveDate: row.effectiveDate || isoDate(), expiryDate: row.expiryDate || null, status: row.status ?? 0, remark: row.remark || '' }; dialog.open = true }
+async function submit() { await formRef.value.validate(); if (!isGroupEnabled(dialog.form.accountId)) { proxy.$modal.msgWarning('账号分组未启用，不能维护费率'); return } await (dialog.form.id ? updateRate(dialog.form) : addRate(dialog.form)); proxy.$modal.msgSuccess('保存成功'); dialog.open = false; await loadRates() }
 async function remove(row) { await proxy.$modal.confirm(`确认删除 ${row.employeeName} 在 ${row.accountLabel} 的这条费率？`); await deleteRate(row.id); proxy.$modal.msgSuccess('删除成功'); await loadRates() }
 async function removeAccountGroup(account) { await proxy.$modal.confirm(`确认删除 ${selectedEmployee.value.label} 的 ${accountLabel(account)} 账号分组及其下全部费率？`); await deleteRateAccountGroup({ employeeId: selectedEmployeeId.value, accountId: account.id }); proxy.$modal.msgSuccess('账号分组及费率已删除'); await Promise.all([loadRates(), loadGroups()]) }
 
 function openSync(account) { syncDialog.source = account; syncDialog.mode = 'OVERWRITE'; syncDialog.targetAccountIds = []; syncDialog.open = true }
 function selectAllSyncTargets() { syncDialog.targetAccountIds = syncTargets.value.map(v => v.id) }
-async function submitSync() { syncDialog.loading = true; try { const res = await syncRateAccountGroup({ employeeId: selectedEmployeeId.value, sourceAccountId: syncDialog.source.id, targetAccountIds: syncDialog.targetAccountIds, mode: syncDialog.mode }); proxy.$modal.msgSuccess(`已同步 ${res.data || 0} 条费率`); syncDialog.open = false; await loadRates() } finally { syncDialog.loading = false } }
+async function submitSync() { syncDialog.loading = true; try { const res = await syncRateAccountGroup({ employeeId: selectedEmployeeId.value, sourceAccountId: syncDialog.source.id, targetAccountIds: syncDialog.targetAccountIds, mode: syncDialog.mode }); proxy.$modal.msgSuccess(`已同步 ${res.data || 0} 条费率，目标账号分组已启用`); syncDialog.open = false; await Promise.all([loadRates(), loadGroups()]) } finally { syncDialog.loading = false } }
 async function recalculate() { await proxy.$modal.confirm('将按当前费率重新计算所有非手工时薪的开播记录，是否继续？'); const res = await recalculateStreams({}); proxy.$modal.msgSuccess(`已重算 ${res.data || 0} 条记录`) }
 function headers() { return [{ key: 'employeeName', label: '主播/运营' }, { key: 'accountLabel', label: '账号' }, { key: 'rateTypeName', label: '费率类型' }, { key: 'hourlyRate', label: '时薪' }, { key: 'effectiveDate', label: '生效日期' }, { key: 'expiryDate', label: '失效日期' }, { key: 'status', label: '状态' }, { key: 'remark', label: '备注' }] }
 function exportRows() { downloadCsv('主播费率配置.csv', headers(), rows.value) }
@@ -195,16 +197,15 @@ onMounted(loadAll)
 
 <style scoped lang="scss">
 @import '../live.scss';
-.rate-page { --rate-primary: #6956d9; }
 .rate-config-shell { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 16px; min-height: 680px; }
 .employee-panel, .rate-detail-panel { background: #fff; border: 1px solid #e9eaf1; border-radius: 14px; box-shadow: 0 4px 20px rgba(37, 48, 74, .05); }
 .employee-panel { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
 .employee-search { padding: 14px 12px 10px; border-bottom: 1px solid #f0f1f5; }
 .employee-list { flex: 1; max-height: calc(100vh - 240px); min-height: 560px; padding: 8px; overflow-y: auto; }
 .employee-item { width: 100%; display: flex; align-items: center; gap: 10px; padding: 10px; border: 1px solid transparent; border-radius: 10px; background: transparent; color: #30364a; text-align: left; cursor: pointer; transition: .18s ease; }
-.employee-item:hover { background: #f7f6fc; }
-.employee-item.active { border-color: #dcd6fa; background: #f3f0ff; }
-.employee-avatar, .summary-avatar { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; border-radius: 50%; background: #f0eef8; color: #6355b7; font-weight: 700; }
+.employee-item:hover { background: #f5f7fb; }
+.employee-item.active { border-color: #cbd9ff; background: #edf3ff; }
+.employee-avatar, .summary-avatar { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; border-radius: 50%; background: #edf3ff; color: #3563e9; font-weight: 700; }
 .employee-avatar { width: 34px; height: 34px; font-size: 13px; }
 .employee-copy { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 3px; }
 .employee-copy strong { overflow: hidden; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
@@ -219,7 +220,7 @@ onMounted(loadAll)
 .summary-main p { margin: 0; color: #8b93a5; font-size: 13px; }
 .account-groups { display: flex; flex-direction: column; gap: 12px; }
 .account-group { overflow: hidden; border: 1px solid #e9eaf0; border-radius: 12px; }
-.account-group-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 48px; padding: 8px 12px; background: #fafafe; }
+.account-group-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 48px; padding: 8px 12px; background: #f8fafc; }
 .account-collapse { display: flex; align-items: center; min-width: 0; flex: 1; gap: 8px; padding: 0; border: 0; background: transparent; color: #4b5265; text-align: left; cursor: pointer; }
 .account-collapse > span:nth-of-type(1) { overflow: hidden; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .account-collapse small { color: #9aa1af; }
@@ -230,10 +231,10 @@ onMounted(loadAll)
 .rate-type-name strong { color: #5a6070; font-size: 14px; }
 .rate-type-name small, .unconfigured { color: #a0a6b3; }
 .rate-value { display: flex; align-items: center; gap: 12px; color: #838b9c; font-size: 13px; }
-.rate-value strong { color: #6c5ac8; font-size: 15px; }
+.rate-value strong { color: #3563e9; font-size: 15px; }
 .rate-actions { display: flex; justify-content: flex-end; }
 .rate-list-view { overflow: hidden; border: 1px solid #e9eaf0; border-radius: 12px; }
-.sync-source { display: grid; grid-template-columns: 90px 1fr auto; align-items: center; gap: 12px; padding: 14px; border-radius: 10px; background: #f7f6fc; }
+.sync-source { display: grid; grid-template-columns: 90px 1fr auto; align-items: center; gap: 12px; padding: 14px; border-radius: 10px; background: #f5f7fb; }
 .sync-source span, .sync-source small, .sync-mode small, .sync-targets small { color: #8d95a6; }
 .sync-mode { margin: 18px 0; }
 .sync-mode p { margin: 0 0 10px; font-weight: 600; }
