@@ -5,9 +5,13 @@ export function isoDate(date = new Date()) {
   return `${y}-${m}-${d}`
 }
 
-export function monthRange() {
+export function monthRange(offset = 0) {
   const now = new Date()
-  return [isoDate(new Date(now.getFullYear(), now.getMonth(), 1)), isoDate(now)]
+  const firstDay = new Date(now.getFullYear(), now.getMonth() + offset, 1)
+  const lastDay = offset === 0
+    ? now
+    : new Date(firstDay.getFullYear(), firstDay.getMonth() + 1, 0)
+  return [isoDate(firstDay), isoDate(lastDay)]
 }
 
 export function weekRange(offset = 0) {

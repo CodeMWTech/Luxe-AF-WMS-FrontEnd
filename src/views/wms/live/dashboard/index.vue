@@ -21,7 +21,7 @@
         <el-form-item label="账号"><el-select v-model="filters.accountId" clearable filterable placeholder="全部账号"><el-option v-for="v in options.accounts" :key="v.id" :label="accountLabel(v)" :value="v.id" /></el-select></el-form-item>
         <el-form-item label="主播"><el-select v-model="filters.employeeId" clearable filterable placeholder="全部主播"><el-option v-for="v in options.employees" :key="v.value" :label="v.label" :value="v.value" /></el-select></el-form-item>
         <el-form-item label="费率类型"><el-select v-model="filters.rateTypeId" clearable placeholder="全部类型"><el-option v-for="v in options.rateTypes" :key="v.id" :label="v.typeName" :value="v.id" /></el-select></el-form-item>
-        <el-form-item><el-button type="primary" @click="load">查询</el-button><el-button @click="reset">本月</el-button></el-form-item>
+        <el-form-item><el-button type="primary" @click="load">查询</el-button><el-button @click="selectMonth(0)">本月</el-button><el-button @click="selectMonth(-1)">上个月</el-button></el-form-item>
       </el-form>
     </el-card>
 
@@ -53,9 +53,10 @@
         <div class="checklist-header">
           <div>
             <strong>每日核对清单</strong>
-            <div class="muted checklist-subtitle">按天核对排班和开播记录，打卡结果仅来自上传的打卡 Excel</div>
+            <div class="muted checklist-subtitle">按天核对排班和开播记录；异常包含时间不符、未录、多录，以及已录但未打卡</div>
           </div>
           <div class="checklist-actions">
+            <el-date-picker v-model="checklistDate" type="date" value-format="YYYY-MM-DD" clearable placeholder="筛选日期" style="width:145px" />
             <el-switch v-model="checklistOnlyAbnormal" active-text="仅看异常" />
             <el-select v-model="checklistStatus" clearable placeholder="全部状态" style="width:130px">
               <el-option v-for="status in checklistStatuses" :key="status" :label="status" :value="status" />
@@ -120,18 +121,20 @@ const data = reactive({ overview: {}, rateStats: [], dailyTrend: [], platformSta
 const overview = computed(() => data.overview || {})
 const attendanceUploadRef = ref()
 const attendanceImporting = ref(false)
+const checklistDate = ref('')
 const checklistOnlyAbnormal = ref(false)
 const checklistStatus = ref('')
 const checklistStatuses = ['已录', '时间不符', '未录', '多录']
+const checklistDateRows = computed(() => (data.dailyChecklist || []).filter(row => !checklistDate.value || row.date === checklistDate.value))
 const checklistStats = computed(() => {
   const stats = { '已录': 0, '时间不符': 0, '未录': 0, '多录': 0, clocked: 0, notClocked: 0 }
-  ;(data.dailyChecklist || []).forEach(row => {
+  checklistDateRows.value.forEach(row => {
     if (stats[row.status] !== undefined) stats[row.status]++
     row.clocked ? stats.clocked++ : stats.notClocked++
   })
   return stats
 })
-const filteredChecklist = computed(() => (data.dailyChecklist || []).filter(row => {
+const filteredChecklist = computed(() => checklistDateRows.value.filter(row => {
   if (checklistOnlyAbnormal.value && row.status === '已录' && row.clocked) return false
   return !checklistStatus.value || row.status === checklistStatus.value
 }))
@@ -155,7 +158,7 @@ async function load() {
     await nextTick(); renderCharts()
   } finally { loading.value = false }
 }
-function reset() { dateRange.value = monthRange(); Object.assign(filters, { employeeId: null, accountId: null, rateTypeId: null }); load() }
+function selectMonth(offset) { dateRange.value = monthRange(offset); checklistDate.value = ''; load() }
 function renderCharts() {
   trendChart ||= echarts.init(trendEl.value); platformChart ||= echarts.init(platformEl.value)
   trendChart.setOption({ tooltip: { trigger: 'axis' }, grid: { left: 42, right: 18, top: 24, bottom: 36 }, xAxis: { type: 'category', data: data.dailyTrend.map(v => v.name) }, yAxis: { type: 'value' }, series: [{ type: 'line', smooth: true, areaStyle: { opacity: .12 }, itemStyle: { color: '#3563e9' }, data: data.dailyTrend.map(v => Number(v.hours || 0)) }] })
@@ -199,7 +202,8 @@ function exportChecklist() {
     actualTime: timeRange(row.actualStartTime, row.actualEndTime),
     clockedLabel: row.clocked ? '是' : '否'
   }))
-  downloadCsv(`每日核对清单-${dateRange.value[0]}-${dateRange.value[1]}.csv`, [
+  const filenameRange = checklistDate.value || `${dateRange.value[0]}-${dateRange.value[1]}`
+  downloadCsv(`每日核对清单-${filenameRange}.csv`, [
     { key: 'date', label: '日期' }, { key: 'employeeName', label: '主播' }, { key: 'accountLabel', label: '账号' },
     { key: 'plannedTime', label: '计划时间' }, { key: 'actualTime', label: '实际时间' },
     { key: 'clockedLabel', label: '是否打卡' }, { key: 'status', label: '状态' }
