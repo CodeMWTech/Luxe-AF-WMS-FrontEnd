@@ -986,6 +986,8 @@ const zhToEnMap = {
   '全员必备文件上传进度': 'Required file upload progress (all staff)',
   '仍有必备文件未齐': 'Still missing required files',
   '已齐全': 'Complete',
+  '以下为登录账号信息，用于系统登录。': 'Login credentials below are used to sign in to the system.',
+  '用于登录系统的账号名，支持邮箱等形式；创建后不可修改。': 'Login account name; email-style names are supported. Cannot be changed after creation.',
   '系统已预设初始密码，可直接使用；也可自行修改后再提交。': 'A default password is preset; use it as-is or change it before submitting.',
   '必填项；不修改时默认「在职」。': 'Required; defaults to Active if unchanged.',
   '必填项；不修改时默认 W2。': 'Required; defaults to W2 if unchanged.',

@@ -199,16 +199,16 @@
                <el-tab-pane :label="tr('基本信息')" name="basic">
                   <el-row :gutter="16">
                      <el-col :span="12">
-                        <el-form-item prop="userName">
+                        <el-form-item prop="nickName">
                            <template #label>
                               <span class="label-with-tip">
-                                 {{ tr('用户名') }}
-                                 <el-tooltip :content="tr('用户名提示：用于登录系统的账号名，支持邮箱等形式；创建后不可修改')" placement="top">
+                                 {{ tr('用户信息') }}
+                                 <el-tooltip :content="tr('用户信息提示：此处为员工真实姓名；创建登录账号时以「用户名」为准')" placement="top">
                                     <el-icon class="label-tip"><QuestionFilled /></el-icon>
                                  </el-tooltip>
                               </span>
                            </template>
-                           <el-input v-model="form.userName" :placeholder="tr('请输入用户名')" maxlength="50" :disabled="!!form.userId" />
+                           <el-input v-model="form.nickName" :placeholder="tr('请输入用户信息')" maxlength="30" />
                         </el-form-item>
                      </el-col>
                      <el-col :span="12">
@@ -233,25 +233,6 @@
                      <el-col :span="12">
                         <el-form-item :label="tr('邮箱')" prop="email">
                            <el-input v-model="form.email" :placeholder="tr('请输入邮箱')" maxlength="50" />
-                        </el-form-item>
-                     </el-col>
-                     <el-col :span="12">
-                        <el-form-item prop="nickName">
-                           <template #label>
-                              <span class="label-with-tip">
-                                 {{ tr('用户信息') }}
-                                 <el-tooltip :content="tr('用户信息提示：此处为员工真实姓名；创建登录账号时以「用户名」为准')" placement="top">
-                                    <el-icon class="label-tip"><QuestionFilled /></el-icon>
-                                 </el-tooltip>
-                              </span>
-                           </template>
-                           <el-input v-model="form.nickName" :placeholder="tr('请输入用户信息')" maxlength="30" />
-                        </el-form-item>
-                     </el-col>
-                     <el-col :span="12" v-if="!form.userId">
-                        <el-form-item :label="tr('用户密码')" prop="password">
-                           <el-input v-model="form.password" :placeholder="tr('请输入用户密码')" type="password" maxlength="20" show-password />
-                           <div class="field-hint">{{ tr('系统已预设初始密码，可直接使用；也可自行修改后再提交。') }}</div>
                         </el-form-item>
                      </el-col>
                      <el-col :span="12">
@@ -305,6 +286,32 @@
                      <el-col :span="24">
                         <el-form-item :label="tr('备注')">
                            <el-input v-model="form.remark" type="textarea" :rows="3" :placeholder="tr('请输入内容')" />
+                        </el-form-item>
+                     </el-col>
+                  </el-row>
+
+                  <!-- 登录相关：用户名 / 用户密码，与上方基础信息用分割线区分 -->
+                  <el-divider class="login-section-divider" />
+                  <div class="login-section-hint">{{ tr('以下为登录账号信息，用于系统登录。') }}</div>
+                  <el-row :gutter="16">
+                     <el-col :span="12">
+                        <el-form-item prop="userName">
+                           <template #label>
+                              <span class="label-with-tip">
+                                 {{ tr('用户名') }}
+                                 <el-tooltip :content="tr('用户名提示：用于登录系统的账号名，支持邮箱等形式；创建后不可修改')" placement="top">
+                                    <el-icon class="label-tip"><QuestionFilled /></el-icon>
+                                 </el-tooltip>
+                              </span>
+                           </template>
+                           <el-input v-model="form.userName" :placeholder="tr('请输入用户名')" maxlength="50" :disabled="!!form.userId" />
+                           <div class="field-hint">{{ tr('用于登录系统的账号名，支持邮箱等形式；创建后不可修改。') }}</div>
+                        </el-form-item>
+                     </el-col>
+                     <el-col :span="12" v-if="!form.userId">
+                        <el-form-item :label="tr('用户密码')" prop="password">
+                           <el-input v-model="form.password" :placeholder="tr('请输入用户密码')" type="password" maxlength="20" show-password />
+                           <div class="field-hint">{{ tr('系统已预设初始密码，可直接使用；也可自行修改后再提交。') }}</div>
                         </el-form-item>
                      </el-col>
                   </el-row>
@@ -845,7 +852,8 @@ proxy.getConfigKey("sys.user.initPassword").then(response => {
 .user-page.is-en .el-form-item__label { white-space: nowrap; }
 .user-page .action-btn { min-width: 96px; }
 .user-page.is-en .action-btn { min-width: 110px; }
-.user-page .field-hint {
+.user-page .field-hint,
+.login-section-hint + .el-row .field-hint {
   margin-top: 4px;
   font-size: 12px;
   line-height: 1.5;
@@ -860,5 +868,15 @@ proxy.getConfigKey("sys.user.initPassword").then(response => {
   color: #909399;
   cursor: help;
   vertical-align: middle;
+}
+/* drawer 使用 append-to-body，不能依赖 .user-page 祖先选择器 */
+.login-section-divider.el-divider {
+  margin: 8px 0 12px;
+}
+.login-section-hint {
+  margin: 0 0 16px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #909399;
 }
 </style>
