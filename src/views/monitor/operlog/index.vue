@@ -136,7 +136,7 @@
          </el-table-column>
          <el-table-column :label="isEn ? 'Cost (ms)' : '消耗时间'" align="center" prop="costTime" width="110" :show-overflow-tooltip="true" sortable="custom" :sort-orders="['descending', 'ascending']">
             <template #default="scope">
-               <span>{{ scope.row.costTime }} ms</span>
+               <span>{{ formatCostTime(scope.row.costTime) }}</span>
             </template>
          </el-table-column>
          <el-table-column :label="tr('操作')" align="center" class-name="small-padding fixed-width">
@@ -180,18 +180,17 @@
                </el-col>
                <el-col :span="6">
                   <el-form-item :label="isEn ? 'Status:' : '操作状态：'">
-                     <div v-if="form.status === 0">{{ tr('成功') }}</div>
-                     <div v-else-if="form.status === 1">{{ tr('失败') }}</div>
+                     <dict-tag :options="sys_common_status" :value="form.status" />
                   </el-form-item>
                </el-col>
                <el-col :span="8">
-                  <el-form-item :label="isEn ? 'Cost:' : '消耗时间：'">{{ form.costTime }}{{ tr('毫秒') }}</el-form-item>
+                  <el-form-item :label="isEn ? 'Cost:' : '消耗时间：'">{{ formatCostTime(form.costTime) }}</el-form-item>
                </el-col>
                <el-col :span="10">
                   <el-form-item :label="isEn ? 'Time:' : '操作时间：'">{{ parseTime(form.operTime) }}</el-form-item>
                </el-col>
                <el-col :span="24">
-                  <el-form-item :label="isEn ? 'Error:' : '异常信息：'" v-if="form.status === 1">{{ form.errorMsg }}</el-form-item>
+                  <el-form-item :label="isEn ? 'Error:' : '异常信息：'" v-if="isFailedStatus(form.status)">{{ form.errorMsg }}</el-form-item>
                </el-col>
             </el-row>
          </el-form>
@@ -254,6 +253,16 @@ function getList() {
 /** 操作日志类型字典翻译 */
 function typeFormat(row, column) {
   return proxy.selectDictLabel(sys_oper_type.value, row.businessType);
+}
+/** 统一显示耗时；旧日志未记录耗时时不单独显示单位 */
+function formatCostTime(costTime) {
+  return costTime === null || costTime === undefined || costTime === ''
+    ? '--'
+    : `${costTime} ms`;
+}
+/** 后端 BusinessStatus 中 0 为失败、1 为成功 */
+function isFailedStatus(status) {
+  return Number(status) === 0;
 }
 /** 搜索按钮操作 */
 function handleQuery() {
