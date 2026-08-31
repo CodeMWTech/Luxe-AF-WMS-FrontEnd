@@ -297,7 +297,7 @@
         @select="handlePreviewSelect"
         @select-all="handlePreviewSelectAll"
       >
-        <el-table-column type="selection" width="52" fixed="left" />
+        <el-table-column type="selection" width="52" fixed="left" reserve-selection />
         <el-table-column :label="text('结算类型', 'Type')" width="105" fixed="left">
           <template #default="{ row }">
             <el-tag :type="row.settlementType === 'FORCED' ? 'warning' : 'success'" effect="plain">
@@ -363,6 +363,7 @@
               size="small"
               class="force-amount-input"
               :placeholder="text('输入金额', 'Amount')"
+              @change="handlePreviewAmountChange(row)"
             />
           </template>
         </el-table-column>
@@ -646,6 +647,18 @@ function handlePreviewSelect(lines, row) {
 
 function handlePreviewSelectAll(lines) {
   updatePreviewSelectionCache(previewPageLines.value, lines)
+}
+
+async function handlePreviewAmountChange(row) {
+  // 手工修改后不应在提交时再次按原目标金额分配，否则用户输入会被覆盖。
+  settlementTargetAmount.value = undefined
+  if (Number(row?.pendingSettlementAmount) !== 0) return
+
+  const nextCache = new Map(previewSelectionCache.value)
+  nextCache.delete(String(row.skuId))
+  previewSelectionCache.value = nextCache
+  await nextTick()
+  previewTableRef.value?.toggleRowSelection(row, false)
 }
 
 async function restorePreviewPageSelection() {
