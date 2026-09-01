@@ -8,13 +8,25 @@ import cache from '@/plugins/cache'
 import { saveAs } from 'file-saver'
 import useUserStore from '@/store/modules/user'
 import { createProgressLoading } from '@/utils/progressLoading'
+import { getExportLanguageHeaders, prepareLanguageXlsx } from '@/utils/xlsxTranslate'
 
 // 是否显示重新登录
 export let isRelogin = { show: false };
 
+function resolveUiLanguage() {
+  try {
+    return localStorage.getItem('language') || 'zh-cn'
+  } catch (e) {
+    return 'zh-cn'
+  }
+}
+
+function isEnglishUi() {
+  const lang = String(resolveUiLanguage()).toLowerCase()
+  return lang === 'en' || lang.startsWith('en')
+}
+
 axios.defaults.headers['Content-Type'] = 'application/json;charset=utf-8'
-// 对应国际化资源文件后缀
-axios.defaults.headers['Content-Language'] = 'zh_CN'
 // 创建axios实例
 const service = axios.create({
   // axios中请求配置有baseURL选项，表示请求URL公共部分
@@ -25,6 +37,15 @@ const service = axios.create({
 
 // request拦截器
 service.interceptors.request.use(config => {
+  // 随当前界面语言传递给后端（导出/i18n 资源）
+  const langHeaders = getExportLanguageHeaders(isEnglishUi())
+  config.headers = config.headers || {}
+  if (!config.headers['Content-Language'] && !config.headers['content-language']) {
+    config.headers['Content-Language'] = langHeaders['Content-Language']
+  }
+  if (!config.headers['Accept-Language'] && !config.headers['accept-language']) {
+    config.headers['Accept-Language'] = langHeaders['Accept-Language']
+  }
   // 是否需要设置 token
   const isToken = (config.headers || {}).isToken === false
   // 是否需要防止数据重复提交
@@ -134,16 +155,24 @@ service.interceptors.response.use(res => {
   }
 )
 
-// 通用下载方法
-export function download(url, params, filename, config) {
+// 通用下载方法（Excel：英文界面下自动翻译常见中文表头）
+export function download(url, params, filename, config = {}) {
   const userOnDownloadProgress = config?.onDownloadProgress
   const progressLoading = createProgressLoading(config?.progressLabel || '正在导出文件')
+  const english = isEnglishUi()
+  const langHeaders = getExportLanguageHeaders(english)
+  const mergedHeaders = {
+    'Content-Type': 'application/x-www-form-urlencoded',
+    ...langHeaders,
+    ...(config.headers || {})
+  }
+  const { headers: _ignoredHeaders, onDownloadProgress: _ignoredProgress, ...restConfig } = config
 
   return service.post(url, params, {
     transformRequest: [(params) => { return tansParams(params) }],
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     responseType: 'blob',
-    ...config,
+    ...restConfig,
+    headers: mergedHeaders,
     onDownloadProgress: (event) => {
       if (event.total) {
         progressLoading.setProgress((event.loaded / event.total) * 100)
@@ -154,7 +183,15 @@ export function download(url, params, filename, config) {
     const isBlob = blobValidate(data);
     if (isBlob) {
       await progressLoading.finish()
-      const blob = new Blob([data])
+      let blob = data instanceof Blob ? data : new Blob([data])
+      const lowerName = String(filename || '').toLowerCase()
+      const skipTranslate = config.skipHeaderTranslate === true
+      if (english && !skipTranslate && lowerName.endsWith('.xlsx')) {
+        const translated = await prepareLanguageXlsx(blob, true)
+        blob = translated instanceof Blob
+          ? translated
+          : new Blob([translated], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+      }
       saveAs(blob, filename)
     } else {
       progressLoading.close()

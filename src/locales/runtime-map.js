@@ -43,6 +43,8 @@ const zhToEnMap = {
   开始盘库: 'Start Stocktake',
   导出: 'Export',
   导出Excel: 'Export Excel',
+  导出成功: 'Export successful',
+  导出失败: 'Export failed',
   批量操作: 'Batch Operations',
   批量导出为Excel: 'Batch Export Excel',
   批量导出为PDF: 'Batch Export PDF',
@@ -109,6 +111,7 @@ const zhToEnMap = {
   请选择图片Zip包: 'Please select an image ZIP file',
   下载失败: 'Download failed',
   详情: 'Detail',
+  商品详情: 'Item Details',
   商品明细: 'Item Details',
   商品信息: 'Item Info',
   商品选择: 'Item Select',
@@ -224,6 +227,8 @@ const zhToEnMap = {
   源仓库: 'Source Warehouse',
   目标仓库: 'Target Warehouse',
   上级分类: 'Parent Category',
+  '可不选；清空后为顶级分类': 'Optional; clear to make it a top-level category',
+  '清空「上级分类」后，该分类将恢复为顶级分类': 'Clear Parent Category to restore this as a top-level category',
   全部: 'All',
   更多: 'More',
   更多菜单: 'More',
@@ -393,6 +398,20 @@ const zhToEnMap = {
   包型管理: 'Model Management',
   新增包型: 'Add Model',
   修改包型: 'Edit Model',
+  列表: 'List',
+  图集: 'Gallery',
+  查看材质: 'View Materials',
+  查看包型: 'View Models',
+  暂无图片: 'No Image',
+  请先选择分类: 'Select category first',
+  请先选择品牌: 'Select brand first',
+  请先选择包型: 'Select model first',
+  请选择材质: 'Select material',
+  按层级筛选: 'Filter by hierarchy',
+  当前层级: 'Current level',
+  已选路径: 'Selected path',
+  关联分类: 'Linked Categories',
+  包型数: 'Models',
   材质: 'Material',
   MaterialName: 'Material Name',
   Material列表: 'Material List',
@@ -704,6 +723,13 @@ const zhToEnMap = {
   不能为空: 'cannot be empty',
   分类不能为空: 'Category cannot be empty',
   品牌不能为空: 'Brand cannot be empty',
+  品牌名称不能为空: 'Brand name cannot be empty',
+  品牌图片: 'Brand image',
+  '优先显示品牌自有图片；未设置时显示该品牌下第1个包型图': 'Shows the brand image first; falls back to the first model image under this brand.',
+  '选填。请上传大小不超过 5MB 格式为 png/jpg/jpeg 的文件': 'Optional. Upload a png/jpg/jpeg image no larger than 5 MB.',
+  '文件格式不正确，请上传png/jpg/jpeg格式图片': 'Invalid file type. Please upload a png/jpg/jpeg image.',
+  '上传图片大小不能超过 5MB': 'The image must not exceed 5 MB.',
+  '图片为该品牌下第1个包型图，详情请进入包型查看': 'Cover shows the first model image under this brand; open models for details.',
   包型不能为空: 'Model cannot be empty',
   包型名称不能为空: 'Model name cannot be empty',
   材质名称不能为空: 'Material name cannot be empty',
@@ -996,7 +1022,29 @@ const zhToEnMap = {
   '仅支持 PDF，每个类型限一个文件': 'PDF only; one file per document type',
   '拖拽 PDF 到此处，或点击上传': 'Drag PDF here or click to upload',
   '拖拽 PDF 到此处重新上传': 'Drag PDF here to replace',
+  '已上传，点击或拖拽 PDF 可重新上传': 'Uploaded — click or drag a PDF to replace',
   '拖拽文件到此处，或点击上传其他文件': 'Drag files here or click to upload other files',
+  '拖拽或点击上传新的其他文件批次': 'Drag or click to upload a new Other Files batch',
+  '已选中员工，列表支持鼠标滚动浏览': 'Employee selected — scroll inside the left list',
+  '已选中员工，请在名单上滚动鼠标浏览': 'Employee selected — scroll on the list to browse',
+  '已选中员工': 'Employee selected',
+  '当前页': 'this page',
+  '该类型已有 PDF 文件，重新上传将覆盖原文件': 'This slot already has a PDF; re-uploading will replace the existing file',
+  '请先为该分组命名': 'Please name this group first',
+  '批次名称': 'Batch name',
+  '请输入本批次名称': 'Enter a name for this upload batch',
+  '其他文件批次': 'Other Files Batch',
+  '未命名批次': 'Untitled batch',
+  '未分组': 'Ungrouped',
+  '重命名批次': 'Rename batch',
+  '删除批次': 'Delete batch',
+  '向此批次添加文件': 'Add files to this batch',
+  '确认删除该批次及其中全部文件？': 'Delete this batch and all files in it?',
+  '请填写批次名称': 'Please enter a batch name',
+  '批次名称不能为空': 'Batch name cannot be empty',
+  '批次名称不能超过128个字符': 'Batch name cannot exceed 128 characters',
+  '共 {count} 个文件': '{count} file(s)',
+  '修改失败': 'Update failed',
   '必备文件仅支持 PDF 格式，其他格式请上传到「其他文件」': 'Required files must be PDF; use Other Files for other formats.',
   '每个类型仅限上传一个文件': 'Only one file is allowed per document type.',
   '将文件拖到此处，或': 'Drag files here, or ',
@@ -1288,7 +1336,13 @@ export function translateByMap(text, language = 'zh-cn') {
     return text
   }
 
-  const exact = zhToEnMap[text.trim()]
+  // 用户上传的文件名等自由文本不要做局部替换（避免「盘库xxx.pdf」被改成 Stocktakexxx.pdf）
+  const trimmed = text.trim()
+  if (/\.[a-zA-Z0-9]{1,8}$/.test(trimmed) || /[\\/]/.test(trimmed)) {
+    return text
+  }
+
+  const exact = zhToEnMap[trimmed]
   if (exact) {
     return replacePreservingSpaces(text, exact)
   }

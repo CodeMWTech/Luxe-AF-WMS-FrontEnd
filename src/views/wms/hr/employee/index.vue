@@ -105,9 +105,9 @@
       </el-alert>
     </el-card>
 
-    <el-row :gutter="16" class="mt16 workspace-row">
+    <el-row :gutter="16" class="mt16 workspace-row" :class="{ 'is-detail-open': !!selectedEmployee }">
       <el-col :xs="24" :md="8" class="workspace-col">
-        <el-card class="list-card workspace-panel">
+        <el-card class="list-card workspace-panel" :class="{ 'is-detail-open': !!selectedEmployee }">
           <div class="list-toolbar">
             <el-input
               v-model="queryParams.keyword"
@@ -163,16 +163,18 @@
             <div class="selection-hint-status">{{ batchDownloadScopeHint }}</div>
           </div>
 
-          <div class="list-table-wrap">
+          <div class="list-table-wrap" :class="{ 'is-scroll-mode': !!selectedEmployee }">
             <el-table
+              ref="employeeTableRef"
               v-loading="loading"
               :data="employeeList"
               highlight-current-row
               stripe
-              height="100%"
+              v-bind="employeeTableSizeBind"
               @current-change="handleSelectEmployee"
               @selection-change="handleSelectionChange"
               class="employee-table"
+              :class="{ 'is-scrollable': !!selectedEmployee }"
               size="small"
             >
               <el-table-column type="selection" width="42" v-if="canBatchDownload" />
@@ -209,7 +211,7 @@
             </el-table>
           </div>
 
-          <div v-show="total > 0" class="list-pagination">
+          <div v-show="total > 0 && !selectedEmployee" class="list-pagination">
             <pagination
               :total="total"
               v-model:page="queryParams.pageNum"
@@ -218,6 +220,10 @@
               :auto-scroll="false"
               @pagination="getList"
             />
+          </div>
+          <div v-show="selectedEmployee && employeeList.length > 0" class="list-scroll-hint">
+            {{ tr('已选中员工，请在名单上滚动鼠标浏览') }}
+            （{{ employeeList.length }} / {{ total }}）
           </div>
         </el-card>
       </el-col>
@@ -316,8 +322,31 @@
                       v-hasPermi="['wms:employee:edit']"
                     >{{ tr('删除') }}</el-button>
                   </div>
+                  <!-- 已上传：紧凑重新上传条，不再展示大拖拽区 -->
                   <div
-                    v-if="selectedEmployee.employeeStatus < 2 && canUploadAttachment(card)"
+                    v-if="attachmentMap[card.code] && selectedEmployee.employeeStatus < 2 && canUploadAttachment(card)"
+                    class="required-reupload"
+                    :class="{
+                      'is-upload-error': requiredUploadErrors[card.code],
+                      'is-uploading': isUploadingType(card.code)
+                    }"
+                    v-hasPermi="['wms:employee:edit']"
+                    @click="openRequiredUploadDialog(card)"
+                    @dragover.prevent
+                    @drop.prevent="(e) => handleRequiredCardDrop(e, card)"
+                  >
+                    <template v-if="isUploadingType(card.code)">
+                      <div class="upload-progress-label">{{ tr('上传中') }}... {{ uploadProgress }}%</div>
+                      <el-progress :percentage="uploadProgress" :stroke-width="8" />
+                    </template>
+                    <template v-else>
+                      <el-icon class="required-reupload-icon"><UploadFilled /></el-icon>
+                      <span>{{ tr('已上传，点击或拖拽 PDF 可重新上传') }}</span>
+                    </template>
+                  </div>
+                  <!-- 未上传：保留大拖拽上传区 -->
+                  <div
+                    v-else-if="!attachmentMap[card.code] && selectedEmployee.employeeStatus < 2 && canUploadAttachment(card)"
                     class="required-upload"
                     :class="{
                       'is-upload-error': requiredUploadErrors[card.code],
@@ -334,9 +363,7 @@
                         <el-progress :percentage="uploadProgress" :stroke-width="10" />
                       </template>
                       <template v-else>
-                        <div class="required-upload-text">
-                          {{ attachmentMap[card.code] ? tr('拖拽 PDF 到此处重新上传') : tr('拖拽 PDF 到此处，或点击上传') }}
-                        </div>
+                        <div class="required-upload-text">{{ tr('拖拽 PDF 到此处，或点击上传') }}</div>
                         <div class="el-upload__tip">{{ tr('仅支持 PDF，每个类型限一个文件') }}</div>
                       </template>
                     </div>
@@ -352,25 +379,65 @@
           <div class="section-title mt20">{{ tr('其他文件') }} <span class="sub-text">（{{ tr('共') }} {{ otherAttachments.length }}）</span></div>
           <div class="upload-hint">{{ tr('其他文件支持多种格式，可批量上传；如需打包多个文件，可先压缩再上传。') }}</div>
           <div class="other-files">
-            <div v-for="item in otherAttachments" :key="item.id" class="other-file-item">
-              <el-link type="primary" @click="previewAttachment(item)">{{ item.fileName || tr(item.attachmentTypeLabel) }}</el-link>
-              <el-button v-if="selectedEmployee.employeeStatus < 2" link type="danger" @click.stop.prevent="removeAttachment(item)" v-hasPermi="['wms:employee:edit']">{{ tr('删除') }}</el-button>
-            </div>
+            <el-row :gutter="12" class="other-batch-grid">
+              <el-col v-for="batch in otherAttachmentBatches" :key="batch.key" :xs="24" :sm="12" :lg="8">
+                <div class="attachment-card other-batch-card">
+                  <div class="attachment-card-head">
+                    <div>
+                      <div
+                        class="attachment-title other-batch-title hr-user-content"
+                        data-runtime-i18n-ignore="true"
+                      >{{ batch.displayName }}</div>
+                      <div class="attachment-desc">
+                        {{ tr('共 {count} 个文件').replace('{count}', String(batch.files.length)) }}
+                      </div>
+                    </div>
+                    <el-tag size="small" type="success">{{ tr('已上传') }}</el-tag>
+                  </div>
+                  <div class="other-batch-files hr-user-content" data-runtime-i18n-ignore="true">
+                    <div v-for="item in batch.files" :key="item.id" class="other-batch-file-row">
+                      <el-link type="primary" class="other-batch-file-name" @click="previewAttachment(item)">
+                        {{ item.fileName || item.attachmentTypeLabel || '-' }}
+                      </el-link>
+                      <div class="other-batch-file-actions">
+                        <el-button link type="primary" @click.stop.prevent="previewAttachment(item)">{{ tr('查看') }}</el-button>
+                        <el-button
+                          v-if="selectedEmployee.employeeStatus < 2"
+                          link
+                          type="danger"
+                          @click.stop.prevent="removeAttachment(item)"
+                          v-hasPermi="['wms:employee:edit']"
+                        >{{ tr('删除') }}</el-button>
+                      </div>
+                    </div>
+                  </div>
+                  <div
+                    v-if="selectedEmployee.employeeStatus < 2"
+                    class="other-batch-actions"
+                    v-hasPermi="['wms:employee:edit']"
+                  >
+                    <el-button link type="primary" @click="renameOtherBatch(batch)">{{ tr('重命名批次') }}</el-button>
+                    <el-button link type="primary" @click="openOtherUploadDialog(batch)">{{ tr('向此批次添加文件') }}</el-button>
+                    <el-button link type="danger" @click="removeOtherBatch(batch)">{{ tr('删除批次') }}</el-button>
+                  </div>
+                </div>
+              </el-col>
+            </el-row>
             <div
               v-if="selectedEmployee.employeeStatus < 2"
               class="other-upload"
-              :class="{ 'is-uploading': isUploadingType('OTHER') }"
+              :class="{ 'is-uploading': isUploadingType('OTHER') && !uploadDialogBatchId }"
               v-hasPermi="['wms:employee:edit']"
-              @click="openOtherUploadDialog"
+              @click="openOtherUploadDialog()"
               @dragover.prevent
               @drop.prevent="handleOtherCardDrop"
             >
               <div class="el-upload-dragger">
-                <template v-if="isUploadingType('OTHER')">
+                <template v-if="isUploadingType('OTHER') && !uploadDialogBatchId && !uploadDialogOpen">
                   <div class="upload-progress-label">{{ tr('上传中') }}... {{ uploadProgress }}%</div>
                   <el-progress :percentage="uploadProgress" :stroke-width="10" />
                 </template>
-                <div v-else class="required-upload-text">{{ tr('拖拽文件到此处，或点击上传其他文件') }}</div>
+                <div v-else class="required-upload-text">{{ tr('拖拽或点击上传新的其他文件批次') }}</div>
               </div>
             </div>
           </div>
@@ -395,11 +462,22 @@
     >
       <el-alert
         :title="uploadDialogHelp"
-        type="info"
+        :type="uploadDialogType !== 'OTHER' && attachmentMap[uploadDialogType] ? 'warning' : 'info'"
         show-icon
         :closable="false"
         class="mb16"
       />
+      <el-form v-if="uploadDialogType === 'OTHER'" label-position="top" class="mb16">
+        <el-form-item :label="tr('批次名称')" required>
+          <el-input
+            v-model="uploadDialogBatchName"
+            maxlength="128"
+            show-word-limit
+            :disabled="uploadDialogLoading"
+            :placeholder="tr('请输入本批次名称')"
+          />
+        </el-form-item>
+      </el-form>
       <el-upload
         class="hr-upload-dialog-zone"
         drag
@@ -602,27 +680,59 @@ import usePermissionStore from '@/store/modules/permission'
 import { hasAccessibleRoutePath } from '@/store/modules/permission'
 import { translateByMap } from '@/locales/runtime-map'
 import { deptTreeSelect, getUser } from '@/api/system/user'
+import { ElMessageBox } from 'element-plus'
 import {
   addEmployee,
   archiveEmployee,
   batchDownloadAttachments,
   delEmployee,
+  delOtherAttachmentBatch,
   getAttachmentTypes,
   getEmployee,
   getEmployeeCapabilities,
   getEmployeeDeptTree,
   getEmployeePostOptions,
   getEmployeeStats,
+  groupOtherAttachmentBatch,
   listEmployee,
+  renameOtherAttachmentBatch,
   saveEmployeeAttachment,
+  saveOtherAttachmentBatch,
   delEmployeeAttachment,
   syncEmployeeUsers,
   updateEmployee
 } from '@/api/wms/employee'
 
+const LIST_PAGE_SIZE = 10
+/** 选中员工后拉取足够多的名单，才能在固定高度区域内滚轮浏览 */
+const LIST_SCROLL_SIZE = 500
+
 const router = useRouter()
 const { proxy } = getCurrentInstance()
 const permissionStore = usePermissionStore()
+const listViewportMax = ref(420)
+const employeeTableRef = ref(null)
+
+function updateListViewportMax() {
+  // 固定可视高度，保证多数情况下名单会溢出 → 滚轮有响应；又不撑开整页
+  listViewportMax.value = Math.min(480, Math.max(320, window.innerHeight - 420))
+}
+
+onMounted(() => {
+  updateListViewportMax()
+  window.addEventListener('resize', updateListViewportMax)
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', updateListViewportMax)
+})
+
+/** 未选中：撑满卡片；已选中：固定 height，表格内部出现滚动条，滚轮可滑动 */
+const employeeTableSizeBind = computed(() => {
+  if (!selectedEmployee.value) {
+    return { height: '100%' }
+  }
+  return { height: listViewportMax.value }
+})
 
 const TAX_FORM_PERM = {
   W2: 'wms:employee:tax:w2',
@@ -676,6 +786,9 @@ const uploadDialogHelp = ref('')
 const uploadDialogDropText = ref('')
 const uploadDialogTip = ref('')
 const uploadDialogFileList = ref([])
+const uploadDialogBatchId = ref('')
+const uploadDialogBatchName = ref('')
+const uploadDialogLegacyAttachmentIds = ref([])
 const uploadingType = ref('')
 const uploadProgress = ref(0)
 
@@ -836,6 +949,40 @@ const requiredAttachmentCards = computed(() => {
 })
 
 const otherAttachments = computed(() => currentAttachments.value.filter(item => item.attachmentType === 'OTHER'))
+
+/** 其他文件按上传批次分组；无 batchId 的历史数据归入「未分组」 */
+const otherAttachmentBatches = computed(() => {
+  const byId = new Map()
+  const legacy = []
+  otherAttachments.value.forEach(item => {
+    if (!item?.batchId) {
+      legacy.push(item)
+      return
+    }
+    if (!byId.has(item.batchId)) {
+      byId.set(item.batchId, {
+        key: item.batchId,
+        batchId: item.batchId,
+        batchName: item.batchName || '',
+        displayName: item.batchName || tr('未命名批次'),
+        files: []
+      })
+    }
+    byId.get(item.batchId).files.push(item)
+  })
+  const batches = [...byId.values()]
+  if (legacy.length) {
+    batches.push({
+      key: '__legacy_ungrouped',
+      batchId: null,
+      batchName: '',
+      displayName: tr('未分组'),
+      files: legacy,
+      legacy: true
+    })
+  }
+  return batches
+})
 
 const attachmentMap = computed(() => {
   const map = {}
@@ -1131,18 +1278,54 @@ function handleDeptFilterChange(val) {
   handleQuery()
 }
 
-function getList() {
+function clearSelectedEmployee() {
+  selectedEmployee.value = null
+  currentAttachments.value = []
+  if (queryParams.value.pageSize !== LIST_PAGE_SIZE) {
+    queryParams.value.pageSize = LIST_PAGE_SIZE
+    queryParams.value.pageNum = 1
+  }
+}
+
+function ensureListScrollMode() {
+  if (queryParams.value.pageSize === LIST_SCROLL_SIZE && queryParams.value.pageNum === 1) {
+    nextTick(() => syncTableCurrentRow())
+    return Promise.resolve()
+  }
+  queryParams.value.pageNum = 1
+  queryParams.value.pageSize = LIST_SCROLL_SIZE
+  return getList({ preserveDetail: true }).then(() => {
+    nextTick(() => syncTableCurrentRow())
+  })
+}
+
+function syncTableCurrentRow() {
+  if (!selectedEmployee.value || !employeeTableRef.value) return
+  const matched = employeeList.value.find(item => item.id === selectedEmployee.value.id)
+  if (matched) {
+    employeeTableRef.value.setCurrentRow?.(matched)
+  }
+}
+
+function getList(options = {}) {
   loading.value = true
-  listEmployee(buildListParams()).then(res => {
+  return listEmployee(buildListParams()).then(res => {
     employeeList.value = res.rows || []
     total.value = res.total || 0
     if (selectedEmployee.value) {
       const matched = employeeList.value.find(item => item.id === selectedEmployee.value.id)
       if (matched) {
-        loadEmployeeDetail(matched.id)
+        if (!options.preserveDetail) {
+          return loadEmployeeDetail(matched.id)
+        }
       } else {
-        selectedEmployee.value = null
-        currentAttachments.value = []
+        clearSelectedEmployee()
+        queryParams.value.pageSize = LIST_PAGE_SIZE
+        queryParams.value.pageNum = 1
+        return listEmployee(buildListParams()).then(paged => {
+          employeeList.value = paged.rows || []
+          total.value = paged.total || 0
+        })
       }
     }
   }).finally(() => {
@@ -1153,7 +1336,7 @@ function getList() {
 function loadEmployeeDetail(id) {
   requiredUploadErrors.value = {}
   requiredUploadKeys.value = {}
-  getEmployee(id).then(res => {
+  return getEmployee(id).then(res => {
     selectedEmployee.value = res.data
     currentAttachments.value = res.data?.attachments || []
   })
@@ -1162,14 +1345,15 @@ function loadEmployeeDetail(id) {
 function handleViewModeChange() {
   queryParams.value.filterEmployeeStatus = ''
   if (queryParams.value.viewMode === 'archived') {
-    selectedEmployee.value = null
-    currentAttachments.value = []
+    clearSelectedEmployee()
   }
   handleQuery()
 }
 
 function handleQuery() {
   queryParams.value.pageNum = 1
+  // 已打开详情时保持滚动模式的大批量加载，否则分页 10 条
+  queryParams.value.pageSize = selectedEmployee.value ? LIST_SCROLL_SIZE : LIST_PAGE_SIZE
   getList()
 }
 
@@ -1185,7 +1369,11 @@ function resetFilters() {
 
 function handleSelectEmployee(row) {
   if (!row) return
-  loadEmployeeDetail(row.id)
+  // 滚动模式刷新列表后 setCurrentRow 会再次触发，避免重复拉详情
+  if (selectedEmployee.value?.id === row.id && queryParams.value.pageSize === LIST_SCROLL_SIZE) {
+    return
+  }
+  loadEmployeeDetail(row.id).then(() => ensureListScrollMode())
 }
 
 function handleSelectionChange(rows) {
@@ -1274,10 +1462,9 @@ function submitForm() {
 function handleArchive(row) {
   proxy.$modal.confirm(tr('确认将该员工归档？归档后将不再计入在职统计。')).then(() => archiveEmployee(row.id)).then(() => {
     proxy.$modal.msgSuccess(tr('归档成功'))
+    clearSelectedEmployee()
     loadStats()
     getList()
-    selectedEmployee.value = null
-    currentAttachments.value = []
   })
 }
 
@@ -1287,10 +1474,9 @@ function handleRemoveEmployee(row) {
     : tr('确认删除该员工档案？此操作不可恢复。')
   proxy.$modal.confirm(message).then(() => delEmployee(row.id)).then(() => {
     proxy.$modal.msgSuccess(row.userId ? tr('已从 HR 移除') : tr('删除成功'))
+    clearSelectedEmployee()
     loadStats()
     getList()
-    selectedEmployee.value = null
-    currentAttachments.value = []
   })
 }
 
@@ -1302,7 +1488,11 @@ function syncUsersOnLoad() {
 }
 
 function handleExport() {
-  proxy.download('wms/employee/export', { ...buildListParams() }, `employee_${Date.now()}.xlsx`)
+  proxy.download(
+    'wms/employee/export',
+    { ...buildListParams() },
+    isEn.value ? `employee_roster_${Date.now()}.xlsx` : `员工花名册_${Date.now()}.xlsx`
+  )
 }
 
 function getTargetEmployeeIds() {
@@ -1355,7 +1545,13 @@ function handleDetailExportCommand(command) {
   if (!selectedEmployee.value) return
   const employeeIds = [selectedEmployee.value.id]
   if (command === 'EXCEL') {
-    proxy.download('wms/employee/export', { id: selectedEmployee.value.id }, `employee_${selectedEmployee.value.employeeNo}.xlsx`)
+    proxy.download(
+      'wms/employee/export',
+      { id: selectedEmployee.value.id },
+      isEn.value
+        ? `employee_${selectedEmployee.value.employeeNo}.xlsx`
+        : `员工档案_${selectedEmployee.value.employeeNo}.xlsx`
+    )
     return
   }
   if (command.startsWith('TYPE:')) {
@@ -1403,20 +1599,44 @@ function openRequiredUploadDialog(card) {
   uploadDialogType.value = card.code
   uploadDialogMultiple.value = false
   uploadDialogAccept.value = '.pdf,application/pdf'
+  uploadDialogBatchId.value = ''
+  uploadDialogBatchName.value = ''
   uploadDialogTitle.value = `${tr('上传')} - ${tr(card.label)}`
-  uploadDialogHelp.value = `${tr(card.desc || card.label)} · ${tr('仅支持 PDF，每个类型限一个文件')}`
+  const baseHelp = `${tr(card.desc || card.label)} · ${tr('仅支持 PDF，每个类型限一个文件')}`
+  uploadDialogHelp.value = attachmentMap.value[card.code]
+    ? `${baseHelp}。${tr('该类型已有 PDF 文件，重新上传将覆盖原文件')}`
+    : baseHelp
   uploadDialogDropText.value = tr('将文件拖到此处，或')
-  uploadDialogTip.value = tr('仅支持 PDF，每个类型限一个文件')
+  uploadDialogTip.value = attachmentMap.value[card.code]
+    ? tr('该类型已有 PDF 文件，重新上传将覆盖原文件')
+    : tr('仅支持 PDF，每个类型限一个文件')
   uploadDialogFileList.value = []
   uploadDialogOpen.value = true
 }
 
-function openOtherUploadDialog() {
+function defaultOtherBatchName() {
+  const now = new Date()
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${tr('其他文件')} ${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`
+}
+
+function openOtherUploadDialog(batch) {
   if (uploadDialogLoading.value || isUploadingType('OTHER')) return
   uploadDialogType.value = 'OTHER'
   uploadDialogMultiple.value = true
   uploadDialogAccept.value = ''
-  uploadDialogTitle.value = tr('上传其他文件')
+  uploadDialogBatchId.value = batch?.batchId || ''
+  uploadDialogLegacyAttachmentIds.value = (!batch?.batchId && batch?.files?.length)
+    ? batch.files.map(item => item.id).filter(Boolean)
+    : []
+  if (batch?.batchId) {
+    uploadDialogBatchName.value = batch.batchName || batch.displayName || defaultOtherBatchName()
+  } else {
+    uploadDialogBatchName.value = defaultOtherBatchName()
+  }
+  uploadDialogTitle.value = batch
+    ? tr('向此批次添加文件')
+    : tr('上传其他文件')
   uploadDialogHelp.value = tr('其他文件支持多种格式，可批量上传；如需打包多个文件，可先压缩再上传。')
   uploadDialogDropText.value = tr('将文件拖到此处，或')
   uploadDialogTip.value = tr('其他文件支持多种格式，可批量上传；如需打包多个文件，可先压缩再上传。')
@@ -1429,6 +1649,26 @@ function cancelUploadDialog() {
   uploadDialogOpen.value = false
   uploadDialogFileList.value = []
   uploadDialogType.value = ''
+  uploadDialogBatchId.value = ''
+  uploadDialogBatchName.value = ''
+  uploadDialogLegacyAttachmentIds.value = []
+}
+
+async function promptBatchName(defaultName = '') {
+  const { value } = await ElMessageBox.prompt(tr('请输入本批次名称'), tr('其他文件批次'), {
+    confirmButtonText: tr('确定'),
+    cancelButtonText: tr('取消'),
+    inputValue: defaultName || defaultOtherBatchName(),
+    inputPattern: /\S+/,
+    inputErrorMessage: tr('批次名称不能为空'),
+    inputValidator: (val) => {
+      const name = String(val || '').trim()
+      if (!name) return tr('批次名称不能为空')
+      if (name.length > 128) return tr('批次名称不能超过128个字符')
+      return true
+    }
+  })
+  return String(value || '').trim()
 }
 
 function handleUploadDialogFileChange(uploadFile, uploadFiles) {
@@ -1470,11 +1710,16 @@ function handleRequiredCardDrop(event, card) {
   submitFiles([file], card.code, { fromCard: true })
 }
 
-function handleOtherCardDrop(event) {
+async function handleOtherCardDrop(event) {
   if (uploadDialogLoading.value || isUploadingType('OTHER')) return
   const files = Array.from(event.dataTransfer?.files || [])
   if (!files.length) return
-  submitFiles(files, 'OTHER', { fromCard: true })
+  try {
+    const batchName = await promptBatchName(defaultOtherBatchName())
+    await submitFiles(files, 'OTHER', { fromCard: true, batchName })
+  } catch (err) {
+    if (err === 'cancel' || err === 'close') return
+  }
 }
 
 async function submitUploadDialog() {
@@ -1489,8 +1734,23 @@ async function submitUploadDialog() {
       proxy.$modal.msgError(tr('必备文件仅支持 PDF 格式，其他格式请上传到「其他文件」'))
       return
     }
+  } else {
+    const batchName = String(uploadDialogBatchName.value || '').trim()
+    if (!batchName) {
+      proxy.$modal.msgWarning(tr('请填写批次名称'))
+      return
+    }
+    if (batchName.length > 128) {
+      proxy.$modal.msgWarning(tr('批次名称不能超过128个字符'))
+      return
+    }
   }
-  await submitFiles(files, uploadDialogType.value, { fromDialog: true })
+  await submitFiles(files, uploadDialogType.value, {
+    fromDialog: true,
+    batchId: uploadDialogBatchId.value || undefined,
+    batchName: String(uploadDialogBatchName.value || '').trim(),
+    legacyAttachmentIds: [...uploadDialogLegacyAttachmentIds.value]
+  })
 }
 
 async function submitFiles(files, attachmentType, options = {}) {
@@ -1503,19 +1763,56 @@ async function submitFiles(files, attachmentType, options = {}) {
   }
   let successCount = 0
   try {
-    for (let i = 0; i < list.length; i++) {
-      const file = list[i]
-      const base = Math.round((i / list.length) * 100)
-      const span = Math.round(100 / list.length)
-      await uploadSingleFile(file, attachmentType, (pct) => {
-        uploadProgress.value = Math.min(99, base + Math.round((pct / 100) * span))
+    if (attachmentType === 'OTHER') {
+      const batchName = String(options.batchName || '').trim()
+      if (!batchName) {
+        throw new Error(tr('批次名称不能为空'))
+      }
+      let batchId = options.batchId || undefined
+      const legacyIds = options.legacyAttachmentIds || uploadDialogLegacyAttachmentIds.value || []
+      if (!batchId && legacyIds.length) {
+        const groupRes = await groupOtherAttachmentBatch({
+          employeeId: selectedEmployee.value.id,
+          batchName,
+          attachmentIds: legacyIds
+        })
+        batchId = groupRes?.data || groupRes
+      }
+      const uploadedFiles = []
+      for (let i = 0; i < list.length; i++) {
+        const file = list[i]
+        const base = Math.round((i / list.length) * 100)
+        const span = Math.round(100 / list.length)
+        const oss = await uploadFileToOss(file, (pct) => {
+          uploadProgress.value = Math.min(99, base + Math.round((pct / 100) * span))
+        })
+        uploadedFiles.push({ ossId: oss.ossId, fileName: file.name })
+        successCount += 1
+      }
+      await saveOtherAttachmentBatch({
+        employeeId: selectedEmployee.value.id,
+        batchId,
+        batchName,
+        files: uploadedFiles
       })
-      successCount += 1
+    } else {
+      for (let i = 0; i < list.length; i++) {
+        const file = list[i]
+        const base = Math.round((i / list.length) * 100)
+        const span = Math.round(100 / list.length)
+        await uploadSingleFile(file, attachmentType, (pct) => {
+          uploadProgress.value = Math.min(99, base + Math.round((pct / 100) * span))
+        })
+        successCount += 1
+      }
     }
     uploadProgress.value = 100
     if (options.fromDialog) {
       uploadDialogOpen.value = false
       uploadDialogFileList.value = []
+      uploadDialogBatchId.value = ''
+      uploadDialogBatchName.value = ''
+      uploadDialogLegacyAttachmentIds.value = []
     }
     if (attachmentType !== 'OTHER') {
       clearRequiredUploadError(attachmentType)
@@ -1528,7 +1825,7 @@ async function submitFiles(files, attachmentType, options = {}) {
     )
     await loadEmployeeDetail(selectedEmployee.value.id)
     loadStats()
-    getList()
+    getList({ preserveDetail: true })
   } catch (err) {
     const msg = err?.response?.data?.msg || err?.msg || err?.message || tr('上传失败')
     proxy.$modal.msgError(msg)
@@ -1542,7 +1839,7 @@ async function submitFiles(files, attachmentType, options = {}) {
   }
 }
 
-async function uploadSingleFile(file, attachmentType, onProgress) {
+async function uploadFileToOss(file, onProgress) {
   const formData = new FormData()
   formData.append('file', file)
   const { data } = await axios.post(uploadUrl, formData, {
@@ -1555,11 +1852,63 @@ async function uploadSingleFile(file, attachmentType, onProgress) {
   if (data?.code !== 200) {
     throw new Error(data?.msg || tr('上传失败'))
   }
+  return data.data
+}
+
+async function uploadSingleFile(file, attachmentType, onProgress) {
+  const oss = await uploadFileToOss(file, onProgress)
   await saveEmployeeAttachment({
     employeeId: selectedEmployee.value.id,
     attachmentType,
-    ossId: data.data.ossId,
+    ossId: oss.ossId,
     fileName: file.name
+  })
+}
+
+async function renameOtherBatch(batch) {
+  if (!batch) return
+  try {
+    const batchName = await promptBatchName(batch.batchName || (batch.legacy ? '' : batch.displayName) || '')
+    if (batch.batchId) {
+      await renameOtherAttachmentBatch(batch.batchId, { batchName })
+    } else {
+      const ids = (batch.files || []).map(item => item.id).filter(Boolean)
+      if (!ids.length) {
+        proxy.$modal.msgWarning(tr('请先为该分组命名'))
+        return
+      }
+      await groupOtherAttachmentBatch({
+        employeeId: selectedEmployee.value.id,
+        batchName,
+        attachmentIds: ids
+      })
+    }
+    proxy.$modal.msgSuccess(tr('修改成功'))
+    await loadEmployeeDetail(selectedEmployee.value.id)
+  } catch (err) {
+    if (err === 'cancel' || err === 'close') return
+    proxy.$modal.msgError(err?.response?.data?.msg || err?.msg || err?.message || tr('修改失败'))
+  }
+}
+
+function removeOtherBatch(batch) {
+  if (!batch) return
+  proxy.$modal.confirm(tr('确认删除该批次及其中全部文件？')).then(async () => {
+    if (batch.batchId) {
+      await delOtherAttachmentBatch(batch.batchId)
+      return
+    }
+    const ids = (batch.files || []).map(item => item.id).filter(Boolean)
+    for (const id of ids) {
+      await delEmployeeAttachment(id)
+    }
+  }).then(() => {
+    proxy.$modal.msgSuccess(tr('删除成功'))
+    loadEmployeeDetail(selectedEmployee.value.id)
+    loadStats()
+    getList({ preserveDetail: true })
+  }).catch((err) => {
+    if (err === 'cancel' || err === 'close') return
   })
 }
 
@@ -1588,7 +1937,8 @@ async function previewAttachment(item) {
   }
   revokePreviewUrl()
   previewItem.value = item
-  previewTitle.value = item.fileName || tr(item.attachmentTypeLabel) || tr('文件预览')
+  // 文件名保持原样，不走 tr / 运行时中英替换
+  previewTitle.value = item.fileName || (item.attachmentTypeLabel ? tr(item.attachmentTypeLabel) : '') || tr('文件预览')
   previewOpen.value = true
   previewLoading.value = true
   try {
@@ -1646,7 +1996,7 @@ function removeAttachment(item) {
     proxy.$modal.msgSuccess(tr('删除成功'))
     loadEmployeeDetail(selectedEmployee.value.id)
     loadStats()
-    getList()
+    getList({ preserveDetail: true })
   }).catch((err) => {
     if (err === 'cancel' || err === 'close') {
       return
@@ -1720,10 +2070,29 @@ loadCapabilities().then(() => {
   }
   .workspace-row {
     align-items: stretch;
+    &.is-detail-open {
+      align-items: flex-start;
+      min-height: 0;
+    }
   }
   .workspace-col {
     display: flex;
     min-height: 640px;
+  }
+  .workspace-row.is-detail-open .workspace-col {
+    min-height: 0;
+  }
+  /* 选中详情后：左侧名单高度随内容，不跟右侧强行拉齐 */
+  .workspace-row.is-detail-open .workspace-col:first-child {
+    align-self: flex-start;
+    height: auto;
+    max-height: calc(100vh - 140px);
+  }
+  .workspace-row.is-detail-open .workspace-col:last-child {
+    align-self: stretch;
+    min-height: 640px;
+    max-height: calc(100vh - 140px);
+    height: calc(100vh - 140px);
   }
   .workspace-panel {
     flex: 1;
@@ -1734,6 +2103,8 @@ loadCapabilities().then(() => {
       flex-direction: column;
       box-sizing: border-box;
       height: 100%;
+      min-height: 0;
+      overflow: hidden;
     }
   }
   .list-card {
@@ -1741,11 +2112,29 @@ loadCapabilities().then(() => {
       padding: 12px 14px 12px;
       min-height: 640px;
     }
+    &.is-detail-open {
+      height: auto !important;
+      max-height: calc(100vh - 140px);
+      :deep(.el-card__body) {
+        min-height: 0;
+        height: auto !important;
+        max-height: calc(100vh - 140px);
+        overflow: hidden;
+      }
+    }
   }
   .detail-card {
     min-height: 640px;
     :deep(.el-card__body) {
       min-height: 640px;
+    }
+  }
+  .workspace-row.is-detail-open .detail-card {
+    min-height: 0;
+    height: 100%;
+    :deep(.el-card__body) {
+      min-height: 0;
+      height: 100%;
     }
   }
   .list-toolbar {
@@ -1807,6 +2196,11 @@ loadCapabilities().then(() => {
     margin-top: 8px;
     display: flex;
     flex-direction: column;
+    overflow: hidden;
+    &.is-scroll-mode {
+      flex: 0 0 auto;
+      overflow: hidden;
+    }
   }
   .employee-table {
     flex: 1;
@@ -1814,6 +2208,17 @@ loadCapabilities().then(() => {
     min-height: 0;
     :deep(.el-table) {
       height: 100% !important;
+    }
+    &.is-scrollable {
+      flex: 0 0 auto;
+      /* 固定高度由 el-table height 控制，保证 body 可滚轮 */
+      :deep(.el-table__body-wrapper) {
+        overflow-y: auto !important;
+        overscroll-behavior: contain;
+      }
+      :deep(.el-scrollbar__wrap) {
+        overscroll-behavior: contain;
+      }
     }
     :deep(.el-table__header th) {
       background: #f5f7fa;
@@ -1953,9 +2358,47 @@ loadCapabilities().then(() => {
     border: 1px solid #ebeef5;
     border-radius: 8px;
     padding: 14px;
-    min-height: 120px;
+    min-height: 96px;
     margin-bottom: 12px;
     background: #fff;
+  }
+  .list-scroll-hint {
+    flex-shrink: 0;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid #ebeef5;
+    font-size: 12px;
+    color: #909399;
+    line-height: 1.4;
+  }
+  .required-reupload {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px dashed #c0c4cc;
+    border-radius: 6px;
+    background: #f5f7fa;
+    color: #606266;
+    font-size: 12px;
+    line-height: 1.4;
+    cursor: pointer;
+    &.is-uploading {
+      cursor: default;
+      border-color: var(--el-color-primary-light-5, #a0cfff);
+      background: var(--el-color-primary-light-9, #ecf5ff);
+      flex-direction: column;
+      align-items: stretch;
+    }
+    &.is-upload-error {
+      border-color: #f56c6c;
+      background: #fef0f0;
+    }
+  }
+  .required-reupload-icon {
+    flex-shrink: 0;
+    color: #409eff;
   }
   .attachment-card-head {
     display: flex;
@@ -2090,16 +2533,47 @@ loadCapabilities().then(() => {
     margin-top: 12px;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 12px;
     padding-bottom: 8px;
   }
-  .other-file-item {
+  .other-batch-grid {
+    width: 100%;
+  }
+  .other-batch-card {
+    min-height: 140px;
+  }
+  .other-batch-files {
+    margin-top: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .other-batch-file-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 8px 12px;
+    gap: 8px;
+    padding: 6px 8px;
     background: #fafafa;
     border-radius: 6px;
+  }
+  .other-batch-file-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .other-batch-file-actions {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
+  .other-batch-actions {
+    margin-top: 10px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 8px;
   }
   .empty-detail {
     display: flex;
