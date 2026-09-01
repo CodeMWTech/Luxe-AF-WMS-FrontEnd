@@ -25,10 +25,16 @@
           <el-form-item label="时薪"><el-input-number v-model="dialog.form.hourlyRate" class="hourly-rate-input" :disabled="!dialog.form.manualRate" :min="0" :precision="2" /></el-form-item>
           <el-form-item class="wide special-details-item" label="特殊明细">
             <div class="special-details">
+              <div v-if="dialog.specials.length" class="special-detail-header">
+                <span>{{ tr('类型') }}</span>
+                <span class="special-required-label">{{ tr('金额') }} <i>*</i></span>
+                <span>{{ tr('备注') }}</span>
+                <span></span>
+              </div>
               <div v-for="(item,index) in dialog.specials" :key="index" class="special-detail-row">
                 <el-select v-model="item.typeId" @change="normalizeSpecialInput(item)"><el-option v-for="v in options.specialTypes" :key="v.id" :label="tr(v.typeName)" :value="v.id" /></el-select>
                 <div class="special-amount-field" :class="{ 'is-error': item.amountError }">
-                  <el-input-number v-model="item.amount" :min="specialAmountMin(item)" :precision="2" :placeholder="tr('请输入金额')" @change="handleSpecialAmountChange(item)" />
+                  <el-input-number v-model="item.amount" :controls="false" :min="specialAmountMin(item)" :precision="2" :placeholder="tr('请输入金额')" @change="handleSpecialAmountChange(item)" />
                   <span v-if="item.amountError" class="special-amount-error">{{ tr('金额为必填项') }}</span>
                 </div>
                 <el-input v-model="item.remark" placeholder="备注" />
@@ -105,14 +111,14 @@ function specialAmountMin(item) { return ['DEDUCTION', 'SUBSIDY'].includes(speci
 function normalizeSpecialInput(item) { if (['DEDUCTION', 'SUBSIDY'].includes(specialCategory(item)) && Number(item.amount) < 0) item.amount = Math.abs(Number(item.amount)) }
 function addSpecialDetail() { dialog.specials.push({ typeId:null, amount:null, remark:'', amountError:false }) }
 function isSpecialAmountEmpty(item) { return item.amount === null || item.amount === undefined || item.amount === '' }
-function handleSpecialAmountChange(item) { normalizeSpecialInput(item); item.amountError = isSpecialAmountEmpty(item) }
+function handleSpecialAmountChange(item) { normalizeSpecialInput(item); if (!isSpecialAmountEmpty(item)) item.amountError = false }
 function validateSpecialAmounts() {
   let valid = true
   dialog.specials.forEach(item => { item.amountError = isSpecialAmountEmpty(item); if (item.amountError) valid = false })
   if (!valid) proxy.$modal.msgWarning(tr('请输入特殊明细金额，或删除该特殊明细'))
   return valid
 }
-function signedSpecialAmount(item) { const amount = Number(item.amount || 0), category = specialCategory(item); if (category === 'DEDUCTION') return -Math.abs(amount); if (category === 'SUBSIDY') return Math.abs(amount); return amount }
+function signedSpecialAmount(item) { if (isSpecialAmountEmpty(item)) return 0; const amount = Number(item.amount); if (!Number.isFinite(amount)) return 0; const category = specialCategory(item); if (category === 'DEDUCTION') return -Math.abs(amount); if (category === 'SUBSIDY') return Math.abs(amount); return amount }
 async function submit() { await formRef.value.validate(); if (!validateSpecialAmounts()) return; const specials = dialog.specials.map(({ amountError, ...item }) => ({ ...item, amount: signedSpecialAmount(item) })); const payload={ ...dialog.form, specialAmount:specialTotal.value, specialDetails:JSON.stringify(specials) }; await (payload.id ? updateStream(payload) : addStream(payload)); proxy.$modal.msgSuccess('保存成功'); dialog.open=false; load() }
 async function remove(row) { await proxy.$modal.confirm(`确认删除 ${row.employeeName} ${row.streamDate} 的开播记录？`); await deleteStream(row.id); proxy.$modal.msgSuccess('删除成功'); load() }
 function exportRows() {
@@ -143,10 +149,13 @@ onMounted(async()=>{ Object.assign(options,await getLiveOptions());load() })
   .el-time-picker,
   .hourly-rate-input { width: 100%; }
   .special-details { width: 100%; }
+  .special-detail-header { display: grid; grid-template-columns: 190px 170px minmax(160px, 1fr) auto; gap: 10px; margin-bottom: 6px; color: var(--el-text-color-secondary); font-size: 12px; line-height: 18px; }
+  .special-required-label i { color: var(--el-color-danger); font-style: normal; }
   .special-detail-row { display: grid; grid-template-columns: 190px 170px minmax(160px, 1fr) auto; align-items: start; gap: 10px; margin-bottom: 10px; }
-  .special-amount-field { position: relative; padding-bottom: 18px; }
-  .special-amount-field::before { position: absolute; left: -8px; top: 8px; color: var(--el-color-danger); content: '*'; }
+  .special-amount-field { position: relative; }
+  .special-amount-field.is-error { padding-bottom: 18px; }
   .special-amount-field .el-input-number { width: 100%; }
+  .special-amount-field .el-input__inner { text-align: left; }
   .special-amount-field.is-error .el-input__wrapper { box-shadow: 0 0 0 1px var(--el-color-danger) inset; }
   .special-amount-error { position: absolute; left: 0; bottom: 0; color: var(--el-color-danger); font-size: 12px; line-height: 16px; white-space: nowrap; }
   .special-details-footer { display: flex; align-items: center; justify-content: space-between; min-height: 40px; }
@@ -158,6 +167,7 @@ onMounted(async()=>{ Object.assign(options,await getLiveOptions());load() })
     .el-form-item { display: block; }
     .el-form-item__label { display: block; width: auto !important; height: auto; margin-bottom: 8px; line-height: 1.4; text-align: left; }
     .el-form-item__content { margin-left: 0 !important; }
+    .special-detail-header { display: none; }
     .special-detail-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; }
     .special-detail-row .el-input { grid-column: 1 / -1; grid-row: 2; }
   }

@@ -152,16 +152,19 @@
       </div>
       <template #footer><el-button @click="syncDialog.open = false">取消</el-button><el-button type="primary" :disabled="!syncDialog.targetAccountIds.length" :loading="syncDialog.loading" @click="submitSync">同步</el-button></template>
     </el-dialog>
+
+    <UsageConflictDialog v-model="usageDialog.open" :rows="usageDialog.rows" :action="usageDialog.action" :target="usageDialog.target" />
   </div>
 </template>
 
 <script setup>
 import { computed, getCurrentInstance, onMounted, reactive, ref } from 'vue'
 import { ArrowDown, ArrowRight, Connection, Delete, Edit, Search, WarningFilled } from '@element-plus/icons-vue'
-import { addRate, deleteRate, deleteRateAccountGroup, getLiveOptions, listRateAccountGroups, listRates, previewRateImpact, syncRateAccountGroup, updateAllRateAccountGroupStatuses, updateRate, updateRateAccountGroupStatus } from '@/api/wms/livePayroll'
+import { addRate, deleteRate, deleteRateAccountGroup, getLiveOptions, getRateAccountGroupUsage, getRateUsage, listRateAccountGroups, listRates, previewRateImpact, syncRateAccountGroup, updateAllRateAccountGroupStatuses, updateRate, updateRateAccountGroupStatus } from '@/api/wms/livePayroll'
 import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
 import { accountLabel, downloadCsv, isoDate, money } from '../shared'
+import UsageConflictDialog from '../components/UsageConflictDialog.vue'
 
 const settingsStore = useSettingsStore(), isEn = computed(() => (settingsStore.language || 'zh-cn') === 'en'), tr = text => translateByMap(text, settingsStore.language || 'zh-cn')
 const { proxy } = getCurrentInstance(), loading = ref(false), groupLoading = ref(false), rows = ref([]), formRef = ref()
@@ -169,6 +172,7 @@ const options = reactive({ employees: [], accounts: [], rateTypes: [] }), employ
 const groupLinks = ref([]), expandedAccounts = ref(new Set()), statusBusy = ref(null), dialog = reactive({ open: false, form: {}, loading: false })
 const impactDialog = reactive({ open: false, rows: [], pendingForm: null, saving: false })
 const syncDialog = reactive({ open: false, source: null, mode: 'OVERWRITE', targetAccountIds: [], loading: false })
+const usageDialog = reactive({ open: false, rows: [], action: '', target: '' })
 const rules = { employeeId: [{ required: true, message: '请选择主播或直播运营' }], accountId: [{ required: true, message: '请选择直播平台' }], rateTypeId: [{ required: true, message: '请选择费率类型' }], hourlyRate: [{ required: true, message: '请输入时薪' }], effectiveDate: [{ required: true, message: '请选择生效日期' }] }
 
 const filteredEmployees = computed(() => { const keyword = employeeKeyword.value.trim().toLowerCase(); return keyword ? options.employees.filter(v => `${v.label} ${v.extra || ''}`.toLowerCase().includes(keyword)) : options.employees })
@@ -202,16 +206,16 @@ async function loadRates() { const res = await listRates({}); rows.value = res.r
 async function loadGroups() { if (!selectedEmployeeId.value) { groupLinks.value = []; return } groupLoading.value = true; try { const res = await listRateAccountGroups(selectedEmployeeId.value); groupLinks.value = res.data || [] } finally { groupLoading.value = false } }
 async function loadAll() { loading.value = true; try { const [liveOptions] = await Promise.all([getLiveOptions(true), loadRates()]); Object.assign(options, liveOptions); expandedAccounts.value = new Set(); if (!options.employees.some(v => v.value === selectedEmployeeId.value)) selectedEmployeeId.value = options.employees[0]?.value || null; await loadGroups() } finally { loading.value = false } }
 async function selectEmployee(employeeId) { if (selectedEmployeeId.value === employeeId) return; selectedEmployeeId.value = employeeId; expandedAccounts.value = new Set(); await loadGroups() }
-async function toggleGroupStatus(account, enabled) { statusBusy.value = account.id; try { await updateRateAccountGroupStatus({ employeeId: selectedEmployeeId.value, accountId: account.id, status: enabled ? 0 : 1 }); await loadGroups(); proxy.$modal.msgSuccess(enabled ? '直播平台分组已启用' : '直播平台分组已禁用') } catch (error) { await showActionBlocked(error) } finally { statusBusy.value = null } }
-async function setAllGroups(status) { try { await updateAllRateAccountGroupStatuses({ employeeId: selectedEmployeeId.value, status }); await loadGroups(); proxy.$modal.msgSuccess(status === 0 ? '全部直播平台已启用' : '全部直播平台已禁用') } catch (error) { await showActionBlocked(error) } }
+async function toggleGroupStatus(account, enabled) { statusBusy.value = account.id; try { await updateRateAccountGroupStatus({ employeeId: selectedEmployeeId.value, accountId: account.id, status: enabled ? 0 : 1 }); await loadGroups(); proxy.$modal.msgSuccess(enabled ? '直播平台分组已启用' : '直播平台分组已禁用') } catch (error) { await showActionBlocked(error, enabled ? null : () => getRateAccountGroupUsage({ employeeId: selectedEmployeeId.value, accountId: account.id }), '停用', '该直播平台分组') } finally { statusBusy.value = null } }
+async function setAllGroups(status) { try { await updateAllRateAccountGroupStatuses({ employeeId: selectedEmployeeId.value, status }); await loadGroups(); proxy.$modal.msgSuccess(status === 0 ? '全部直播平台已启用' : '全部直播平台已禁用') } catch (error) { await showActionBlocked(error, status === 1 ? () => getRateAccountGroupUsage({ employeeId: selectedEmployeeId.value }) : null, '停用', '该主播的直播平台分组') } }
 
 function openDialog(row = {}, accountId = null, rateTypeId = null) { const targetAccountId = row.accountId || accountId; if (targetAccountId && !isGroupEnabled(targetAccountId)) { proxy.$modal.msgWarning('请先启用该直播平台分组'); return } if (!targetAccountId && !configurableAccounts.value.length) { proxy.$modal.msgWarning('请先启用至少一个直播平台分组'); return } dialog.form = { id: row.id, employeeId: row.employeeId || selectedEmployeeId.value, accountId: targetAccountId, rateTypeId: row.rateTypeId || rateTypeId, hourlyRate: Number(row.hourlyRate || 0), effectiveDate: row.effectiveDate || isoDate(), expiryDate: row.expiryDate || null, status: row.status ?? 0, remark: row.remark || '' }; dialog.open = true }
 async function submit() { await formRef.value.validate(); if (!isGroupEnabled(dialog.form.accountId)) { proxy.$modal.msgWarning('直播平台分组未启用，不能维护费率'); return } dialog.loading = true; try { const pendingForm = { ...dialog.form }; const res = await previewRateImpact(pendingForm); impactDialog.rows = res.data || []; impactDialog.pendingForm = pendingForm; impactDialog.open = true } finally { dialog.loading = false } }
 async function confirmSubmit() { if (!impactDialog.pendingForm) return; impactDialog.saving = true; try { const form = impactDialog.pendingForm; await (form.id ? updateRate(form) : addRate(form)); proxy.$modal.msgSuccess(`保存成功${impactDialog.rows.length ? `，已同步更新 ${impactDialog.rows.length} 条开播记录` : ''}`); impactDialog.open = false; dialog.open = false; impactDialog.pendingForm = null; await loadRates() } finally { impactDialog.saving = false } }
-async function remove(row) { await proxy.$modal.confirm(`确认删除 ${row.employeeName} 在 ${row.accountLabel} 的这条费率？`); try { await deleteRate(row.id) } catch (error) { await showActionBlocked(error); return } proxy.$modal.msgSuccess('删除成功'); await loadRates() }
-async function removeAccountGroup(account) { await proxy.$modal.confirm(`确认删除 ${selectedEmployee.value.label} 的 ${accountLabel(account)} 直播平台分组及其下全部费率？`); try { await deleteRateAccountGroup({ employeeId: selectedEmployeeId.value, accountId: account.id }) } catch (error) { await showActionBlocked(error); return } proxy.$modal.msgSuccess('直播平台分组及费率已删除'); await Promise.all([loadRates(), loadGroups()]) }
+async function remove(row) { await proxy.$modal.confirm(`确认删除 ${row.employeeName} 在 ${row.accountLabel} 的这条费率？`); try { await deleteRate(row.id) } catch (error) { await showActionBlocked(error, () => getRateUsage(row.id), '删除', '该费率配置'); return } proxy.$modal.msgSuccess('删除成功'); await loadRates() }
+async function removeAccountGroup(account) { await proxy.$modal.confirm(`确认删除 ${selectedEmployee.value.label} 的 ${accountLabel(account)} 直播平台分组及其下全部费率？`); try { await deleteRateAccountGroup({ employeeId: selectedEmployeeId.value, accountId: account.id }) } catch (error) { await showActionBlocked(error, () => getRateAccountGroupUsage({ employeeId: selectedEmployeeId.value, accountId: account.id }), '删除', '该直播平台分组'); return } proxy.$modal.msgSuccess('直播平台分组及费率已删除'); await Promise.all([loadRates(), loadGroups()]) }
 
-async function showActionBlocked(error) { await proxy.$modal.alertWarning(error?.message || '操作失败，请稍后重试。') }
+async function showActionBlocked(error, usageLoader, action, target) { if (usageLoader) { try { const res = await usageLoader(); const usageRows = res.data || []; if (usageRows.length) { Object.assign(usageDialog, { open: true, rows: usageRows, action, target }); return } } catch (_) {} } await proxy.$modal.alertWarning(error?.message || '操作失败，请稍后重试。') }
 
 function openSync(account) { syncDialog.source = account; syncDialog.mode = 'OVERWRITE'; syncDialog.targetAccountIds = []; syncDialog.open = true }
 function selectAllSyncTargets() { syncDialog.targetAccountIds = syncTargets.value.map(v => v.id) }

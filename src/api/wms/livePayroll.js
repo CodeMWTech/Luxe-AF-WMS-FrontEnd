@@ -46,6 +46,7 @@ export const listAccounts = params => request({ url: `${base}/accounts/list`, me
 export const addAccount = data => request({ url: `${base}/accounts`, method: 'post', data })
 export const updateAccount = data => request({ url: `${base}/accounts`, method: 'put', data, silentError: true })
 export const deleteAccount = id => request({ url: `${base}/accounts/${id}`, method: 'delete', silentError: true })
+export const getAccountUsage = id => request({ url: `${base}/accounts/${id}/usage`, method: 'get', silentError: true })
 export const syncAccounts = () => request({ url: `${base}/accounts/sync-shops`, method: 'post' })
 
 export const listRates = params => request({ url: `${base}/rates/list`, method: 'get', params })
@@ -53,7 +54,9 @@ export const previewRateImpact = data => request({ url: `${base}/rates/impact-pr
 export const addRate = data => request({ url: `${base}/rates`, method: 'post', data })
 export const updateRate = data => request({ url: `${base}/rates`, method: 'put', data })
 export const deleteRate = id => request({ url: `${base}/rates/${id}`, method: 'delete', silentError: true })
+export const getRateUsage = id => request({ url: `${base}/rates/${id}/usage`, method: 'get', silentError: true })
 export const listRateAccountGroups = employeeId => request({ url: `${base}/rates/account-groups`, method: 'get', params: { employeeId } })
+export const getRateAccountGroupUsage = params => request({ url: `${base}/rates/account-groups/usage`, method: 'get', params, silentError: true })
 export const updateRateAccountGroupStatus = data => request({ url: `${base}/rates/account-groups/status`, method: 'put', data, silentError: true })
 export const updateAllRateAccountGroupStatuses = params => request({ url: `${base}/rates/account-groups/status/all`, method: 'put', params, silentError: true })
 export const syncRateAccountGroup = data => request({ url: `${base}/rates/account-groups/sync`, method: 'post', data })
