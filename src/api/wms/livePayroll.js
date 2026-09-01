@@ -26,11 +26,13 @@ export const importAttendance = data => request({
 
 export const listSchedules = params => request({ url: `${base}/schedules/list`, method: 'get', params })
 export const listScheduleCalendar = params => request({ url: `${base}/schedules/calendar`, method: 'get', params })
+export const listScheduleRateTypes = params => request({ url: `${base}/schedules/rate-types`, method: 'get', params })
 export const addSchedule = data => request({ url: `${base}/schedules`, method: 'post', data })
 export const updateSchedule = data => request({ url: `${base}/schedules`, method: 'put', data })
 export const deleteSchedule = id => request({ url: `${base}/schedules/${id}`, method: 'delete' })
 
 export const listStreams = params => request({ url: `${base}/streams/list`, method: 'get', params })
+export const listStreamRateTypes = params => request({ url: `${base}/streams/rate-types`, method: 'get', params })
 export const addStream = data => request({ url: `${base}/streams`, method: 'post', data })
 export const updateStream = data => request({ url: `${base}/streams`, method: 'put', data })
 export const deleteStream = id => request({ url: `${base}/streams/${id}`, method: 'delete' })

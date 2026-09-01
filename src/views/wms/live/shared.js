@@ -16,12 +16,11 @@ export function monthRange(offset = 0) {
 
 export function weekRange(offset = 0) {
   const now = new Date()
-  const day = now.getDay() || 7
-  const monday = new Date(now)
-  monday.setDate(now.getDate() - day + 1 + offset * 7)
-  const sunday = new Date(monday)
-  sunday.setDate(monday.getDate() + 6)
-  return [isoDate(monday), isoDate(sunday)]
+  const sunday = new Date(now)
+  sunday.setDate(now.getDate() - now.getDay() + offset * 7)
+  const saturday = new Date(sunday)
+  saturday.setDate(sunday.getDate() + 6)
+  return [isoDate(sunday), isoDate(saturday)]
 }
 
 export function money(value, currency = 'USD') {
