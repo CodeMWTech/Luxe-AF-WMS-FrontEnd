@@ -18,7 +18,7 @@
     <el-card class="live-filter" shadow="never">
       <el-form :inline="true">
         <el-form-item label="日期"><el-date-picker v-model="dateRange" type="daterange" value-format="YYYY-MM-DD" range-separator="至" /></el-form-item>
-        <el-form-item label="账号"><el-select v-model="filters.accountId" clearable filterable placeholder="全部账号"><el-option v-for="v in options.accounts" :key="v.id" :label="accountLabel(v)" :value="v.id" /></el-select></el-form-item>
+        <el-form-item label="直播平台"><el-select v-model="filters.accountId" clearable filterable placeholder="全部直播平台"><el-option v-for="v in options.accounts" :key="v.id" :label="accountLabel(v)" :value="v.id" /></el-select></el-form-item>
         <el-form-item label="主播"><el-select v-model="filters.employeeId" clearable filterable placeholder="全部主播"><el-option v-for="v in options.employees" :key="v.value" :label="v.label" :value="v.value" /></el-select></el-form-item>
         <el-form-item label="费率类型"><el-select v-model="filters.rateTypeId" clearable placeholder="全部类型"><el-option v-for="v in options.rateTypes" :key="v.id" :label="v.typeName" :value="v.id" /></el-select></el-form-item>
         <el-form-item><el-button type="primary" @click="load">查询</el-button><el-button @click="selectMonth(0)">本月</el-button><el-button @click="selectMonth(-1)">上个月</el-button></el-form-item>
@@ -30,7 +30,7 @@
         <div class="metric-label">{{ item.label }}</div><div class="metric-value">{{ item.value }}</div><div class="metric-hint">{{ item.hint }}</div>
       </el-card>
     </div>
-    <el-card class="live-card" shadow="never" style="margin-bottom:16px">
+    <el-card class="live-card" shadow="never" style="margin-bottom:20px">
       <template #header><span>特殊金额分类</span></template>
       <el-space :size="28"><span class="positive">补贴类 {{ money(overview.subsidyAmount) }}</span><span class="negative">扣款类 {{ money(overview.deductionAmount) }}</span><strong>净 {{ money(overview.specialNet) }}</strong></el-space>
     </el-card>
@@ -76,7 +76,7 @@
       <el-table :data="filteredChecklist" stripe empty-text="当前筛选范围内没有核对记录">
         <el-table-column prop="date" label="日期" width="120" sortable />
         <el-table-column prop="employeeName" label="主播" min-width="110" />
-        <el-table-column label="账号" min-width="220">
+        <el-table-column label="直播平台" min-width="220">
           <template #default="s">{{ s.row.accountLabel }}<span v-if="s.row.platform" class="muted"> ({{ s.row.platform }})</span></template>
         </el-table-column>
         <el-table-column label="计划时间" width="130"><template #default="s">{{ timeRange(s.row.plannedStartTime, s.row.plannedEndTime) }}</template></el-table-column>
@@ -204,7 +204,7 @@ function exportChecklist() {
   }))
   const filenameRange = checklistDate.value || `${dateRange.value[0]}-${dateRange.value[1]}`
   downloadCsv(`每日核对清单-${filenameRange}.csv`, [
-    { key: 'date', label: '日期' }, { key: 'employeeName', label: '主播' }, { key: 'accountLabel', label: '账号' },
+    { key: 'date', label: '日期' }, { key: 'employeeName', label: '主播' }, { key: 'accountLabel', label: '直播平台' },
     { key: 'plannedTime', label: '计划时间' }, { key: 'actualTime', label: '实际时间' },
     { key: 'clockedLabel', label: '是否打卡' }, { key: 'status', label: '状态' }
   ], rows)
@@ -217,7 +217,7 @@ onBeforeUnmount(() => { window.removeEventListener('resize', resize); trendChart
 <style scoped lang="scss">
 @import '../live.scss';
 
-.checklist-card { margin-bottom: 16px; }
+.checklist-card { margin-bottom: 20px; }
 .checklist-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .checklist-subtitle { margin-top: 5px; font-size: 12px; font-weight: 400; }
 .checklist-actions, .checklist-summary { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
