@@ -30,7 +30,7 @@
         <div class="metric-label">{{ item.label }}</div><div class="metric-value">{{ item.value }}</div><div class="metric-hint">{{ item.hint }}</div>
       </el-card>
     </div>
-    <el-card class="live-card" shadow="never" style="margin-bottom:16px">
+    <el-card class="live-card" shadow="never" style="margin-bottom:20px">
       <template #header><span>特殊金额分类</span></template>
       <el-space :size="28"><span class="positive">补贴类 {{ money(overview.subsidyAmount) }}</span><span class="negative">扣款类 {{ money(overview.deductionAmount) }}</span><strong>净 {{ money(overview.specialNet) }}</strong></el-space>
     </el-card>
@@ -217,7 +217,7 @@ onBeforeUnmount(() => { window.removeEventListener('resize', resize); trendChart
 <style scoped lang="scss">
 @import '../live.scss';
 
-.checklist-card { margin-bottom: 16px; }
+.checklist-card { margin-bottom: 20px; }
 .checklist-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .checklist-subtitle { margin-top: 5px; font-size: 12px; font-weight: 400; }
 .checklist-actions, .checklist-summary { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
