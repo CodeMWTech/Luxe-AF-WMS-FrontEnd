@@ -125,8 +125,6 @@
     browseFeatures: 'Browse Features',
     viewGuidelines: 'View Operation Notes',
     aboutStudio: 'About CODE MW',
-    hostHoursLink: 'host hours link',
-    hostHoursLinkHint: 'External link: open the Host Hours website in a new tab',
     advantageTitle: 'Our advantages:',
     featureTagAutomation: 'End-to-end automation for orders, inbound, and outbound',
     featureTagEfficiency: 'Less repeated entry, much faster daily operations',

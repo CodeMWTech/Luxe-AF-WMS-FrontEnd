@@ -125,8 +125,6 @@
     browseFeatures: '浏览功能',
     viewGuidelines: '查看操作注意事项',
     aboutStudio: '关于CODE MW',
-    hostHoursLink: 'host hours link',
-    hostHoursLinkHint: '外部链接：在新标签页打开 Host Hours 网站',
     advantageTitle: '我们的优势有：',
     featureTagAutomation: '全流程自动化，订单入库出库自动流转',
     featureTagEfficiency: '减少重复录入，日常操作效率大幅提升',
