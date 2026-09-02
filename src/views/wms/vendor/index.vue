@@ -274,7 +274,7 @@
           @click="applySettlementTarget()"
         >{{ text('按上架时间分配', 'Allocate by listing time') }}</el-button>
         <span class="settlement-target__tip">
-          {{ text('从上架时间最早的商品开始分配，最后一个 SKU 可部分结算。', 'Allocates from the earliest listed item; the last SKU can be partially settled.') }}
+          {{ text('从已勾选商品中按上架时间从早到晚分配，超额时按勾选项可结算上限分配。', 'Allocates selected items from earliest to latest and caps excess amounts at their available limit.') }}
         </span>
       </div>
 
@@ -530,13 +530,13 @@ const previewPageLines = computed(() => {
 })
 const selectedPreviewLines = computed(() => (preview.value.lines || [])
   .filter(line => previewSelectionCache.value.has(String(line.skuId))))
-const settlementTargetMaxAmount = computed(() => (preview.value.lines || []).reduce((total, line) => {
-  const available = settlementAvailableAmount(line)
-  return available > 0 ? total + available : total
-}, 0))
+const settlementTargetMaxAmount = computed(() => selectedPreviewLines.value.reduce((totalCents, line) => {
+  const availableCents = amountInCents(settlementAvailableAmount(line))
+  return availableCents > 0 ? totalCents + availableCents : totalCents
+}, 0) / 100)
 const hasValidSettlementTarget = computed(() => {
   const amount = Number(settlementTargetAmount.value)
-  return Number.isFinite(amount) && amount > 0 && amount <= settlementTargetMaxAmount.value + 0.000001
+  return Number.isFinite(amount) && amount > 0 && settlementTargetMaxAmount.value > 0
 })
 const forceSkuVisible = ref(false)
 const forceSkuLoading = ref(false)
@@ -690,9 +690,9 @@ function amountInCents(value) {
 }
 
 async function applySettlementTarget(showSuccess = true) {
-  const targetCents = amountInCents(settlementTargetAmount.value)
+  const requestedCents = amountInCents(settlementTargetAmount.value)
   const maxCents = amountInCents(settlementTargetMaxAmount.value)
-  if (targetCents <= 0 || targetCents > maxCents) {
+  if (requestedCents <= 0 || maxCents <= 0) {
     proxy.$modal.msgWarning(text(
       `本次结算金额需大于 0，且不能超过可结算金额 ${money(settlementTargetMaxAmount.value)}`,
       `The current amount must be greater than 0 and no more than ${money(settlementTargetMaxAmount.value)}`
@@ -700,9 +700,12 @@ async function applySettlementTarget(showSuccess = true) {
     return false
   }
 
+  const targetCents = Math.min(requestedCents, maxCents)
+  const targetWasClamped = requestedCents > maxCents
+  settlementTargetAmount.value = targetCents / 100
   let remainingCents = targetCents
   const allocatedLines = new Map()
-  const orderedLines = (preview.value.lines || [])
+  const orderedLines = selectedPreviewLines.value
     .map((line, index) => ({ line, index }))
     .sort((left, right) => {
       const leftTime = left.line?.createdTime ? String(left.line.createdTime) : ''
@@ -734,10 +737,17 @@ async function applySettlementTarget(showSuccess = true) {
   previewSelectionCache.value = allocatedLines
   await restorePreviewPageSelection()
   if (showSuccess) {
-    proxy.$modal.msgSuccess(text(
-      `已按商品上架时间从旧到新分配 ${money(targetCents / 100)}`,
-      `${money(targetCents / 100)} allocated from oldest to newest listing`
-    ))
+    if (targetWasClamped) {
+      proxy.$modal.msgWarning(text(
+        `输入金额超过当前勾选项可结算上限，已按 ${money(targetCents / 100)} 分配`,
+        `The entered amount exceeded the selected items' limit and was allocated as ${money(targetCents / 100)}`
+      ))
+    } else {
+      proxy.$modal.msgSuccess(text(
+        `已按商品上架时间从旧到新分配 ${money(targetCents / 100)}`,
+        `${money(targetCents / 100)} allocated from oldest to newest listing`
+      ))
+    }
   }
   return true
 }
