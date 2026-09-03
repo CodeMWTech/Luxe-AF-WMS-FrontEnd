@@ -1692,7 +1692,7 @@ function navigateTo(path) {
 
 .hero-actions {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
   margin-top: 30px;
 }
@@ -2297,7 +2297,7 @@ function navigateTo(path) {
 
   .hero-actions {
     width: 100%;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
     margin-top: 22px;
   }

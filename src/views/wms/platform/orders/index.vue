@@ -268,8 +268,8 @@
             </div>
 
             <div class="summary-cell money-cell">
-              <span class="cell-label">{{ t('platformOrders.grossProfit') }}</span>
-              <span class="secondary-value">{{ formatOptionalMoney(order.grossProfit, getCurrency(order)) }}</span>
+              <span class="cell-label">{{ t('platformOrders.netProfit') }}</span>
+              <span class="secondary-value">{{ formatNetProfit(order) }}</span>
             </div>
 
             <div class="summary-cell status-cell">
@@ -500,7 +500,7 @@
                   <template v-for="(item, itemIndex) in getLineItems(getDisplayOrder(order, index))" :key="'pay-item-' + (item.lineItemId || item.skuId || itemIndex)">
                     <InfoLine :label="t('platformOrders.itemSubtotal')" :value="formatOptionalMoney(item.subtotal, item.currency || getCurrency(getDisplayOrder(order, index)))" />
                   </template>
-                  <InfoLine v-if="getPlatform(getDisplayOrder(order, index)) === 'EBAY'" :label="t('platformOrders.paymentEbayNetProfit')" :value="formatEbayNetProfit(getDisplayOrder(order, index))" strong />
+                  <InfoLine v-if="getPlatform(getDisplayOrder(order, index)) === 'EBAY'" :label="t('platformOrders.paymentEbayNetProfit')" :value="formatNetProfit(getDisplayOrder(order, index))" strong />
                 </section>
               </div>
 
@@ -1442,11 +1442,21 @@ function formatGrossProfit(order) {
   return formatMoney(order.grossProfit, getCurrency(order))
 }
 
-/** eBay 净毛利 = 售价(totalAmount) - 平台交易费(totalMarketplaceFee) - 成本(costPrice) */
-function formatEbayNetProfit(order) {
-  const totalAmount = order.totalAmount
+/** TikTok 汇总单品预估利润 subtotal；eBay 净毛利 = 售价 - 平台交易费 - 成本。 */
+function formatNetProfit(order) {
+  if (getPlatform(order) === 'TIKTOK') {
+    const estimatedProfits = getLineItems(order)
+      .map(item => Number(item.subtotal))
+      .filter(Number.isFinite)
+    if (!estimatedProfits.length) return '-'
+    return formatMoney(
+      estimatedProfits.reduce((sum, profit) => sum + profit, 0),
+      getCurrency(order)
+    )
+  }
+  const totalAmount = order.totalAmount ?? getSaleAmount(order)
   const fee = order.totalMarketplaceFee
-  const cost = order.costPrice
+  const cost = order.costPrice ?? order.cost
   // 成本未匹配（null 或 0）时显示 -
   if (totalAmount == null || cost == null) return '-'
   const ta = Number(totalAmount)

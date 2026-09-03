@@ -241,6 +241,11 @@
           >
             {{ tr('导出Excel') }}
           </el-button>
+          <el-button
+            @click="openExportTaskDialog"
+          >
+            {{ tr('导出记录') }}
+          </el-button>
         </el-col>
       </el-row>
 
@@ -646,6 +651,49 @@
       </div>
     </el-drawer>
 
+    <el-dialog v-model="exportTaskDialogVisible" :title="tr('导出记录')" width="860px">
+      <el-table :data="exportTaskList" v-loading="exportTaskListLoading" border>
+        <el-table-column prop="fileName" :label="tr('文件名')" min-width="250">
+          <template #default="{ row }">
+            {{ row.fileName || (row.exportType === 'BATCH' ? tr('库存统计批量导出') : tr('库存统计')) }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="rowCount" :label="tr('数据量')" width="90" align="center">
+          <template #default="{ row }">{{ row.rowCount ?? '--' }}</template>
+        </el-table-column>
+        <el-table-column :label="tr('状态')" width="110" align="center">
+          <template #default="{ row }">
+            <el-tag :type="exportTaskStatusType(row.status)">{{ exportTaskStatusText(row.status) }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="createTime" :label="tr('创建时间')" width="170" />
+        <el-table-column :label="tr('操作')" width="150" align="center" fixed="right">
+          <template #default="{ row }">
+            <el-button
+              link
+              type="primary"
+              :disabled="row.status !== EXPORT_TASK_STATUS_SUCCESS"
+              @click="downloadCompletedExportTask(row)"
+            >
+              {{ tr('下载') }}
+            </el-button>
+            <el-button
+              link
+              type="danger"
+              :loading="deletingExportTaskId === row.id"
+              @click="deleteExportTaskRecord(row)"
+            >
+              {{ tr('删除') }}
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+      <template #footer>
+        <el-button :loading="exportTaskListLoading" @click="loadExportTaskList">{{ tr('刷新') }}</el-button>
+        <el-button type="primary" @click="exportTaskDialogVisible = false">{{ tr('关闭') }}</el-button>
+      </template>
+    </el-dialog>
+
     <!-- 批量上架对话框 -->
     <PublishDialog ref="publishDialogRef" @success="getList" />
   </div>
@@ -653,10 +701,14 @@
 
 <script setup name="Inventory">
 import {
-  batchExportInventoryBoardExcel,
-  exportInventoryBoardItem,
+  deleteInventoryExportTask,
+  downloadInventoryExportTask,
+  getInventoryExportTask,
   listInventoryBoard,
-  listInventoryBoardWarehouseSummary
+  listInventoryExportTasks,
+  listInventoryBoardWarehouseSummary,
+  submitInventoryBoardBatchExportTask,
+  submitInventoryBoardExportTask
 } from '@/api/wms/inventory'
 import { downloadItemImage, getItemImages } from '@/api/wms/item'
 import { computed, getCurrentInstance, nextTick, onActivated, onMounted, ref } from 'vue'
@@ -689,6 +741,10 @@ const loading = ref(true)
 const exportLoading = ref(false)
 const batchExportExcelLoading = ref(false)
 const batchExportPdfLoading = ref(false)
+const exportTaskDialogVisible = ref(false)
+const exportTaskListLoading = ref(false)
+const exportTaskList = ref([])
+const deletingExportTaskId = ref(null)
 const selectedRows = ref([])
 const selectedRowMap = ref(new Map())
 const selectAllLoading = ref(false)
@@ -743,10 +799,15 @@ const detailFieldList = computed(() => {
 })
 
 function getDetailExportLabels() {
-  const labels = ['\u5546\u54c1\u5206\u7c7b', '\u5546\u54c1\u54c1\u724c', '\u5e74\u4efd', '\u6210\u8272', '\u5305\u578b', '\u6750\u8d28']
-  if (canViewCostPrice.value) labels.push('\u6210\u672c\u4ef7')
-  if (canViewSellingPrice.value) labels.push('\u9500\u552e\u4ef7')
-  labels.push('\u6570\u91cf', '\u662f\u5426\u5df2\u62a4\u7406', '\u9274\u5b9a\u673a\u6784', '\u5bc4\u552e\u4fe1\u606f', '\u7455\u75b5', '\u914d\u4ef6', '\u5907\u6ce8')
+  // 与 detailFieldList 顺序一致，跟随界面语言
+  const labels = [
+    tr('商品分类'), tr('商品品牌'), tr('年份'), tr('成色'), tr('包型'), tr('材质')
+  ]
+  if (canViewCostPrice.value) labels.push(tr('成本价'))
+  if (canViewSellingPrice.value) labels.push(tr('销售价'))
+  labels.push(
+    tr('数量'), tr('是否已护理'), tr('鉴定机构'), tr('寄售信息'), tr('瑕疵'), tr('配件'), tr('备注')
+  )
   return labels
 }
 
@@ -1016,13 +1077,14 @@ function exportDetailPdf() {
   const item = detailItem.value || {}
   const sku = detailSku.value || {}
   const title = displayValue(item.itemName)
+  const caredLabel = tr('是否已护理')
   const exportLabels = getDetailExportLabels()
   const rows = detailFieldList.value.map((field, index) => {
     const label = exportLabels[index] || field.label
     const value = field.type === 'accessories' && accessoryList.value.length
       ? accessoryList.value.join(', ')
-      : label === '\u662f\u5426\u5df2\u62a4\u7406' && detailItem.value?.cared !== null && detailItem.value?.cared !== undefined
-        ? (detailItem.value.cared ? '\u5df2\u62a4\u7406' : '\u672a\u62a4\u7406')
+      : label === caredLabel && detailItem.value?.cared !== null && detailItem.value?.cared !== undefined
+        ? (detailItem.value.cared ? tr('已护理') : tr('未护理'))
         : field.value
     return `<tr><th>${escapeHtml(label)}</th><td>${escapeHtml(value)}</td></tr>`
   }).join('')
@@ -1030,7 +1092,7 @@ function exportDetailPdf() {
     .map((img, idx) => {
       const url = getImageUrl(img)
       if (!url) return ''
-      return `<figure><img src="${escapeHtml(url)}" alt="image-${idx + 1}" /><figcaption>${escapeHtml('\u5546\u54c1\u56fe\u7247')} ${idx + 1}</figcaption></figure>`
+      return `<figure><img src="${escapeHtml(url)}" alt="image-${idx + 1}" /><figcaption>${escapeHtml(tr('商品图片'))} ${idx + 1}</figcaption></figure>`
     })
     .join('')
   const printWindow = window.open('', '_blank')
@@ -1038,12 +1100,13 @@ function exportDetailPdf() {
     proxy.$modal.msgError(tr('导出失败'))
     return
   }
+  const detailTitleFallback = tr('商品详情')
   printWindow.document.write(`
 <!doctype html>
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>${escapeHtml(safeFileName(`${sku.skuCode || ''}-${item.itemName || '商品详情'}`, '商品详情'))}</title>
+  <title>${escapeHtml(safeFileName(`${sku.skuCode || ''}-${item.itemName || detailTitleFallback}`, detailTitleFallback))}</title>
   <style>
     * { box-sizing: border-box; }
     body { margin: 0; padding: 28px; font-family: Arial, "Microsoft YaHei", sans-serif; color: #1f2329; }
@@ -1628,7 +1691,7 @@ const handleExportExcel = async () => {
   try {
     exportLoading.value = true
     const exportLanguage = getExportLanguagePayload()
-    const blobData = await exportInventoryBoardItem(
+    const response = await submitInventoryBoardExportTask(
       {
         ...getCurrentQuery(),
         ...exportLanguage
@@ -1640,28 +1703,126 @@ const handleExportExcel = async () => {
         }
       }
     )
-    const isBlob = blobValidate(blobData)
-    if (!isBlob) {
-      const resText = await blobData.text()
-      const rspObj = JSON.parse(resText)
-      const errMsg = rspObj?.msg || tr('导出失败')
-      throw new Error(errMsg)
-    }
-    const excelData = isEn.value ? await translateInventoryExportXlsx(blobData) : blobData
-    const blob = new Blob([excelData], {
-      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    })
-    const url = window.URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = isEn.value ? 'LuxeAFWMS-Inventory Statistics.xlsx' : 'LuxeAFWMS-库存统计.xlsx'
-    a.click()
-    window.URL.revokeObjectURL(url)
+    proxy.$modal.msgSuccess(tr('导出任务已提交，文件正在后台生成'))
+    await waitForInventoryExportTask(
+      response.data,
+      isEn.value ? 'LuxeAFWMS-Inventory Statistics.xlsx' : 'LuxeAFWMS-库存统计.xlsx'
+    )
     proxy.$modal.msgSuccess(tr('导出成功'))
   } catch (e) {
     proxy.$modal.msgError(e?.message || tr('导出失败'))
   } finally {
     exportLoading.value = false
+  }
+}
+
+const EXPORT_TASK_STATUS_SUCCESS = 2
+const EXPORT_TASK_STATUS_FAILED = 3
+const EXPORT_TASK_STATUS_EXPIRED = 4
+const EXPORT_TASK_POLL_INTERVAL = 2000
+const EXPORT_TASK_MAX_WAIT = 30 * 60 * 1000
+
+const delay = milliseconds => new Promise(resolve => window.setTimeout(resolve, milliseconds))
+
+async function waitForInventoryExportTask(taskId, fallbackFileName) {
+  const startedAt = Date.now()
+  while (Date.now() - startedAt < EXPORT_TASK_MAX_WAIT) {
+    const response = await getInventoryExportTask(taskId, { silentError: true })
+    const task = response.data || {}
+    if (task.status === EXPORT_TASK_STATUS_SUCCESS) {
+      await downloadInventoryTaskFile(taskId, task.fileName || fallbackFileName)
+      return
+    }
+    if (task.status === EXPORT_TASK_STATUS_FAILED) {
+      throw new Error(task.errorMsg || tr('导出失败'))
+    }
+    if (task.status === EXPORT_TASK_STATUS_EXPIRED) {
+      throw new Error(tr('导出文件已过期，请重新导出'))
+    }
+    await delay(EXPORT_TASK_POLL_INTERVAL)
+  }
+  throw new Error(tr('导出任务仍在后台生成，请稍后重试'))
+}
+
+async function downloadInventoryTaskFile(taskId, fileName) {
+  const blobData = await downloadInventoryExportTask(taskId, { silentError: true })
+  if (!blobValidate(blobData)) {
+    const responseText = await blobData.text()
+    const responseBody = JSON.parse(responseText)
+    throw new Error(responseBody?.msg || tr('导出失败'))
+  }
+  const blob = new Blob([blobData], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  })
+  const url = window.URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = fileName || 'inventory-export.xlsx'
+  anchor.click()
+  window.URL.revokeObjectURL(url)
+}
+
+function exportTaskStatusText(status) {
+  return {
+    0: tr('待处理'),
+    1: tr('生成中'),
+    2: tr('已完成'),
+    3: tr('失败'),
+    4: tr('已过期')
+  }[status] || '--'
+}
+
+function exportTaskStatusType(status) {
+  return {
+    0: 'info',
+    1: 'warning',
+    2: 'success',
+    3: 'danger',
+    4: 'info'
+  }[status] || 'info'
+}
+
+async function loadExportTaskList() {
+  try {
+    exportTaskListLoading.value = true
+    const response = await listInventoryExportTasks({ pageNum: 1, pageSize: 20 }, { silentError: true })
+    exportTaskList.value = response.rows || []
+  } catch (error) {
+    proxy.$modal.msgError(error?.message || tr('查询导出记录失败'))
+  } finally {
+    exportTaskListLoading.value = false
+  }
+}
+
+function openExportTaskDialog() {
+  exportTaskDialogVisible.value = true
+  loadExportTaskList()
+}
+
+async function downloadCompletedExportTask(task) {
+  try {
+    await downloadInventoryTaskFile(task.id, task.fileName)
+  } catch (error) {
+    proxy.$modal.msgError(error?.message || tr('导出失败'))
+    await loadExportTaskList()
+  }
+}
+
+async function deleteExportTaskRecord(task) {
+  try {
+    await proxy.$modal.confirm(tr('确认删除该导出记录吗？删除后文件将无法恢复。'))
+  } catch {
+    return
+  }
+  try {
+    deletingExportTaskId.value = task.id
+    await deleteInventoryExportTask(task.id, { silentError: true })
+    proxy.$modal.msgSuccess(tr('删除成功'))
+    await loadExportTaskList()
+  } catch (error) {
+    proxy.$modal.msgError(error?.message || tr('删除失败'))
+  } finally {
+    deletingExportTaskId.value = null
   }
 }
 
@@ -1748,7 +1909,7 @@ async function handleBatchExportExcel() {
       warehouseId: row.warehouseId
     }))
     const exportLanguage = getExportLanguagePayload()
-    const blobData = await batchExportInventoryBoardExcel(
+    const response = await submitInventoryBoardBatchExportTask(
       { rows, snapshotDate: queryParams.value.snapshotDate },
       {
         headers: {
@@ -1757,22 +1918,11 @@ async function handleBatchExportExcel() {
         }
       }
     )
-    const isBlob = blobValidate(blobData)
-    if (!isBlob) {
-      const resText = await blobData.text()
-      const rspObj = JSON.parse(resText)
-      throw new Error(rspObj?.msg || tr('批量导出失败'))
-    }
-    const excelData = isEn.value ? await translateInventoryExportXlsx(blobData) : blobData
-    const blob = new Blob([excelData], {
-      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    })
-    const url = window.URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = isEn.value ? 'LuxeAFWMS-Inventory Batch Export.xlsx' : 'LuxeAFWMS-库存统计批量导出.xlsx'
-    a.click()
-    window.URL.revokeObjectURL(url)
+    proxy.$modal.msgSuccess(tr('导出任务已提交，文件正在后台生成'))
+    await waitForInventoryExportTask(
+      response.data,
+      isEn.value ? 'LuxeAFWMS-Inventory Batch Export.xlsx' : 'LuxeAFWMS-库存统计批量导出.xlsx'
+    )
     proxy.$modal.msgSuccess(tr('批量导出成功'))
   } catch (e) {
     proxy.$modal.msgError(e?.message || tr('批量导出失败'))

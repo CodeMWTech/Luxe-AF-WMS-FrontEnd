@@ -44,10 +44,30 @@ export function updateItemBrand(data) {
   })
 }
 
-// 删除商品品牌
-export function delItemBrand(id) {
+// 删除商品品牌；传入 itemCategory 时：开放池分类=从本分类解绑，绑定分类=删实体
+export function delItemBrand(id, itemCategory) {
   return request({
     url: '/wms/itemBrand/' + id,
+    method: 'delete',
+    params: itemCategory != null && itemCategory !== '' ? { itemCategory } : undefined
+  })
+}
+
+export function uploadItemBrandImage(id, file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request({
+    url: `/wms/itemBrand/${id}/image/upload`,
+    method: 'post',
+    data: formData,
+    headers: { 'Content-Type': 'multipart/form-data', repeatSubmit: false },
+    timeout: 0
+  })
+}
+
+export function deleteItemBrandImage(id) {
+  return request({
+    url: `/wms/itemBrand/${id}/image`,
     method: 'delete'
   })
 }

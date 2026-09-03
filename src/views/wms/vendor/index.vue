@@ -255,6 +255,29 @@
         </el-descriptions-item>
       </el-descriptions>
 
+      <div class="settlement-target">
+        <span class="settlement-target__label">{{ text('本次结算金额', 'Current settlement amount') }}</span>
+        <el-input-number
+          v-model="settlementTargetAmount"
+          :min="0.01"
+          :max="settlementTargetMaxAmount"
+          :precision="2"
+          :controls="false"
+          class="settlement-target__input"
+          :placeholder="text('输入本次结算总额', 'Enter total amount')"
+          @keyup.enter="applySettlementTarget"
+        />
+        <el-button
+          type="primary"
+          plain
+          :disabled="!hasValidSettlementTarget"
+          @click="applySettlementTarget()"
+        >{{ text('按上架时间分配', 'Allocate by listing time') }}</el-button>
+        <span class="settlement-target__tip">
+          {{ text('从已勾选商品中按上架时间从早到晚分配，超额时按勾选项可结算上限分配。', 'Allocates selected items from earliest to latest and caps excess amounts at their available limit.') }}
+        </span>
+      </div>
+
       <div class="preview-toolbar">
         <el-button type="warning" plain icon="Plus" @click="openForceSkuDialog">
           {{ text('手工添加 SKU 强制结算', 'Add SKU for forced settlement') }}
@@ -274,7 +297,7 @@
         @select="handlePreviewSelect"
         @select-all="handlePreviewSelectAll"
       >
-        <el-table-column type="selection" width="52" fixed="left" />
+        <el-table-column type="selection" width="52" fixed="left" reserve-selection />
         <el-table-column :label="text('结算类型', 'Type')" width="105" fixed="left">
           <template #default="{ row }">
             <el-tag :type="row.settlementType === 'FORCED' ? 'warning' : 'success'" effect="plain">
@@ -285,6 +308,9 @@
         <el-table-column :label="text('供货商', 'Supplier')" prop="supplierName" min-width="105" show-overflow-tooltip />
         <el-table-column label="SKU" prop="skuCode" min-width="135" />
         <el-table-column :label="text('商品', 'Item')" prop="itemName" min-width="180" show-overflow-tooltip />
+        <el-table-column :label="text('商品上架时间', 'Item listing time')" prop="createdTime" width="175">
+          <template #default="{ row }">{{ displayTime(row.createdTime) }}</template>
+        </el-table-column>
         <el-table-column :label="text('全部商品数量', 'All product qty')" align="right" width="125">
           <template #default="{ row }">{{ quantity(row.productQuantity) }}</template>
         </el-table-column>
@@ -337,6 +363,7 @@
               size="small"
               class="force-amount-input"
               :placeholder="text('输入金额', 'Amount')"
+              @change="handlePreviewAmountChange(row)"
             />
           </template>
         </el-table-column>
@@ -496,12 +523,21 @@ const preview = ref({ lines: [] })
 const previewTableRef = ref()
 const previewSelectionCache = ref(new Map())
 const previewPagination = reactive({ pageNum: 1, pageSize: 50 })
+const settlementTargetAmount = ref()
 const previewPageLines = computed(() => {
   const start = (previewPagination.pageNum - 1) * previewPagination.pageSize
   return (preview.value.lines || []).slice(start, start + previewPagination.pageSize)
 })
 const selectedPreviewLines = computed(() => (preview.value.lines || [])
   .filter(line => previewSelectionCache.value.has(String(line.skuId))))
+const settlementTargetMaxAmount = computed(() => selectedPreviewLines.value.reduce((totalCents, line) => {
+  const availableCents = amountInCents(settlementAvailableAmount(line))
+  return availableCents > 0 ? totalCents + availableCents : totalCents
+}, 0) / 100)
+const hasValidSettlementTarget = computed(() => {
+  const amount = Number(settlementTargetAmount.value)
+  return Number.isFinite(amount) && amount > 0 && settlementTargetMaxAmount.value > 0
+})
 const forceSkuVisible = ref(false)
 const forceSkuLoading = ref(false)
 const forceSkuRows = ref([])
@@ -613,6 +649,18 @@ function handlePreviewSelectAll(lines) {
   updatePreviewSelectionCache(previewPageLines.value, lines)
 }
 
+async function handlePreviewAmountChange(row) {
+  // 手工修改后不应在提交时再次按原目标金额分配，否则用户输入会被覆盖。
+  settlementTargetAmount.value = undefined
+  if (Number(row?.pendingSettlementAmount) !== 0) return
+
+  const nextCache = new Map(previewSelectionCache.value)
+  nextCache.delete(String(row.skuId))
+  previewSelectionCache.value = nextCache
+  await nextTick()
+  previewTableRef.value?.toggleRowSelection(row, false)
+}
+
 async function restorePreviewPageSelection() {
   await nextTick()
   previewTableRef.value?.clearSelection()
@@ -636,6 +684,74 @@ async function selectAllPreviewLines() {
   await restorePreviewPageSelection()
 }
 
+function amountInCents(value) {
+  const amount = Number(value)
+  return Number.isFinite(amount) ? Math.round(amount * 100) : 0
+}
+
+async function applySettlementTarget(showSuccess = true) {
+  const requestedCents = amountInCents(settlementTargetAmount.value)
+  const maxCents = amountInCents(settlementTargetMaxAmount.value)
+  if (requestedCents <= 0 || maxCents <= 0) {
+    proxy.$modal.msgWarning(text(
+      `本次结算金额需大于 0，且不能超过可结算金额 ${money(settlementTargetMaxAmount.value)}`,
+      `The current amount must be greater than 0 and no more than ${money(settlementTargetMaxAmount.value)}`
+    ))
+    return false
+  }
+
+  const targetCents = Math.min(requestedCents, maxCents)
+  const targetWasClamped = requestedCents > maxCents
+  settlementTargetAmount.value = targetCents / 100
+  let remainingCents = targetCents
+  const allocatedLines = new Map()
+  const orderedLines = selectedPreviewLines.value
+    .map((line, index) => ({ line, index }))
+    .sort((left, right) => {
+      const leftTime = left.line?.createdTime ? String(left.line.createdTime) : ''
+      const rightTime = right.line?.createdTime ? String(right.line.createdTime) : ''
+      if (leftTime && rightTime && leftTime !== rightTime) return leftTime.localeCompare(rightTime)
+      if (leftTime && !rightTime) return -1
+      if (!leftTime && rightTime) return 1
+      if (leftTime && rightTime) {
+        const itemDifference = Number(left.line?.itemId || 0) - Number(right.line?.itemId || 0)
+        if (itemDifference !== 0) return itemDifference
+        const skuDifference = Number(left.line?.skuId || 0) - Number(right.line?.skuId || 0)
+        if (skuDifference !== 0) return skuDifference
+      }
+      return left.index - right.index
+    })
+  for (const { line } of orderedLines) {
+    const availableCents = Math.max(amountInCents(settlementAvailableAmount(line)), 0)
+    if (availableCents <= 0) continue
+    const allocatedCents = Math.min(availableCents, remainingCents)
+    line.pendingSettlementAmount = allocatedCents / 100
+    if (allocatedCents > 0) allocatedLines.set(String(line.skuId), line)
+    remainingCents -= allocatedCents
+  }
+
+  if (remainingCents !== 0) {
+    proxy.$modal.msgWarning(text('本次结算金额分配失败，请刷新后重试', 'Unable to allocate the amount; refresh and try again'))
+    return false
+  }
+  previewSelectionCache.value = allocatedLines
+  await restorePreviewPageSelection()
+  if (showSuccess) {
+    if (targetWasClamped) {
+      proxy.$modal.msgWarning(text(
+        `输入金额超过当前勾选项可结算上限，已按 ${money(targetCents / 100)} 分配`,
+        `The entered amount exceeded the selected items' limit and was allocated as ${money(targetCents / 100)}`
+      ))
+    } else {
+      proxy.$modal.msgSuccess(text(
+        `已按商品上架时间从旧到新分配 ${money(targetCents / 100)}`,
+        `${money(targetCents / 100)} allocated from oldest to newest listing`
+      ))
+    }
+  }
+  return true
+}
+
 function forceRemainingAmount(row) {
   return Math.max(Number(row?.totalSettlementAmount || 0) - Number(row?.settledAmount || 0), 0)
 }
@@ -646,17 +762,22 @@ function settlementAvailableAmount(row) {
     : (Number(row?.soldQuantity || 0) - Number(row?.returnedQuantity || 0)) * Number(row?.unitPrice || 0)
       - Number(row?.settledAmount || 0)
   const value = Number(row?.availableSettlementAmount ?? calculated)
-  return Number.isFinite(value) ? value : 0
+  if (!Number.isFinite(value) || value <= 0) return Number.isFinite(value) ? value : 0
+  const totalRemaining = Math.max(
+    Number(row?.totalSettlementAmount || 0) - Number(row?.settledAmount || 0),
+    0
+  )
+  return Math.min(value, totalRemaining)
 }
 
 function settlementAmountMin(row) {
   const available = settlementAvailableAmount(row)
-  return available < 0 ? available : 0.01
+  return available < 0 ? available : 0
 }
 
 function settlementAmountMax(row) {
   const available = settlementAvailableAmount(row)
-  return available < 0 ? -0.01 : available
+  return available < 0 ? 0 : available
 }
 
 function validSettlementAmount(row) {
@@ -764,6 +885,7 @@ function toForcedSettlementLine(row) {
     skuCode: row.skuCode,
     itemName: row.itemName,
     mainThumbUrl: row.mainThumbUrl,
+    createdTime: row.createdTime,
     productQuantity: row.productQuantity,
     platformSoldQuantity: row.platformSoldQuantity,
     offPlatformSoldQuantity: row.offPlatformSoldQuantity,
@@ -776,7 +898,7 @@ function toForcedSettlementLine(row) {
     returnDeductionAmount: (returnedQuantity * unitPrice).toFixed(2),
     totalSettlementAmount: row.totalSettlementAmount,
     settledAmount: row.settledAmount,
-    pendingSettlementAmount: undefined,
+    pendingSettlementAmount: forceRemainingAmount(row),
     availableSettlementAmount: forceRemainingAmount(row),
     settlementType: 'FORCED',
     remark: ''
@@ -964,6 +1086,7 @@ async function loadSettlementPreview() {
         remark: line.remark || ''
       }))
     }
+    settlementTargetAmount.value = undefined
     previewSelectionCache.value = new Map()
     supplierSelectVisible.value = false
     previewVisible.value = true
@@ -1004,6 +1127,10 @@ function settlementRequest(recordStatus) {
 }
 
 async function confirmSettlement(recordStatus = 'CONFIRMED') {
+  if (settlementTargetAmount.value !== undefined && settlementTargetAmount.value !== null) {
+    const applied = await applySettlementTarget(false)
+    if (!applied) return
+  }
   const detail = settlementPreview.value || {}
   const invalidLine = (detail.lines || []).find(line => !validSettlementAmount(line))
   if (invalidLine) {
@@ -1046,6 +1173,7 @@ async function openDraftFromRoute() {
         remark: line.remark || ''
       }))
     }
+    settlementTargetAmount.value = undefined
     previewSelectionCache.value = new Map()
     previewVisible.value = true
     await nextTick()
@@ -1264,6 +1392,28 @@ onMounted(async () => {
   margin-bottom: 12px;
 }
 
+.settlement-target {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.settlement-target__label {
+  flex: 0 0 auto;
+  color: var(--el-text-color-regular);
+  font-weight: 600;
+}
+
+.settlement-target__input {
+  width: 190px;
+}
+
+.settlement-target__tip {
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+}
+
 .preview-toolbar__tip {
   color: var(--el-text-color-secondary);
   font-size: 13px;
@@ -1332,5 +1482,6 @@ onMounted(async () => {
   .summary-grid { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
   .supplier-pagination { justify-content: flex-start; }
   .preview-toolbar { align-items: flex-start; flex-direction: column; }
+  .settlement-target { align-items: flex-start; flex-direction: column; }
 }
 </style>

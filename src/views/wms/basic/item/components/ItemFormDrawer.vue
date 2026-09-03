@@ -26,6 +26,7 @@
                     placeholder="请选择分类"
                     check-strictly
                     style="width: 100%!important;"
+                    @change="emit('category-change', $event)"
                   />
                 </el-form-item>
               </el-col>
@@ -49,11 +50,12 @@
                     v-model="form.itemBrand"
                     clearable
                     filterable
-                    placeholder="请选择品牌"
+                    :placeholder="form.itemCategory ? tr('请选择品牌') : tr('请先选择分类')"
+                    :disabled="!form.itemCategory"
                     style="width: 100%!important;"
                   >
                     <el-option
-                      v-for="item in useWmsStore().itemBrandList"
+                      v-for="item in formBrandOptions"
                       :key="String(item.id)"
                       :label="item.brandName"
                       :value="String(item.id)"
@@ -377,7 +379,6 @@
 <script setup>
 import { ref } from 'vue'
 import { Check, Plus, Ticket } from '@element-plus/icons-vue'
-import { useWmsStore } from '@/store/modules/wms'
 
 defineProps({
   dialog: { type: Object, required: true },
@@ -385,6 +386,7 @@ defineProps({
   form: { type: Object, required: true },
   rules: { type: Object, required: true },
   itemCategoryTreeSelectList: { type: Array, default: () => [] },
+  formBrandOptions: { type: Array, default: () => [] },
   ITEM_CONDITION_OPTIONS: { type: Array, default: () => [] },
   AUTH_AGENCY_OPTIONS: { type: Array, default: () => [] },
   ACCESSORY_TAG_OPTIONS: { type: Array, default: () => [] },
@@ -413,6 +415,7 @@ defineProps({
 const emit = defineEmits([
   'open-name-tag-drawer',
   'add-category',
+  'category-change',
   'cost-price-change',
   'material-change',
   'append-accessory-tag',
