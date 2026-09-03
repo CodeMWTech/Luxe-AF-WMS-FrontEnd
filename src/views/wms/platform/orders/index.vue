@@ -1148,7 +1148,11 @@ function submitSync() {
       syncOpen.value = false
       syncLoading.value = false
       proxy.$modal.msgSuccess(t('platformOrders.syncStarted', { count: shopCount }))
-      // 延迟刷新列表，给后台同步一些时间      setTimeout(() => { getList(); loadShops() }, 5000)
+      // 延迟刷新列表，给后台同步一些时间
+      setTimeout(() => {
+        getList()
+        loadShops()
+      }, 5000)
     }).catch(() => {
       syncLoading.value = false
       proxy.$modal.msgError(t('platformOrders.syncRequestFailed'))
