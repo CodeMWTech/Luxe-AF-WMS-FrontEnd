@@ -31,15 +31,6 @@
               {{ t('overviewDashboard.aboutStudio') }}
               <el-icon class="btn-arrow"><ArrowRight /></el-icon>
             </el-button>
-            <el-button
-              class="hero-btn hero-btn-secondary hero-btn-external"
-              :title="t('overviewDashboard.hostHoursLinkHint')"
-              @click="openHostHours"
-            >
-              <el-icon class="external-link-icon"><Link /></el-icon>
-              {{ t('overviewDashboard.hostHoursLink') }}
-              <el-icon class="btn-arrow"><TopRight /></el-icon>
-            </el-button>
           </div>
           <div class="hero-tags-title">{{ t('overviewDashboard.advantageTitle') }}</div>
           <div class="hero-tags">
@@ -216,12 +207,10 @@ import {
   DataLine,
   Goods,
   Iphone,
-  Link,
   ShoppingCart,
   SoldOut,
   Star,
   Timer,
-  TopRight,
   TrendCharts,
   Wallet
 } from '@element-plus/icons-vue'
@@ -599,10 +588,6 @@ function setTimelineIndex(index) {
 
 function openLuxeAf() {
   window.open('https://www.codemw.com/', '_blank', 'noopener,noreferrer')
-}
-
-function openHostHours() {
-  window.open('https://luxeaflive.readdy.co/', '_blank', 'noopener,noreferrer')
 }
 
 async function scrollTo(id) {
@@ -1761,16 +1746,6 @@ function navigateTo(path) {
   border-color: #a0cfff;
   color: #1677ff;
   box-shadow: none;
-}
-
-.hero-btn-external {
-  border-color: #91caff;
-  color: #0958d9;
-  background: #f0f7ff;
-}
-
-.external-link-icon {
-  margin-right: 5px;
 }
 
 .hero-tags {

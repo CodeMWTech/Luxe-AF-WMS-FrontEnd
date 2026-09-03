@@ -770,6 +770,7 @@ const zhToEnMap = {
   'Management模板': 'Templates',
   '上架Management': 'Listing Management',
   'TikTok + eBay 订单卡片列表': 'TikTok + eBay Order List',
+  'TikTok + eBay + Whatnot 订单卡片列表': 'TikTok + eBay + Whatnot Order List',
   '店铺': 'Shop',
   '平台': 'Platform',
   '全部平台': 'All Platforms',

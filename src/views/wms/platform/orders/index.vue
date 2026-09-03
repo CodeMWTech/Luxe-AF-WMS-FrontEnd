@@ -24,7 +24,7 @@
               :value="shop.id"
             >
               <span class="shop-option">
-                <el-tag :type="shop.platform === 'TIKTOK' ? 'danger' : ''" size="small" effect="plain" class="shop-option-tag">{{ shop.platform }}</el-tag>
+                <el-tag :type="getPlatformTagType(shop.platform)" size="small" effect="plain" class="shop-option-tag">{{ getPlatformLabel(shop.platform) }}</el-tag>
                 <span>{{ formatShopLabel(shop) }}</span>
               </span>
             </el-option>
@@ -163,6 +163,7 @@
         <div class="platform-tags">
           <el-tag class="platform-soft-tag tiktok-tag" effect="plain">TikTok Shop</el-tag>
           <el-tag class="platform-soft-tag ebay-tag" effect="plain">eBay</el-tag>
+          <el-tag class="platform-soft-tag whatnot-tag" effect="plain">Whatnot</el-tag>
         </div>
       </div>
 
@@ -211,8 +212,8 @@
             </div>
 
             <div class="summary-cell platform-cell">
-              <el-tag :class="['platform-soft-tag', getPlatform(order) === 'TIKTOK' ? 'tiktok-tag' : 'ebay-tag']" effect="plain">
-                {{ getPlatform(order) === 'TIKTOK' ? 'TikTok Shop' : 'eBay' }}
+              <el-tag :class="['platform-soft-tag', getPlatformTagClass(getPlatform(order))]" effect="plain">
+                {{ getPlatformLabel(getPlatform(order)) }}
               </el-tag>
             </div>
 
@@ -409,6 +410,12 @@
                       </span>
                     </InfoLine>
                     <InfoLine :label="t('platformOrders.labelAddress')" :value="getRecipient(getDisplayOrder(order, index)).addressLine1 || getRecipient(getDisplayOrder(order, index)).fullAddress" />
+                    <InfoLine :label="t('platformOrders.labelCityStateZip')" :value="formatJoin([
+                      getRecipient(getDisplayOrder(order, index)).city,
+                      getRecipient(getDisplayOrder(order, index)).stateOrProvince,
+                      getRecipient(getDisplayOrder(order, index)).postalCode
+                    ])" />
+                    <InfoLine :label="t('platformOrders.labelCountry')" :value="formatCountry(getRecipient(getDisplayOrder(order, index)).countryCode)" />
                     <InfoLine :label="t('platformOrders.labelPostalCode')" :value="getRecipient(getDisplayOrder(order, index)).postalCode" />
                     <InfoLine :label="t('platformOrders.labelRegion')" :value="getRecipient(getDisplayOrder(order, index)).regionCode" />
                     <InfoLine :label="t('platformOrders.buyerMessage')" :value="getDisplayOrder(order, index).buyerMessage || rawField(getDisplayOrder(order, index), 'buyer_message')" />
@@ -563,12 +570,12 @@
                 >
                   <span class="shop-check-label">
                     <el-tag
-                      :type="shop.platform === 'TIKTOK' ? 'danger' : ''"
+                      :type="getPlatformTagType(shop.platform)"
                       size="small"
                       effect="dark"
                       class="platform-mini-tag"
                     >
-                      {{ shop.platform }}
+                      {{ getPlatformLabel(shop.platform) }}
                     </el-tag>
                     <span>{{ formatShopLabel(shop) }}</span>
                     <el-tag
@@ -731,7 +738,8 @@ const orderStatusMap = ref({})
 const platformOptions = [
   { label: () => t('platformOrders.allPlatforms'), value: '' },
   { label: 'TikTok Shop', value: 'TIKTOK' },
-  { label: 'eBay', value: 'EBAY' }
+  { label: 'eBay', value: 'EBAY' },
+  { label: 'Whatnot', value: 'SHOPIFY' }
 ]
 
 const defaultTime = reactive([new Date(2000, 0, 1, 0, 0, 0), new Date(2000, 0, 1, 23, 59, 59)])
@@ -781,7 +789,7 @@ function getByPath(obj, path) {
   return cur ?? null
 }
 
-/** 从订单 raw JSON 获取字段（TikTok 和 eBay 字段路径不同） */
+/** 从订单 raw JSON 获取平台专有字段（目前用于 TikTok 和 eBay） */
 function rawField(order, tiktokPath, ebayPath) {
   const json = parseOrderJson(order)
   if (!json) return null
@@ -1176,6 +1184,28 @@ function getPlatform(order) {
   return order?.platform || ''
 }
 
+function getPlatformLabel(platform) {
+  const normalized = String(platform || '').toUpperCase()
+  if (normalized === 'TIKTOK') return 'TikTok Shop'
+  if (normalized === 'EBAY') return 'eBay'
+  if (normalized === 'SHOPIFY') return 'Whatnot'
+  return platform || '-'
+}
+
+function getPlatformTagClass(platform) {
+  const normalized = String(platform || '').toUpperCase()
+  if (normalized === 'TIKTOK') return 'tiktok-tag'
+  if (normalized === 'SHOPIFY') return 'whatnot-tag'
+  return 'ebay-tag'
+}
+
+function getPlatformTagType(platform) {
+  const normalized = String(platform || '').toUpperCase()
+  if (normalized === 'TIKTOK') return 'danger'
+  if (normalized === 'SHOPIFY') return 'success'
+  return ''
+}
+
 function resolveTikTokSellerHost(region) {
   const key = String(region || '').toUpperCase()
   // 注意：美区域名是 seller-us（连字符），不是 seller.us
@@ -1214,7 +1244,7 @@ function resolveEbaySiteHost(region) {
   return 'https://www.ebay.com'
 }
 
-/** 根据平台订单构造外部跳转链接：eBay 和 TikTok 均跳卖家中心订单详情 */
+/** 根据平台订单构造外部跳转链接，跳转到对应平台的订单详情 */
 function getPlatformOrderExternalUrl(order) {
   const orderId = String(getOrderId(order) || '').trim()
   if (!orderId) return ''
@@ -1242,6 +1272,12 @@ function getPlatformOrderExternalUrl(order) {
     const host = resolveTikTokSellerHost(region)
     const shopRegion = resolveTikTokShopRegion(region)
     return `${host}/order/detail?order_no=${encodeURIComponent(orderId)}&shop_region=${encodeURIComponent(shopRegion)}`
+  }
+  if (platform === 'SHOPIFY') {
+    const shopifyOrderId = String(order?.shopifyOrderId || '').trim()
+    const shopHandle = String(shop?.shopId || order?.platformShopId || '').trim().replace(/\.myshopify\.com$/i, '')
+    if (!shopifyOrderId || !shopHandle) return ''
+    return `https://admin.shopify.com/store/${encodeURIComponent(shopHandle)}/orders/${encodeURIComponent(shopifyOrderId)}`
   }
   return ''
 }
@@ -1296,6 +1332,7 @@ function getRecipient(order) {
     city: order?.city,
     stateOrProvince: order?.stateOrProvince,
     postalCode: order?.postalCode,
+    countryCode: order?.countryCode,
     regionCode: order?.regionCode
   }
 }
@@ -1564,7 +1601,8 @@ const SHOP_ALIASES = [
   { platform: 'EBAY', shopName: 'luxury_bagparty', alias: 'Ebay1' },
   { platform: 'EBAY', shopName: 'the_attraction', alias: 'Ebay2' },
   { platform: 'EBAY', shopName: 'truestluxury', alias: 'Ebay3' },
-  { platform: 'EBAY', shopName: 'luxeaf', alias: 'Ebay4' }
+  { platform: 'EBAY', shopName: 'luxeaf', alias: 'Ebay4' },
+  { platform: 'SHOPIFY', shopName: 'luxury bagparty', alias: 'Whatnot1' }
 ]
 
 const SHOP_SORT_ORDER = [
@@ -1574,7 +1612,8 @@ const SHOP_SORT_ORDER = [
   ['EBAY', 'luxeaf'],
   ['TIKTOK', 'luxe af'],
   ['TIKTOK', '777 luxury'],
-  ['TIKTOK', 'truest luxury']
+  ['TIKTOK', 'truest luxury'],
+  ['SHOPIFY', 'luxury bagparty']
 ]
 
 function normalizeShopName(value) {
@@ -2091,6 +2130,12 @@ onActivated(() => {
   color: #175cd3;
   background: #eff8ff;
   border-color: #d1e4ff;
+}
+
+.platform-soft-tag.whatnot-tag {
+  color: #067647;
+  background: #ecfdf3;
+  border-color: #abefc6;
 }
 
 // ==================== Order Card ====================

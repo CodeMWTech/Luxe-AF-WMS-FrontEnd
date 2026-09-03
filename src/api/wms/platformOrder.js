@@ -1,6 +1,6 @@
 import request from '@/utils/request'
 
-// 统一分页查询平台订单（TikTok + eBay）
+// 统一分页查询平台订单（TikTok + eBay + Whatnot）
 export function listPlatformOrders(query) {
   return request({
     url: '/wms/platform/orders',
