@@ -32,9 +32,10 @@ export const updateSchedule = data => request({ url: `${base}/schedules`, method
 export const deleteSchedule = id => request({ url: `${base}/schedules/${id}`, method: 'delete' })
 
 export const listStreams = params => request({ url: `${base}/streams/list`, method: 'get', params })
+export const listStreamScheduleOptions = params => request({ url: `${base}/streams/schedule-options`, method: 'get', params })
 export const listStreamRateTypes = params => request({ url: `${base}/streams/rate-types`, method: 'get', params })
-export const addStream = data => request({ url: `${base}/streams`, method: 'post', data })
-export const updateStream = data => request({ url: `${base}/streams`, method: 'put', data })
+export const addStream = data => request({ url: `${base}/streams`, method: 'post', data, silentError: true })
+export const updateStream = data => request({ url: `${base}/streams`, method: 'put', data, silentError: true })
 export const deleteStream = id => request({ url: `${base}/streams/${id}`, method: 'delete' })
 
 export const listCommissions = params => request({ url: `${base}/commissions/list`, method: 'get', params })

@@ -17,7 +17,7 @@
     </div>
     <el-card class="live-filter" shadow="never">
       <el-form :inline="true">
-        <el-form-item label="日期"><el-date-picker v-model="dateRange" type="daterange" value-format="YYYY-MM-DD" range-separator="至" /></el-form-item>
+        <el-form-item label="日期"><el-date-picker v-model="dateRange" type="daterange" value-format="YYYY-MM-DD" :format="LIVE_DATE_FORMAT" range-separator="至" /></el-form-item>
         <el-form-item label="直播平台"><el-select v-model="filters.accountId" clearable filterable placeholder="全部直播平台"><el-option v-for="v in options.accounts" :key="v.id" :label="accountLabel(v)" :value="v.id" /></el-select></el-form-item>
         <el-form-item label="主播"><el-select v-model="filters.employeeId" clearable filterable placeholder="全部主播"><el-option v-for="v in options.employees" :key="v.value" :label="v.label" :value="v.value" /></el-select></el-form-item>
         <el-form-item label="费率类型"><el-select v-model="filters.rateTypeId" clearable placeholder="全部类型"><el-option v-for="v in options.rateTypes" :key="v.id" :label="v.typeName" :value="v.id" /></el-select></el-form-item>
@@ -56,7 +56,7 @@
             <div class="muted checklist-subtitle">按天核对排班和开播记录；异常包含时间不符、未录、多录，以及已录但未打卡</div>
           </div>
           <div class="checklist-actions">
-            <el-date-picker v-model="checklistDate" type="date" value-format="YYYY-MM-DD" clearable placeholder="筛选日期" style="width:145px" />
+            <el-date-picker v-model="checklistDate" type="date" value-format="YYYY-MM-DD" :format="LIVE_DATE_FORMAT" clearable placeholder="筛选日期" style="width:145px" />
             <el-switch v-model="checklistOnlyAbnormal" active-text="仅看异常" />
             <el-select v-model="checklistStatus" clearable placeholder="全部状态" style="width:130px">
               <el-option v-for="status in checklistStatuses" :key="status" :label="status" :value="status" />
@@ -74,7 +74,7 @@
         <el-tag type="danger" effect="plain">未打卡 {{ checklistStats.notClocked }}</el-tag>
       </div>
       <el-table :data="filteredChecklist" stripe empty-text="当前筛选范围内没有核对记录">
-        <el-table-column prop="date" label="日期" width="120" sortable />
+        <el-table-column prop="date" label="日期" width="120" sortable><template #default="s">{{ displayDate(s.row.date) }}</template></el-table-column>
         <el-table-column prop="employeeName" label="主播" min-width="110" />
         <el-table-column label="直播平台" min-width="220">
           <template #default="s">{{ s.row.accountLabel }}<span v-if="s.row.platform" class="muted"> ({{ s.row.platform }})</span></template>
@@ -108,7 +108,7 @@ import * as echarts from 'echarts'
 import { getDashboard, getLiveOptions, importAttendance } from '@/api/wms/livePayroll'
 import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
-import { accountLabel, downloadCsv, money, monthRange } from '../shared'
+import { accountLabel, displayDate, downloadCsv, LIVE_DATE_FORMAT, money, monthRange } from '../shared'
 
 const settingsStore = useSettingsStore()
 const router = useRouter()
@@ -141,7 +141,7 @@ const filteredChecklist = computed(() => checklistDateRows.value.filter(row => {
 const trendEl = ref(), platformEl = ref()
 let trendChart, platformChart
 const metrics = computed(() => [
-  { label: '总开播场次', value: overview.value.totalSessions || 0, hint: `${dateRange.value[0]} ~ ${dateRange.value[1]}` },
+  { label: '总开播场次', value: overview.value.totalSessions || 0, hint: `${displayDate(dateRange.value[0])} ~ ${displayDate(dateRange.value[1])}` },
   { label: '总工时', value: `${Number(overview.value.totalHours || 0).toFixed(2)}h`, hint: '按实际开播汇总' },
   { label: '开播薪酬', value: money(overview.value.streamCompensation), hint: '含特殊金额' },
   { label: '佣金收入', value: money(overview.value.commissionIncome), hint: '仅正常销售' },
@@ -161,7 +161,7 @@ async function load() {
 function selectMonth(offset) { dateRange.value = monthRange(offset); checklistDate.value = ''; load() }
 function renderCharts() {
   trendChart ||= echarts.init(trendEl.value); platformChart ||= echarts.init(platformEl.value)
-  trendChart.setOption({ tooltip: { trigger: 'axis' }, grid: { left: 42, right: 18, top: 24, bottom: 36 }, xAxis: { type: 'category', data: data.dailyTrend.map(v => v.name) }, yAxis: { type: 'value' }, series: [{ type: 'line', smooth: true, areaStyle: { opacity: .12 }, itemStyle: { color: '#3563e9' }, data: data.dailyTrend.map(v => Number(v.hours || 0)) }] })
+  trendChart.setOption({ tooltip: { trigger: 'axis' }, grid: { left: 42, right: 18, top: 24, bottom: 36 }, xAxis: { type: 'category', data: data.dailyTrend.map(v => displayDate(v.name)) }, yAxis: { type: 'value' }, series: [{ type: 'line', smooth: true, areaStyle: { opacity: .12 }, itemStyle: { color: '#3563e9' }, data: data.dailyTrend.map(v => Number(v.hours || 0)) }] })
   platformChart.setOption({ tooltip: { trigger: 'axis' }, grid: { left: 56, right: 18, top: 24, bottom: 36 }, xAxis: { type: 'category', data: data.platformStats.map(v => v.name) }, yAxis: { type: 'value' }, series: [{ type: 'bar', barWidth: 36, itemStyle: { color: '#6c8df4', borderRadius: [7, 7, 0, 0] }, data: data.platformStats.map(v => Number(v.compensation || 0)) }] })
 }
 async function handleAttendanceFile(uploadFile) {
@@ -198,6 +198,7 @@ function exportSummary() { downloadCsv(`主播薪酬汇总-${dateRange.value[0]}
 function exportChecklist() {
   const rows = filteredChecklist.value.map(row => ({
     ...row,
+    date: displayDate(row.date),
     plannedTime: timeRange(row.plannedStartTime, row.plannedEndTime),
     actualTime: timeRange(row.actualStartTime, row.actualEndTime),
     clockedLabel: row.clocked ? '是' : '否'
