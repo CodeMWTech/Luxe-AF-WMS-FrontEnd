@@ -21,7 +21,7 @@
           <small class="record-id">#{{ scope.row.recordId }}</small>
         </template>
       </el-table-column>
-      <el-table-column prop="businessDate" label="日期" width="112" />
+      <el-table-column prop="businessDate" label="日期" width="120"><template #default="scope">{{ displayDate(scope.row.businessDate) }}</template></el-table-column>
       <el-table-column prop="employeeName" label="主播" min-width="130" show-overflow-tooltip />
       <el-table-column prop="accountLabel" label="直播平台" min-width="190" show-overflow-tooltip />
       <el-table-column prop="rateTypeName" label="费率类型" min-width="120" show-overflow-tooltip />
@@ -35,6 +35,7 @@
 
 <script setup>
 import { WarningFilled } from '@element-plus/icons-vue'
+import { displayDate } from '../shared'
 
 defineProps({
   modelValue: { type: Boolean, default: false },

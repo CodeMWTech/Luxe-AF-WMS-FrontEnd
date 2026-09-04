@@ -34,12 +34,12 @@
           </div>
         </div>
       </div>
-      <el-table v-else :data="rows" stripe><el-table-column prop="scheduleDate" label="日期" /><el-table-column prop="employeeName" label="主播" /><el-table-column prop="platform" label="平台" /><el-table-column prop="accountLabel" label="直播平台" min-width="180" /><el-table-column label="时间"><template #default="s">{{ s.row.startTime }} - {{ s.row.endTime }}</template></el-table-column><el-table-column prop="rateTypeName" label="场次类型" /><el-table-column prop="remark" label="备注" /><el-table-column label="操作" width="140"><template #default="s"><el-button link type="primary" @click="openDialog(s.row)">{{ tr('编辑') }}</el-button><el-button link type="danger" @click="remove(s.row)">{{ tr('删除') }}</el-button></template></el-table-column></el-table>
+      <el-table v-else :data="rows" stripe><el-table-column prop="scheduleDate" label="日期"><template #default="s">{{ displayDate(s.row.scheduleDate) }}</template></el-table-column><el-table-column prop="employeeName" label="主播" /><el-table-column prop="platform" label="平台" /><el-table-column prop="accountLabel" label="直播平台" min-width="180" /><el-table-column label="时间"><template #default="s">{{ s.row.startTime }} - {{ s.row.endTime }}</template></el-table-column><el-table-column prop="rateTypeName" label="场次类型" /><el-table-column prop="remark" label="备注" /><el-table-column label="操作" width="140"><template #default="s"><el-button link type="primary" @click="openDialog(s.row)">{{ tr('编辑') }}</el-button><el-button link type="danger" @click="remove(s.row)">{{ tr('删除') }}</el-button></template></el-table-column></el-table>
     </el-card>
     <el-dialog v-model="dialog.open" class="schedule-dialog" :title="dialog.form.id ? '编辑排班' : '新增排班'" width="820px" append-to-body>
       <el-form ref="formRef" :model="dialog.form" :rules="rules" :label-width="isEn ? '128px' : '92px'">
         <div class="dialog-grid">
-          <el-form-item label="日期" prop="scheduleDate"><el-date-picker v-model="dialog.form.scheduleDate" type="date" value-format="YYYY-MM-DD" :format="isEn ? 'MM/DD/YYYY' : 'YYYY-MM-DD'" @change="handleScheduleScopeChange" /></el-form-item>
+          <el-form-item label="日期" prop="scheduleDate"><el-date-picker v-model="dialog.form.scheduleDate" type="date" value-format="YYYY-MM-DD" :format="LIVE_DATE_FORMAT" @change="handleScheduleScopeChange" /></el-form-item>
           <el-form-item label="主播" prop="employeeId"><el-select v-model="dialog.form.employeeId" filterable @change="handleScheduleScopeChange"><el-option v-for="v in options.employees" :key="v.value" :label="v.label" :value="v.value" /></el-select></el-form-item>
           <el-form-item label="直播平台" prop="accountId"><el-select v-model="dialog.form.accountId" @change="handleScheduleScopeChange"><el-option v-for="v in options.accounts" :key="v.id" :label="accountLabel(v)" :value="v.id" /></el-select></el-form-item>
           <el-form-item label="场次类型" prop="rateTypeId">
@@ -70,7 +70,7 @@ import { computed, getCurrentInstance, onMounted, reactive, ref } from 'vue'
 import { addSchedule, deleteSchedule, getLiveOptions, listScheduleCalendar, listScheduleRateTypes, updateSchedule } from '@/api/wms/livePayroll'
 import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
-import { accountLabel, downloadCsv, isoDate, weekRange } from '../shared'
+import { accountLabel, displayDate, downloadCsv, isoDate, LIVE_DATE_FORMAT, weekRange } from '../shared'
 const { proxy } = getCurrentInstance()
 const settingsStore = useSettingsStore()
 const isEn = computed(() => (settingsStore.language || 'zh-cn') === 'en')
@@ -145,7 +145,7 @@ async function openDialog(row = {}) {
 function shortTime(value) { return String(value || '').slice(0, 5) }
 async function submit() { await formRef.value.validate(); await (dialog.form.id ? updateSchedule(dialog.form) : addSchedule(dialog.form)); proxy.$modal.msgSuccess('保存成功'); dialog.open = false; load() }
 async function remove(row) { await proxy.$modal.confirm(`确认删除 ${row.employeeName} 的排班？`); await deleteSchedule(row.id); proxy.$modal.msgSuccess('删除成功'); dialog.open = false; load() }
-function exportRows() { downloadCsv(`主播排班-${weekDateRange.value[0]}-${weekDateRange.value[1]}.csv`, [{ key: 'scheduleDate', label: '日期' }, { key: 'employeeName', label: '主播' }, { key: 'accountLabel', label: '直播平台' }, { key: 'startTime', label: '开始时间' }, { key: 'endTime', label: '结束时间' }, { key: 'rateTypeName', label: '场次类型' }, { key: 'remark', label: '备注' }], rows.value) }
+function exportRows() { downloadCsv(`主播排班-${weekDateRange.value[0]}-${weekDateRange.value[1]}.csv`, [{ key: 'scheduleDate', label: '日期' }, { key: 'employeeName', label: '主播' }, { key: 'accountLabel', label: '直播平台' }, { key: 'startTime', label: '开始时间' }, { key: 'endTime', label: '结束时间' }, { key: 'rateTypeName', label: '场次类型' }, { key: 'remark', label: '备注' }], rows.value.map(row => ({ ...row, scheduleDate: displayDate(row.scheduleDate) }))) }
 onMounted(async () => { Object.assign(options, await getLiveOptions()); load() })
 </script>
 <style scoped lang="scss">

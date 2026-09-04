@@ -108,8 +108,8 @@
           <el-form-item :label="tr('直播平台')" prop="accountId"><el-select v-model="dialog.form.accountId"><el-option v-for="v in configurableAccounts" :key="v.id" :label="accountLabel(v)" :value="v.id" /></el-select></el-form-item>
           <el-form-item :label="tr('费率类型')" prop="rateTypeId"><el-select v-model="dialog.form.rateTypeId"><el-option v-for="v in options.rateTypes" :key="v.id" :label="tr(v.typeName)" :value="v.id" /></el-select></el-form-item>
           <el-form-item :label="tr('时薪')" prop="hourlyRate"><el-input-number v-model="dialog.form.hourlyRate" :precision="2" :min="0" /></el-form-item>
-          <el-form-item :label="tr('生效日期')" prop="effectiveDate"><el-date-picker v-model="dialog.form.effectiveDate" type="date" value-format="YYYY-MM-DD" :format="isEn ? 'MM/DD/YYYY' : 'YYYY-MM-DD'" /></el-form-item>
-          <el-form-item :label="tr('失效日期')"><el-date-picker v-model="dialog.form.expiryDate" type="date" value-format="YYYY-MM-DD" :format="isEn ? 'MM/DD/YYYY' : 'YYYY-MM-DD'" clearable /></el-form-item>
+          <el-form-item :label="tr('生效日期')" prop="effectiveDate"><el-date-picker v-model="dialog.form.effectiveDate" type="date" value-format="YYYY-MM-DD" :format="LIVE_DATE_FORMAT" /></el-form-item>
+          <el-form-item :label="tr('失效日期')"><el-date-picker v-model="dialog.form.expiryDate" type="date" value-format="YYYY-MM-DD" :format="LIVE_DATE_FORMAT" clearable /></el-form-item>
           <el-form-item :label="tr('状态')"><el-radio-group v-model="dialog.form.status"><el-radio :label="0">{{ tr('启用') }}</el-radio><el-radio :label="1">{{ tr('停用') }}</el-radio></el-radio-group></el-form-item>
           <el-form-item class="wide" :label="tr('备注')"><el-input v-model="dialog.form.remark" /></el-form-item>
         </div>
@@ -126,7 +126,7 @@
         </div>
       </div>
       <el-table v-if="impactDialog.rows.length" :data="impactDialog.rows" max-height="440" stripe border>
-        <el-table-column prop="streamDate" label="开播日期" width="112" />
+        <el-table-column prop="streamDate" label="开播日期" width="120"><template #default="s">{{ displayDate(s.row.streamDate) }}</template></el-table-column>
         <el-table-column prop="accountLabel" label="直播平台" min-width="170" show-overflow-tooltip />
         <el-table-column prop="rateTypeName" label="费率类型" width="110"><template #default="s">{{ tr(s.row.rateTypeName) }}</template></el-table-column>
         <el-table-column label="时段" width="116"><template #default="s">{{ timeRange(s.row) }}</template></el-table-column>
@@ -163,7 +163,7 @@ import { ArrowDown, ArrowRight, Connection, Delete, Edit, Search, WarningFilled 
 import { addRate, deleteRate, deleteRateAccountGroup, getLiveOptions, getRateAccountGroupUsage, getRateUsage, listRateAccountGroups, listRates, previewRateImpact, syncRateAccountGroup, updateAllRateAccountGroupStatuses, updateRate, updateRateAccountGroupStatus } from '@/api/wms/livePayroll'
 import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
-import { accountLabel, downloadCsv, isoDate, money } from '../shared'
+import { accountLabel, displayDate, downloadCsv, isoDate, LIVE_DATE_FORMAT, money } from '../shared'
 import UsageConflictDialog from '../components/UsageConflictDialog.vue'
 
 const settingsStore = useSettingsStore(), isEn = computed(() => (settingsStore.language || 'zh-cn') === 'en'), tr = text => translateByMap(text, settingsStore.language || 'zh-cn')
@@ -190,8 +190,7 @@ const rateMatrix = computed(() => { const result = new Map(); selectedEmployeeRa
 
 function initial(name) { return String(name || '?').trim().charAt(0).toUpperCase() }
 function rateRecordLabel(count) { return isEn.value ? `${count} rate ${count === 1 ? 'record' : 'records'}` : `${count} 条费率` }
-function displayDate(date) { if (!isEn.value || !date) return date; const [year, month, day] = String(date).split('-'); return `${month}/${day}/${year}` }
-function effectiveDateText(date) { return isEn.value ? `From ${displayDate(date)}` : `${date} 起` }
+function effectiveDateText(date) { return isEn.value ? `From ${displayDate(date)}` : `${displayDate(date)} 起` }
 function rateCountByEmployee(employeeId) { return rows.value.filter(v => v.employeeId === employeeId).length }
 function accountRateCount(accountId) { return selectedEmployeeRates.value.filter(v => v.accountId === accountId).length }
 function rateFor(accountId, rateTypeId) { return rateMatrix.value.get(`${accountId}:${rateTypeId}`) }
@@ -221,7 +220,7 @@ function openSync(account) { syncDialog.source = account; syncDialog.mode = 'OVE
 function selectAllSyncTargets() { syncDialog.targetAccountIds = syncTargets.value.map(v => v.id) }
 async function submitSync() { syncDialog.loading = true; try { const res = await syncRateAccountGroup({ employeeId: selectedEmployeeId.value, sourceAccountId: syncDialog.source.id, targetAccountIds: syncDialog.targetAccountIds, mode: syncDialog.mode }); proxy.$modal.msgSuccess(`已同步 ${res.data || 0} 条费率，目标直播平台分组已启用`); syncDialog.open = false; await Promise.all([loadRates(), loadGroups()]) } finally { syncDialog.loading = false } }
 function headers() { return [{ key: 'employeeName', label: '主播/运营' }, { key: 'accountLabel', label: '直播平台' }, { key: 'rateTypeName', label: '费率类型' }, { key: 'hourlyRate', label: '时薪' }, { key: 'effectiveDate', label: '生效日期' }, { key: 'expiryDate', label: '失效日期' }, { key: 'status', label: '状态' }, { key: 'remark', label: '备注' }] }
-function exportRows() { downloadCsv('主播费率配置.csv', headers(), rows.value) }
+function exportRows() { downloadCsv('主播费率配置.csv', headers(), rows.value.map(row => ({ ...row, effectiveDate: displayDate(row.effectiveDate), expiryDate: displayDate(row.expiryDate) }))) }
 onMounted(loadAll)
 </script>
 
