@@ -1,3 +1,5 @@
+import livePayrollMessages from './live-payroll'
+
 const zhToEnMap = {
   首页: 'Home',
   系统概述: 'System Overview',
@@ -1405,6 +1407,8 @@ Object.assign(zhToEnMap, {
   '至': 'to',
 })
 
+Object.assign(zhToEnMap, livePayrollMessages)
+
 const replacerKeys = Object.keys(zhToEnMap).sort((a, b) => b.length - a.length)
 
 function replacePreservingSpaces(source, translated) {
@@ -1445,3 +1449,10 @@ export function translateByMap(text, language = 'zh-cn') {
 }
 
 export default zhToEnMap
+
+// 精确匹配后再插值，避免把业务数据中的词语做局部替换。
+export function translateExact(text, language = 'zh-cn', values = []) {
+  if (typeof text !== 'string') return text
+  const translated = language === 'en' ? (zhToEnMap[text] || text) : text
+  return translated.replace(/\{(\d+)\}/g, (match, index) => values[index] == null ? match : String(values[index]))
+}

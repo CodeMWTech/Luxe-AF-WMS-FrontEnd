@@ -1,64 +1,64 @@
 <template>
-  <div class="live-page">
+  <div data-runtime-i18n-ignore="true" class="live-page">
     <div class="live-hero">
-      <div><h2>排班计划</h2><p>同时查看所选周与下一周排班</p></div>
-      <div class="live-actions"><el-button @click="exportRows">导出 CSV</el-button><el-button type="primary" v-hasPermi="['wms:live:schedule:edit']" @click="openDialog()">新增排班</el-button></div>
+      <div><h2>{{ tr('排班计划') }}</h2><p>{{ tr('同时查看所选周与下一周排班') }}</p></div>
+      <div class="live-actions"><el-button @click="exportRows">{{ tr('导出 CSV') }}</el-button><el-button type="primary" v-hasPermi="['wms:live:schedule:edit']" @click="openDialog()">{{ tr('新增排班') }}</el-button></div>
     </div>
     <el-card class="live-filter schedule-filter" shadow="never">
       <div class="schedule-filter-bar">
         <el-form class="schedule-filter-form" :inline="true">
-          <el-form-item class="week-filter-item" label="周次">
+          <el-form-item class="week-filter-item" :label="tr('周次')">
             <div class="week-picker-field">
               <el-date-picker class="week-picker-input" v-model="selectedWeek" type="date" value-format="YYYY-MM-DD" format="MM/DD/YYYY" placeholder="MM/DD/YYYY" popper-class="schedule-week-picker-popper" :cell-class-name="weekCellClassName" :editable="true" :clearable="false" @change="handleWeekChange" />
             </div>
           </el-form-item>
-          <el-form-item label="主播"><LiveEmployeeSelect v-model="query.employeeId"   placeholder="全部主播" :employees="options.employees" /></el-form-item>
-          <el-form-item label="直播平台"><el-select v-model="query.accountId" clearable placeholder="全部直播平台"><el-option v-for="v in options.accounts" :key="v.id" :label="accountLabel(v)" :value="v.id" /></el-select></el-form-item>
-          <el-form-item label="场次"><el-select v-model="query.rateTypeId" clearable placeholder="全部场次"><el-option v-for="v in options.rateTypes" :key="v.id" :label="v.typeName" :value="v.id" /></el-select></el-form-item>
-          <el-form-item class="query-action"><el-button type="primary" @click="load">查询</el-button></el-form-item>
-        <el-form-item label="主播状态"><el-select v-model="query.employeeScope" @change="query.pageNum = 1; load()"><el-option label="全部" value="ALL" /><el-option label="在职/试用期" value="ACTIVE" /><el-option label="已离职/归档" value="INACTIVE" /></el-select></el-form-item></el-form>
+          <el-form-item :label="tr('主播')"><LiveEmployeeSelect v-model="query.employeeId"   :placeholder="tr('全部主播')" :employees="options.employees" /></el-form-item>
+          <el-form-item :label="tr('直播平台')"><el-select v-model="query.accountId" clearable :placeholder="tr('全部直播平台')"><el-option v-for="v in options.accounts" :key="v.id" :label="accountLabel(v)" :value="v.id" /></el-select></el-form-item>
+          <el-form-item :label="tr('场次')"><el-select v-model="query.rateTypeId" clearable :placeholder="tr('全部场次')"><el-option v-for="v in options.rateTypes" :key="v.id" :label="v.typeName" :value="v.id" /></el-select></el-form-item>
+          <el-form-item class="query-action"><el-button type="primary" @click="load">{{ tr('查询') }}</el-button></el-form-item>
+        <el-form-item :label="tr('主播状态')"><el-select v-model="query.employeeScope" @change="query.pageNum = 1; load()"><el-option :label="tr('全部')" value="ALL" /><el-option :label="tr('在职/试用期')" value="ACTIVE" /><el-option :label="tr('已归档')" value="INACTIVE" /></el-select></el-form-item></el-form>
         <el-radio-group v-model="view" class="view-switch">
-          <el-radio-button label="calendar">日历</el-radio-button>
-          <el-radio-button label="list">列表</el-radio-button>
+          <el-radio-button label="calendar">{{ tr('日历') }}</el-radio-button>
+          <el-radio-button label="list">{{ tr('列表') }}</el-radio-button>
         </el-radio-group>
       </div>
     </el-card>
     <el-card class="live-card" shadow="never" v-loading="loading">
       <div v-if="view === 'calendar'" class="week-calendar-wrap">
-        <section v-for="(week, weekIndex) in calendarWeeks" :key="weekIndex"><h3 class="calendar-week-title">{{ weekIndex === 0 ? '所选周' : '下一周' }} · {{ displayDate(week[0].date) }} — {{ displayDate(week[6].date) }}</h3><div class="week-calendar">
-          <div v-for="weekday in weekdays" :key="weekday" class="week-weekday">{{ weekday }}</div>
+        <section v-for="(week, weekIndex) in calendarWeeks" :key="weekIndex"><h3 class="calendar-week-title">{{ weekIndex === 0 ? tr('所选周') : tr('下一周') }} · {{ displayDate(week[0].date) }} — {{ displayDate(week[6].date) }}</h3><div class="week-calendar">
+          <div v-for="weekday in weekdays" :key="weekday" class="week-weekday">{{ tr(weekday) }}</div>
           <div v-for="day in week" :key="day.key" class="calendar-day" :class="{ 'is-today': day.today }">
-            <div class="calendar-day-title"><span>{{ day.month }}/{{ day.day }}</span><el-tag v-if="day.today" size="small" effect="plain">今天</el-tag></div>
-            <div v-for="row in byDay[day.date] || []" :key="row.id" class="schedule-chip" @click="openDialog(row)"><strong><LiveEmployeeName :name="row.employeeName" :status="row.employeeStatus" /></strong><div>{{ row.accountLabel }}</div><div>{{ shortTime(row.startTime) }} - {{ shortTime(row.endTime) }} · {{ row.rateTypeName }}</div><div v-if="row.remark" class="schedule-chip-remark">备注：{{ row.remark }}</div></div>
-            <el-button text type="primary" @click="openDialog({ scheduleDate: day.date })">+ 添加</el-button>
+            <div class="calendar-day-title"><span>{{ day.month }}/{{ day.day }}</span><el-tag v-if="day.today" size="small" effect="plain">{{ tr('今天') }}</el-tag></div>
+            <div v-for="row in byDay[day.date] || []" :key="row.id" class="schedule-chip" @click="openDialog(row)"><strong><LiveEmployeeName :name="row.employeeName" :status="row.employeeStatus" /></strong><div>{{ row.accountLabel }}</div><div>{{ shortTime(row.startTime) }} - {{ shortTime(row.endTime) }} · {{ row.rateTypeName }}</div><div v-if="row.remark" class="schedule-chip-remark">{{ tr('备注：') }}{{ row.remark }}</div></div>
+            <el-button text type="primary" @click="openDialog({ scheduleDate: day.date })">{{ tr('+ 添加') }}</el-button>
           </div>
         </div></section>
       </div>
-      <el-table v-else :data="rows" stripe><el-table-column prop="scheduleDate" label="日期"><template #default="s">{{ displayDate(s.row.scheduleDate) }}</template></el-table-column><el-table-column prop="employeeName" label="主播" ><template #default="s"><LiveEmployeeName :name="s.row.employeeName" :status="s.row.employeeStatus" /></template></el-table-column><el-table-column prop="platform" label="平台" /><el-table-column prop="accountLabel" label="直播平台" min-width="180" /><el-table-column label="时间"><template #default="s">{{ s.row.startTime }} - {{ s.row.endTime }}</template></el-table-column><el-table-column prop="rateTypeName" label="场次类型" /><el-table-column prop="remark" label="备注" /><el-table-column label="操作" width="140"><template #default="s"><el-button link type="primary" @click="openDialog(s.row)">{{ tr('编辑') }}</el-button><el-button link type="danger" @click="remove(s.row)">{{ tr('删除') }}</el-button></template></el-table-column></el-table>
+      <el-table v-else :data="rows" stripe><el-table-column prop="scheduleDate" :label="tr('日期')"><template #default="s">{{ displayDate(s.row.scheduleDate) }}</template></el-table-column><el-table-column prop="employeeName" :label="tr('主播')" ><template #default="s"><LiveEmployeeName :name="s.row.employeeName" :status="s.row.employeeStatus" /></template></el-table-column><el-table-column prop="platform" :label="tr('平台')" /><el-table-column prop="accountLabel" :label="tr('直播平台')" min-width="180" /><el-table-column :label="tr('时间')"><template #default="s">{{ s.row.startTime }} - {{ s.row.endTime }}</template></el-table-column><el-table-column prop="rateTypeName" :label="tr('场次类型')" /><el-table-column prop="remark" :label="tr('备注')" /><el-table-column :label="tr('操作')" :min-width="isEn ? 165 : 140"><template #default="s"><el-button link type="primary" @click="openDialog(s.row)">{{ tr('编辑') }}</el-button><el-button link type="danger" @click="remove(s.row)">{{ tr('删除') }}</el-button></template></el-table-column></el-table>
     </el-card>
-    <el-dialog v-model="dialog.open" class="schedule-dialog" :title="dialog.form.id ? '编辑排班' : '新增排班'" width="820px" append-to-body>
+    <el-dialog data-runtime-i18n-ignore="true" v-model="dialog.open" class="schedule-dialog" :title="dialog.form.id ? tr('编辑排班') : tr('新增排班')" width="820px" append-to-body>
       <el-form ref="formRef" :model="dialog.form" :rules="rules" :label-width="isEn ? '128px' : '92px'">
         <div class="dialog-grid">
-          <el-form-item label="日期" prop="scheduleDate"><el-date-picker v-model="dialog.form.scheduleDate" type="date" value-format="YYYY-MM-DD" :format="LIVE_DATE_FORMAT" @change="handleScheduleScopeChange" /></el-form-item>
-          <el-form-item label="主播" prop="employeeId"><LiveEmployeeSelect v-model="dialog.form.employeeId"  @change="handleScheduleScopeChange" :employees="options.employees" /></el-form-item>
-          <el-form-item label="直播平台" prop="accountId"><el-select v-model="dialog.form.accountId" @change="handleScheduleScopeChange"><el-option v-for="v in options.accounts" :key="v.id" :label="accountLabel(v)" :value="v.id" /></el-select></el-form-item>
-          <el-form-item label="场次类型" prop="rateTypeId">
+          <el-form-item :label="tr('日期')" prop="scheduleDate"><el-date-picker v-model="dialog.form.scheduleDate" type="date" value-format="YYYY-MM-DD" :format="LIVE_DATE_FORMAT" @change="handleScheduleScopeChange" /></el-form-item>
+          <el-form-item :label="tr('主播')" prop="employeeId"><LiveEmployeeSelect v-model="dialog.form.employeeId"  @change="handleScheduleScopeChange" :employees="options.employees" /></el-form-item>
+          <el-form-item :label="tr('直播平台')" prop="accountId"><el-select v-model="dialog.form.accountId" @change="handleScheduleScopeChange"><el-option v-for="v in options.accounts" :key="v.id" :label="accountLabel(v)" :value="v.id" /></el-select></el-form-item>
+          <el-form-item :label="tr('场次类型')" prop="rateTypeId">
             <div class="rate-type-field">
               <el-select v-model="dialog.form.rateTypeId" :loading="dialog.loadingRateTypes" :disabled="!hasScheduleRateScope" :placeholder="rateTypePlaceholder">
                 <el-option v-for="v in dialog.rateTypes" :key="v.id" :label="v.typeName" :value="v.id" />
               </el-select>
-              <small v-if="hasScheduleRateScope && !dialog.loadingRateTypes && !dialog.rateTypes.length">请先在费率配置中启用该主播、直播平台和日期对应的场次类型</small>
+              <small v-if="hasScheduleRateScope && !dialog.loadingRateTypes && !dialog.rateTypes.length">{{ tr('请先在费率配置中启用该主播、直播平台和日期对应的场次类型') }}</small>
             </div>
           </el-form-item>
-          <el-form-item label="开始时间" prop="startTime"><el-time-picker v-model="dialog.form.startTime" value-format="HH:mm:ss" format="HH:mm" @change="formRef?.validateField('endTime')" /></el-form-item>
-          <el-form-item label="结束时间" prop="endTime"><el-time-picker v-model="dialog.form.endTime" value-format="HH:mm:ss" format="HH:mm" /></el-form-item>
-          <el-form-item class="wide" label="备注"><el-input v-model="dialog.form.remark" type="textarea" :rows="2" /></el-form-item>
+          <el-form-item :label="tr('开始时间')" prop="startTime"><el-time-picker v-model="dialog.form.startTime" value-format="HH:mm:ss" format="HH:mm" @change="formRef?.validateField('endTime')" /></el-form-item>
+          <el-form-item :label="tr('结束时间')" prop="endTime"><el-time-picker v-model="dialog.form.endTime" value-format="HH:mm:ss" format="HH:mm" /></el-form-item>
+          <el-form-item class="wide" :label="tr('备注')"><el-input v-model="dialog.form.remark" type="textarea" :rows="2" /></el-form-item>
         </div>
       </el-form>
       <template #footer>
         <div class="schedule-dialog-footer">
           <el-button v-if="dialog.form.id" type="danger" plain @click="remove(dialog.form)">{{ tr('删除排班') }}</el-button>
-          <div class="schedule-dialog-actions"><el-button @click="dialog.open=false">取消</el-button><el-button type="primary" :disabled="dialog.loadingRateTypes" @click="submit">保存</el-button></div>
+          <div class="schedule-dialog-actions"><el-button @click="dialog.open=false">{{ tr('取消') }}</el-button><el-button type="primary" :disabled="dialog.loadingRateTypes" @click="submit">{{ tr('保存') }}</el-button></div>
         </div>
       </template>
     </el-dialog>
@@ -66,17 +66,15 @@
 </template>
 
 <script setup>
+import { useLiveI18n } from '../useLiveI18n'
 import LiveEmployeeSelect from '../components/LiveEmployeeSelect.vue'
 import LiveEmployeeName from '../components/LiveEmployeeName.vue'
 import { onActivated, computed, getCurrentInstance, onMounted, reactive, ref } from 'vue'
 import { addSchedule, deleteSchedule, getLiveOptions, listScheduleCalendar, listScheduleRateTypes, updateSchedule } from '@/api/wms/livePayroll'
-import useSettingsStore from '@/store/modules/settings'
-import { translateByMap } from '@/locales/runtime-map'
-import { accountLabel, displayDate, downloadCsv, isoDate, liveEmployeeOptionLabel, LIVE_DATE_FORMAT, weekRange, twoWeekRange } from '../shared'
+import { accountLabel, displayDate, downloadCsv, isoDate, LIVE_DATE_FORMAT, weekRange, twoWeekRange } from '../shared'
+const { tr, isEn, messageNode } = useLiveI18n()
 const { proxy } = getCurrentInstance()
-const settingsStore = useSettingsStore()
-const isEn = computed(() => (settingsStore.language || 'zh-cn') === 'en')
-const tr = (text) => translateByMap(text, settingsStore.language || 'zh-cn')
+
 const loading = ref(false), view = ref('calendar'), formRef = ref()
 const selectedWeek = ref(weekRange()[0]), query = reactive({ employeeScope: 'ALL', employeeId: null, accountId: null, rateTypeId: null })
 const options = reactive({ employees: [], accounts: [], rateTypes: [] }), rows = ref([])
@@ -84,16 +82,16 @@ const dialog = reactive({ open: false, form: {}, rateTypes: [], loadingRateTypes
 let rateTypeRequestSequence = 0
 const hasScheduleRateScope = computed(() => Boolean(dialog.form.scheduleDate && dialog.form.employeeId && dialog.form.accountId))
 const rateTypePlaceholder = computed(() => {
-  if (!hasScheduleRateScope.value) return '请先选择日期、主播和直播平台'
-  if (dialog.loadingRateTypes) return '正在加载场次类型'
-  return dialog.rateTypes.length ? '请选择场次类型' : '当前组合无已激活场次'
+  if (!hasScheduleRateScope.value) return tr('请先选择日期、主播和直播平台')
+  if (dialog.loadingRateTypes) return tr('正在加载场次类型')
+  return dialog.rateTypes.length ? tr('请选择场次类型') : tr('当前组合无已激活场次')
 })
 const validateEndTime = (_rule, value, callback) => {
-  if (!value) return callback(new Error('请选择结束时间'))
-  if (dialog.form.startTime && value <= dialog.form.startTime) return callback(new Error('结束时间必须晚于开始时间'))
+  if (!value) return callback(new Error(tr('请选择结束时间')))
+  if (dialog.form.startTime && value <= dialog.form.startTime) return callback(new Error(tr('结束时间必须晚于开始时间')))
   callback()
 }
-const rules = { scheduleDate: [{ required: true, message: '请选择日期' }], employeeId: [{ required: true, message: '请选择主播' }], accountId: [{ required: true, message: '请选择直播平台' }], rateTypeId: [{ required: true, message: '请选择场次类型' }], startTime: [{ required: true, message: '请选择开始时间' }], endTime: [{ validator: validateEndTime, trigger: 'change' }] }
+const rules = computed(() => ({ scheduleDate: [{ required: true, message: tr('请选择日期') }], employeeId: [{ required: true, message: tr('请选择主播') }], accountId: [{ required: true, message: tr('请选择直播平台') }], rateTypeId: [{ required: true, message: tr('请选择场次类型') }], startTime: [{ required: true, message: tr('请选择开始时间') }], endTime: [{ validator: validateEndTime, trigger: 'change' }] }))
 const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
 const weekDateRange = computed(() => twoWeekRange(selectedWeek.value))
 const days = computed(() => {
@@ -139,9 +137,9 @@ async function openDialog(row = {}) {
   await refreshScheduleRateTypes()
 }
 function shortTime(value) { return String(value || '').slice(0, 5) }
-async function submit() { await formRef.value.validate(); await (dialog.form.id ? updateSchedule(dialog.form) : addSchedule(dialog.form)); proxy.$modal.msgSuccess('保存成功'); dialog.open = false; load() }
-async function remove(row) { await proxy.$modal.confirm(`确认删除 ${row.employeeName} 的排班？`); await deleteSchedule(row.id); proxy.$modal.msgSuccess('删除成功'); dialog.open = false; load() }
-function exportRows() { downloadCsv(`主播排班-${weekDateRange.value[0]}-${weekDateRange.value[1]}.csv`, [{ key: 'scheduleDate', label: '日期' }, { key: 'employeeName', label: '主播' }, { key: 'accountLabel', label: '直播平台' }, { key: 'startTime', label: '开始时间' }, { key: 'endTime', label: '结束时间' }, { key: 'rateTypeName', label: '场次类型' }, { key: 'remark', label: '备注' }], rows.value.map(row => ({ ...row, scheduleDate: displayDate(row.scheduleDate) }))) }
+async function submit() { await formRef.value.validate(); await (dialog.form.id ? updateSchedule(dialog.form) : addSchedule(dialog.form)); proxy.$modal.msgSuccess(tr('保存成功')); dialog.open = false; load() }
+async function remove(row) { await proxy.$modal.confirm(messageNode(tr('确认删除 {0} 的排班？', [row.employeeName]))); await deleteSchedule(row.id); proxy.$modal.msgSuccess(tr('删除成功')); dialog.open = false; load() }
+function exportRows() { downloadCsv(tr('主播排班-{0}-{1}.csv', [weekDateRange.value[0], weekDateRange.value[1]]), [{ key: 'scheduleDate', label: tr('日期') }, { key: 'employeeName', label: tr('主播') }, { key: 'accountLabel', label: tr('直播平台') }, { key: 'startTime', label: tr('开始时间') }, { key: 'endTime', label: tr('结束时间') }, { key: 'rateTypeName', label: tr('场次类型') }, { key: 'remark', label: tr('备注') }], rows.value.map(row => ({ ...row, scheduleDate: displayDate(row.scheduleDate) }))) }
 onMounted(async () => { Object.assign(options, await getLiveOptions()); load() })
 onActivated(async () => { Object.assign(options, await getLiveOptions()) })
 </script>

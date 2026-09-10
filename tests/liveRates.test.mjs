@@ -10,7 +10,7 @@ const compiled = compileScript(descriptor, { id: 'live-rate-test' }).content
 const displaySource = await readFile(new URL('../src/views/wms/live/rates/rateDisplay.js', import.meta.url), 'utf8')
 const display = await import(`data:text/javascript;base64,${Buffer.from(displaySource).toString('base64')}`)
 // 执行真实页面的 setup，只替换网络、弹窗和下载边界，无需启动后端或浏览器。
-const createComponent = new Function('modules', compiled
+const createComponent = new Function('modules', "modules['../useLiveI18n']={useLiveI18n:()=>({tr:(text,values=[])=>text.replace(/\\{(\\d+)\\}/g,(_,i)=>values[i]),isEn:{value:false},messageNode:text=>text})};\n" + compiled
   .replace(/^import \{([^}]+)\} from ['"]([^'"]+)['"];?$/gm, (_, bindings, name) =>
     `const {${bindings.replace(/\bas\b/g, ':')}} = modules[${JSON.stringify(name)}]`)
   .replace(/^import (\w+) from ['"]([^'"]+)['"];?$/gm, (_, binding, name) =>

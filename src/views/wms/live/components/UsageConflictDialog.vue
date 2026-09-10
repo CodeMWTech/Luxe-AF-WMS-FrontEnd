@@ -1,8 +1,8 @@
 <template>
-  <el-dialog
+  <el-dialog data-runtime-i18n-ignore="true"
     :model-value="modelValue"
     class="usage-conflict-dialog"
-    :title="`无法${action}${target}`"
+    :title="tr('无法{0}{1}', [tr(action).toLowerCase(), tr(target)])"
     width="980px"
     append-to-body
     @update:model-value="$emit('update:modelValue', $event)"
@@ -10,33 +10,34 @@
     <div class="usage-conflict-notice">
       <el-icon><WarningFilled /></el-icon>
       <div>
-        <strong>以下 {{ rows.length }} 条记录正在使用{{ target }}</strong>
-        <p>请先删除下列排班计划或开播录入，再进行{{ action }}。</p>
+        <strong>{{ tr('{0} 条记录正在使用{1}', [rows.length, tr(target)]) }}</strong>
+        <p>{{ tr('请先删除下列排班计划或开播录入，再进行{0}。', [tr(action).toLowerCase()]) }}</p>
       </div>
     </div>
     <el-table :data="rows" max-height="440" stripe border>
-      <el-table-column label="记录" width="128">
+      <el-table-column :label="tr('记录')" :min-width="isEn ? 153 : 128">
         <template #default="scope">
-          <el-tag :type="scope.row.recordType === '排班计划' ? 'warning' : 'primary'">{{ scope.row.recordType }}</el-tag>
+          <el-tag :type="scope.row.recordType === '排班计划' ? 'warning' : 'primary'">{{ tr(scope.row.recordType) }}</el-tag>
           <small class="record-id">#{{ scope.row.recordId }}</small>
         </template>
       </el-table-column>
-      <el-table-column prop="businessDate" label="日期" width="120"><template #default="scope">{{ displayDate(scope.row.businessDate) }}</template></el-table-column>
-      <el-table-column prop="employeeName" label="主播" min-width="130" show-overflow-tooltip />
-      <el-table-column prop="accountLabel" label="直播平台" min-width="190" show-overflow-tooltip />
-      <el-table-column prop="rateTypeName" label="费率类型" min-width="120" show-overflow-tooltip />
-      <el-table-column label="时段" width="125">
+      <el-table-column prop="businessDate" :label="tr('日期')" :min-width="isEn ? 145 : 120"><template #default="scope">{{ displayDate(scope.row.businessDate) }}</template></el-table-column>
+      <el-table-column prop="employeeName" :label="tr('主播')" min-width="130" show-overflow-tooltip />
+      <el-table-column prop="accountLabel" :label="tr('直播平台')" min-width="190" show-overflow-tooltip />
+      <el-table-column prop="rateTypeName" :label="tr('费率类型')" min-width="120" show-overflow-tooltip />
+      <el-table-column :label="tr('时段')" :min-width="isEn ? 150 : 125">
         <template #default="scope">{{ timeRange(scope.row) }}</template>
       </el-table-column>
     </el-table>
-    <template #footer><el-button type="primary" @click="$emit('update:modelValue', false)">我知道了</el-button></template>
+    <template #footer><el-button type="primary" @click="$emit('update:modelValue', false)">{{ tr('我知道了') }}</el-button></template>
   </el-dialog>
 </template>
 
 <script setup>
+import { useLiveI18n } from '../useLiveI18n'
 import { WarningFilled } from '@element-plus/icons-vue'
 import { displayDate } from '../shared'
-
+const { tr, isEn } = useLiveI18n()
 defineProps({
   modelValue: { type: Boolean, default: false },
   rows: { type: Array, default: () => [] },

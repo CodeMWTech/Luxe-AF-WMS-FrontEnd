@@ -265,12 +265,17 @@
                      </el-col>
                      <el-col :span="12">
                         <el-form-item :label="tr('员工状态')">
-                           <el-select v-model="form.employeeStatus" :placeholder="tr('请选择员工状态')" style="width: 100%">
+                           <el-select v-model="form.employeeStatus" :placeholder="tr('请选择员工状态')" style="width: 100%" :disabled="form.archiveLocked">
                               <el-option :label="tr('在职')" :value="0" />
                               <el-option :label="tr('试用期')" :value="1" />
-                              <el-option :label="tr('已离职')" :value="2" />
+                              <el-option v-if="form.archiveLocked || proxy.$auth.hasPermi('wms:employee:archive')" :label="tr('已归档')" :value="3" />
                            </el-select>
                            <div class="field-hint">{{ tr('必填项；不修改时默认「在职」。') }}</div>
+                        </el-form-item>
+                     </el-col>
+                     <el-col :span="12" v-if="form.employeeStatus === 3">
+                        <el-form-item :label="tr('离职日期')" prop="departureDate" :rules="[{ required: !form.archiveLocked, message: tr('请选择离职日期'), trigger: 'change' }]">
+                           <el-date-picker v-model="form.departureDate" type="date" value-format="YYYY-MM-DD" format="MM/DD/YYYY" :disabled="form.archiveLocked" />
                         </el-form-item>
                      </el-col>
                      <el-col :span="12">
@@ -720,7 +725,9 @@ function goPrev() {
 function mergeEmployeeIntoForm(employee) {
   if (!employee) return
   form.value.deptId = employee.deptId
-  form.value.employeeStatus = employee.employeeStatus ?? 0
+  form.value.archiveLocked = Number(employee.employeeStatus) >= 2
+  form.value.employeeStatus = form.value.archiveLocked ? 3 : (employee.employeeStatus ?? 0)
+  form.value.departureDate = employee.departureDate
   form.value.taxFormType = employee.taxFormType || 'W2'
   form.value.salaryType = employee.salaryType
   form.value.baseSalary = employee.baseSalary
@@ -745,6 +752,7 @@ function buildSavePayload() {
     postIds: form.value.postIds,
     remark: form.value.remark,
     employeeStatus: form.value.employeeStatus ?? 0,
+    departureDate: form.value.departureDate,
     taxFormType: form.value.taxFormType || 'W2',
     salaryType: form.value.salaryType,
     baseSalary: form.value.baseSalary,
@@ -771,6 +779,8 @@ function reset() {
     postIds: [],
     roleIds: [],
     employeeStatus: 0,
+    departureDate: undefined,
+    archiveLocked: false,
     taxFormType: 'W2',
     salaryType: undefined,
     baseSalary: undefined,
