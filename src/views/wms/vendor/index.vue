@@ -689,6 +689,13 @@ function amountInCents(value) {
   return Number.isFinite(amount) ? Math.round(amount * 100) : 0
 }
 
+function decimalPayload(value) {
+  const cents = amountInCents(value)
+  const sign = cents < 0 ? '-' : ''
+  const abs = Math.abs(cents)
+  return `${sign}${Math.trunc(abs / 100)}.${String(abs % 100).padStart(2, '0')}`
+}
+
 async function applySettlementTarget(showSuccess = true) {
   const requestedCents = amountInCents(settlementTargetAmount.value)
   const maxCents = amountInCents(settlementTargetMaxAmount.value)
@@ -725,7 +732,7 @@ async function applySettlementTarget(showSuccess = true) {
     const availableCents = Math.max(amountInCents(settlementAvailableAmount(line)), 0)
     if (availableCents <= 0) continue
     const allocatedCents = Math.min(availableCents, remainingCents)
-    line.pendingSettlementAmount = allocatedCents / 100
+    line.pendingSettlementAmount = Number((allocatedCents / 100).toFixed(2))
     if (allocatedCents > 0) allocatedLines.set(String(line.skuId), line)
     remainingCents -= allocatedCents
   }
@@ -1099,30 +1106,34 @@ async function loadSettlementPreview() {
 
 function settlementRequest(recordStatus) {
   const detail = settlementPreview.value || {}
+  const lines = (detail.lines || []).map(line => ({
+    skuId: line.skuId,
+    productQuantity: decimalPayload(line.productQuantity),
+    soldQuantity: decimalPayload(line.soldQuantity),
+    returnedQuantity: decimalPayload(line.returnedQuantity),
+    unitPrice: decimalPayload(line.unitPrice),
+    totalSettlementAmount: decimalPayload(line.totalSettlementAmount),
+    settledAmount: decimalPayload(line.settledAmount),
+    pendingSettlementAmount: decimalPayload(line.pendingSettlementAmount),
+    settlementType: line.settlementType || 'NORMAL',
+    remark: line.remark?.trim() || undefined
+  }))
+  const sumField = (field) => decimalPayload(
+    lines.reduce((total, line) => total + amountInCents(line[field]), 0) / 100
+  )
   return {
     recordStatus,
     previewId: detail.previewId,
     contractVersion: detail.contractVersion,
     supplierId: detail.supplierId,
     previewGeneratedAt: detail.generatedAt,
-    productQuantity: detail.productQuantity,
-    soldQuantity: detail.soldQuantity,
-    returnedQuantity: detail.returnedQuantity,
-    totalSettlementAmount: detail.totalSettlementAmount,
-    settledAmount: detail.settledAmount,
-    pendingSettlementAmount: detail.pendingSettlementAmount,
-    lines: (detail.lines || []).map(line => ({
-      skuId: line.skuId,
-      productQuantity: line.productQuantity,
-      soldQuantity: line.soldQuantity,
-      returnedQuantity: line.returnedQuantity,
-      unitPrice: line.unitPrice,
-      totalSettlementAmount: line.totalSettlementAmount,
-      settledAmount: line.settledAmount,
-      pendingSettlementAmount: line.pendingSettlementAmount,
-      settlementType: line.settlementType || 'NORMAL',
-      remark: line.remark?.trim() || undefined
-    }))
+    productQuantity: sumField('productQuantity'),
+    soldQuantity: sumField('soldQuantity'),
+    returnedQuantity: sumField('returnedQuantity'),
+    totalSettlementAmount: sumField('totalSettlementAmount'),
+    settledAmount: sumField('settledAmount'),
+    pendingSettlementAmount: sumField('pendingSettlementAmount'),
+    lines
   }
 }
 
