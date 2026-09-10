@@ -4,16 +4,17 @@
     <el-card class="live-filter" shadow="never">
       <el-form inline>
         <el-form-item label="主播"><LiveEmployeeSelect v-model="query.employeeId" :employees="options.employees" /></el-form-item>
-        <el-form-item label="记录类型"><el-select v-model="query.kind" @change="query.status=null; query.pageNum=1; load()"><el-option label="结算后差额" value="ADJUSTMENT" /><el-option label="未结算重算历史" value="RECALC" /></el-select></el-form-item>
+        <el-form-item label="记录类型"><el-select v-model="query.kind" clearable placeholder="全部类型" @change="query.status=null; query.pageNum=1; load()"><el-option label="结算后差额" value="ADJUSTMENT" /><el-option label="未结算重算历史" value="RECALC" /></el-select></el-form-item>
         <el-form-item label="状态"><el-select v-model="query.status" clearable placeholder="全部"><el-option v-for="status in statuses" :key="status" :label="adjustmentStatusLabel(status)" :value="status" /></el-select></el-form-item>
         <el-form-item label="入账日期"><el-date-picker v-model="dateRange" type="daterange" value-format="YYYY-MM-DD" :format="LIVE_DATE_FORMAT" /></el-form-item>
-        <el-form-item><el-button type="primary" @click="query.pageNum=1;load()">查询</el-button></el-form-item>
+        <el-form-item><el-button type="primary" @click="query.pageNum=1;load()">查询</el-button><el-button @click="resetQuery">重置</el-button></el-form-item>
       </el-form>
     </el-card>
     <el-alert title="待确认调整尚未计入待付。请按同一开播记录的变更顺序审核；作废应从最新一笔开始。已结算调整只能新增反向记录冲正。" type="info" :closable="false" style="margin-bottom:16px" />
     <el-card shadow="never">
       <el-table :data="rows" v-loading="loading" stripe>
         <el-table-column prop="employeeName" label="主播" min-width="120" />
+        <el-table-column label="记录类型" width="150"><template #default="s">{{ kindLabel(s.row.kind) }}</template></el-table-column>
         <el-table-column prop="accountLabel" label="平台" min-width="170" />
         <el-table-column label="原业务日期" width="120"><template #default="s">{{ displayDate(s.row.streamDate) }}</template></el-table-column>
         <el-table-column label="入账日期" width="120"><template #default="s">{{ displayDate(s.row.postingDate) }}</template></el-table-column>
@@ -53,17 +54,19 @@ import { getLiveOptions, listPayrollAdjustments, exportPayrollAdjustments, revie
 import LiveEmployeeSelect from '../components/LiveEmployeeSelect.vue'
 import { adjustmentStatusLabel, displayDate, money, isoDate, LIVE_DATE_FORMAT, downloadCsv } from '../shared'
 const { proxy }=getCurrentInstance()
-const query=reactive({ employeeId:null, status:null, kind:'ADJUSTMENT', pageNum:1, pageSize:20 })
+const query=reactive({ employeeId:null, status:null, kind:null, pageNum:1, pageSize:20 })
 const options=reactive({employees:[]}), dateRange=ref(null), loading=ref(false), rows=ref([]), total=ref(0), detail=ref(null)
-const statuses=computed(()=>query.kind==='RECALC'?['APPLIED']:['PENDING','CONFIRMED','SETTLED','VOID'])
+const statuses=computed(()=>query.kind==='RECALC'?['APPLIED']:query.kind==='ADJUSTMENT'?['PENDING','CONFIRMED','SETTLED','VOID']:['PENDING','CONFIRMED','SETTLED','VOID','APPLIED'])
 const review=reactive({open:false,row:null,action:'CONFIRM',reason:'',date:isoDate(),saving:false})
+function kindLabel(kind){return kind==='RECALC'?'未结算重算历史':'结算后差额'}
+function resetQuery(){Object.assign(query,{employeeId:null,status:null,kind:null,pageNum:1});dateRange.value=null;return load()}
 function params(){return {...query,startDate:dateRange.value?.[0],endDate:dateRange.value?.[1]}}
 async function loadOptions(){Object.assign(options,await getLiveOptions())}
 async function load(){loading.value=true;try{const res=await listPayrollAdjustments(params());rows.value=res.rows||[];total.value=res.total||0}finally{loading.value=false}}
 function openReview(row,action){Object.assign(review,{open:true,row,action,reason:'',date:row.postingDate||isoDate(),saving:false})}
 async function submitReview(){if(review.saving||!review.reason.trim())return;review.saving=true;try{await reviewPayrollAdjustment(review.row.id,{action:review.action,reason:review.reason,postingDate:review.date});review.open=false;proxy.$modal.msgSuccess('处理成功');await load()}finally{review.saving=false}}
-async function exportRows(){const {data}=await exportPayrollAdjustments(params());downloadCsv('薪酬调整.csv',[{key:'id',label:'调整编号'},{key:'employeeName',label:'主播'},{key:'accountLabel',label:'平台'},{key:'streamId',label:'原开播记录'},{key:'originalSettlementId',label:'原结算批次'},{key:'settlementId',label:'调整结算批次'},{key:'changeBatchNo',label:'调价批次'},{key:'streamDate',label:'业务日期'},{key:'postingDate',label:'入账日期'},{key:'originalAmount',label:'原金额'},{key:'targetAmount',label:'最新应计'},{key:'previousAdjustments',label:'此前调整'},{key:'amount',label:'本次差额'},{key:'statusLabel',label:'状态'},{key:'reason',label:'原因'},{key:'createdBy',label:'操作人'},{key:'reviewRemark',label:'审核说明'}],data.map(row=>({...row,statusLabel:adjustmentStatusLabel(row.status)})))}
-onMounted(async()=>{await loadOptions();await load()})
+async function exportRows(){const {data}=await exportPayrollAdjustments(params());downloadCsv('薪酬调整.csv',[{key:'id',label:'调整编号'},{key:'employeeName',label:'主播'},{key:'accountLabel',label:'平台'},{key:'kindLabel',label:'记录类型'},{key:'streamId',label:'原开播记录'},{key:'originalSettlementId',label:'原结算批次'},{key:'settlementId',label:'调整结算批次'},{key:'changeBatchNo',label:'调价批次'},{key:'streamDate',label:'业务日期'},{key:'postingDate',label:'入账日期'},{key:'originalAmount',label:'原金额'},{key:'targetAmount',label:'最新应计'},{key:'previousAdjustments',label:'此前调整'},{key:'amount',label:'本次差额'},{key:'statusLabel',label:'状态'},{key:'reason',label:'原因'},{key:'createdBy',label:'操作人'},{key:'reviewRemark',label:'审核说明'}],data.map(row=>({...row,kindLabel:kindLabel(row.kind),statusLabel:adjustmentStatusLabel(row.status)})))}
+onMounted(()=>Promise.all([loadOptions(),load()]))
 onActivated(loadOptions)
 </script>
 <style scoped lang="scss">

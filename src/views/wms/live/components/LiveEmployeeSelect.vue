@@ -3,7 +3,7 @@
     <el-select :model-value="modelValue" filterable clearable :placeholder="placeholder" :disabled="disabled" @update:model-value="$emit('update:modelValue', $event)" @change="$emit('change', $event)">
       <el-option v-for="employee in visibleEmployees" :key="employee.value" :value="employee.value" :label="liveEmployeeOptionLabel(employee)" />
     </el-select>
-    <el-checkbox v-if="!disabled" v-model="includeInactive">包含离职/归档</el-checkbox>
+    <el-checkbox v-if="!disabled" v-model="includeInactive">包含已归档</el-checkbox>
   </div>
 </template>
 <script setup>

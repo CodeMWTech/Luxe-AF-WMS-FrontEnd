@@ -54,7 +54,7 @@ test('employee picker hides inactive staff by default but preserves history sele
   assert.deepEqual(page.visibleEmployees.value.map(e=>e.value),['1','2'])
   page.includeInactive.value=true
   assert.equal(page.visibleEmployees.value.length,4)
-  assert.equal(shared.liveEmployeeOptionLabel(employees[2]),'C · 已离职')
+  assert.equal(shared.liveEmployeeOptionLabel(employees[2]),'C · 已归档')
   assert.equal(shared.liveEmployeeOptionLabel(employees[3]),'D · 已归档')
   const editPage=await setup('components/LiveEmployeeSelect.vue',{vue:vueModule,'../shared':shared},{employees,modelValue:'3'})
   assert.ok(editPage.visibleEmployees.value.some(e=>e.value==='3'))
@@ -72,18 +72,18 @@ test('settlement selects exact typed source IDs without losing large integer IDs
 })
 test('settlement sends no write before confirmation, keeps request identity after network failure',async()=>{
   const calls=[], states={fail:true}
-  const snapshot={streams:[{id:'50',streamDate:'2026-08-01',totalAmount:200,settlementStatus:'OPEN'}],commissions:[],adjustments:[],streamAmount:200,commissionAmount:0,adjustmentAmount:0,totalAmount:200,token:'preview-token'}
+  const snapshot={streams:[{id:'50',employeeId:'1',employeeName:'主播 A',streamDate:'2026-08-01',totalAmount:200,settlementStatus:'OPEN'}],commissions:[],adjustments:[],streamAmount:200,commissionAmount:0,adjustmentAmount:0,totalAmount:200,token:'preview-token'}
   const page=await setup('settlements/index.vue',{
     vue:vueModule,'../components/LiveEmployeeSelect.vue':{},'../shared':shared,'./settlementDisplay':display,
     '@/api/wms/livePayroll':{
-      getLiveOptions:async()=>({employees:[]}),previewSettlement:async()=>({data:snapshot}),
+      getLiveOptions:async()=>({employees:[]}),listSettlementCandidates:async()=>({data:snapshot}),previewSettlement:async()=>({data:snapshot}),
       confirmSettlement:async body=>{calls.push(body);if(states.fail)throw new Error('Network failure')},
       listSettlements:async()=>({rows:[],total:0})
     }
   })
   page.query.employeeId='1';page.dateRange.value=['2026-08-01','2026-08-31']
   page.selection.value=display.flattenSettlement(snapshot)
-  await page.prepare('NORMAL')
+  await page.prepare()
   assert.equal(calls.length,0)
   page.review.remark='已核对付款明细'
   await assert.rejects(page.submit(),/Network failure/)
@@ -94,13 +94,76 @@ test('settlement sends no write before confirmation, keeps request identity afte
   assert.deepEqual(calls[0].streamIds,['50']);assert.deepEqual(calls[0].commissionIds,[])
   assert.equal(page.review.open,false)
 })
-test('unverified historical rows cannot enter the normal settlement confirmation flow',async()=>{
+test('settled originals and unconfirmed adjustments cannot enter settlement confirmation',async()=>{
   let requests=0
   const page=await setup('settlements/index.vue',{
     vue:vueModule,'../components/LiveEmployeeSelect.vue':{},'../shared':shared,'./settlementDisplay':display,
     '@/api/wms/livePayroll':{previewSettlement:async()=>{requests++;return{data:{}}}}
   })
-  page.selection.value=[{type:'STREAM',id:'50',status:'UNKNOWN'}]
-  await page.prepare('NORMAL')
-  assert.equal(requests,0);assert.equal(page.review.open,false)
+  for (const row of [{type:'STREAM',id:'50',status:'SETTLED'}, {type:'ADJUSTMENT',id:'70',status:'PENDING'}, {type:'STREAM',id:'50',status:'CONFIRMED'}]) {
+    page.selection.value=[row]
+    await page.prepare()
+    assert.equal(requests,0);assert.equal(page.review.open,false)
+  }
+})
+
+test('settlement opens with all employees and dates, preserves employee identity and resets filters',async()=>{
+  let mounted
+  const calls=[]
+  const snapshot={streams:[{id:'1',employeeId:'10',employeeName:'主播 A',streamDate:'2025-01-02',totalAmount:200,settlementStatus:'OPEN'}],commissions:[],adjustments:[]}
+  const page=await setup('settlements/index.vue',{
+    vue:{...vueModule,onMounted:callback=>{mounted=callback}},
+    '../components/LiveEmployeeSelect.vue':{},'../shared':shared,'./settlementDisplay':display,
+    '@/api/wms/livePayroll':{
+      getLiveOptions:async()=>({employees:[]}),
+      listSettlementCandidates:async params=>{calls.push(['candidates',params]);return {data:snapshot}},
+      listSettlements:async params=>{calls.push(['batches',params]);return {rows:[],total:0}}
+    }
+  })
+  await mounted()
+  const initial=calls.find(call=>call[0]==='candidates')[1]
+  assert.equal(initial.employeeId,null);assert.equal(initial.startDate,undefined);assert.equal(initial.endDate,undefined)
+  assert.equal(page.candidates.value[0].employeeName,'主播 A')
+  assert.equal(calls.find(call=>call[0]==='batches')[1].employeeId,null)
+  page.query.employeeId='10';page.dateRange.value=['2025-01-01','2025-01-31']
+  await page.loadCandidates()
+  assert.deepEqual(calls.at(-1)[1],{employeeId:'10',startDate:'2025-01-01',endDate:'2025-01-31'})
+  await page.resetQuery()
+  assert.equal(page.query.employeeId,null);assert.equal(page.dateRange.value,null)
+  assert.equal(page.candidates.value.length,1)
+})
+test('all-employee settlement uses selected employee and posting dates and rejects mixed employees',()=>{
+  const employeeId='2090000000000000123'
+  const rows=display.flattenSettlement({
+    streams:[{id:'1',employeeId,streamDate:'2026-07-02'}],
+    adjustments:[{id:'2',employeeId,streamDate:'2026-06-01',postingDate:'2026-08-15'}]
+  })
+  assert.deepEqual(display.selectedSettlementScope(rows,null),{employeeId,startDate:'2026-07-02',endDate:'2026-08-15'})
+  assert.deepEqual(display.selectedSettlementScope(rows,['2026-07-01','2026-08-31']),{employeeId,startDate:'2026-07-01',endDate:'2026-08-31'})
+  assert.throws(()=>display.selectedSettlementScope([...rows,{employeeId:'999',businessDate:'2026-07-03'}]),/同一主播/)
+})
+test('adjustments default to all types, statuses and dates and export the same scope',async()=>{
+  let mounted
+  const calls={list:[],export:[]}, csv=[]
+  const records=[{id:'1',kind:'ADJUSTMENT',status:'PENDING'},{id:'2',kind:'RECALC',status:'APPLIED'}]
+  const page=await setup('adjustments/index.vue',{
+    vue:{...vueModule,onMounted:callback=>{mounted=callback}},'../components/LiveEmployeeSelect.vue':{},
+    '../shared':{...shared,downloadCsv:(...args)=>csv.push(args)},
+    '@/api/wms/livePayroll':{
+      getLiveOptions:async()=>({employees:[]}),
+      listPayrollAdjustments:async params=>{calls.list.push(params);return {rows:records,total:2}},
+      exportPayrollAdjustments:async params=>{calls.export.push(params);return {data:records}}
+    }
+  })
+  await mounted()
+  assert.equal(calls.list[0].employeeId,null);assert.equal(calls.list[0].kind,null);assert.equal(calls.list[0].status,null)
+  assert.equal(calls.list[0].startDate,undefined);assert.equal(calls.list[0].endDate,undefined)
+  assert.equal(page.rows.value.length,2);assert.ok(page.statuses.value.includes('APPLIED'))
+  await page.exportRows()
+  assert.deepEqual(calls.export[0],calls.list[0])
+  assert.deepEqual(csv[0][2].map(row=>row.kindLabel),['结算后差额','未结算重算历史'])
+  page.query.kind='RECALC';page.query.status='APPLIED';page.query.pageNum=3
+  assert.deepEqual(page.statuses.value,['APPLIED'])
+  await page.resetQuery()
+  assert.equal(calls.list.at(-1).kind,null);assert.equal(calls.list.at(-1).status,null);assert.equal(calls.list.at(-1).pageNum,1)
 })

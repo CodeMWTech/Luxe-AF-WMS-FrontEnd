@@ -13,7 +13,7 @@
           <el-input v-model="employeeKeyword" clearable :placeholder="tr('搜索主播 / 直播运营')">
             <template #prefix><el-icon><Search /></el-icon></template>
           </el-input>
-          <el-checkbox :model-value="!includeInactive" @change="includeInactive = !$event; resetEmployeeSelection()">隐藏已离职主播</el-checkbox>
+          <el-checkbox :model-value="!includeInactive" @change="includeInactive = !$event; resetEmployeeSelection()">隐藏已归档主播</el-checkbox>
         </div>
         <div v-loading="loading" class="employee-list">
           <button v-for="employee in filteredEmployees" :key="employee.value" type="button" class="employee-item" :class="{ active: selectedEmployeeId === employee.value }" @click="selectEmployee(employee.value)">
@@ -39,7 +39,7 @@
             <div class="summary-main">
               <span class="summary-avatar">{{ initial(selectedEmployee.label) }}</span>
               <div><h3>{{ selectedEmployee.label }} <el-tag v-if="selectedEmployee.employeeStatus >= 2" type="info">{{ employeeStatusLabel(selectedEmployee.employeeStatus) }}</el-tag></h3>
-              <el-button link type="warning" v-hasPermi="['wms:employee:edit']" @click="openDeparture">{{ selectedEmployee.employeeStatus >= 2 ? '核实离职日期' : '标记离职' }}</el-button><p>{{ selectedEmployee.nickName ? selectedEmployee.nickName + ' · ' : '' }}{{ employeeSummaryText }}</p></div>
+              <el-button v-if="Number(selectedEmployee.employeeStatus) === 3" link type="warning" v-hasPermi="['wms:employee:edit']" @click="openDeparture">核实离职日期</el-button><el-button v-else link type="warning" v-hasPermi="['wms:employee:archive']" @click="openDeparture">离职归档</el-button><p>{{ selectedEmployee.nickName ? selectedEmployee.nickName + ' · ' : '' }}{{ employeeSummaryText }}</p></div>
             </div>
             <div class="live-actions">
               <el-button size="small" @click="setAllGroups(0)">{{ tr('全部启用') }}</el-button>
@@ -128,7 +128,7 @@
       <template #footer><el-button @click="dialog.open = false">{{ tr('取消') }}</el-button><el-button type="primary" :loading="dialog.loading" @click="submit">{{ tr('保存') }}</el-button></template>
     </el-dialog>
 
-    <el-dialog v-model="departure.open" title="主播离职信息" width="500px">
+    <el-dialog v-model="departure.open" :title="departure.archived ? '核实离职日期' : '主播离职归档'" width="500px">
       <el-form label-width="100px"><el-form-item label="离职日期"><el-date-picker v-model="departure.date" type="date" value-format="YYYY-MM-DD" :format="LIVE_DATE_FORMAT" /></el-form-item><el-form-item label="说明"><el-input v-model="departure.reason" type="textarea" maxlength="500" /></el-form-item></el-form>
       <template #footer><el-button @click="departure.open=false">取消</el-button><el-button type="primary" :disabled="!departure.date || !departure.reason.trim()" :loading="departure.saving" @click="submitDeparture">确认</el-button></template>
     </el-dialog>
@@ -147,11 +147,11 @@
         <el-icon><WarningFilled /></el-icon>
         <div>
           <strong>{{ impactDialog.rows.length ? `本次涉及 ${impactDialog.rows.length} 条开播记录，请按结算状态核对处理方式` : '本次修改不会影响已有开播记录' }}</strong>
-          <p>{{ impactDialog.rows.length ? '未结算记录重算；已结算原记录锁定，差额生成待确认调整；待核实记录需先核实结算。' : '确认后将仅保存费率配置。' }} 影响范围仅限当前直播平台，不会自动覆盖其他直播平台。</p>
+          <p>{{ impactDialog.rows.length ? '未结算记录重算；已结算原记录锁定，差额生成待确认调整。' : '确认后将仅保存费率配置。' }} 影响范围仅限当前直播平台，不会自动覆盖其他直播平台。</p>
         </div>
       </div>
       <el-table v-if="impactDialog.rows.length" :data="impactDialog.rows" max-height="440" stripe border>
-        <el-table-column label="处理方式" width="130"><template #default="s">{{ s.row.settlementStatus === 'SETTLED' ? '原单锁定，新增调整' : s.row.settlementStatus === 'UNKNOWN' ? '待核实，禁止变更' : '重算未结算记录' }}</template></el-table-column>
+        <el-table-column label="处理方式" width="130"><template #default="s">{{ s.row.settlementStatus === 'SETTLED' ? '原单锁定，新增调整' : '重算未结算记录' }}</template></el-table-column>
         <el-table-column label="已有调整" width="110"><template #default="s">{{ money(s.row.previousAdjustments) }}</template></el-table-column>
         <el-table-column label="本次差额" width="110"><template #default="s">{{ money(s.row.adjustmentAmount) }}</template></el-table-column>
         <el-table-column prop="streamDate" label="开播日期" width="120"><template #default="s">{{ displayDate(s.row.streamDate) }}</template></el-table-column>
@@ -162,7 +162,7 @@
         <el-table-column label="基础工资" min-width="150"><template #default="s"><div class="amount-change"><span>{{ money(s.row.oldBaseAmount) }}</span><b>→</b><strong>{{ money(s.row.newBaseAmount) }}</strong></div></template></el-table-column>
         <el-table-column label="总工资" min-width="150"><template #default="s"><div class="amount-change"><span>{{ money(s.row.oldTotalAmount) }}</span><b>→</b><strong>{{ money(s.row.newTotalAmount) }}</strong></div></template></el-table-column>
       </el-table>
-      <template #footer><el-button :disabled="impactDialog.saving" @click="impactDialog.open = false">返回修改</el-button><el-button type="primary" :disabled="impactDialog.rows.some(row => row.settlementStatus === 'UNKNOWN')" :loading="impactDialog.saving" @click="confirmSubmit">确认修改</el-button></template>
+      <template #footer><el-button :disabled="impactDialog.saving" @click="impactDialog.open = false">返回修改</el-button><el-button type="primary" :loading="impactDialog.saving" @click="confirmSubmit">确认修改</el-button></template>
     </el-dialog>
 
     <el-dialog v-model="syncDialog.open" title="同步费率到其他直播平台" width="1000px" append-to-body>
@@ -180,7 +180,7 @@
       </div>
       <el-form-item label="同步原因"><el-input v-model="syncDialog.changeReason" placeholder="影响历史工资时必填" maxlength="500" /></el-form-item>
       <template v-if="syncDialog.preview">
-        <el-alert title="未结算记录重算；已结算原单保持不变，生成差额调整；待核实历史记录须先核实。" :closable="false" type="info" />
+        <el-alert title="未结算记录重算；已结算原单保持不变，生成差额调整。" :closable="false" type="info" />
         <el-table :data="syncDialog.preview.streamImpacts" max-height="300">
           <el-table-column prop="employeeName" label="主播" /><el-table-column prop="accountLabel" label="目标平台" />
           <el-table-column label="原业务日期"><template #default="s">{{ displayDate(s.row.streamDate) }}</template></el-table-column>
@@ -191,7 +191,7 @@
           <el-table-column label="本次差额"><template #default="s">{{ money(s.row.adjustmentAmount) }}</template></el-table-column>
         </el-table>
       </template>
-      <template #footer><el-button @click="syncDialog.open = false">取消</el-button><el-button :disabled="!syncDialog.targetAccountIds.length" :loading="syncDialog.loading" @click="previewSync">预览影响</el-button><el-button type="primary" :disabled="!syncDialog.preview || syncDialog.preview.streamImpacts.some(row => row.settlementStatus === 'UNKNOWN')" :loading="syncDialog.loading" @click="submitSync">确认同步</el-button></template>
+      <template #footer><el-button @click="syncDialog.open = false">取消</el-button><el-button :disabled="!syncDialog.targetAccountIds.length" :loading="syncDialog.loading" @click="previewSync">预览影响</el-button><el-button type="primary" :disabled="!syncDialog.preview" :loading="syncDialog.loading" @click="submitSync">确认同步</el-button></template>
     </el-dialog>
 
     <UsageConflictDialog v-model="usageDialog.open" :rows="usageDialog.rows" :action="usageDialog.action" :target="usageDialog.target" />
@@ -324,8 +324,8 @@ async function submitSync() {
     await Promise.all([loadRates(),loadGroups()])
   } catch(error) { syncDialog.preview=null; throw error } finally { syncDialog.loading=false }
 }
-const departure = reactive({ open: false, date: '', reason: '', saving: false })
-function openDeparture() { Object.assign(departure, { open: true, date: selectedEmployee.value.departureDate || isoDate(), reason: '', saving: false }) }
+const departure = reactive({ open: false, date: '', reason: '', saving: false, archived: false })
+function openDeparture() { Object.assign(departure, { open: true, date: selectedEmployee.value.departureDate || isoDate(), reason: '', saving: false, archived: Number(selectedEmployee.value.employeeStatus) === 3 }) }
 async function submitDeparture() {
   if (!departure.date || !departure.reason.trim() || departure.saving) return
   departure.saving = true
@@ -333,11 +333,14 @@ async function submitDeparture() {
     const employeeId = selectedEmployeeId.value
     const body = { departureDate: departure.date, reason: departure.reason }
     const { data } = await previewDeparture(employeeId, body)
-    await proxy.$modal.confirm(`确认将 ${data.employeeName} 的离职日期记为 ${displayDate(departure.date)}？默认列表将隐藏该主播，历史资料保留。${data.futureSchedules ? '离职后仍有 ' + data.futureSchedules + ' 条排班，请到排班计划处理。' : ''}`)
+    const message = departure.archived
+      ? `确认将 ${data.employeeName} 的离职日期核实为 ${displayDate(departure.date)}？原归档信息保留。`
+      : `确认将 ${data.employeeName} 离职归档，离职日期为 ${displayDate(departure.date)}？归档后可在 HR 的归档员工列表查看，主播默认列表将隐藏该员工，历史资料保留。`
+    await proxy.$modal.confirm(`${message}${data.futureSchedules ? '离职后仍有 ' + data.futureSchedules + ' 条排班，请到排班计划处理。' : ''}`)
     await markDeparture(employeeId, body)
     departure.open = false
     await loadAll()
-    proxy.$modal.msgSuccess('离职信息已同步至 HR 和主播薪酬')
+    proxy.$modal.msgSuccess(departure.archived ? '离职日期已同步至 HR 和主播薪酬' : '离职归档成功，可在 HR 归档员工列表查看')
   } finally { departure.saving = false }
 }
 function headers() { return [{ key: 'employeeName', label: '主播/运营' }, { key: 'accountLabel', label: '直播平台' }, { key: 'rateTypeName', label: '费率类型' }, { key: 'hourlyRate', label: '时薪' }, { key: 'effectiveDate', label: '生效日期' }, { key: 'expiryDate', label: '失效日期' }, { key: 'status', label: '启用状态' }, { key: 'effectiveStatusLabel', label: '生效状态' }, { key: 'remark', label: '备注' }] }

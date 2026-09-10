@@ -90,10 +90,10 @@ export function downloadCsv(filename, headers, rows) {
 }
 
 export function employeeStatusLabel(value) {
-  return ({ 0: '在职', 1: '试用期', 2: '已离职', 3: '已归档' })[value] || '未知'
+  return ({ 0: '在职', 1: '试用期', 2: '已归档', 3: '已归档' })[value] || '未知'
 }
 export function settlementStatusLabel(value) {
-  return ({ OPEN: '未结算', UNKNOWN: '待核实', SETTLED: '已结算' })[value] || '待核实'
+  return ({ OPEN: '未结算', SETTLED: '已结算' })[value] || '未知状态'
 }
 export function adjustmentStatusLabel(value) {
   return ({ PENDING: '待确认', CONFIRMED: '待结算', SETTLED: '已结算', VOID: '已作废', APPLIED: '已重算' })[value] || value

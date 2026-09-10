@@ -23,7 +23,7 @@
         <el-form-item label="主播"><LiveEmployeeSelect v-model="filters.employeeId"   placeholder="全部主播" :employees="options.employees" /></el-form-item>
         <el-form-item label="费率类型"><el-select v-model="filters.rateTypeId" clearable placeholder="全部类型"><el-option v-for="v in options.rateTypes" :key="v.id" :label="v.typeName" :value="v.id" /></el-select></el-form-item>
         <el-form-item><el-button type="primary" @click="load">查询</el-button><el-button @click="selectMonth(0)">本月</el-button><el-button @click="selectMonth(-1)">上个月</el-button></el-form-item>
-      <el-form-item label="主播状态"><el-select v-model="filters.employeeScope" @change="load"><el-option label="全部" value="ALL" /><el-option label="在职/试用期" value="ACTIVE" /><el-option label="已离职/归档" value="INACTIVE" /></el-select></el-form-item></el-form>
+      <el-form-item label="主播状态"><el-select v-model="filters.employeeScope" @change="load"><el-option label="全部" value="ALL" /><el-option label="在职/试用期" value="ACTIVE" /><el-option label="已归档" value="INACTIVE" /></el-select></el-form-item></el-form>
     </el-card>
 
     <div class="metric-grid" v-loading="loading">

@@ -16,7 +16,7 @@
           <el-form-item label="直播平台"><el-select v-model="query.accountId" clearable placeholder="全部直播平台"><el-option v-for="v in options.accounts" :key="v.id" :label="accountLabel(v)" :value="v.id" /></el-select></el-form-item>
           <el-form-item label="场次"><el-select v-model="query.rateTypeId" clearable placeholder="全部场次"><el-option v-for="v in options.rateTypes" :key="v.id" :label="v.typeName" :value="v.id" /></el-select></el-form-item>
           <el-form-item class="query-action"><el-button type="primary" @click="load">查询</el-button></el-form-item>
-        <el-form-item label="主播状态"><el-select v-model="query.employeeScope" @change="query.pageNum = 1; load()"><el-option label="全部" value="ALL" /><el-option label="在职/试用期" value="ACTIVE" /><el-option label="已离职/归档" value="INACTIVE" /></el-select></el-form-item></el-form>
+        <el-form-item label="主播状态"><el-select v-model="query.employeeScope" @change="query.pageNum = 1; load()"><el-option label="全部" value="ALL" /><el-option label="在职/试用期" value="ACTIVE" /><el-option label="已归档" value="INACTIVE" /></el-select></el-form-item></el-form>
         <el-radio-group v-model="view" class="view-switch">
           <el-radio-button label="calendar">日历</el-radio-button>
           <el-radio-button label="list">列表</el-radio-button>
