@@ -11,6 +11,7 @@ async function sourceModule(path) {
 const shared=await sourceModule('../src/views/wms/live/shared.js')
 const display=await sourceModule('../src/views/wms/live/settlements/settlementDisplay.js')
 async function setup(file, modules, props={}) {
+  modules={ '../useLiveI18n':{useLiveI18n:()=>({tr:(text,values=[])=>text.replace(/\{(\d+)\}/g,(_,i)=>values[i]),isEn:vue.ref(false),messageNode:text=>text})}, ...modules }
   const source=await readFile(new URL('../src/views/wms/live/'+file,import.meta.url),'utf8')
   const {descriptor}=parse(source)
   const compiled=compileScript(descriptor,{id:'payroll-test'}).content
@@ -205,7 +206,7 @@ test('manual entry saves independent business and posting dates, employee, accou
   const page=await manualDialog({addManualAdjustment:async body=>calls.push(body)})
   await page.open({},'10')
   assert.equal(page.dialog.open,true)
-  assert.deepEqual(Object.keys(page.rules),['businessDate','postingDate','employeeId','accountId'])
+  assert.deepEqual(Object.keys(page.rules.value),['businessDate','postingDate','employeeId','accountId'])
   assert.equal(calls.length,0)
   const postingDate=page.dialog.form.postingDate
   assert.equal(postingDate,shared.isoDate())
@@ -270,4 +271,55 @@ test('manual sources retain exact IDs and special detail snapshots through settl
   const edit=await manualDialog()
   await edit.open(snapshot.manualAdjustments[0])
   assert.equal(edit.dialog.form.postingDate,'2026-08-02')
+})
+
+test('automatic settlement previews use the latest date when responses arrive out of order',async()=>{
+  const requests=[],writes=[]
+  const page=await setup('settlements/index.vue',{
+    vue:vueModule,'./ManualAdjustmentDialog.vue':{},'../components/LiveEmployeeSelect.vue':{},'../shared':shared,'./settlementDisplay':display,
+    '@/api/wms/livePayroll':{
+      previewSettlement:body=>new Promise(resolve=>requests.push({body,resolve})),
+      confirmSettlement:async body=>writes.push(body),
+      listSettlementCandidates:async()=>({data:{}}),listSettlements:async()=>({rows:[],total:0})
+    }
+  })
+  page.review.command={employeeId:'1',streamIds:['50'],requestKey:'same-request'}
+  page.review.remark='已核对'
+  page.review.date='2026-08-01'
+  const first=page.refreshPreview()
+  page.review.date='2026-08-02'
+  const second=page.refreshPreview()
+  assert.equal(requests[0].body.settlementDate,'2026-08-01')
+  assert.equal(requests[1].body.settlementDate,'2026-08-02')
+  await page.submit();assert.equal(writes.length,0)
+  requests[1].resolve({data:{token:'latest',totalAmount:200}})
+  await second
+  assert.equal(page.review.preview.token,'latest');assert.equal(page.review.loading,false)
+  requests[0].resolve({data:{token:'stale',totalAmount:100}})
+  await first
+  assert.equal(page.review.preview.token,'latest')
+  await page.submit()
+  assert.equal(writes[0].settlementDate,'2026-08-02');assert.equal(writes[0].token,'latest')
+})
+
+test('a failed automatic preview blocks confirmation until a date change succeeds',async()=>{
+  let fail=true,requests=0,writes=0
+  const page=await setup('settlements/index.vue',{
+    vue:vueModule,'./ManualAdjustmentDialog.vue':{},'../components/LiveEmployeeSelect.vue':{},'../shared':shared,'./settlementDisplay':display,
+    '@/api/wms/livePayroll':{
+      previewSettlement:async()=>{requests++;if(fail)throw new Error('Network failure');return {data:{token:'fresh'}}},
+      confirmSettlement:async()=>{writes++}
+    }
+  })
+  page.review.command={employeeId:'1'};page.review.remark='已核对';page.review.preview={token:'old'}
+  await assert.rejects(page.refreshPreview(),/Network failure/)
+  assert.equal(page.review.preview,null);assert.equal(page.review.loading,false)
+  await page.submit();assert.equal(writes,0)
+  fail=false;page.review.date='2026-08-02'
+  await page.refreshPreview()
+  assert.equal(page.review.preview.token,'fresh')
+  page.review.date=null
+  await page.refreshPreview()
+  assert.equal(requests,2);assert.equal(page.review.preview,null);assert.equal(page.review.loading,false)
+  await page.submit();assert.equal(writes,0)
 })

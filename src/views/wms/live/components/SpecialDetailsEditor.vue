@@ -1,31 +1,33 @@
 <template>
   <div class="special-details">
-    <div v-if="modelValue.length" class="special-detail-header"><span>类型 <i>*</i></span><span>金额 <i>*</i></span><span>备注</span><span></span></div>
+    <div v-if="modelValue.length" class="special-detail-header"><span>{{ tr('类型') }} <i>*</i></span><span>{{ tr('金额') }} <i>*</i></span><span>{{ tr('备注') }}</span><span></span></div>
     <div v-for="(item, index) in modelValue" :key="index" class="special-detail-row">
       <div class="special-field" :class="{ 'is-error': item.typeError }">
-        <el-select v-model="item.typeId" placeholder="请选择类型" @change="handleTypeChange(item)"><el-option v-for="type in availableTypes" :key="type.id" :label="type.typeName" :value="type.id" /></el-select>
-        <span v-if="item.typeError" class="special-error">请选择类型</span>
+        <el-select v-model="item.typeId" :placeholder="tr('请选择类型')" @change="handleTypeChange(item)"><el-option v-for="type in availableTypes" :key="type.id" :label="type.typeName" :value="type.id" /></el-select>
+        <span v-if="item.typeError" class="special-error">{{ tr('请选择类型') }}</span>
       </div>
       <div class="special-field" :class="{ 'is-error': item.amountError }">
-        <el-input-number v-model="item.amount" :controls="false" :min="amountMin(item)" :precision="2" placeholder="请输入金额" @change="handleAmountChange(item)" />
-        <span v-if="item.amountError" class="special-error">金额为必填项</span>
+        <el-input-number v-model="item.amount" :controls="false" :min="amountMin(item)" :precision="2" :placeholder="tr('请输入金额')" @change="handleAmountChange(item)" />
+        <span v-if="item.amountError" class="special-error">{{ tr('金额为必填项') }}</span>
       </div>
-      <el-input v-model="item.remark" class="special-remark" placeholder="请输入备注" />
-      <el-button type="danger" link @click="remove(index)">删除</el-button>
+      <el-input v-model="item.remark" class="special-remark" :placeholder="tr('请输入备注')" />
+      <el-button type="danger" link @click="remove(index)">{{ tr('删除') }}</el-button>
     </div>
-    <div v-if="!modelValue.length" class="special-empty">暂无特殊明细</div>
-    <el-button class="add-special-button" plain type="primary" @click="add">+ 新增特殊明细</el-button>
+    <div v-if="!modelValue.length" class="special-empty">{{ tr('暂无特殊明细') }}</div>
+    <el-button class="add-special-button" plain type="primary" @click="add">{{ tr('+ 新增特殊明细') }}</el-button>
   </div>
 </template>
 <script setup>
+import { useLiveI18n } from '../useLiveI18n'
 import { computed } from 'vue'
 import { specialCategory, normalizeSpecialInput, isSpecialAmountEmpty } from './specialDetails'
+const { tr } = useLiveI18n()
 const props = defineProps({ modelValue: { type: Array, default: () => [] }, types: { type: Array, default: () => [] }, required: Boolean })
 const emit = defineEmits(['update:modelValue'])
 const availableTypes = computed(() => {
   const types = [...props.types]
   for (const item of props.modelValue) {
-    if (item.typeId && !types.some(type => String(type.id) === String(item.typeId))) types.push({ id: item.typeId, typeName: item.typeName || '已停用类型', category: item.category })
+    if (item.typeId && !types.some(type => String(type.id) === String(item.typeId))) types.push({ id: item.typeId, typeName: item.typeName || tr('已停用类型'), category: item.category })
   }
   return types
 })

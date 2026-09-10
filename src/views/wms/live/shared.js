@@ -61,11 +61,11 @@ export function accountLabel(account) {
   return `[${account.accountCode}] ${account.displayName}`
 }
 
-export function liveEmployeeOptionLabel(option) {
+export function liveEmployeeOptionLabel(option, tr = text => text) {
   if (!option) return ''
   const name = option.label || ''
   const label = option.nickName ? `${name} (${option.nickName})` : name
-  return Number(option.employeeStatus) >= 2 ? `${label} · ${employeeStatusLabel(option.employeeStatus)}` : label
+  return Number(option.employeeStatus) >= 2 ? `${label} · ${tr(employeeStatusLabel(option.employeeStatus))}` : label
 }
 
 export function matchLiveEmployee(option, keyword) {
