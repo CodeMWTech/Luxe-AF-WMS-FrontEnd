@@ -1,6 +1,6 @@
 <template>
   <div class="live-page">
-    <div class="live-hero"><div><h2>薪酬结算</h2><p>按明确选择的开播、佣金及已确认调整结算，原单和快照永久保留</p></div></div>
+    <div class="live-hero"><div><h2>薪酬结算</h2><p>按明确选择的开播、佣金及已确认调整结算，原单和快照永久保留；支持仅特殊金额的薪酬调整</p></div></div>
     <el-card class="live-filter" shadow="never">
       <el-form inline>
         <el-form-item label="主播"><LiveEmployeeSelect v-model="query.employeeId" :employees="options.employees" placeholder="全部主播" @change="resetCandidates" /></el-form-item>
@@ -11,6 +11,7 @@
     <el-card shadow="never" class="live-card">
       <div class="live-actions">
         <el-button v-hasPermi="['wms:live:settlement:confirm']" :disabled="!selection.length" @click="prepare">结算所选明细</el-button>
+        <el-button v-hasPermi="['wms:live:settlement:confirm']" @click="manualDialog.open({}, query.employeeId)">薪酬调整（仅特殊金额）</el-button>
         <span>已选 {{ selection.length }} 条 · {{ money(selectedAmount) }}</span>
       </div>
       <el-table :data="candidates" v-loading="loading" row-key="key" @selection-change="selection = $event">
@@ -23,6 +24,7 @@
         <el-table-column prop="description" label="说明" min-width="200" />
         <el-table-column label="状态" width="110"><template #default="s">{{ s.row.type === 'ADJUSTMENT' ? adjustmentStatusLabel(s.row.status) : settlementStatusLabel(s.row.status) }}</template></el-table-column>
         <el-table-column label="金额" width="130"><template #default="s">{{ money(s.row.amount) }}</template></el-table-column>
+        <el-table-column label="操作" width="130"><template #default="s"><template v-if="s.row.type === 'MANUAL' && s.row.status === 'OPEN'"><el-button v-hasPermi="['wms:live:settlement:confirm']" link type="primary" @click="manualDialog.open(s.row.manualAdjustment)">编辑</el-button><el-button v-hasPermi="['wms:live:settlement:confirm']" link type="danger" @click="removeManual(s.row)">删除</el-button></template></template></el-table-column>
       </el-table>
     </el-card>
     <el-card class="live-card" shadow="never" style="margin-top:20px">
@@ -38,6 +40,7 @@
       </el-table>
       <pagination v-show="batchTotal > 0" :total="batchTotal" v-model:page="batchQuery.pageNum" v-model:limit="batchQuery.pageSize" @pagination="loadBatches" />
     </el-card>
+    <ManualAdjustmentDialog ref="manualDialog" @saved="loadCandidates" />
     <el-dialog v-model="review.open" title="确认结算" width="1050px" :close-on-click-modal="false" :close-on-press-escape="!review.saving" :show-close="!review.saving">
       <el-form label-width="100px">
         <el-form-item label="结算日期"><el-date-picker v-model="review.date" type="date" value-format="YYYY-MM-DD" :format="LIVE_DATE_FORMAT" @change="review.preview = null" /></el-form-item>
@@ -46,7 +49,7 @@
       <el-button :loading="review.loading" style="margin:12px 0" @click="refreshPreview">核对金额</el-button>
       <template v-if="review.preview">
         <el-table :data="flatten(review.preview)" max-height="340">
-          <el-table-column prop="typeLabel" label="来源" width="90" /><el-table-column label="日期"><template #default="s">{{ displayDate(s.row.businessDate) }}</template></el-table-column><el-table-column prop="accountLabel" label="平台" /><el-table-column prop="description" label="说明" /><el-table-column label="金额"><template #default="s">{{ money(s.row.amount) }}</template></el-table-column>
+          <el-table-column prop="typeLabel" label="来源" width="90" /><el-table-column label="业务日期" width="125"><template #default="s">{{ displayDate(s.row.businessDate) }}</template></el-table-column><el-table-column label="入账日期" width="125"><template #default="s">{{ displayDate(s.row.postingDate) }}</template></el-table-column><el-table-column prop="accountLabel" label="平台" /><el-table-column prop="description" label="说明" /><el-table-column label="金额"><template #default="s">{{ money(s.row.amount) }}</template></el-table-column>
         </el-table>
         <p>开播 {{ money(review.preview.streamAmount) }} ＋ 佣金 {{ money(review.preview.commissionAmount) }} ＋ 调整 {{ money(review.preview.adjustmentAmount) }} ＝ <strong>{{ money(review.preview.totalAmount) }}</strong></p>
       </template>
@@ -56,7 +59,7 @@
       <template v-if="detail.batch">
         <p>{{ detail.batch.settlementNo }} · {{ detail.batch.employeeName }} · {{ displayDate(detail.batch.settlementDate) }} · {{ money(detail.batch.totalAmount) }}</p>
         <p>确认人：{{ detail.batch.confirmedBy }}；说明：{{ detail.batch.remark }}；支付凭据：{{ detail.batch.paymentReference || '未登记' }}</p>
-        <el-table :data="detail.rows" max-height="480"><el-table-column prop="typeLabel" label="来源" width="90" /><el-table-column prop="id" label="原记录编号" min-width="180" /><el-table-column label="业务日期"><template #default="s">{{ displayDate(s.row.businessDate) }}</template></el-table-column><el-table-column prop="accountLabel" label="平台" /><el-table-column prop="description" label="说明" /><el-table-column label="金额"><template #default="s">{{ money(s.row.amount) }}</template></el-table-column></el-table>
+        <el-table :data="detail.rows" max-height="480"><el-table-column prop="typeLabel" label="来源" width="90" /><el-table-column prop="id" label="原记录编号" min-width="180" /><el-table-column label="业务日期" width="125"><template #default="s">{{ displayDate(s.row.businessDate) }}</template></el-table-column><el-table-column label="入账日期" width="125"><template #default="s">{{ displayDate(s.row.postingDate) }}</template></el-table-column><el-table-column prop="accountLabel" label="平台" /><el-table-column prop="description" label="说明" /><el-table-column label="金额"><template #default="s">{{ money(s.row.amount) }}</template></el-table-column></el-table>
       </template>
       <template #footer><el-button @click="exportBatch">导出本批次</el-button><el-button @click="detail.open=false">关闭</el-button></template>
     </el-dialog>
@@ -64,7 +67,8 @@
 </template>
 <script setup>
 import { computed, getCurrentInstance, onMounted, onActivated, reactive, ref } from 'vue'
-import { getLiveOptions, listSettlementCandidates, previewSettlement, confirmSettlement, listSettlements, getSettlement, markSettlementPaid } from '@/api/wms/livePayroll'
+import { getLiveOptions, listSettlementCandidates, previewSettlement, confirmSettlement, listSettlements, getSettlement, markSettlementPaid, deleteManualAdjustment } from '@/api/wms/livePayroll'
+import ManualAdjustmentDialog from './ManualAdjustmentDialog.vue'
 import LiveEmployeeSelect from '../components/LiveEmployeeSelect.vue'
 import { money, displayDate, isoDate, LIVE_DATE_FORMAT, settlementStatusLabel, adjustmentStatusLabel, downloadCsv } from '../shared'
 import { flattenSettlement, selectedSettlementIds, selectedSettlementScope } from './settlementDisplay'
@@ -73,6 +77,7 @@ const query = reactive({ employeeId: null }), options = reactive({ employees: []
 const loading = ref(false), batchLoading = ref(false), candidates = ref([]), selection = ref([]), batches = ref([]), batchTotal = ref(0)
 const batchQuery = reactive({ pageNum: 1, pageSize: 20 })
 const review = reactive({ open: false, date: isoDate(), remark: '', loading: false, saving: false, preview: null, command: null })
+const manualDialog = ref()
 const detail = reactive({ open: false, batch: null, rows: [] })
 const selectedAmount = computed(() => selection.value.reduce((total, row) => total + Number(row.amount), 0))
 const flatten = flattenSettlement
@@ -112,6 +117,12 @@ async function submit() {
     proxy.$modal.msgSuccess('结算批次已保存，原记录已锁定')
     await Promise.all([loadCandidates(), loadBatches()])
   } finally { review.saving=false }
+}
+async function removeManual(row) {
+  await proxy.$modal.confirm(`确认删除 ${row.employeeName} ${displayDate(row.businessDate)} 的薪酬调整？`)
+  await deleteManualAdjustment(row.id)
+  proxy.$modal.msgSuccess('删除成功')
+  await loadCandidates()
 }
 async function showBatch(id) { const { data }=await getSettlement(id); detail.batch=data; detail.rows=flatten(JSON.parse(data.snapshotJson)); detail.open=true }
 async function registerPayment(row) {

@@ -46,25 +46,7 @@
         <div class="stream-form-section">
           <div class="stream-section-title stream-special-title"><span>3</span><div><strong>特殊明细</strong><small>记录补贴、扣款或其他特殊金额</small></div><div class="special-total">合计 <strong>{{ money(specialTotal) }}</strong></div></div>
           <el-form-item class="special-details-item">
-            <div class="special-details">
-              <div v-if="dialog.specials.length" class="special-detail-header">
-                <span>{{ tr('类型') }}</span>
-                <span class="special-required-label">{{ tr('金额') }} <i>*</i></span>
-                <span>{{ tr('备注') }}</span>
-                <span></span>
-              </div>
-              <div v-for="(item,index) in dialog.specials" :key="index" class="special-detail-row">
-                <el-select v-model="item.typeId" placeholder="请选择类型" @change="normalizeSpecialInput(item)"><el-option v-for="v in options.specialTypes" :key="v.id" :label="tr(v.typeName)" :value="v.id" /></el-select>
-                <div class="special-amount-field" :class="{ 'is-error': item.amountError }">
-                  <el-input-number v-model="item.amount" :controls="false" :min="specialAmountMin(item)" :precision="2" :placeholder="tr('请输入金额')" @change="handleSpecialAmountChange(item)" />
-                  <span v-if="item.amountError" class="special-amount-error">{{ tr('金额为必填项') }}</span>
-                </div>
-                <el-input v-model="item.remark" placeholder="请输入备注" />
-                <el-button type="danger" link @click="dialog.specials.splice(index,1)">{{ tr('删除') }}</el-button>
-              </div>
-              <div v-if="!dialog.specials.length" class="special-empty">暂无特殊明细</div>
-              <el-button class="add-special-button" plain type="primary" @click="addSpecialDetail">+ 新增特殊明细</el-button>
-            </div>
+            <SpecialDetailsEditor ref="specialEditor" v-model="dialog.specials" :types="options.specialTypes" />
           </el-form-item>
         </div>
 
@@ -78,6 +60,8 @@
 </template>
 
 <script setup>
+import SpecialDetailsEditor from '../components/SpecialDetailsEditor.vue'
+import { normalizeSpecialInput as normalizeSpecial, specialTotal as sumSpecials, serializeSpecialDetails } from '../components/specialDetails'
 import LiveEmployeeSelect from '../components/LiveEmployeeSelect.vue'
 import LiveEmployeeName from '../components/LiveEmployeeName.vue'
 import { onActivated, computed, getCurrentInstance, onMounted, reactive, ref } from 'vue'
@@ -89,7 +73,7 @@ import { settlementStatusLabel, accountLabel, displayDate, isoDate, liveEmployee
 const settingsStore=useSettingsStore(),tr=(text)=>translateByMap(text,settingsStore.language||'zh-cn')
 const userStore = useUserStore()
 const { proxy } = getCurrentInstance()
-const loading = ref(false), rows = ref([]), total = ref(0), formRef = ref()
+const loading = ref(false), rows = ref([]), total = ref(0), formRef = ref(), specialEditor = ref()
 const dateRange = ref(null), options = reactive({ employees: [], accounts: [], rateTypes: [], specialTypes: [] })
 const query = reactive({ employeeScope: 'ALL', pageNum: 1, pageSize: 20, keyword: '', employeeId: null, accountId: null, rateTypeId: null })
 const dialog = reactive({ open: false, form: {}, specials: [], rateTypes: [], schedules: [], loadingRateTypes: false, loadingSchedule: false, scheduleMissing: false, submitting: false })
@@ -104,7 +88,7 @@ const rateTypePlaceholder = computed(() => {
 })
 const validateEndTime = (_rule, value, callback) => { if (!value) return callback(new Error('请选择结束时间')); if (dialog.form.startTime === value) return callback(new Error('结束时间不能等于开始时间')); callback() }
 const rules = { streamDate: [{ required: true, message: '请选择日期' }], employeeId: [{ required: true, message: '请选择主播' }], accountId: [{ required: true, message: '请选择直播平台' }], rateTypeId: [{ required: true, message: '请选择费率类型' }], startTime: [{ required: true, message: '请选择开始时间' }], endTime: [{ required: true, message: '请选择结束时间' }, { validator: validateEndTime, trigger: 'change' }] }
-const specialTotal = computed(() => dialog.specials.reduce((sum, item) => sum + signedSpecialAmount(item), 0))
+const specialTotal = computed(() => sumSpecials(dialog.specials, options.specialTypes))
 const streamDurationText = computed(() => {
   const startMinutes = timeInMinutes(dialog.form.startTime)
   const endMinutes = timeInMinutes(dialog.form.endTime)
@@ -203,24 +187,12 @@ async function openDialog(row = {}) {
   await Promise.all([refreshStreamRateTypes(), refreshStreamSchedule()])
   if (!row.id) applyScheduledDefaults()
 }
-function specialCategory(item) { return options.specialTypes.find(type => String(type.id) === String(item.typeId))?.category }
-function specialAmountMin(item) { return ['DEDUCTION', 'SUBSIDY'].includes(specialCategory(item)) ? 0 : undefined }
-function normalizeSpecialInput(item) { if (['DEDUCTION', 'SUBSIDY'].includes(specialCategory(item)) && Number(item.amount) < 0) item.amount = Math.abs(Number(item.amount)) }
-function addSpecialDetail() { dialog.specials.push({ typeId:null, amount:null, remark:'', amountError:false }) }
-function isSpecialAmountEmpty(item) { return item.amount === null || item.amount === undefined || item.amount === '' }
-function handleSpecialAmountChange(item) { normalizeSpecialInput(item); if (!isSpecialAmountEmpty(item)) item.amountError = false }
-function validateSpecialAmounts() {
-  let valid = true
-  dialog.specials.forEach(item => { item.amountError = isSpecialAmountEmpty(item); if (item.amountError) valid = false })
-  if (!valid) proxy.$modal.msgWarning(tr('请输入特殊明细金额，或删除该特殊明细'))
-  return valid
-}
-function signedSpecialAmount(item) { if (isSpecialAmountEmpty(item)) return 0; const amount = Number(item.amount); if (!Number.isFinite(amount)) return 0; const category = specialCategory(item); if (category === 'DEDUCTION') return -Math.abs(amount); if (category === 'SUBSIDY') return Math.abs(amount); return amount }
+function normalizeSpecialInput(item) { normalizeSpecial(item, options.specialTypes) }
 async function submit() {
   const valid = await formRef.value.validate().catch(() => false)
-  if (!valid || !validateSpecialAmounts()) return
-  const specials = dialog.specials.map(({ amountError, ...item }) => ({ ...item, amount: signedSpecialAmount(item) }))
-  const payload = { ...dialog.form, specialAmount: specialTotal.value, specialDetails: JSON.stringify(specials) }
+  if (!valid) return
+  if (!specialEditor.value.validate()) { proxy.$modal.msgWarning(tr('请填写特殊明细类型和金额，或删除该明细')); return }
+  const payload = { ...dialog.form, specialAmount: specialTotal.value, specialDetails: serializeSpecialDetails(dialog.specials, options.specialTypes) }
   dialog.submitting = true
   try {
     await (payload.id ? updateStream(payload) : addStream(payload))
@@ -287,22 +259,10 @@ onActivated(async () => { Object.assign(options, await getLiveOptions()) })
   .manual-rate-control strong { color: var(--el-text-color-primary); font-size: 13px; }
   .manual-rate-control small { color: var(--el-text-color-secondary); font-size: 12px; line-height: 17px; }
   .hourly-rate-item { margin-bottom: 0; }
-  .special-details { width: 100%; }
   .stream-special-title { margin-bottom: 14px; }
   .special-total { margin-left: auto; color: var(--el-text-color-secondary); font-size: 13px; white-space: nowrap; }
   .special-total strong { margin-left: 6px; color: var(--el-text-color-primary); font-size: 15px; }
   .special-details-item { margin-bottom: 0; }
-  .special-detail-header { display: grid; grid-template-columns: 180px 160px minmax(180px, 1fr) 44px; gap: 10px; margin-bottom: 6px; padding: 0 2px; color: var(--el-text-color-secondary); font-size: 12px; line-height: 18px; }
-  .special-required-label i { color: var(--el-color-danger); font-style: normal; }
-  .special-detail-row { display: grid; grid-template-columns: 180px 160px minmax(180px, 1fr) 44px; align-items: start; gap: 10px; margin-bottom: 10px; }
-  .special-amount-field { position: relative; }
-  .special-amount-field.is-error { padding-bottom: 18px; }
-  .special-amount-field .el-input-number { width: 100%; }
-  .special-amount-field .el-input__inner { text-align: left; }
-  .special-amount-field.is-error .el-input__wrapper { box-shadow: 0 0 0 1px var(--el-color-danger) inset; }
-  .special-amount-error { position: absolute; left: 0; bottom: 0; color: var(--el-color-danger); font-size: 12px; line-height: 16px; white-space: nowrap; }
-  .special-empty { display: flex; min-height: 54px; align-items: center; justify-content: center; margin-bottom: 10px; border: 1px dashed var(--el-border-color); border-radius: 6px; color: var(--el-text-color-placeholder); background: var(--el-fill-color-lighter); font-size: 13px; }
-  .add-special-button { width: 100%; border-style: dashed; }
   .stream-remark-section { padding-bottom: 2px; }
   .stream-remark-section .el-form-item { margin-bottom: 16px; }
 
@@ -314,9 +274,6 @@ onActivated(async () => { Object.assign(options, await getLiveOptions()) })
     .stream-info-grid,
     .stream-time-grid,
     .stream-pay-row { grid-template-columns: 1fr; }
-    .special-detail-header { display: none; }
-    .special-detail-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; }
-    .special-detail-row .el-input { grid-column: 1 / -1; grid-row: 2; }
     .special-total { margin-left: 0; }
   }
 }

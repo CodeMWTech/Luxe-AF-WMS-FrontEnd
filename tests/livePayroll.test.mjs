@@ -67,7 +67,7 @@ test('settlement selects exact typed source IDs without losing large integer IDs
     adjustments:[{id:'9',streamDate:'2026-08-01',postingDate:'2026-09-01',amount:'-30.00',status:'CONFIRMED'}]
   })
   assert.equal(new Set(rows.map(r=>r.key)).size,3)
-  assert.deepEqual(display.selectedSettlementIds([rows[0],rows[2]]),{streamIds:[large],commissionIds:[],adjustmentIds:['9']})
+  assert.deepEqual(display.selectedSettlementIds([rows[0],rows[2]]),{streamIds:[large],commissionIds:[],adjustmentIds:['9'],manualAdjustmentIds:[]})
   assert.equal(rows[2].businessDate,'2026-08-01');assert.equal(rows[2].postingDate,'2026-09-01')
 })
 test('settlement sends no write before confirmation, keeps request identity after network failure',async()=>{
@@ -166,4 +166,108 @@ test('adjustments default to all types, statuses and dates and export the same s
   assert.deepEqual(page.statuses.value,['APPLIED'])
   await page.resetQuery()
   assert.equal(calls.list.at(-1).kind,null);assert.equal(calls.list.at(-1).status,null);assert.equal(calls.list.at(-1).pageNum,1)
+})
+
+const specialsModule=await sourceModule('../src/views/wms/live/components/specialDetails.js')
+const specialTypes=[{id:'1',typeName:'补贴',category:'SUBSIDY'},{id:'2',typeName:'扣款',category:'DEDUCTION'},{id:'3',typeName:'其他',category:'OTHER'}]
+
+test('shared special details keep subsidy positive, deduction negative and cents consistent',()=>{
+  const items=[{typeId:1,amount:-10.25},{typeId:'2',amount:5.15},{typeId:'3',amount:-0.10}]
+  specialsModule.normalizeSpecialInput(items[0],specialTypes)
+  assert.equal(items[0].amount,10.25)
+  assert.equal(items[0].typeId,'1')
+  assert.equal(specialsModule.specialTotal(items,specialTypes),5)
+  assert.deepEqual(JSON.parse(specialsModule.serializeSpecialDetails(items,specialTypes)).map(item=>item.amount),[10.25,-5.15,-0.10])
+})
+
+test('shared editor requires types and amounts but accepts an explicit zero amount',async()=>{
+  const props={modelValue:[],types:specialTypes,required:true}
+  const editor=await setup('components/SpecialDetailsEditor.vue',{vue:vueModule,'./specialDetails':specialsModule},props)
+  assert.equal(editor.validate(),false)
+  props.modelValue=[{typeId:'1',amount:null}]
+  assert.equal(editor.validate(),false)
+  assert.equal(props.modelValue[0].amountError,true)
+  props.modelValue[0].amount=0
+  assert.equal(editor.validate(),true)
+  props.modelValue[0].typeId=null
+  assert.equal(editor.validate(),false)
+})
+
+async function manualDialog(api={}) {
+  return setup('settlements/ManualAdjustmentDialog.vue',{
+    vue:vueModule,'../components/LiveEmployeeSelect.vue':{},'../components/SpecialDetailsEditor.vue':{},
+    '../components/specialDetails':specialsModule,'../shared':shared,
+    '@/api/wms/livePayroll':{getLiveOptions:async()=>({employees:[{value:'10',label:'主播 A'}],accounts:[{id:'20'}],specialTypes}),...api}
+  })
+}
+test('manual entry saves independent business and posting dates, employee, account, specials and remark without a live session',async()=>{
+  const calls=[]
+  const page=await manualDialog({addManualAdjustment:async body=>calls.push(body)})
+  await page.open({},'10')
+  assert.equal(page.dialog.open,true)
+  assert.deepEqual(Object.keys(page.rules),['businessDate','postingDate','employeeId','accountId'])
+  assert.equal(calls.length,0)
+  const postingDate=page.dialog.form.postingDate
+  assert.equal(postingDate,shared.isoDate())
+  page.formRef.value={validate:async()=>true}
+  page.specialEditor.value={validate:()=>true}
+  page.dialog.form.businessDate='2026-08-01';page.dialog.form.accountId='20';page.dialog.form.remark='测试补扣'
+  assert.equal(page.dialog.form.postingDate,postingDate)
+  page.dialog.form.postingDate='2026-09-10'
+  page.dialog.specials=[{typeId:'1',amount:100,remark:'奖励'},{typeId:'2',amount:30,remark:'扣款'}]
+  assert.equal(page.total.value,70)
+  await page.save()
+  assert.deepEqual(Object.keys(calls[0]).sort(),['accountId','businessDate','employeeId','postingDate','remark','specialDetails'])
+  assert.equal(calls[0].businessDate,'2026-08-01');assert.equal(calls[0].postingDate,'2026-09-10')
+  assert.deepEqual(JSON.parse(calls[0].specialDetails).map(item=>item.amount),[100,-30])
+  assert.equal(page.dialog.open,false)
+})
+test('manual entry rejects incomplete forms and specials and keeps entered data after a failed save',async()=>{
+  let requests=0
+  const page=await manualDialog({addManualAdjustment:async()=>{requests++;throw new Error('Network failure')}})
+  await page.open()
+  page.formRef.value={validate:async()=>false};page.specialEditor.value={validate:()=>true}
+  await page.save();assert.equal(requests,0)
+  page.formRef.value={validate:async()=>true};page.specialEditor.value={validate:()=>false}
+  await page.save();assert.equal(requests,0)
+  page.specialEditor.value={validate:()=>true};page.dialog.specials=[{typeId:'1',amount:20}]
+  await assert.rejects(page.save(),/Network failure/)
+  assert.equal(page.dialog.open,true);assert.equal(page.dialog.saving,false);assert.equal(page.dialog.specials[0].amount,20)
+})
+test('manual edit restores a deduction as positive input and preserves the record ID when saving',async()=>{
+  const calls=[]
+  const page=await manualDialog({updateManualAdjustment:async(...args)=>calls.push(args)})
+  await page.open({id:'99',employeeId:'10',accountId:'20',businessDate:'2026-08-01',postingDate:'2026-09-01',specialDetails:'[{"typeId":"2","amount":-15,"remark":"扣款"}]'})
+  assert.equal(page.dialog.specials[0].amount,15)
+  assert.equal(page.dialog.form.businessDate,'2026-08-01');assert.equal(page.dialog.form.postingDate,'2026-09-01')
+  page.dialog.form.postingDate='2026-09-10'
+  page.formRef.value={validate:async()=>true};page.specialEditor.value={validate:()=>true}
+  await page.save()
+  assert.equal(calls[0][1].postingDate,'2026-09-10');assert.equal(calls[0][1].businessDate,'2026-08-01')
+  assert.equal(calls[0][0],'99');assert.equal(JSON.parse(calls[0][1].specialDetails)[0].amount,-15)
+})
+test('manual sources retain exact IDs and special detail snapshots through settlement and export',async()=>{
+  const large='2090000000000000123'
+  const snapshot={streams:[{id:large,employeeId:'10',streamDate:'2026-09-01',totalAmount:200,settlementStatus:'OPEN'}],manualAdjustments:[{id:large,employeeId:'10',employeeName:'主播 A',accountLabel:'直播平台 A',businessDate:'2026-08-02',postingDate:'2026-09-10',settlementStatus:'OPEN',amount:-20,specialDetails:'[{"typeName":"扣款","amount":-20,"remark":"原始依据"}]',remark:'薪酬调整说明'}]}
+  const rows=display.flattenSettlement(snapshot)
+  assert.equal(new Set(rows.map(row=>row.key)).size,2)
+  assert.equal(rows[1].typeLabel,'薪酬调整')
+  assert.equal(rows[1].businessDate,'2026-08-02');assert.equal(rows[1].postingDate,'2026-09-10')
+  assert.deepEqual(display.selectedSettlementScope([rows[1]]),{employeeId:'10',startDate:'2026-09-10',endDate:'2026-09-10'})
+  assert.ok(rows[1].description.includes('原始依据'))
+  assert.deepEqual(display.selectedSettlementIds(rows),{streamIds:[large],commissionIds:[],adjustmentIds:[],manualAdjustmentIds:[large]})
+  const exports=[]
+  const page=await setup('settlements/index.vue',{
+    vue:vueModule,'./ManualAdjustmentDialog.vue':{},'../components/LiveEmployeeSelect.vue':{},'../shared':{...shared,downloadCsv:(...args)=>exports.push(args)},'./settlementDisplay':display,
+    '@/api/wms/livePayroll':{getSettlement:async()=>({data:{settlementNo:'LP-1',employeeName:'主播 A',snapshotJson:JSON.stringify(snapshot)}})}
+  })
+  await page.showBatch('1');page.exportBatch()
+  assert.equal(exports[0][2][1].typeLabel,'薪酬调整');assert.equal(exports[0][2][1].amount,-20)
+  assert.ok(exports[0][2][1].description.includes('原始依据'))
+  assert.equal(exports[0][2][1].businessDate,'2026-08-02');assert.equal(exports[0][2][1].postingDate,'2026-09-10')
+  delete snapshot.manualAdjustments[0].postingDate
+  assert.equal(display.flattenSettlement(snapshot)[1].postingDate,'2026-08-02')
+  const edit=await manualDialog()
+  await edit.open(snapshot.manualAdjustments[0])
+  assert.equal(edit.dialog.form.postingDate,'2026-08-02')
 })
