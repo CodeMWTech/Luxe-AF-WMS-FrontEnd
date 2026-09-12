@@ -75,7 +75,7 @@
           <el-col :xs="24" :sm="12" :md="6" :lg="6">
             <el-form-item :label="tr('商品品牌')" prop="itemBrand">
               <el-select
-                v-model="queryParams.itemBrand"
+                v-model="selectedBrandGroups"
                 multiple
                 clearable
                 filterable
@@ -83,10 +83,10 @@
                 style="width: 100%"
               >
                 <el-option
-                  v-for="item in useWmsStore().itemBrandList"
-                  :key="String(item.id)"
+                  v-for="item in brandGroups"
+                  :key="item.id"
                   :label="item.brandName"
-                  :value="String(item.id)"
+                  :value="item.id"
                 />
               </el-select>
             </el-form-item>
@@ -719,7 +719,7 @@ import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
 import { blobValidate } from '@/utils/ruoyi'
 import { formatDateForQuery, formatDateTimeForQuery } from '@/utils/laTime'
-import { formatBrandNames } from '@/utils/itemBrand'
+import { formatBrandNames, parseBrandIdList } from '@/utils/itemBrand'
 import PublishDialog from '@/views/wms/platform/listings/components/PublishDialog.vue'
 const route = useRoute()
 
@@ -860,6 +860,39 @@ const queryParams = ref({
   maxQuantity: undefined,
   orderByColumn: DEFAULT_INVENTORY_SORT.prop,
   isAsc: DEFAULT_INVENTORY_SORT.order
+})
+
+// 与商品管理一致：同名品牌合并显示，保留不同分类下的全部品牌 ID。
+const brandGroups = computed(() => {
+  const groups = new Map()
+  for (const brand of useWmsStore().itemBrandList || []) {
+    if (brand?.id == null || brand.id === '') continue
+    const id = String(brand.id)
+    const brandName = String(brand.brandName || '').trim()
+    const key = brandName ? `name:${brandName}` : `id:${id}`
+    if (!groups.has(key)) {
+      groups.set(key, { id, brandName: brandName || id, brandIds: [] })
+    }
+    const group = groups.get(key)
+    if (!group.brandIds.includes(id)) group.brandIds.push(id)
+  }
+  return [...groups.values()]
+})
+
+const selectedBrandGroups = computed({
+  get() {
+    const selectedIds = new Set(parseBrandIdList(queryParams.value.itemBrand))
+    return brandGroups.value
+      .filter(group => group.brandIds.some(id => selectedIds.has(id)))
+      .map(group => group.id)
+  },
+  set(values) {
+    const selectedGroups = new Set(values)
+    // 列表、仓库汇总和导出均使用这份完整的品牌筛选范围。
+    queryParams.value.itemBrand = brandGroups.value
+      .filter(group => selectedGroups.has(group.id))
+      .flatMap(group => group.brandIds)
+  }
 })
 
 const appliedRouteFilterKey = ref('')
