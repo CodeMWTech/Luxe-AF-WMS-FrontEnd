@@ -223,9 +223,22 @@ const MODULE_SECTIONS = [
   { key: 'insight', categories: ['overview', 'inventory'] },
   { key: 'order', categories: ['order'] },
   { key: 'platform', categories: ['platform'] },
+  { key: 'live', categories: ['live'] },
   { key: 'vendor', categories: ['vendor'] },
   { key: 'basic', categories: ['basic'] },
   { key: 'system', categories: ['system'] },
+]
+
+const LIVE_MODULE_ORDER = [
+  'dashboard',
+  'schedule',
+  'streams',
+  'commissions',
+  'accounts',
+  'rates',
+  'settings',
+  'settlements',
+  'adjustments',
 ]
 
 const router = useRouter()
@@ -348,6 +361,7 @@ const categoryOptions = computed(() => [
   { key: 'inventory', label: t('overviewDashboard.categories.inventory') },
   { key: 'order', label: t('overviewDashboard.categories.order') },
   { key: 'platform', label: t('overviewDashboard.categories.platform') },
+  { key: 'live', label: t('overviewDashboard.categories.live') },
   { key: 'vendor', label: t('overviewDashboard.categories.vendor') },
   { key: 'basic', label: t('overviewDashboard.categories.basic') },
   { key: 'system', label: t('overviewDashboard.categories.system') },
@@ -438,7 +452,19 @@ function normalizeRoutePath(basePath, routePath) {
   return `${base}/${routePath}`.replace(/\/+/g, '/')
 }
 
-function inferCategory(path = '', title = '') {
+function isLivePayrollModule(path = '', title = '', groupTitle = '') {
+  const text = `${path} ${title} ${groupTitle}`.toLowerCase()
+  return /live-payroll|wms\/live|主播薪酬|live payroll/.test(text)
+}
+
+function liveModuleOrder(path = '') {
+  const normalized = String(path || '').toLowerCase()
+  const index = LIVE_MODULE_ORDER.findIndex((segment) => new RegExp(`/${segment}(?:/|$)`).test(normalized))
+  return index === -1 ? LIVE_MODULE_ORDER.length : index
+}
+
+function inferCategory(path = '', title = '', groupTitle = '') {
+  if (isLivePayrollModule(path, title, groupTitle)) return 'live'
   const text = `${path} ${title}`.toLowerCase()
   if (/dashboard|description|数据分析|analysis|chart|概述|overview/.test(text)) return 'overview'
   if (/inventory|库存|unstocked|statistic|history/.test(text)) return 'inventory'
@@ -469,7 +495,7 @@ function collectLeafRoutes(routes, basePath = '', groupTitle = '') {
       title: getTitleByText(route.meta.title, language.value),
       icon: route.meta.icon,
       groupTitle: currentGroup,
-      category: inferCategory(fullPath, route.meta.title),
+      category: inferCategory(fullPath, route.meta.title, currentGroup),
     })
   }
   return items
@@ -495,6 +521,9 @@ const groupedModules = computed(() => {
     items: filteredModules.value
       .filter((item) => section.categories.includes(item.category))
       .sort((a, b) => {
+        if (section.key === 'live') {
+          return liveModuleOrder(a.path) - liveModuleOrder(b.path)
+        }
         const categoryOrder = section.categories.indexOf(a.category) - section.categories.indexOf(b.category)
         if (categoryOrder !== 0) return categoryOrder
         return a.title.localeCompare(b.title, language.value.startsWith('zh') ? 'zh-CN' : 'en')
@@ -506,7 +535,25 @@ function getSectionEnLabel(sectionKey) {
   return t(`overviewDashboard.moduleSectionEn.${sectionKey}`) || t('overviewDashboard.moduleSectionEn.system')
 }
 
+function resolveLiveModuleContentKey(item) {
+  if (!isLivePayrollModule(item.path, item.title, item.groupTitle)) return ''
+  const text = `${item.title} ${item.path}`.toLowerCase()
+  if (/\/dashboard(?:\/|$)|汇总看板/.test(text)) return 'liveDashboard'
+  if (/\/schedule(?:\/|$)|排班计划/.test(text)) return 'liveSchedule'
+  if (/\/streams(?:\/|$)|开播录入/.test(text)) return 'liveStreams'
+  if (/\/commissions(?:\/|$)|佣金管理/.test(text)) return 'liveCommissions'
+  if (/\/accounts(?:\/|$)|直播平台/.test(text)) return 'liveAccounts'
+  if (/\/rates(?:\/|$)|费率配置/.test(text)) return 'liveRates'
+  if (/\/settings(?:\/|$)|系统设置/.test(text)) return 'liveSettings'
+  if (/\/settlements(?:\/|$)|薪酬结算/.test(text)) return 'liveSettlements'
+  if (/\/adjustments(?:\/|$)|薪酬调整/.test(text)) return 'liveAdjustments'
+  return 'live'
+}
+
 function resolveModuleContentKey(item) {
+  const liveKey = resolveLiveModuleContentKey(item)
+  if (liveKey) return liveKey
+
   const text = `${item.title} ${item.path}`.toLowerCase()
 
   if (/chart|dashboard|数据分析|statistic|统计/.test(text)) return 'charts'
@@ -1478,6 +1525,15 @@ function navigateTo(path) {
   .module-icon,
   .module-icon-fallback {
     color: #64748b;
+  }
+}
+
+.module-card-rich--live .module-card-rich__icon {
+  background: #fff1ef;
+
+  .module-icon,
+  .module-icon-fallback {
+    color: #ef5454;
   }
 }
 

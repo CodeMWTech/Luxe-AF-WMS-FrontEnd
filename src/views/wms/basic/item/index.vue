@@ -333,7 +333,8 @@ import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
 import { CircleCheckFilled, UploadFilled } from '@element-plus/icons-vue'
 import { formatDateTimeForQuery } from '@/utils/laTime'
-import { listItemModelBrandOptions, listItemModelMaterialOptions } from '@/api/wms/itemModel'
+import { listItemModel, listItemModelBrandOptions, listItemModelMaterialOptions } from '@/api/wms/itemModel'
+import { listItemMaterial } from '@/api/wms/itemMaterial'
 import { blobValidate } from '@/utils/ruoyi'
 import { downloadXlsx, getExportLanguageHeaders, getExportLanguagePayload, prepareLanguageXlsx } from '@/utils/xlsxTranslate'
 import { saveAs } from 'file-saver'
@@ -684,6 +685,8 @@ const {
 } = useItemNameTags({ queryParams, form })
 
 const modelMaterialIds = ref([]);
+const formModelList = ref([])
+const formMaterialList = ref([])
 /** Brand ids allowed for current form category (legacy originals vs Rebag tree). */
 const formBrandIds = ref([])
 
@@ -728,7 +731,7 @@ const filteredItemModelList = computed(() => {
   const brand = form.value.itemBrand
   const category = form.value.itemCategory
   if (!brand || !category) return []
-  return useWmsStore().itemModelList.filter(item => {
+  return formModelList.value.filter(item => {
     return String(item.itemBrand) === String(brand) && String(item.itemCategory) === String(category)
   })
 })
@@ -739,7 +742,7 @@ const filteredItemMaterialList = computed(() => {
   const model = form.value.modelId
   if (!brand || !category || !model) return []
   const materialIdSet = new Set(modelMaterialIds.value.map(id => String(id)))
-  return useWmsStore().itemMaterialList.filter(item => {
+  return formMaterialList.value.filter(item => {
     const materialModelId = item.modelId
     const brandMatched = String(item.itemBrand) === String(brand)
     const categoryMatched = String(item.itemCategory) === String(category)
@@ -749,15 +752,44 @@ const filteredItemMaterialList = computed(() => {
   })
 })
 
+async function loadFormModels() {
+  const brand = form.value.itemBrand
+  const category = form.value.itemCategory
+  if (!brand || !category) {
+    formModelList.value = []
+    return
+  }
+  try {
+    const res = await listItemModel({
+      status: '1',
+      itemBrand: brand,
+      itemCategory: category
+    })
+    formModelList.value = res.data || []
+  } catch (_) {
+    formModelList.value = []
+  }
+}
+
 async function loadModelMaterialOptions(modelId) {
   if (!modelId) {
     modelMaterialIds.value = []
+    formMaterialList.value = []
     form.value.materialId = undefined
     form.value.material = undefined
     return
   }
-  const res = await listItemModelMaterialOptions(modelId)
-  modelMaterialIds.value = res.data || []
+  try {
+    const [idsRes, listRes] = await Promise.all([
+      listItemModelMaterialOptions(modelId),
+      listItemMaterial({ status: '1', modelId })
+    ])
+    modelMaterialIds.value = idsRes.data || []
+    formMaterialList.value = listRes.data || []
+  } catch (_) {
+    modelMaterialIds.value = []
+    formMaterialList.value = []
+  }
   if (form.value.materialId && modelMaterialIds.value.length > 0 && !modelMaterialIds.value.some(id => String(id) === String(form.value.materialId))) {
     form.value.materialId = undefined
     form.value.material = undefined
@@ -768,25 +800,24 @@ function findSelectOptionById(list, id) {
   return list.find(item => String(item.id) === String(id)) || null
 }
 
-const selectedItemModel = computed(() => findSelectOptionById(useWmsStore().itemModelList, form.value.modelId))
-const selectedItemMaterial = computed(() => findSelectOptionById(useWmsStore().itemMaterialList, form.value.materialId))
+const selectedItemModel = computed(() => findSelectOptionById(formModelList.value, form.value.modelId))
+const selectedItemMaterial = computed(() => findSelectOptionById(formMaterialList.value, form.value.materialId))
 
 watch(
   () => [form.value.itemBrand, form.value.itemCategory],
-  () => {
+  async () => {
     if (!hasItemModelContext.value) {
+      formModelList.value = []
+      formMaterialList.value = []
+      modelMaterialIds.value = []
+      return
+    }
+    const keepModelId = form.value.modelId
+    await loadFormModels()
+    if (keepModelId && !filteredItemModelList.value.some(item => String(item.id) === String(keepModelId))) {
       form.value.modelId = undefined
       form.value.materialId = undefined
       form.value.material = undefined
-      return
-    }
-    if (form.value.modelId) {
-      const exists = filteredItemModelList.value.some(item => String(item.id) === String(form.value.modelId))
-      if (!exists) {
-        form.value.modelId = undefined
-        form.value.materialId = undefined
-        form.value.material = undefined
-      }
     }
   }
 )
@@ -1171,6 +1202,8 @@ const handleDeleteItemSku = async (row, index) => {
   form.value.itemBrand = resolveFormBrandId(form.value.itemBrandIds, form.value.itemBrand)
   form.value.authAgency = parseAuthAgencyList(form.value.authAgency)
   await refreshFormBrandOptions({ keepCurrentBrand: true })
+  await loadFormModels()
+  await loadModelMaterialOptions(form.value.modelId)
 }
 const cancel = () => {
   reset();
@@ -1189,6 +1222,8 @@ const reset = () => {
   form.value = {...initFormData};
   modelMaterialIds.value = [];
   formBrandIds.value = [];
+  formModelList.value = [];
+  formMaterialList.value = [];
   itemFormRef.value?.resetFields();
 }
 
@@ -1240,6 +1275,8 @@ const handleUpdate = (row) => {
       form.value.itemBrand = resolveFormBrandId(form.value.itemBrandIds, form.value.itemBrand)
       form.value.authAgency = parseAuthAgencyList(form.value.authAgency)
       await refreshFormBrandOptions({ keepCurrentBrand: true })
+      await loadFormModels()
+      await loadModelMaterialOptions(form.value.modelId)
       normalizeUploadedImageMeta()
       form.value.skuCode = skuForm.itemSkuList[0]?.skuCode ?? ''
       form.value.costPrice = canViewCostPrice.value ? (skuForm.itemSkuList[0]?.costPrice ?? null) : null
@@ -1485,19 +1522,6 @@ const initItemBrandDataIfNeeded = async () => {
   const wmsStore = useWmsStore()
   if (!Array.isArray(wmsStore.itemBrandList) || wmsStore.itemBrandList.length === 0) {
     await wmsStore.getItemBrandList()
-  }
-}
-const initMaterialModelDataIfNeeded = async () => {
-  const wmsStore = useWmsStore()
-  const tasks = []
-  if (!Array.isArray(wmsStore.itemMaterialList) || wmsStore.itemMaterialList.length === 0) {
-    tasks.push(wmsStore.getItemMaterialList())
-  }
-  if (!Array.isArray(wmsStore.itemModelList) || wmsStore.itemModelList.length === 0) {
-    tasks.push(wmsStore.getItemModelList())
-  }
-  if (tasks.length > 0) {
-    await Promise.all(tasks)
   }
 }
 /** 删除按钮操作 */
@@ -1807,15 +1831,6 @@ const downloadQrcode = async (row) => {
   // this.$message.warn('下载中，请稍后...')
 }
 onMounted(async () => {
-  try {
-    await Promise.all([
-      initItemCategoryDataIfNeeded(),
-      initItemBrandDataIfNeeded(),
-      initMaterialModelDataIfNeeded()
-    ])
-  } catch (_) {
-    // 分类数据加载失败不阻断列表渲染
-  }
   initSupplierData();
   nextTick(() => {
     applyRouteSkuFilter()
@@ -1824,6 +1839,10 @@ onMounted(async () => {
       handleAdd()
     }
   })
+  Promise.all([
+    initItemCategoryDataIfNeeded(),
+    initItemBrandDataIfNeeded()
+  ]).catch(() => {})
 });
 
 onActivated(() => {

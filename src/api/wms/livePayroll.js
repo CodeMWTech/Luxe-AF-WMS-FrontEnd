@@ -2,9 +2,9 @@ import request from '@/utils/request'
 
 const base = '/wms/live'
 
-export function getLiveOptions(includeDisabledAccounts = false) {
+export function getLiveOptions(includeDisabledAccounts = false, includeInactiveEmployees = true) {
   return Promise.all([
-    request({ url: `${base}/options/employees`, method: 'get' }),
+    request({ url: `${base}/options/employees`, method: 'get', params: { includeInactive: includeInactiveEmployees } }),
     request({ url: `${base}/options/accounts`, method: 'get', params: { includeDisabled: includeDisabledAccounts } }),
     request({ url: `${base}/options/rate-types`, method: 'get' }),
     request({ url: `${base}/options/special-types`, method: 'get' })
@@ -72,3 +72,21 @@ export const listSpecialTypes = () => request({ url: `${base}/settings/special-t
 export const addSpecialType = data => request({ url: `${base}/settings/special-types`, method: 'post', data })
 export const updateSpecialType = data => request({ url: `${base}/settings/special-types`, method: 'put', data })
 export const deleteSpecialType = id => request({ url: `${base}/settings/special-types/${id}`, method: 'delete' })
+
+export const previewDeparture = (id, data) => request({ url: `${base}/employees/${id}/departure-preview`, method: 'post', data })
+export const markDeparture = (id, data) => request({ url: `${base}/employees/${id}/departure`, method: 'put', data })
+export const listSettlementCandidates = params => request({ url: `${base}/settlements/candidates`, method: 'get', params })
+export const previewSettlement = data => request({ url: `${base}/settlements/preview`, method: 'post', data })
+export const confirmSettlement = data => request({ url: `${base}/settlements`, method: 'post', data })
+export const listSettlements = params => request({ url: `${base}/settlements/list`, method: 'get', params })
+export const getSettlement = id => request({ url: `${base}/settlements/${id}`, method: 'get' })
+export const markSettlementPaid = (id, reference) => request({ url: `${base}/settlements/${id}/paid`, method: 'post', data: { reference } })
+export const listPayrollAdjustments = params => request({ url: `${base}/adjustments/list`, method: 'get', params })
+export const exportPayrollAdjustments = params => request({ url: `${base}/adjustments/export`, method: 'get', params })
+export const reviewPayrollAdjustment = (id, data) => request({ url: `${base}/adjustments/${id}/review`, method: 'post', data })
+
+export const previewRateSync = data => request({ url: `${base}/rates/account-groups/sync-preview`, method: 'post', data })
+
+export const addManualAdjustment = data => request({ url: `${base}/settlements/manual-adjustments`, method: 'post', data })
+export const updateManualAdjustment = (id, data) => request({ url: `${base}/settlements/manual-adjustments/${id}`, method: 'put', data })
+export const deleteManualAdjustment = id => request({ url: `${base}/settlements/manual-adjustments/${id}`, method: 'delete' })

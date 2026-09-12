@@ -284,7 +284,7 @@
             <el-descriptions-item :label="tr('岗位')">{{ selectedEmployee.position || '-' }}</el-descriptions-item>
             <el-descriptions-item :label="tr('联系电话')">{{ selectedEmployee.phone || '-' }}</el-descriptions-item>
             <el-descriptions-item :label="tr('状态')">
-              <el-tag size="small" :type="statusTagType(selectedEmployee.employeeStatus)">{{ statusLabel(selectedEmployee.employeeStatus) }}</el-tag>
+              <el-tag size="small" :type="statusTagType(selectedEmployee.employeeStatus)">{{ statusLabel(selectedEmployee.employeeStatus) }}</el-tag><span v-if="selectedEmployee.departureDate"> · {{ tr('离职日期') }} {{ selectedEmployee.departureDate }}</span>
             </el-descriptions-item>
             <el-descriptions-item :label="tr('备注')" :span="3">{{ selectedEmployee.remark || '-' }}</el-descriptions-item>
             <template v-if="canViewSensitiveForSelected">
@@ -679,8 +679,13 @@
                   <el-select v-model="form.employeeStatus" :placeholder="tr('请选择员工状态')" style="width: 100%" :disabled="isLinkedUserReadonly">
                     <el-option :label="tr('在职')" :value="0" />
                     <el-option :label="tr('试用期')" :value="1" />
-                    <el-option :label="tr('已离职')" :value="2" />
+                    <el-option v-if="proxy.$auth.hasPermi('wms:employee:archive')" :label="tr('已归档')" :value="3" />
                   </el-select>
+                </el-form-item>
+              </el-col>
+              <el-col :span="12" v-if="form.employeeStatus === 3">
+                <el-form-item :label="tr('离职日期')" prop="departureDate" :rules="[{ required: true, message: '请选择离职日期', trigger: 'change' }]">
+                  <el-date-picker v-model="form.departureDate" type="date" value-format="YYYY-MM-DD" format="MM/DD/YYYY" :disabled="isLinkedUserReadonly" />
                 </el-form-item>
               </el-col>
               <el-col :span="12">
@@ -1061,14 +1066,13 @@ const attachmentMap = computed(() => {
 })
 
 function statusLabel(status) {
-  const map = { 0: tr('在职'), 1: tr('试用期'), 2: tr('已离职'), 3: tr('已归档') }
+  const map = { 0: tr('在职'), 1: tr('试用期'), 2: tr('已归档'), 3: tr('已归档') }
   return map[status] || '-'
 }
 
 function statusTagType(status) {
   if (status === 0) return 'success'
   if (status === 1) return 'warning'
-  if (status === 2) return 'info'
   return 'danger'
 }
 

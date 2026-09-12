@@ -15,6 +15,19 @@
 
 .live-hero h2 { margin: 0 0 6px; color: var(--el-text-color-primary, #303133); font-size: 20px; font-weight: 600; line-height: 28px; }
 .live-hero p { margin: 0; color: var(--el-text-color-secondary, #909399); font-size: 13px; line-height: 20px; }
+/* Keep every live-payroll pager inside its card, including the page-jump suffix. */
+:deep(.pagination-container) {
+  position: relative !important;
+  width: 100%; height: auto; min-height: 48px;
+  margin: 16px 0 0; padding: 12px 0 4px !important;
+  box-sizing: border-box;
+}
+:deep(.pagination-container .el-pagination) {
+  position: static !important; right: auto !important;
+  max-width: 100%; min-width: 0;
+  flex-wrap: wrap; justify-content: flex-end; row-gap: 10px;
+}
+:deep(.el-table .cell) { word-break: normal; overflow-wrap: break-word; }
 .live-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .live-filter,
 .live-card,

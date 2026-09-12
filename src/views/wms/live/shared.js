@@ -61,10 +61,11 @@ export function accountLabel(account) {
   return `[${account.accountCode}] ${account.displayName}`
 }
 
-export function liveEmployeeOptionLabel(option) {
+export function liveEmployeeOptionLabel(option, tr = text => text) {
   if (!option) return ''
   const name = option.label || ''
-  return option.nickName ? `${name} (${option.nickName})` : name
+  const label = option.nickName ? `${name} (${option.nickName})` : name
+  return Number(option.employeeStatus) >= 2 ? `${label} · ${tr(employeeStatusLabel(option.employeeStatus))}` : label
 }
 
 export function matchLiveEmployee(option, keyword) {
@@ -86,4 +87,22 @@ export function downloadCsv(filename, headers, rows) {
   link.download = filename
   link.click()
   URL.revokeObjectURL(url)
+}
+
+export function employeeStatusLabel(value) {
+  return ({ 0: '在职', 1: '试用期', 2: '已归档', 3: '已归档' })[value] || '未知'
+}
+export function settlementStatusLabel(value) {
+  return ({ OPEN: '未结算', SETTLED: '已结算' })[value] || '未知状态'
+}
+export function adjustmentStatusLabel(value) {
+  return ({ PENDING: '待确认', CONFIRMED: '待结算', SETTLED: '已结算', VOID: '已作废', APPLIED: '已重算' })[value] || value
+}
+export function twoWeekRange(selectedDate = isoDate()) {
+  const [year, month, day] = selectedDate.split('-').map(Number)
+  const sunday = new Date(year, month - 1, day)
+  sunday.setDate(sunday.getDate() - sunday.getDay())
+  const end = new Date(sunday)
+  end.setDate(sunday.getDate() + 13)
+  return [isoDate(sunday), isoDate(end)]
 }

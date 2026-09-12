@@ -1,95 +1,80 @@
 <template>
-  <div class="live-page">
-    <div class="live-hero"><div><h2>开播录入</h2><p>记录开播数据并自动计算薪酬</p></div><div class="live-actions"><el-button @click="exportRows">导出 Excel</el-button><el-button type="primary" v-hasPermi="['wms:live:stream:edit']" @click="openDialog()">新增开播记录</el-button></div></div>
-    <div class="metric-grid"><el-card v-for="item in metrics" :key="item.label" class="metric-card" shadow="never"><div class="metric-label">{{ item.label }}</div><div class="metric-value">{{ item.value }}</div><div class="metric-hint">当前筛选页汇总</div></el-card></div>
-    <el-card class="live-filter" shadow="never"><el-form :inline="true"><el-form-item label="日期"><el-date-picker v-model="dateRange" type="daterange" value-format="YYYY-MM-DD" :format="LIVE_DATE_FORMAT" /></el-form-item><el-form-item><el-input v-model="query.keyword" clearable :placeholder="tr('搜索录入人/备注')" /></el-form-item><el-form-item><el-select v-model="query.employeeId" filterable clearable placeholder="全部主播"><el-option v-for="v in options.employees" :key="v.value" :label="liveEmployeeOptionLabel(v)" :value="v.value" /></el-select></el-form-item><el-form-item><el-select v-model="query.accountId" clearable placeholder="全部直播平台"><el-option v-for="v in options.accounts" :key="v.id" :label="accountLabel(v)" :value="v.id" /></el-select></el-form-item><el-form-item><el-select v-model="query.rateTypeId" clearable placeholder="全部费率类型"><el-option v-for="v in options.rateTypes" :key="v.id" :label="v.typeName" :value="v.id" /></el-select></el-form-item><el-form-item><el-button type="primary" @click="load">查询</el-button><el-button @click="reset">重置</el-button></el-form-item></el-form></el-card>
-    <el-card class="live-card" shadow="never"><el-table v-loading="loading" :data="rows" stripe><el-table-column prop="streamDate" label="日期" width="120"><template #default="s">{{ displayDate(s.row.streamDate) }}</template></el-table-column><el-table-column prop="accountLabel" label="直播平台" min-width="180" /><el-table-column prop="employeeName" label="主播" /><el-table-column label="时间" width="150"><template #default="s">{{ shortTime(s.row.startTime) }} - {{ shortTime(s.row.endTime) }}</template></el-table-column><el-table-column label="工时"><template #default="s">{{ Number(s.row.durationHours || 0).toFixed(2) }}h</template></el-table-column><el-table-column prop="rateTypeName" label="费率类型"><template #default="s"><el-tag class="type-tag">{{ s.row.rateTypeName }}</el-tag></template></el-table-column><el-table-column label="时薪"><template #default="s">{{ money(s.row.hourlyRate) }}<sup v-if="s.row.manualRate">*</sup></template></el-table-column><el-table-column label="特殊"><template #default="s"><span :class="Number(s.row.specialAmount) >= 0 ? 'positive' : 'negative'">{{ money(s.row.specialAmount) }}</span></template></el-table-column><el-table-column label="总金额"><template #default="s"><strong>{{ money(s.row.totalAmount) }}</strong></template></el-table-column><el-table-column prop="enteredBy" label="录入人" /><el-table-column label="操作" width="130" fixed="right"><template #default="s"><el-button link type="primary" @click="openDialog(s.row)">{{ tr('编辑') }}</el-button><el-button link type="danger" @click="remove(s.row)">{{ tr('删除') }}</el-button></template></el-table-column></el-table><pagination v-show="total>0" class="stream-pagination" :total="total" v-model:page="query.pageNum" v-model:limit="query.pageSize" @pagination="load" /></el-card>
+  <div data-runtime-i18n-ignore="true" class="live-page">
+    <div class="live-hero"><div><h2>{{ tr('开播录入') }}</h2><p>{{ tr('记录开播数据并自动计算薪酬') }}</p></div><div class="live-actions"><el-button @click="exportRows">{{ tr('导出 Excel') }}</el-button><el-button type="primary" v-hasPermi="['wms:live:stream:edit']" @click="openDialog()">{{ tr('新增开播记录') }}</el-button></div></div>
+    <div class="metric-grid"><el-card v-for="item in metrics" :key="item.label" class="metric-card" shadow="never"><div class="metric-label">{{ item.label }}</div><div class="metric-value">{{ item.value }}</div><div class="metric-hint">{{ tr('当前筛选页汇总') }}</div></el-card></div>
+    <el-card class="live-filter" shadow="never"><el-form :inline="true"><el-form-item :label="tr('日期')"><el-date-picker v-model="dateRange" type="daterange" value-format="YYYY-MM-DD" :format="LIVE_DATE_FORMAT" /></el-form-item><el-form-item><el-input v-model="query.keyword" clearable :placeholder="tr('搜索录入人/备注')" /></el-form-item><el-form-item><LiveEmployeeSelect v-model="query.employeeId"   :placeholder="tr('全部主播')" :employees="options.employees" /></el-form-item><el-form-item><el-select v-model="query.accountId" clearable :placeholder="tr('全部直播平台')"><el-option v-for="v in options.accounts" :key="v.id" :label="accountLabel(v)" :value="v.id" /></el-select></el-form-item><el-form-item><el-select v-model="query.rateTypeId" clearable :placeholder="tr('全部费率类型')"><el-option v-for="v in options.rateTypes" :key="v.id" :label="v.typeName" :value="v.id" /></el-select></el-form-item><el-form-item><el-button type="primary" @click="load">{{ tr('查询') }}</el-button><el-button @click="reset">{{ tr('重置') }}</el-button></el-form-item><el-form-item :label="tr('主播状态')"><el-select v-model="query.employeeScope" @change="query.pageNum = 1; load()"><el-option :label="tr('全部')" value="ALL" /><el-option :label="tr('在职/试用期')" value="ACTIVE" /><el-option :label="tr('已归档')" value="INACTIVE" /></el-select></el-form-item></el-form></el-card>
+    <el-card class="live-card" shadow="never"><el-table v-loading="loading" :data="rows" stripe><el-table-column prop="streamDate" :label="tr('日期')" :min-width="isEn ? 145 : 120"><template #default="s">{{ displayDate(s.row.streamDate) }}</template></el-table-column><el-table-column prop="accountLabel" :label="tr('直播平台')" min-width="180" /><el-table-column :label="tr('结算状态')" :min-width="isEn ? 145 : 110"><template #default="s"><el-tag :type="s.row.settlementStatus === 'SETTLED' ? 'success' : 'info'">{{ tr(settlementStatusLabel(s.row.settlementStatus)) }}</el-tag></template></el-table-column><el-table-column prop="employeeName" :label="tr('主播')" ><template #default="s"><LiveEmployeeName :name="s.row.employeeName" :status="s.row.employeeStatus" /></template></el-table-column><el-table-column :label="tr('时间')" :min-width="isEn ? 175 : 150"><template #default="s">{{ shortTime(s.row.startTime) }} - {{ shortTime(s.row.endTime) }}</template></el-table-column><el-table-column :label="tr('工时')"><template #default="s">{{ Number(s.row.durationHours || 0).toFixed(2) }}h</template></el-table-column><el-table-column prop="rateTypeName" :label="tr('费率类型')" min-width="180"><template #default="s"><el-tag class="type-tag">{{ s.row.rateTypeName }}</el-tag></template></el-table-column><el-table-column :label="tr('时薪')"><template #default="s">{{ money(s.row.hourlyRate) }}<sup v-if="s.row.manualRate">*</sup></template></el-table-column><el-table-column :label="tr('特殊')"><template #default="s"><span :class="Number(s.row.specialAmount) >= 0 ? 'positive' : 'negative'">{{ money(s.row.specialAmount) }}</span></template></el-table-column><el-table-column :label="tr('总金额')"><template #default="s"><strong>{{ money(s.row.totalAmount) }}</strong></template></el-table-column><el-table-column prop="enteredBy" :label="tr('录入人')" /><el-table-column :label="tr('操作')" :min-width="isEn ? 155 : 130" fixed="right"><template #default="s"><el-button link type="primary" :disabled="s.row.settlementStatus !== 'OPEN'" @click="openDialog(s.row)">{{ tr('编辑') }}</el-button><el-button link type="danger" :disabled="s.row.settlementStatus !== 'OPEN'" @click="remove(s.row)">{{ tr('删除') }}</el-button></template></el-table-column></el-table><pagination v-show="total>0" class="stream-pagination" :total="total" v-model:page="query.pageNum" v-model:limit="query.pageSize" @pagination="load" /></el-card>
 
-    <el-dialog v-model="dialog.open" class="stream-entry-dialog" :title="dialog.form.id ? '编辑开播记录' : '新增开播记录'" width="900px" append-to-body destroy-on-close>
+    <el-dialog data-runtime-i18n-ignore="true" v-model="dialog.open" class="stream-entry-dialog" :title="dialog.form.id ? tr('编辑开播记录') : tr('新增开播记录')" width="900px" append-to-body destroy-on-close>
       <el-form ref="formRef" :model="dialog.form" :rules="rules" label-position="top">
         <div class="stream-form-section">
-          <div class="stream-section-title"><span>1</span><div><strong>直播信息</strong><small>选择日期、主播和直播账号后，将自动匹配排班与费率</small></div></div>
+          <div class="stream-section-title"><span>1</span><div><strong>{{ tr('直播信息') }}</strong><small>{{ tr('选择日期、主播和直播账号后，将自动匹配排班与费率') }}</small></div></div>
           <div class="dialog-grid stream-info-grid">
-            <el-form-item label="日期" prop="streamDate"><el-date-picker v-model="dialog.form.streamDate" type="date" value-format="YYYY-MM-DD" :format="LIVE_DATE_FORMAT" @change="handleStreamRateScopeChange" /></el-form-item>
-            <el-form-item label="主播" prop="employeeId"><el-select v-model="dialog.form.employeeId" filterable @change="handleStreamRateScopeChange"><el-option v-for="v in options.employees" :key="v.value" :label="liveEmployeeOptionLabel(v)" :value="v.value" /></el-select></el-form-item>
-            <el-form-item label="直播平台" prop="accountId"><el-select v-model="dialog.form.accountId" filterable @change="handleStreamRateScopeChange"><el-option v-for="v in options.accounts" :key="v.id" :label="accountLabel(v)" :value="v.id" /></el-select></el-form-item>
-            <el-form-item label="费率类型" prop="rateTypeId">
+            <el-form-item :label="tr('日期')" prop="streamDate"><el-date-picker v-model="dialog.form.streamDate" type="date" value-format="YYYY-MM-DD" :format="LIVE_DATE_FORMAT" @change="handleStreamRateScopeChange" /></el-form-item>
+            <el-form-item :label="tr('主播')" prop="employeeId"><LiveEmployeeSelect v-model="dialog.form.employeeId"  @change="handleStreamRateScopeChange" :employees="options.employees" /></el-form-item>
+            <el-form-item :label="tr('直播平台')" prop="accountId"><el-select v-model="dialog.form.accountId" filterable @change="handleStreamRateScopeChange"><el-option v-for="v in options.accounts" :key="v.id" :label="accountLabel(v)" :value="v.id" /></el-select></el-form-item>
+            <el-form-item :label="tr('费率类型')" prop="rateTypeId">
               <div class="stream-rate-type-field">
                 <el-select v-model="dialog.form.rateTypeId" :loading="dialog.loadingRateTypes" :disabled="!hasStreamRateScope" :placeholder="rateTypePlaceholder" @change="handleStreamRateTypeChange">
                   <el-option v-for="v in dialog.rateTypes" :key="v.id" :label="v.typeName" :value="v.id" />
                 </el-select>
-                <small v-if="hasStreamRateScope && !dialog.loadingRateTypes && !dialog.rateTypes.length">请先在费率配置中启用当前组合对应的费率类型</small>
+                <small v-if="hasStreamRateScope && !dialog.loadingRateTypes && !dialog.rateTypes.length">{{ tr('请先在费率配置中启用当前组合对应的费率类型') }}</small>
               </div>
             </el-form-item>
           </div>
         </div>
 
         <div class="stream-form-section">
-          <div class="stream-section-title"><span>2</span><div><strong>直播时段与薪资</strong><small>时间默认来自排班计划，工时由系统自动计算</small></div></div>
-          <el-alert v-if="dialog.scheduleMissing" class="stream-schedule-warning" title="当天没有该主播在该直播间的排班计划" type="error" :closable="false" show-icon />
+          <div class="stream-section-title"><span>2</span><div><strong>{{ tr('直播时段与薪资') }}</strong><small>{{ tr('时间默认来自排班计划，工时由系统自动计算') }}</small></div></div>
+          <el-alert v-if="dialog.scheduleMissing" class="stream-schedule-warning" :title="tr('当天没有该主播在该直播间的排班计划')" type="error" :closable="false" show-icon />
           <div class="dialog-grid stream-time-grid">
-            <el-form-item label="开始时间" prop="startTime"><el-time-picker v-model="dialog.form.startTime" value-format="HH:mm:ss" format="HH:mm" @change="formRef?.validateField('endTime')" /></el-form-item>
-            <el-form-item label="结束时间" prop="endTime"><el-time-picker v-model="dialog.form.endTime" value-format="HH:mm:ss" format="HH:mm" /></el-form-item>
-            <el-form-item label="工时"><el-input :model-value="streamDurationText" disabled title="根据开始时间和结束时间自动计算" /></el-form-item>
+            <el-form-item :label="tr('开始时间')" prop="startTime"><el-time-picker v-model="dialog.form.startTime" value-format="HH:mm:ss" format="HH:mm" @change="formRef?.validateField('endTime')" /></el-form-item>
+            <el-form-item :label="tr('结束时间')" prop="endTime"><el-time-picker v-model="dialog.form.endTime" value-format="HH:mm:ss" format="HH:mm" /></el-form-item>
+            <el-form-item :label="tr('工时')"><el-input :model-value="streamDurationText" disabled :title="tr('根据开始时间和结束时间自动计算')" /></el-form-item>
           </div>
           <div class="stream-pay-row">
             <div class="manual-rate-control">
-              <div><strong>手工时薪</strong><small>开启后可覆盖系统费率，仅影响本条记录</small></div>
+              <div><strong>{{ tr('手工时薪') }}</strong><small>{{ tr('开启后可覆盖系统费率，仅影响本条记录') }}</small></div>
               <el-switch v-model="dialog.form.manualRate" />
             </div>
-            <el-form-item class="hourly-rate-item" label="时薪">
+            <el-form-item class="hourly-rate-item" :label="tr('时薪')">
               <el-input-number v-model="dialog.form.hourlyRate" class="hourly-rate-input" :disabled="!dialog.form.manualRate" :min="0" :precision="2" />
             </el-form-item>
           </div>
         </div>
 
         <div class="stream-form-section">
-          <div class="stream-section-title stream-special-title"><span>3</span><div><strong>特殊明细</strong><small>记录补贴、扣款或其他特殊金额</small></div><div class="special-total">合计 <strong>{{ money(specialTotal) }}</strong></div></div>
+          <div class="stream-section-title stream-special-title"><span>3</span><div><strong>{{ tr('特殊明细') }}</strong><small>{{ tr('记录补贴、扣款或其他特殊金额') }}</small></div><div class="special-total">{{ tr('合计') }} <strong>{{ money(specialTotal) }}</strong></div></div>
           <el-form-item class="special-details-item">
-            <div class="special-details">
-              <div v-if="dialog.specials.length" class="special-detail-header">
-                <span>{{ tr('类型') }}</span>
-                <span class="special-required-label">{{ tr('金额') }} <i>*</i></span>
-                <span>{{ tr('备注') }}</span>
-                <span></span>
-              </div>
-              <div v-for="(item,index) in dialog.specials" :key="index" class="special-detail-row">
-                <el-select v-model="item.typeId" placeholder="请选择类型" @change="normalizeSpecialInput(item)"><el-option v-for="v in options.specialTypes" :key="v.id" :label="tr(v.typeName)" :value="v.id" /></el-select>
-                <div class="special-amount-field" :class="{ 'is-error': item.amountError }">
-                  <el-input-number v-model="item.amount" :controls="false" :min="specialAmountMin(item)" :precision="2" :placeholder="tr('请输入金额')" @change="handleSpecialAmountChange(item)" />
-                  <span v-if="item.amountError" class="special-amount-error">{{ tr('金额为必填项') }}</span>
-                </div>
-                <el-input v-model="item.remark" placeholder="请输入备注" />
-                <el-button type="danger" link @click="dialog.specials.splice(index,1)">{{ tr('删除') }}</el-button>
-              </div>
-              <div v-if="!dialog.specials.length" class="special-empty">暂无特殊明细</div>
-              <el-button class="add-special-button" plain type="primary" @click="addSpecialDetail">+ 新增特殊明细</el-button>
-            </div>
+            <SpecialDetailsEditor ref="specialEditor" v-model="dialog.specials" :types="options.specialTypes" />
           </el-form-item>
         </div>
 
         <div class="stream-form-section stream-remark-section">
-          <el-form-item label="备注"><el-input v-model="dialog.form.remark" type="textarea" :rows="3" placeholder="可填写本次直播的补充说明" /></el-form-item>
+          <el-form-item :label="tr('备注')"><el-input v-model="dialog.form.remark" type="textarea" :rows="3" :placeholder="tr('可填写本次直播的补充说明')" /></el-form-item>
         </div>
       </el-form>
-      <template #footer><el-button @click="dialog.open=false">取消</el-button><el-button type="primary" :loading="dialog.submitting" :disabled="dialog.loadingRateTypes || dialog.loadingSchedule" @click="submit">确认保存</el-button></template>
+      <template #footer><el-button @click="dialog.open=false">{{ tr('取消') }}</el-button><el-button type="primary" :loading="dialog.submitting" :disabled="dialog.loadingRateTypes || dialog.loadingSchedule" @click="submit">{{ tr('确认保存') }}</el-button></template>
     </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { computed, getCurrentInstance, onMounted, reactive, ref } from 'vue'
+import { useLiveI18n } from '../useLiveI18n'
+import SpecialDetailsEditor from '../components/SpecialDetailsEditor.vue'
+import { normalizeSpecialInput as normalizeSpecial, specialTotal as sumSpecials, serializeSpecialDetails } from '../components/specialDetails'
+import LiveEmployeeSelect from '../components/LiveEmployeeSelect.vue'
+import LiveEmployeeName from '../components/LiveEmployeeName.vue'
+import { onActivated, computed, getCurrentInstance, onMounted, reactive, ref } from 'vue'
 import { addStream, deleteStream, getLiveOptions, listStreamRateTypes, listStreamScheduleOptions, listStreams, updateStream } from '@/api/wms/livePayroll'
-import useSettingsStore from '@/store/modules/settings'
 import useUserStore from '@/store/modules/user'
-import { translateByMap } from '@/locales/runtime-map'
-import { accountLabel, displayDate, isoDate, liveEmployeeOptionLabel, LIVE_DATE_FORMAT, money } from '../shared'
-const settingsStore=useSettingsStore(),tr=(text)=>translateByMap(text,settingsStore.language||'zh-cn')
+import { settlementStatusLabel, accountLabel, displayDate, isoDate, LIVE_DATE_FORMAT, money } from '../shared'
+const { tr, isEn, messageNode } = useLiveI18n()
 const userStore = useUserStore()
 const { proxy } = getCurrentInstance()
-const loading = ref(false), rows = ref([]), total = ref(0), formRef = ref()
+const loading = ref(false), rows = ref([]), total = ref(0), formRef = ref(), specialEditor = ref()
 const dateRange = ref(null), options = reactive({ employees: [], accounts: [], rateTypes: [], specialTypes: [] })
-const query = reactive({ pageNum: 1, pageSize: 20, keyword: '', employeeId: null, accountId: null, rateTypeId: null })
+const query = reactive({ employeeScope: 'ALL', pageNum: 1, pageSize: 20, keyword: '', employeeId: null, accountId: null, rateTypeId: null })
 const dialog = reactive({ open: false, form: {}, specials: [], rateTypes: [], schedules: [], loadingRateTypes: false, loadingSchedule: false, scheduleMissing: false, submitting: false })
 const STREAM_PREFERENCE_KEY = 'live-payroll:stream:last-selection'
 let rateTypeRequestSequence = 0
@@ -100,9 +85,9 @@ const rateTypePlaceholder = computed(() => {
   if (dialog.loadingRateTypes) return tr('正在加载费率类型')
   return tr(dialog.rateTypes.length ? '请选择费率类型' : '当前组合无已激活费率')
 })
-const validateEndTime = (_rule, value, callback) => { if (!value) return callback(new Error('请选择结束时间')); if (dialog.form.startTime === value) return callback(new Error('结束时间不能等于开始时间')); callback() }
-const rules = { streamDate: [{ required: true, message: '请选择日期' }], employeeId: [{ required: true, message: '请选择主播' }], accountId: [{ required: true, message: '请选择直播平台' }], rateTypeId: [{ required: true, message: '请选择费率类型' }], startTime: [{ required: true, message: '请选择开始时间' }], endTime: [{ required: true, message: '请选择结束时间' }, { validator: validateEndTime, trigger: 'change' }] }
-const specialTotal = computed(() => dialog.specials.reduce((sum, item) => sum + signedSpecialAmount(item), 0))
+const validateEndTime = (_rule, value, callback) => { if (!value) return callback(new Error(tr('请选择结束时间'))); if (dialog.form.startTime === value) return callback(new Error(tr('结束时间不能等于开始时间'))); callback() }
+const rules = computed(() => ({ streamDate: [{ required: true, message: tr('请选择日期') }], employeeId: [{ required: true, message: tr('请选择主播') }], accountId: [{ required: true, message: tr('请选择直播平台') }], rateTypeId: [{ required: true, message: tr('请选择费率类型') }], startTime: [{ required: true, message: tr('请选择开始时间') }], endTime: [{ required: true, message: tr('请选择结束时间') }, { validator: validateEndTime, trigger: 'change' }] }))
+const specialTotal = computed(() => sumSpecials(dialog.specials, options.specialTypes))
 const streamDurationText = computed(() => {
   const startMinutes = timeInMinutes(dialog.form.startTime)
   const endMinutes = timeInMinutes(dialog.form.endTime)
@@ -110,14 +95,14 @@ const streamDurationText = computed(() => {
   const durationMinutes = endMinutes > startMinutes ? endMinutes - startMinutes : endMinutes + 24 * 60 - startMinutes
   return `${(durationMinutes / 60).toFixed(2)}h`
 })
-const metrics = computed(() => { const hours = rows.value.reduce((s,v)=>s+Number(v.durationHours||0),0), pay = rows.value.reduce((s,v)=>s+Number(v.totalAmount||0),0), types = new Set(rows.value.map(v=>v.rateTypeId)).size; return [{ label:'总场次', value: total.value }, { label:'当前页工时', value:`${hours.toFixed(2)}h` }, { label:'费率类型数', value:types }, { label:'当前页薪酬', value:money(pay) }] })
+const metrics = computed(() => { const hours = rows.value.reduce((s,v)=>s+Number(v.durationHours||0),0), pay = rows.value.reduce((s,v)=>s+Number(v.totalAmount||0),0), types = new Set(rows.value.map(v=>v.rateTypeId)).size; return [{ label:tr('总场次'), value: total.value }, { label:tr('当前页工时'), value:`${hours.toFixed(2)}h` }, { label:tr('费率类型数'), value:types }, { label:tr('当前页薪酬'), value:money(pay) }] })
 function listQueryParams() {
   const params = { ...query }
   if (dateRange.value?.length === 2) [params.startDate, params.endDate] = dateRange.value
   return params
 }
-async function load() { loading.value = true; try { const res = await listStreams(listQueryParams()); rows.value = res.rows || []; total.value = res.total || 0 } finally { loading.value = false } }
-function reset() { dateRange.value = null; Object.assign(query, { pageNum:1, keyword:'', employeeId:null, accountId:null, rateTypeId:null }); load() }
+async function load() { loading.value = true; try { Object.assign(options, await getLiveOptions()); const res = await listStreams(listQueryParams()); rows.value = res.rows || []; total.value = res.total || 0 } finally { loading.value = false } }
+function reset() { dateRange.value = null; Object.assign(query, { employeeScope:'ALL', pageNum:1, keyword:'', employeeId:null, accountId:null, rateTypeId:null }); load() }
 function shortTime(value) { return String(value || '').slice(0,5) }
 function timeInMinutes(value) {
   const match = String(value || '').match(/^(\d{1,2}):(\d{2})/)
@@ -201,53 +186,41 @@ async function openDialog(row = {}) {
   await Promise.all([refreshStreamRateTypes(), refreshStreamSchedule()])
   if (!row.id) applyScheduledDefaults()
 }
-function specialCategory(item) { return options.specialTypes.find(type => String(type.id) === String(item.typeId))?.category }
-function specialAmountMin(item) { return ['DEDUCTION', 'SUBSIDY'].includes(specialCategory(item)) ? 0 : undefined }
-function normalizeSpecialInput(item) { if (['DEDUCTION', 'SUBSIDY'].includes(specialCategory(item)) && Number(item.amount) < 0) item.amount = Math.abs(Number(item.amount)) }
-function addSpecialDetail() { dialog.specials.push({ typeId:null, amount:null, remark:'', amountError:false }) }
-function isSpecialAmountEmpty(item) { return item.amount === null || item.amount === undefined || item.amount === '' }
-function handleSpecialAmountChange(item) { normalizeSpecialInput(item); if (!isSpecialAmountEmpty(item)) item.amountError = false }
-function validateSpecialAmounts() {
-  let valid = true
-  dialog.specials.forEach(item => { item.amountError = isSpecialAmountEmpty(item); if (item.amountError) valid = false })
-  if (!valid) proxy.$modal.msgWarning(tr('请输入特殊明细金额，或删除该特殊明细'))
-  return valid
-}
-function signedSpecialAmount(item) { if (isSpecialAmountEmpty(item)) return 0; const amount = Number(item.amount); if (!Number.isFinite(amount)) return 0; const category = specialCategory(item); if (category === 'DEDUCTION') return -Math.abs(amount); if (category === 'SUBSIDY') return Math.abs(amount); return amount }
+function normalizeSpecialInput(item) { normalizeSpecial(item, options.specialTypes) }
 async function submit() {
   const valid = await formRef.value.validate().catch(() => false)
-  if (!valid || !validateSpecialAmounts()) return
-  const specials = dialog.specials.map(({ amountError, ...item }) => ({ ...item, amount: signedSpecialAmount(item) }))
-  const payload = { ...dialog.form, specialAmount: specialTotal.value, specialDetails: JSON.stringify(specials) }
+  if (!valid) return
+  if (!specialEditor.value.validate()) { proxy.$modal.msgWarning(tr('请填写特殊明细类型和金额，或删除该明细')); return }
+  const payload = { ...dialog.form, specialAmount: specialTotal.value, specialDetails: serializeSpecialDetails(dialog.specials, options.specialTypes) }
   dialog.submitting = true
   try {
     await (payload.id ? updateStream(payload) : addStream(payload))
     saveStreamPreference(payload)
-    proxy.$modal.msgSuccess('保存成功')
+    proxy.$modal.msgSuccess(tr('保存成功'))
     dialog.open = false
     load()
   } catch (error) {
     const message = error?.message || '保存失败，请稍后重试'
-    if (message.includes('已存在开播记录')) proxy.$modal.alertWarning(message)
+    if (message.includes('已存在开播记录')) proxy.$modal.alertWarning(messageNode(message))
     else proxy.$modal.msgError(message)
   } finally {
     dialog.submitting = false
   }
 }
-async function remove(row) { await proxy.$modal.confirm(`确认删除 ${row.employeeName} ${displayDate(row.streamDate)} 的开播记录？`); await deleteStream(row.id); proxy.$modal.msgSuccess('删除成功'); load() }
+async function remove(row) { await proxy.$modal.confirm(messageNode(tr('确认删除 {0} {1} 的开播记录？', [row.employeeName, displayDate(row.streamDate)]))); await deleteStream(row.id); proxy.$modal.msgSuccess(tr('删除成功')); load() }
 function exportRows() {
-  const rangeLabel = dateRange.value?.length === 2 ? dateRange.value.join('-') : '全部'
-  proxy.download('/wms/live/streams/export', listQueryParams(), `开播记录-${rangeLabel}.xlsx`)
+  const rangeLabel = dateRange.value?.length === 2 ? dateRange.value.join('-') : tr('全部')
+  proxy.download('/wms/live/streams/export', listQueryParams(), tr('开播记录-{0}.xlsx', [rangeLabel]), { skipHeaderTranslate: true })
 }
 onMounted(async()=>{ Object.assign(options,await getLiveOptions());load() })
+onActivated(async () => { Object.assign(options, await getLiveOptions()) })
 </script>
 <style scoped lang="scss">
 @import '../live.scss';
+.type-tag { max-width: 100%; height: auto; min-height: 24px; white-space: normal; overflow-wrap: anywhere; line-height: 20px; }
 .stream-rate-type-field { width: 100%; }
 .stream-rate-type-field small { display: block; margin-top: 6px; color: #9099aa; font-size: 12px; line-height: 1.45; }
 .stream-schedule-warning { margin: 0 0 16px; }
-:deep(.stream-pagination.pagination-container) { position: relative !important; width: 100%; height: auto; min-height: 48px; margin: 16px 0 0; padding: 12px 0 4px !important; overflow-x: auto; box-sizing: border-box; }
-:deep(.stream-pagination.pagination-container .el-pagination) { position: static !important; right: auto !important; width: 100%; min-width: max-content; justify-content: flex-end; box-sizing: border-box; }
 </style>
 <style lang="scss">
 .stream-entry-dialog {
@@ -284,22 +257,10 @@ onMounted(async()=>{ Object.assign(options,await getLiveOptions());load() })
   .manual-rate-control strong { color: var(--el-text-color-primary); font-size: 13px; }
   .manual-rate-control small { color: var(--el-text-color-secondary); font-size: 12px; line-height: 17px; }
   .hourly-rate-item { margin-bottom: 0; }
-  .special-details { width: 100%; }
   .stream-special-title { margin-bottom: 14px; }
   .special-total { margin-left: auto; color: var(--el-text-color-secondary); font-size: 13px; white-space: nowrap; }
   .special-total strong { margin-left: 6px; color: var(--el-text-color-primary); font-size: 15px; }
   .special-details-item { margin-bottom: 0; }
-  .special-detail-header { display: grid; grid-template-columns: 180px 160px minmax(180px, 1fr) 44px; gap: 10px; margin-bottom: 6px; padding: 0 2px; color: var(--el-text-color-secondary); font-size: 12px; line-height: 18px; }
-  .special-required-label i { color: var(--el-color-danger); font-style: normal; }
-  .special-detail-row { display: grid; grid-template-columns: 180px 160px minmax(180px, 1fr) 44px; align-items: start; gap: 10px; margin-bottom: 10px; }
-  .special-amount-field { position: relative; }
-  .special-amount-field.is-error { padding-bottom: 18px; }
-  .special-amount-field .el-input-number { width: 100%; }
-  .special-amount-field .el-input__inner { text-align: left; }
-  .special-amount-field.is-error .el-input__wrapper { box-shadow: 0 0 0 1px var(--el-color-danger) inset; }
-  .special-amount-error { position: absolute; left: 0; bottom: 0; color: var(--el-color-danger); font-size: 12px; line-height: 16px; white-space: nowrap; }
-  .special-empty { display: flex; min-height: 54px; align-items: center; justify-content: center; margin-bottom: 10px; border: 1px dashed var(--el-border-color); border-radius: 6px; color: var(--el-text-color-placeholder); background: var(--el-fill-color-lighter); font-size: 13px; }
-  .add-special-button { width: 100%; border-style: dashed; }
   .stream-remark-section { padding-bottom: 2px; }
   .stream-remark-section .el-form-item { margin-bottom: 16px; }
 
@@ -311,9 +272,6 @@ onMounted(async()=>{ Object.assign(options,await getLiveOptions());load() })
     .stream-info-grid,
     .stream-time-grid,
     .stream-pay-row { grid-template-columns: 1fr; }
-    .special-detail-header { display: none; }
-    .special-detail-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; }
-    .special-detail-row .el-input { grid-column: 1 / -1; grid-row: 2; }
     .special-total { margin-left: 0; }
   }
 }
