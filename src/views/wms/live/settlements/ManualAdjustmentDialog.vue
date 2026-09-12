@@ -7,7 +7,7 @@
           <el-form-item :label="tr('业务日期')" prop="businessDate"><el-date-picker v-model="dialog.form.businessDate" type="date" value-format="YYYY-MM-DD" :format="LIVE_DATE_FORMAT" /></el-form-item>
           <el-form-item :label="tr('入账日期')" prop="postingDate"><el-date-picker v-model="dialog.form.postingDate" type="date" value-format="YYYY-MM-DD" :format="LIVE_DATE_FORMAT" /></el-form-item>
           <el-form-item :label="tr('主播')" prop="employeeId"><LiveEmployeeSelect :placeholder="tr('请选择主播')" v-model="dialog.form.employeeId" :employees="options.employees" /></el-form-item>
-          <el-form-item :label="tr('直播平台')" prop="accountId"><el-select v-model="dialog.form.accountId" filterable><el-option v-for="account in options.accounts" :key="account.id" :label="accountLabel(account)" :value="account.id" /></el-select></el-form-item>
+          <el-form-item :label="tr('直播平台')" prop="accountId"><LiveAccountSelect v-model="dialog.form.accountId" filterable :accounts="options.accounts" /></el-form-item>
         </div>
         <p class="manual-date-hint">{{ tr('业务日期表示金额所属日期；入账日期决定计入哪个结算期间。') }}</p>
       </section>
@@ -21,13 +21,14 @@
   </el-dialog>
 </template>
 <script setup>
+import LiveAccountSelect from '../components/LiveAccountSelect.vue'
 import { useLiveI18n } from '../useLiveI18n'
 import { computed, getCurrentInstance, reactive, ref } from 'vue'
 import { getLiveOptions, addManualAdjustment, updateManualAdjustment } from '@/api/wms/livePayroll'
 import LiveEmployeeSelect from '../components/LiveEmployeeSelect.vue'
 import SpecialDetailsEditor from '../components/SpecialDetailsEditor.vue'
 import { normalizeSpecialInput, specialTotal, serializeSpecialDetails } from '../components/specialDetails'
-import { accountLabel, isoDate, LIVE_DATE_FORMAT, money } from '../shared'
+import { isoDate, LIVE_DATE_FORMAT, money } from '../shared'
 const { tr } = useLiveI18n()
 const emit = defineEmits(['saved'])
 const { proxy } = getCurrentInstance()

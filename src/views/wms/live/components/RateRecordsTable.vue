@@ -1,6 +1,6 @@
 <template>
   <el-table :data="rows" row-key="id" stripe :empty-text="tr('暂无生效费率')">
-    <el-table-column v-if="showAccount" prop="accountLabel" :label="tr('直播平台')" min-width="190" />
+    <el-table-column v-if="showAccount" prop="accountLabel" :label="tr('直播平台')" min-width="190"><template #default="s"><LiveAccountLabel :account="s.row" :accounts="accounts" /></template></el-table-column>
     <el-table-column prop="rateTypeName" :label="tr('费率类型')" min-width="110"><template #default="s"><el-tag>{{ s.row.rateTypeName }}</el-tag></template></el-table-column>
     <el-table-column :label="tr('时薪')" min-width="110"><template #default="s"><strong>{{ money(s.row.hourlyRate) }}/h</strong></template></el-table-column>
     <el-table-column :label="tr('生效日期')" min-width="120"><template #default="s">{{ displayDate(s.row.effectiveDate) }}</template></el-table-column>
@@ -12,10 +12,11 @@
 </template>
 
 <script setup>
+import LiveAccountLabel from './LiveAccountLabel.vue'
 import { useLiveI18n } from '../useLiveI18n'
 import { displayDate, money } from '../shared'
 import { rateStatusLabel, rateStatusType } from '../rates/rateDisplay'
 const { tr } = useLiveI18n()
-defineProps({ rows: { type: Array, default: () => [] }, showAccount: Boolean, canEdit: { type: Function, required: true } })
+defineProps({ accounts: { type: Array, default: () => [] }, rows: { type: Array, default: () => [] }, showAccount: Boolean, canEdit: { type: Function, required: true } })
 defineEmits(['edit', 'remove'])
 </script>

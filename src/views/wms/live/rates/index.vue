@@ -52,7 +52,7 @@
               <header class="account-group-header">
                 <button type="button" class="account-collapse" @click="toggleExpanded(account.id)">
                   <el-icon><ArrowDown v-if="isExpanded(account.id)" /><ArrowRight v-else /></el-icon>
-                  <span>{{ accountLabel(account) }}</span>
+                  <LiveAccountLabel :account="account" />
                   <el-tag v-if="account.status === 1" size="small" type="info">{{ tr('直播平台已停用') }}</el-tag>
                   <el-tag v-else size="small" :type="isGroupEnabled(account.id) ? 'success' : 'info'">{{ tr(isGroupEnabled(account.id) ? '已启用' : '未启用') }}</el-tag>
                   <small>{{ rateRecordLabel(accountRateCount(account.id)) }}</small>
@@ -87,7 +87,7 @@
                 <el-collapse v-if="inactiveRatesFor(account.id).length" :key="selectedEmployeeId" class="inactive-rates">
                   <el-collapse-item name="inactive">
                     <template #title>{{ tr('未生效费率') }}（{{ inactiveRatesFor(account.id).length }}）</template>
-                    <RateRecordsTable :rows="inactiveRatesFor(account.id)" :can-edit="canEditRate" @edit="openDialog" @remove="remove" />
+                    <RateRecordsTable :accounts="options.accounts" :rows="inactiveRatesFor(account.id)" :can-edit="canEditRate" @edit="openDialog" @remove="remove" />
                   </el-collapse-item>
                 </el-collapse>
               </div>
@@ -95,11 +95,11 @@
           </div>
 
           <div v-else class="rate-list-view">
-            <RateRecordsTable :rows="activeEmployeeRates" :can-edit="canEditRate" show-account @edit="openDialog" @remove="remove" />
+            <RateRecordsTable :accounts="options.accounts" :rows="activeEmployeeRates" :can-edit="canEditRate" show-account @edit="openDialog" @remove="remove" />
             <el-collapse v-if="inactiveEmployeeRates.length" :key="selectedEmployeeId" class="inactive-rates">
               <el-collapse-item name="inactive">
                 <template #title>{{ tr('未生效费率') }}（{{ inactiveEmployeeRates.length }}）</template>
-                <RateRecordsTable :rows="inactiveEmployeeRates" :can-edit="canEditRate" show-account @edit="openDialog" @remove="remove" />
+                <RateRecordsTable :accounts="options.accounts" :rows="inactiveEmployeeRates" :can-edit="canEditRate" show-account @edit="openDialog" @remove="remove" />
               </el-collapse-item>
             </el-collapse>
           </div>
@@ -115,7 +115,7 @@
       <el-form ref="formRef" :model="dialog.form" :rules="rules" :label-width="isEn ? '126px' : '90px'">
         <div class="dialog-grid">
           <el-form-item :label="tr('主播/运营')" prop="employeeId"><el-select v-model="dialog.form.employeeId" disabled><el-option v-for="v in options.employees" :key="v.value" :label="liveEmployeeOptionLabel(v, tr)" :value="v.value" /></el-select></el-form-item>
-          <el-form-item :label="tr('直播平台')" prop="accountId"><el-select v-model="dialog.form.accountId"><el-option v-for="v in configurableAccounts" :key="v.id" :label="accountLabel(v)" :value="v.id" /></el-select></el-form-item>
+          <el-form-item :label="tr('直播平台')" prop="accountId"><LiveAccountSelect v-model="dialog.form.accountId" :accounts="configurableAccounts" /></el-form-item>
           <el-form-item :label="tr('变更原因')"><el-input v-model="dialog.form.changeReason" :placeholder="tr('影响历史工资时必填')" maxlength="500" /></el-form-item>
           <el-form-item :label="tr('费率类型')" prop="rateTypeId"><el-select v-model="dialog.form.rateTypeId"><el-option v-for="v in options.rateTypes" :key="v.id" :label="v.typeName" :value="v.id" /></el-select></el-form-item>
           <el-form-item :label="tr('时薪')" prop="hourlyRate"><el-input-number v-model="dialog.form.hourlyRate" :precision="2" :min="0" /></el-form-item>
@@ -155,7 +155,7 @@
         <el-table-column :label="tr('已有调整')" :min-width="isEn ? 145 : 110"><template #default="s">{{ money(s.row.previousAdjustments) }}</template></el-table-column>
         <el-table-column :label="tr('本次差额')" :min-width="isEn ? 145 : 110"><template #default="s">{{ money(s.row.adjustmentAmount) }}</template></el-table-column>
         <el-table-column prop="streamDate" :label="tr('开播日期')" :min-width="isEn ? 145 : 120"><template #default="s">{{ displayDate(s.row.streamDate) }}</template></el-table-column>
-        <el-table-column prop="accountLabel" :label="tr('直播平台')" min-width="170" show-overflow-tooltip />
+        <el-table-column prop="accountLabel" :label="tr('直播平台')" min-width="170" show-overflow-tooltip><template #default="s"><LiveAccountLabel :account="s.row" :accounts="options.accounts" /></template></el-table-column>
         <el-table-column prop="rateTypeName" :label="tr('费率类型')" :min-width="isEn ? 145 : 110"><template #default="s">{{ s.row.rateTypeName }}</template></el-table-column>
         <el-table-column :label="tr('时段')" :min-width="isEn ? 145 : 116"><template #default="s">{{ timeRange(s.row) }}</template></el-table-column>
         <el-table-column :label="tr('时薪变化')" min-width="150"><template #default="s"><div class="amount-change"><span>{{ money(s.row.oldHourlyRate) }}/h</span><b>→</b><strong>{{ money(s.row.newHourlyRate) }}/h</strong></div></template></el-table-column>
@@ -166,7 +166,7 @@
     </el-dialog>
 
     <el-dialog data-runtime-i18n-ignore="true" v-model="syncDialog.open" :title="tr('同步费率到其他直播平台')" width="1000px" append-to-body>
-      <div v-if="syncDialog.source" class="sync-source"><span>{{ tr('来源直播平台') }}</span><strong>{{ accountLabel(syncDialog.source) }}</strong><small>{{ accountRateCount(syncDialog.source.id) }} {{ tr('条费率配置') }}</small></div>
+      <div v-if="syncDialog.source" class="sync-source"><span>{{ tr('来源直播平台') }}</span><LiveAccountLabel :account="syncDialog.source" /><small>{{ accountRateCount(syncDialog.source.id) }} {{ tr('条费率配置') }}</small></div>
       <div class="sync-mode">
         <p>{{ tr('同步模式') }}</p>
         <el-radio-group v-model="syncDialog.mode" @change="syncDialog.preview=null"><el-radio-button label="OVERWRITE">{{ tr('覆盖') }}</el-radio-button><el-radio-button label="MERGE">{{ tr('合并') }}</el-radio-button></el-radio-group>
@@ -175,14 +175,14 @@
       <div class="sync-targets">
         <div class="sync-target-title"><span>{{ tr('目标直播平台（') }}{{ syncTargets.length }}）</span><el-button link type="primary" @click="selectAllSyncTargets">{{ tr('全选') }}</el-button></div>
         <el-checkbox-group v-model="syncDialog.targetAccountIds" @change="syncDialog.preview=null">
-          <el-checkbox v-for="account in syncTargets" :key="account.id" :label="account.id"><span>{{ accountLabel(account) }}</span><small>{{ accountRateCount(account.id) ? tr('{0} 条', [accountRateCount(account.id)]) : tr('无配置') }}</small></el-checkbox>
+          <el-checkbox v-for="account in syncTargets" :key="account.id" :label="account.id"><LiveAccountLabel :account="account" /><small>{{ accountRateCount(account.id) ? tr('{0} 条', [accountRateCount(account.id)]) : tr('无配置') }}</small></el-checkbox>
         </el-checkbox-group>
       </div>
       <el-form-item :label="tr('同步原因')"><el-input v-model="syncDialog.changeReason" :placeholder="tr('影响历史工资时必填')" maxlength="500" /></el-form-item>
       <template v-if="syncDialog.preview">
         <el-alert :title="tr('未结算记录重算；已结算原单保持不变，生成差额调整。')" :closable="false" type="info" />
         <el-table :data="syncDialog.preview.streamImpacts" max-height="300">
-          <el-table-column prop="employeeName" :label="tr('主播')" /><el-table-column prop="accountLabel" :label="tr('目标平台')" />
+          <el-table-column prop="employeeName" :label="tr('主播')" /><el-table-column prop="accountLabel" :label="tr('目标平台')"><template #default="s"><LiveAccountLabel :account="s.row" :accounts="options.accounts" /></template></el-table-column>
           <el-table-column :label="tr('原业务日期')"><template #default="s">{{ displayDate(s.row.streamDate) }}</template></el-table-column>
           <el-table-column :label="tr('状态')"><template #default="s">{{ tr(settlementStatusLabel(s.row.settlementStatus)) }}</template></el-table-column>
           <el-table-column :label="tr('原金额')"><template #default="s">{{ money(s.row.oldTotalAmount) }}</template></el-table-column>
@@ -194,11 +194,13 @@
       <template #footer><el-button @click="syncDialog.open = false">{{ tr('取消') }}</el-button><el-button :disabled="!syncDialog.targetAccountIds.length" :loading="syncDialog.loading" @click="previewSync">{{ tr('预览影响') }}</el-button><el-button type="primary" :disabled="!syncDialog.preview" :loading="syncDialog.loading" @click="submitSync">{{ tr('确认同步') }}</el-button></template>
     </el-dialog>
 
-    <UsageConflictDialog v-model="usageDialog.open" :rows="usageDialog.rows" :action="usageDialog.action" :target="usageDialog.target" />
+    <UsageConflictDialog :accounts="options.accounts" v-model="usageDialog.open" :rows="usageDialog.rows" :action="usageDialog.action" :target="usageDialog.target" />
   </div>
 </template>
 
 <script setup>
+import LiveAccountLabel from '../components/LiveAccountLabel.vue'
+import LiveAccountSelect from '../components/LiveAccountSelect.vue'
 import { useLiveI18n } from '../useLiveI18n'
 import { onActivated, computed, getCurrentInstance, onMounted, reactive, ref } from 'vue'
 import { ArrowDown, ArrowRight, Connection, Delete, Edit, Search, WarningFilled } from '@element-plus/icons-vue'

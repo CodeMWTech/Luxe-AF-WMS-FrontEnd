@@ -15,7 +15,7 @@
       <el-table :data="rows" v-loading="loading" stripe>
         <el-table-column prop="employeeName" :label="tr('主播')" min-width="120" />
         <el-table-column :label="tr('记录类型')" :min-width="isEn ? 175 : 150"><template #default="s">{{ kindLabel(s.row.kind) }}</template></el-table-column>
-        <el-table-column prop="accountLabel" :label="tr('平台')" min-width="170" />
+        <el-table-column prop="accountLabel" :label="tr('平台')" min-width="220"><template #default="s"><LiveAccountLabel :account="s.row" :accounts="options.accounts" /></template></el-table-column>
         <el-table-column :label="tr('原业务日期')" :min-width="isEn ? 145 : 120"><template #default="s">{{ displayDate(s.row.streamDate) }}</template></el-table-column>
         <el-table-column :label="tr('入账日期')" :min-width="isEn ? 145 : 120"><template #default="s">{{ displayDate(s.row.postingDate) }}</template></el-table-column>
         <el-table-column :label="tr('原金额')" :min-width="isEn ? 145 : 100"><template #default="s">{{ money(s.row.originalAmount) }}</template></el-table-column>
@@ -50,6 +50,7 @@
   </div>
 </template>
 <script setup>
+import LiveAccountLabel from '../components/LiveAccountLabel.vue'
 import { useLiveI18n } from '../useLiveI18n'
 import { computed, getCurrentInstance, onMounted, onActivated, reactive, ref } from 'vue'
 import { getLiveOptions, listPayrollAdjustments, exportPayrollAdjustments, reviewPayrollAdjustment } from '@/api/wms/livePayroll'
@@ -64,7 +65,7 @@ const review=reactive({open:false,row:null,action:'CONFIRM',reason:'',date:isoDa
 function kindLabel(kind){return kind==='RECALC'?tr('未结算重算历史'):tr('结算后差额')}
 function resetQuery(){Object.assign(query,{employeeId:null,status:null,kind:null,pageNum:1});dateRange.value=null;return load()}
 function params(){return {...query,startDate:dateRange.value?.[0],endDate:dateRange.value?.[1]}}
-async function loadOptions(){Object.assign(options,await getLiveOptions())}
+async function loadOptions(){Object.assign(options,await getLiveOptions(true))}
 async function load(){loading.value=true;try{const res=await listPayrollAdjustments(params());rows.value=res.rows||[];total.value=res.total||0}finally{loading.value=false}}
 function openReview(row,action){Object.assign(review,{open:true,row,action,reason:'',date:row.postingDate||isoDate(),saving:false})}
 async function submitReview(){if(review.saving||!review.reason.trim())return;review.saving=true;try{await reviewPayrollAdjustment(review.row.id,{action:review.action,reason:review.reason,postingDate:review.date});review.open=false;proxy.$modal.msgSuccess(tr('处理成功'));await load()}finally{review.saving=false}}
