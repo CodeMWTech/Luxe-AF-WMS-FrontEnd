@@ -57,6 +57,13 @@ export function money(value, currency = 'USD') {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(Number(value || 0))
 }
 
+export function livePlatformLabel(platform) {
+  const normalized = String(platform || '').trim().toUpperCase().replace(/[\s_-]/g, '')
+  if (normalized === 'EBAY') return 'eBay'
+  if (normalized === 'TIKTOK' || normalized === 'TIKTOKSHOP') return 'TikTok'
+  if (normalized === 'WHATNOT' || normalized === 'SHOPIFY') return 'Whatnot'
+  return platform || '-'
+}
 export function accountLabel(account) {
   return `[${account.accountCode}] ${account.displayName}`
 }

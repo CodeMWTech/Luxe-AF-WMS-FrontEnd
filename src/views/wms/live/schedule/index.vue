@@ -13,7 +13,7 @@
             </div>
           </el-form-item>
           <el-form-item :label="tr('主播')"><LiveEmployeeSelect v-model="query.employeeId"   :placeholder="tr('全部主播')" :employees="options.employees" /></el-form-item>
-          <el-form-item :label="tr('直播平台')"><el-select v-model="query.accountId" clearable :placeholder="tr('全部直播平台')"><el-option v-for="v in options.accounts" :key="v.id" :label="accountLabel(v)" :value="v.id" /></el-select></el-form-item>
+          <el-form-item :label="tr('直播平台')"><LiveAccountSelect v-model="query.accountId" clearable :placeholder="tr('全部直播平台')" :accounts="options.accounts" /></el-form-item>
           <el-form-item :label="tr('场次')"><el-select v-model="query.rateTypeId" clearable :placeholder="tr('全部场次')"><el-option v-for="v in options.rateTypes" :key="v.id" :label="v.typeName" :value="v.id" /></el-select></el-form-item>
           <el-form-item class="query-action"><el-button type="primary" @click="load">{{ tr('查询') }}</el-button></el-form-item>
         <el-form-item :label="tr('主播状态')"><el-select v-model="query.employeeScope" @change="query.pageNum = 1; load()"><el-option :label="tr('全部')" value="ALL" /><el-option :label="tr('在职/试用期')" value="ACTIVE" /><el-option :label="tr('已归档')" value="INACTIVE" /></el-select></el-form-item></el-form>
@@ -29,19 +29,19 @@
           <div v-for="weekday in weekdays" :key="weekday" class="week-weekday">{{ tr(weekday) }}</div>
           <div v-for="day in week" :key="day.key" class="calendar-day" :class="{ 'is-today': day.today }">
             <div class="calendar-day-title"><span>{{ day.month }}/{{ day.day }}</span><el-tag v-if="day.today" size="small" effect="plain">{{ tr('今天') }}</el-tag></div>
-            <div v-for="row in byDay[day.date] || []" :key="row.id" class="schedule-chip" @click="openDialog(row)"><strong><LiveEmployeeName :name="row.employeeName" :status="row.employeeStatus" /></strong><div>{{ row.accountLabel }}</div><div>{{ shortTime(row.startTime) }} - {{ shortTime(row.endTime) }} · {{ row.rateTypeName }}</div><div v-if="row.remark" class="schedule-chip-remark">{{ tr('备注：') }}{{ row.remark }}</div></div>
+            <div v-for="row in byDay[day.date] || []" :key="row.id" class="schedule-chip" @click="openDialog(row)"><strong><LiveEmployeeName :name="row.employeeName" :status="row.employeeStatus" /></strong><div><LivePlatformTag :account="row" :accounts="options.accounts" /></div><div>{{ shortTime(row.startTime) }} - {{ shortTime(row.endTime) }} · {{ row.rateTypeName }}</div><div v-if="row.remark" class="schedule-chip-remark">{{ tr('备注：') }}{{ row.remark }}</div></div>
             <el-button text type="primary" @click="openDialog({ scheduleDate: day.date })">{{ tr('+ 添加') }}</el-button>
           </div>
         </div></section>
       </div>
-      <el-table v-else :data="rows" stripe><el-table-column prop="scheduleDate" :label="tr('日期')"><template #default="s">{{ displayDate(s.row.scheduleDate) }}</template></el-table-column><el-table-column prop="employeeName" :label="tr('主播')" ><template #default="s"><LiveEmployeeName :name="s.row.employeeName" :status="s.row.employeeStatus" /></template></el-table-column><el-table-column prop="platform" :label="tr('平台')" /><el-table-column prop="accountLabel" :label="tr('直播平台')" min-width="180" /><el-table-column :label="tr('时间')"><template #default="s">{{ s.row.startTime }} - {{ s.row.endTime }}</template></el-table-column><el-table-column prop="rateTypeName" :label="tr('场次类型')" /><el-table-column prop="remark" :label="tr('备注')" /><el-table-column :label="tr('操作')" :min-width="isEn ? 165 : 140"><template #default="s"><el-button link type="primary" @click="openDialog(s.row)">{{ tr('编辑') }}</el-button><el-button link type="danger" @click="remove(s.row)">{{ tr('删除') }}</el-button></template></el-table-column></el-table>
+      <el-table v-else :data="rows" stripe><el-table-column prop="scheduleDate" :label="tr('日期')"><template #default="s">{{ displayDate(s.row.scheduleDate) }}</template></el-table-column><el-table-column prop="employeeName" :label="tr('主播')" ><template #default="s"><LiveEmployeeName :name="s.row.employeeName" :status="s.row.employeeStatus" /></template></el-table-column><el-table-column prop="platform" :label="tr('平台')"><template #default="s"><LivePlatformTag :platform="s.row.platform" /></template></el-table-column><el-table-column prop="accountLabel" :label="tr('直播平台')" min-width="180"><template #default="s"><LivePlatformTag :account="s.row" :accounts="options.accounts" /></template></el-table-column><el-table-column :label="tr('时间')"><template #default="s">{{ s.row.startTime }} - {{ s.row.endTime }}</template></el-table-column><el-table-column prop="rateTypeName" :label="tr('场次类型')" /><el-table-column prop="remark" :label="tr('备注')" /><el-table-column :label="tr('操作')" :min-width="isEn ? 165 : 140"><template #default="s"><el-button link type="primary" @click="openDialog(s.row)">{{ tr('编辑') }}</el-button><el-button link type="danger" @click="remove(s.row)">{{ tr('删除') }}</el-button></template></el-table-column></el-table>
     </el-card>
     <el-dialog data-runtime-i18n-ignore="true" v-model="dialog.open" class="schedule-dialog" :title="dialog.form.id ? tr('编辑排班') : tr('新增排班')" width="820px" append-to-body>
       <el-form ref="formRef" :model="dialog.form" :rules="rules" :label-width="isEn ? '128px' : '92px'">
         <div class="dialog-grid">
           <el-form-item :label="tr('日期')" prop="scheduleDate"><el-date-picker v-model="dialog.form.scheduleDate" type="date" value-format="YYYY-MM-DD" :format="LIVE_DATE_FORMAT" @change="handleScheduleScopeChange" /></el-form-item>
           <el-form-item :label="tr('主播')" prop="employeeId"><LiveEmployeeSelect v-model="dialog.form.employeeId"  @change="handleScheduleScopeChange" :employees="options.employees" /></el-form-item>
-          <el-form-item :label="tr('直播平台')" prop="accountId"><el-select v-model="dialog.form.accountId" @change="handleScheduleScopeChange"><el-option v-for="v in options.accounts" :key="v.id" :label="accountLabel(v)" :value="v.id" /></el-select></el-form-item>
+          <el-form-item :label="tr('直播平台')" prop="accountId"><LiveAccountSelect v-model="dialog.form.accountId" @change="handleScheduleScopeChange" :accounts="options.accounts" /></el-form-item>
           <el-form-item :label="tr('场次类型')" prop="rateTypeId">
             <div class="rate-type-field">
               <el-select v-model="dialog.form.rateTypeId" :loading="dialog.loadingRateTypes" :disabled="!hasScheduleRateScope" :placeholder="rateTypePlaceholder">
@@ -66,6 +66,8 @@
 </template>
 
 <script setup>
+import LiveAccountSelect from '../components/LiveAccountSelect.vue'
+import LivePlatformTag from '../components/LivePlatformTag.vue'
 import { useLiveI18n } from '../useLiveI18n'
 import LiveEmployeeSelect from '../components/LiveEmployeeSelect.vue'
 import LiveEmployeeName from '../components/LiveEmployeeName.vue'

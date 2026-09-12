@@ -323,3 +323,157 @@ test('a failed automatic preview blocks confirmation until a date change succeed
   assert.equal(requests,2);assert.equal(page.review.preview,null);assert.equal(page.review.loading,false)
   await page.submit();assert.equal(writes,0)
 })
+
+
+async function streamFixture(overrides = {}) {
+  const schedules = [
+    { employeeId: '1', accountId: '10', rateTypeId: '20', startTime: '08:00:00', endTime: '10:00:00' },
+    { employeeId: '1', accountId: '11', rateTypeId: '21', startTime: '12:00:00', endTime: '14:00:00' },
+    { employeeId: '1', accountId: '10', rateTypeId: '21', startTime: '22:00:00', endTime: '01:00:00' }
+  ]
+  const calls = { schedules: [], rates: [] }
+  const api = {
+    listStreamScheduleOptions: async params => {
+      calls.schedules.push(params)
+      return { data: schedules.filter(row => row.employeeId === params.employeeId && (!params.accountId || row.accountId === params.accountId)) }
+    },
+    listStreamRateTypes: async params => {
+      calls.rates.push(params)
+      return { data: [{ id: '20' }, { id: '21' }] }
+    },
+    ...overrides
+  }
+  const page = await setup('streams/index.vue', {
+    vue: vueModule, '../shared': shared,
+    '../components/LiveEmployeeSelect.vue': {}, '../components/LiveEmployeeName.vue': {},
+    '../components/SpecialDetailsEditor.vue': {}, '../components/specialDetails': specialsModule,
+    '@/store/modules/user': () => ({ id: 'user-1' }), '@/api/wms/livePayroll': api
+  })
+  page.dialog.form = { streamDate: '2026-09-12', employeeId: '1', accountId: null }
+  return { page, calls, schedules }
+}
+
+test('stream date and host alone fill platform, active rate type and times from the first schedule', async () => {
+  const { page, calls } = await streamFixture()
+  await page.handleStreamRateScopeChange()
+  assert.equal(calls.schedules[0].accountId, undefined)
+  assert.equal(calls.rates[0].accountId, '10')
+  assert.equal(page.dialog.form.accountId, '10')
+  assert.equal(page.dialog.form.rateTypeId, '20')
+  assert.equal(page.dialog.form.startTime, '08:00:00')
+  assert.equal(page.dialog.form.endTime, '10:00:00')
+  assert.equal(page.streamDurationText.value, '2.00h')
+  assert.equal(page.dialog.scheduleMissing, false)
+})
+
+test('stream rate changes use only the chosen platform and manual platform changes re-match schedules', async () => {
+  const { page, calls } = await streamFixture()
+  await page.handleStreamRateScopeChange()
+  page.dialog.form.rateTypeId = '21'
+  page.handleStreamRateTypeChange()
+  assert.equal(page.dialog.form.startTime, '22:00:00')
+  assert.equal(page.dialog.form.endTime, '01:00:00')
+  assert.equal(page.streamDurationText.value, '3.00h')
+  page.dialog.form.accountId = '11'
+  await page.handleStreamAccountChange()
+  assert.equal(calls.schedules.at(-1).accountId, '11')
+  assert.equal(page.dialog.form.rateTypeId, '21')
+  assert.equal(page.dialog.form.startTime, '12:00:00')
+})
+
+test('opening a new stream ignores the remembered platform when finding the host schedule', async () => {
+  const { page, calls } = await streamFixture()
+  const previousStorage = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: { getItem: () => JSON.stringify({ employeeId: '1', accountId: '11', rateTypeId: '21' }) } })
+  try {
+    page.options.employees = [{ value: '1' }]
+    page.options.accounts = [{ id: '10' }, { id: '11' }]
+    await page.openDialog()
+    assert.equal(calls.schedules[0].accountId, undefined)
+    assert.equal(page.dialog.form.accountId, '10')
+    assert.equal(page.dialog.form.startTime, '08:00:00')
+  } finally {
+    if (previousStorage) Object.defineProperty(globalThis, 'localStorage', previousStorage)
+    else delete globalThis.localStorage
+  }
+})
+
+test('opening an existing stream preserves its platform, type and manually entered times', async () => {
+  const { page, calls } = await streamFixture()
+  await page.openDialog({ id: '99', streamDate: '2026-09-12', employeeId: '1', accountId: '11', rateTypeId: '20', startTime: '15:00:00', endTime: '17:30:00', manualRate: true, hourlyRate: 45 })
+  assert.equal(calls.schedules[0].accountId, '11')
+  assert.equal(page.dialog.form.accountId, '11')
+  assert.equal(page.dialog.form.rateTypeId, '20')
+  assert.equal(page.dialog.form.startTime, '15:00:00')
+  assert.equal(page.dialog.form.endTime, '17:30:00')
+  assert.equal(page.dialog.form.hourlyRate, 45)
+  assert.equal(page.dialog.form.manualRate, true)
+})
+
+test('stream lookup skips incomplete criteria and clears old defaults when no schedule matches', async () => {
+  const { page, calls } = await streamFixture()
+  page.dialog.form.employeeId = null
+  await page.handleStreamRateScopeChange()
+  assert.equal(calls.schedules.length, 0)
+  assert.equal(calls.rates.length, 0)
+  assert.equal(page.dialog.scheduleMissing, false)
+  page.dialog.form.employeeId = '1'
+  await page.handleStreamRateScopeChange()
+  page.dialog.form.employeeId = '2'
+  await page.handleStreamRateScopeChange()
+  assert.equal(page.dialog.scheduleMissing, true)
+  assert.equal(page.dialog.form.rateTypeId, null)
+  assert.equal(page.dialog.form.startTime, null)
+  assert.equal(page.dialog.form.endTime, null)
+  assert.equal(page.dialog.loadingSchedule, false)
+  assert.equal(page.dialog.loadingRateTypes, false)
+})
+
+test('a scheduled rate type that is no longer active cannot remain selected', async () => {
+  const { page } = await streamFixture({ listStreamRateTypes: async () => ({ data: [] }) })
+  await page.handleStreamRateScopeChange()
+  assert.equal(page.dialog.form.accountId, '10')
+  assert.equal(page.dialog.form.rateTypeId, null)
+  assert.equal(page.dialog.form.startTime, '08:00:00')
+})
+
+test('an older schedule response cannot overwrite the latest date and host selection', async () => {
+  let resolveOld
+  const { page, schedules, calls } = await streamFixture({
+    listStreamScheduleOptions: params => params.employeeId === '1'
+      ? new Promise(resolve => { resolveOld = resolve })
+      : Promise.resolve({ data: [{ employeeId: '2', accountId: '11', rateTypeId: '21', startTime: '16:00:00', endTime: '18:00:00' }] })
+  })
+  const oldRequest = page.handleStreamRateScopeChange()
+  page.dialog.form.employeeId = '2'
+  page.dialog.form.streamDate = '2026-09-13'
+  await page.handleStreamRateScopeChange()
+  resolveOld({ data: schedules })
+  await oldRequest
+  assert.equal(page.dialog.form.accountId, '11')
+  assert.equal(page.dialog.form.startTime, '16:00:00')
+  assert.equal(calls.rates.length, 1)
+  assert.equal(calls.rates[0].employeeId, '2')
+  assert.equal(calls.rates[0].streamDate, '2026-09-13')
+})
+
+test('changing the stream selection invalidates an in-flight rate request immediately', async () => {
+  let resolveOldRate, rateStarted
+  const started = new Promise(resolve => { rateStarted = resolve })
+  const { page } = await streamFixture({
+    listStreamRateTypes: () => {
+      rateStarted()
+      return new Promise(resolve => { resolveOldRate = resolve })
+    }
+  })
+  const oldRequest = page.handleStreamRateScopeChange()
+  await started
+  page.dialog.form.employeeId = null
+  await page.handleStreamRateScopeChange()
+  resolveOldRate({ data: [{ id: '20' }] })
+  await oldRequest
+  assert.deepEqual(page.dialog.rateTypes, [])
+  assert.equal(page.dialog.form.rateTypeId, null)
+  assert.equal(page.dialog.form.startTime, null)
+  assert.equal(page.dialog.loadingRateTypes, false)
+})

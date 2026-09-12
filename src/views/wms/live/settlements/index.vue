@@ -20,7 +20,7 @@
         <el-table-column prop="typeLabel" :label="tr('来源')" :min-width="isEn ? 145 : 90" />
         <el-table-column :label="tr('业务日期')" :min-width="isEn ? 150 : 125"><template #default="s">{{ displayDate(s.row.businessDate) }}</template></el-table-column>
         <el-table-column :label="tr('入账日期')" :min-width="isEn ? 150 : 125"><template #default="s">{{ displayDate(s.row.postingDate) }}</template></el-table-column>
-        <el-table-column prop="accountLabel" :label="tr('平台/订单')" min-width="180" />
+        <el-table-column prop="accountLabel" :label="tr('平台/订单')" min-width="180"><template #default="s"><LivePlatformTag :account="s.row" :accounts="options.accounts" /></template></el-table-column>
         <el-table-column prop="description" :label="tr('说明')" min-width="200" />
         <el-table-column :label="tr('状态')" :min-width="isEn ? 145 : 110"><template #default="s">{{ s.row.type === 'ADJUSTMENT' ? tr(adjustmentStatusLabel(s.row.status)) : tr(settlementStatusLabel(s.row.status)) }}</template></el-table-column>
         <el-table-column :label="tr('金额')" :min-width="isEn ? 155 : 130"><template #default="s">{{ money(s.row.amount) }}</template></el-table-column>
@@ -48,7 +48,7 @@
       <el-skeleton v-if="review.loading" :rows="3" animated />
       <template v-if="review.preview">
         <el-table :data="flatten(review.preview)" max-height="340">
-          <el-table-column prop="typeLabel" :label="tr('来源')" :min-width="isEn ? 145 : 90" /><el-table-column :label="tr('业务日期')" :min-width="isEn ? 150 : 125"><template #default="s">{{ displayDate(s.row.businessDate) }}</template></el-table-column><el-table-column :label="tr('入账日期')" :min-width="isEn ? 150 : 125"><template #default="s">{{ displayDate(s.row.postingDate) }}</template></el-table-column><el-table-column prop="accountLabel" :label="tr('平台')" /><el-table-column prop="description" :label="tr('说明')" /><el-table-column :label="tr('金额')"><template #default="s">{{ money(s.row.amount) }}</template></el-table-column>
+          <el-table-column prop="typeLabel" :label="tr('来源')" :min-width="isEn ? 145 : 90" /><el-table-column :label="tr('业务日期')" :min-width="isEn ? 150 : 125"><template #default="s">{{ displayDate(s.row.businessDate) }}</template></el-table-column><el-table-column :label="tr('入账日期')" :min-width="isEn ? 150 : 125"><template #default="s">{{ displayDate(s.row.postingDate) }}</template></el-table-column><el-table-column prop="accountLabel" :label="tr('平台')"><template #default="s"><LivePlatformTag :account="s.row" :accounts="options.accounts" /></template></el-table-column><el-table-column prop="description" :label="tr('说明')" /><el-table-column :label="tr('金额')"><template #default="s">{{ money(s.row.amount) }}</template></el-table-column>
         </el-table>
         <p>{{ tr('开播') }} {{ money(review.preview.streamAmount) }} {{ tr('＋ 佣金') }} {{ money(review.preview.commissionAmount) }} {{ tr('＋ 调整') }} {{ money(review.preview.adjustmentAmount) }} ＝ <strong>{{ money(review.preview.totalAmount) }}</strong></p>
       </template>
@@ -58,13 +58,14 @@
       <template v-if="detail.batch">
         <p>{{ detail.batch.settlementNo }} · {{ detail.batch.employeeName }} · {{ displayDate(detail.batch.settlementDate) }} · {{ money(detail.batch.totalAmount) }}</p>
         <p>{{ tr('确认人：') }}{{ detail.batch.confirmedBy }}{{ tr('；说明：') }}{{ detail.batch.remark }}{{ tr('；支付凭据：') }}{{ detail.batch.paymentReference || tr('未登记') }}</p>
-        <el-table :data="detailRows" max-height="480"><el-table-column prop="typeLabel" :label="tr('来源')" :min-width="isEn ? 145 : 90" /><el-table-column prop="id" :label="tr('原记录编号')" min-width="180" /><el-table-column :label="tr('业务日期')" :min-width="isEn ? 150 : 125"><template #default="s">{{ displayDate(s.row.businessDate) }}</template></el-table-column><el-table-column :label="tr('入账日期')" :min-width="isEn ? 150 : 125"><template #default="s">{{ displayDate(s.row.postingDate) }}</template></el-table-column><el-table-column prop="accountLabel" :label="tr('平台')" /><el-table-column prop="description" :label="tr('说明')" /><el-table-column :label="tr('金额')"><template #default="s">{{ money(s.row.amount) }}</template></el-table-column></el-table>
+        <el-table :data="detailRows" max-height="480"><el-table-column prop="typeLabel" :label="tr('来源')" :min-width="isEn ? 145 : 90" /><el-table-column prop="id" :label="tr('原记录编号')" min-width="180" /><el-table-column :label="tr('业务日期')" :min-width="isEn ? 150 : 125"><template #default="s">{{ displayDate(s.row.businessDate) }}</template></el-table-column><el-table-column :label="tr('入账日期')" :min-width="isEn ? 150 : 125"><template #default="s">{{ displayDate(s.row.postingDate) }}</template></el-table-column><el-table-column prop="accountLabel" :label="tr('平台')"><template #default="s"><LivePlatformTag :account="s.row" :accounts="options.accounts" /></template></el-table-column><el-table-column prop="description" :label="tr('说明')" /><el-table-column :label="tr('金额')"><template #default="s">{{ money(s.row.amount) }}</template></el-table-column></el-table>
       </template>
       <template #footer><el-button @click="exportBatch">{{ tr('导出本批次') }}</el-button><el-button @click="detail.open=false">{{ tr('关闭') }}</el-button></template>
     </el-dialog>
   </div>
 </template>
 <script setup>
+import LivePlatformTag from '../components/LivePlatformTag.vue'
 import { useLiveI18n } from '../useLiveI18n'
 import { computed, getCurrentInstance, onMounted, onActivated, reactive, ref } from 'vue'
 import { getLiveOptions, listSettlementCandidates, previewSettlement, confirmSettlement, listSettlements, getSettlement, markSettlementPaid, deleteManualAdjustment } from '@/api/wms/livePayroll'
@@ -87,7 +88,7 @@ const detailRows = computed(() => detail.batch ? flatten(JSON.parse(detail.batch
 function scope() { return { employeeId: query.employeeId, startDate: dateRange.value?.[0], endDate: dateRange.value?.[1] } }
 function resetCandidates() { candidateData.value={}; selection.value=[]; batchQuery.pageNum=1; return Promise.all([loadCandidates(), loadBatches()]) }
 function resetQuery() { query.employeeId=null; dateRange.value=null; return resetCandidates() }
-async function loadOptions() { Object.assign(options, await getLiveOptions()) }
+async function loadOptions() { Object.assign(options, await getLiveOptions(true)) }
 async function loadCandidates() {
   loading.value=true
   selection.value=[]

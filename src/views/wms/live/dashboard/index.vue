@@ -19,7 +19,7 @@
     <el-card class="live-filter" shadow="never">
       <el-form :inline="true">
         <el-form-item :label="tr('日期')"><el-date-picker v-model="dateRange" type="daterange" value-format="YYYY-MM-DD" :format="LIVE_DATE_FORMAT" :range-separator="tr('至')" /></el-form-item>
-        <el-form-item :label="tr('直播平台')"><el-select v-model="filters.accountId" clearable filterable :placeholder="tr('全部直播平台')"><el-option v-for="v in options.accounts" :key="v.id" :label="accountLabel(v)" :value="v.id" /></el-select></el-form-item>
+        <el-form-item :label="tr('直播平台')"><LiveAccountSelect v-model="filters.accountId" clearable filterable :placeholder="tr('全部直播平台')" :accounts="options.accounts" /></el-form-item>
         <el-form-item :label="tr('主播')"><LiveEmployeeSelect v-model="filters.employeeId"   :placeholder="tr('全部主播')" :employees="options.employees" /></el-form-item>
         <el-form-item :label="tr('费率类型')"><el-select v-model="filters.rateTypeId" clearable :placeholder="tr('全部类型')"><el-option v-for="v in options.rateTypes" :key="v.id" :label="v.typeName" :value="v.id" /></el-select></el-form-item>
         <el-form-item><el-button type="primary" @click="load">{{ tr('查询') }}</el-button><el-button @click="selectMonth(0)">{{ tr('本月') }}</el-button><el-button @click="selectMonth(-1)">{{ tr('上个月') }}</el-button></el-form-item>
@@ -78,7 +78,7 @@
         <el-table-column prop="date" :label="tr('日期')" :min-width="isEn ? 145 : 120" sortable><template #default="s">{{ displayDate(s.row.date) }}</template></el-table-column>
         <el-table-column prop="employeeName" :label="tr('主播')" min-width="110" ><template #default="s"><LiveEmployeeName :name="s.row.employeeName" :status="s.row.employeeStatus" /></template></el-table-column>
         <el-table-column :label="tr('直播平台')" min-width="220">
-          <template #default="s">{{ s.row.accountLabel }}<span v-if="s.row.platform" class="muted"> ({{ s.row.platform }})</span></template>
+          <template #default="s"><LivePlatformTag :account="s.row" :accounts="options.accounts" /></template>
         </el-table-column>
         <el-table-column :label="tr('计划时间')" :min-width="isEn ? 155 : 130"><template #default="s">{{ timeRange(s.row.plannedStartTime, s.row.plannedEndTime) }}</template></el-table-column>
         <el-table-column :label="tr('实际时间')" :min-width="isEn ? 155 : 130"><template #default="s">{{ timeRange(s.row.actualStartTime, s.row.actualEndTime) }}</template></el-table-column>
@@ -103,6 +103,8 @@
 </template>
 
 <script setup>
+import LiveAccountSelect from '../components/LiveAccountSelect.vue'
+import LivePlatformTag from '../components/LivePlatformTag.vue'
 import { useLiveI18n } from '../useLiveI18n'
 import LiveEmployeeSelect from '../components/LiveEmployeeSelect.vue'
 import LiveEmployeeName from '../components/LiveEmployeeName.vue'

@@ -23,7 +23,7 @@
       </el-table-column>
       <el-table-column prop="businessDate" :label="tr('日期')" :min-width="isEn ? 145 : 120"><template #default="scope">{{ displayDate(scope.row.businessDate) }}</template></el-table-column>
       <el-table-column prop="employeeName" :label="tr('主播')" min-width="130" show-overflow-tooltip />
-      <el-table-column prop="accountLabel" :label="tr('直播平台')" min-width="190" show-overflow-tooltip />
+      <el-table-column prop="accountLabel" :label="tr('直播平台')" min-width="190" show-overflow-tooltip><template #default="s"><LivePlatformTag :account="s.row" :accounts="accounts" /></template></el-table-column>
       <el-table-column prop="rateTypeName" :label="tr('费率类型')" min-width="120" show-overflow-tooltip />
       <el-table-column :label="tr('时段')" :min-width="isEn ? 150 : 125">
         <template #default="scope">{{ timeRange(scope.row) }}</template>
@@ -34,11 +34,13 @@
 </template>
 
 <script setup>
+import LivePlatformTag from './LivePlatformTag.vue'
 import { useLiveI18n } from '../useLiveI18n'
 import { WarningFilled } from '@element-plus/icons-vue'
 import { displayDate } from '../shared'
 const { tr, isEn } = useLiveI18n()
 defineProps({
+  accounts: { type: Array, default: () => [] },
   modelValue: { type: Boolean, default: false },
   rows: { type: Array, default: () => [] },
   action: { type: String, default: '操作' },
