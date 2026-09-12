@@ -22,7 +22,7 @@
           <el-col :xs="24" :sm="12" :md="6" :lg="6">
             <el-form-item label="商品品牌" prop="itemBrand">
               <el-select
-                v-model="queryParams.itemBrand"
+                v-model="selectedBrandGroups"
                 multiple
                 clearable
                 filterable
@@ -30,10 +30,10 @@
                 style="width: 100%"
               >
                 <el-option
-                  v-for="item in useWmsStore().itemBrandList"
-                  :key="String(item.id)"
+                  v-for="item in brandGroups"
+                  :key="item.id"
                   :label="item.brandName"
-                  :value="String(item.id)"
+                  :value="item.id"
                 />
               </el-select>
             </el-form-item>
@@ -128,11 +128,12 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { Ticket } from '@element-plus/icons-vue'
 import { useWmsStore } from '@/store/modules/wms'
+import { parseBrandIdList } from '@/utils/itemBrand'
 
-defineProps({
+const props = defineProps({
   queryParams: { type: Object, required: true },
   supplierOptions: { type: Array, default: () => [] },
   isSupplierUser: { type: Boolean, default: false },
@@ -145,6 +146,40 @@ defineProps({
 
 const emit = defineEmits(['search', 'reset', 'open-name-tag-drawer'])
 const queryFormRef = ref(null)
+const wmsStore = useWmsStore()
+
+// 同名品牌只显示一个筛选项，但保留不同分类下的全部品牌 ID。
+const brandGroups = computed(() => {
+  const groups = new Map()
+  for (const brand of wmsStore.itemBrandList || []) {
+    if (brand?.id == null || brand.id === '') continue
+    const id = String(brand.id)
+    const brandName = String(brand.brandName || '').trim()
+    const key = brandName ? `name:${brandName}` : `id:${id}`
+    if (!groups.has(key)) {
+      groups.set(key, { id, brandName: brandName || id, brandIds: [] })
+    }
+    const group = groups.get(key)
+    if (!group.brandIds.includes(id)) group.brandIds.push(id)
+  }
+  return [...groups.values()]
+})
+
+const selectedBrandGroups = computed({
+  get() {
+    const selectedIds = new Set(parseBrandIdList(props.queryParams.itemBrand))
+    return brandGroups.value
+      .filter(group => group.brandIds.some(id => selectedIds.has(id)))
+      .map(group => group.id)
+  },
+  set(values) {
+    const selectedGroups = new Set(values)
+    // 查询参数始终使用完整 ID 列表，让搜索、分页和导出共用合并后的范围。
+    props.queryParams.itemBrand = brandGroups.value
+      .filter(group => selectedGroups.has(group.id))
+      .flatMap(group => group.brandIds)
+  }
+})
 
 defineExpose({
   resetFields: () => queryFormRef.value?.resetFields?.()
