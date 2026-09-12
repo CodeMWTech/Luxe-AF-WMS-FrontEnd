@@ -56,6 +56,7 @@
       <el-checkbox v-model="loginForm.rememberMe" class="mobile-login__remember">
         {{ $t('login.rememberMe') }}
       </el-checkbox>
+      <LoginConsentNotice variant="mobile" />
       <el-form-item class="mobile-login__submit-item">
         <el-button
           type="primary"
@@ -80,6 +81,7 @@ import { decrypt, encrypt } from '@/utils/jsencrypt'
 import useUserStore from '@/store/modules/user'
 import { useMobileLanguage } from '@/views/mobile/composables/useMobileLanguage'
 import { resolvePostLoginRedirect } from '@/utils/mobileDevice'
+import LoginConsentNotice from '@/components/LoginConsentNotice/index.vue'
 
 const router = useRouter()
 const route = useRoute()

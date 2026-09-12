@@ -72,6 +72,7 @@
         <div class="form-options">
           <el-checkbox v-model="loginForm.rememberMe">{{ $t('login.rememberMe') }}</el-checkbox>
         </div>
+        <LoginConsentNotice variant="desktop" />
         <el-form-item class="login-action">
           <el-button
             :loading="loading"
@@ -98,6 +99,7 @@ import { encrypt, decrypt } from '@/utils/jsencrypt'
 import useUserStore from '@/store/modules/user'
 import { useI18n } from 'vue-i18n'
 import { resolvePostLoginRedirect } from '@/utils/mobileDevice'
+import LoginConsentNotice from '@/components/LoginConsentNotice/index.vue'
 
 const loginVideoUrl = new URL('../../../videos/A_high-end,_minimalist_luxury_secondary_202607092241-remove-mark.mp4', import.meta.url).href
 const userStore = useUserStore()
