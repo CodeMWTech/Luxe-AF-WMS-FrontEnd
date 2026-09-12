@@ -88,6 +88,18 @@ export const constantRoutes = [
     hidden: true
   },
   {
+    path: '/privacy',
+    component: () => import('@/views/legal/index.vue'),
+    hidden: true,
+    meta: { legalDoc: 'privacy', title: '隐私政策', titleEn: 'Privacy Policy' }
+  },
+  {
+    path: '/terms',
+    component: () => import('@/views/legal/index.vue'),
+    hidden: true,
+    meta: { legalDoc: 'terms', title: '用户协议', titleEn: 'Terms of Service' }
+  },
+  {
     path: "/:pathMatch(.*)*",
     component: () => import('@/views/error/404'),
     hidden: true
