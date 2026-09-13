@@ -60,9 +60,10 @@
       <el-table-column :label="text('操作时间', 'Operated at')" width="175">
         <template #default="{ row }">{{ displayTime(row.recordedAt) }}</template>
       </el-table-column>
-      <el-table-column :label="text('操作', 'Actions')" width="210" fixed="right">
+      <el-table-column :label="text('操作', 'Actions')" width="310" fixed="right">
         <template #default="{ row }">
           <el-button link type="primary" @click="viewRecord(row.id)">{{ text('明细', 'Details') }}</el-button>
+          <el-button v-if="row.recordStatus === 'CONFIRMED'" v-hasPermi="['wms:vendor:list']" link type="primary" :loading="invoiceLoadingId === String(row.id)" :disabled="invoiceLoadingId !== null" @click="exportInvoice(row)">{{ text('发票打印', 'Export Invoice') }}</el-button>
           <el-button v-if="row.recordStatus === 'DRAFT' && canSettleDraft" link type="warning" @click="goSettle(row)">{{ text('去结算', 'Settle') }}</el-button>
           <el-button v-if="row.recordStatus === 'DRAFT' && canSettleDraft" link type="danger" @click="deleteDraft(row)">{{ text('删除', 'Delete') }}</el-button>
         </template>
@@ -131,6 +132,10 @@
           <template #default="{ row }">{{ row.remark || '-' }}</template>
         </el-table-column>
       </el-table>
+      <template #footer>
+        <el-button v-if="detail.recordStatus === 'CONFIRMED'" v-hasPermi="['wms:vendor:list']" type="primary" :loading="invoiceLoadingId === String(detail.id)" :disabled="detailLoading || invoiceLoadingId !== null" @click="exportInvoice(detail)">{{ text('发票打印', 'Export Invoice') }}</el-button>
+        <el-button @click="detailVisible = false">{{ text('关闭', 'Close') }}</el-button>
+      </template>
     </el-dialog>
   </div>
 </template>
@@ -145,6 +150,7 @@ const { proxy } = getCurrentInstance()
 const router = useRouter()
 const loading = ref(false)
 const exportLoading = ref(false)
+const invoiceLoadingId = ref(null)
 const detailLoading = ref(false)
 const detailVisible = ref(false)
 const identityResolved = ref(false)
@@ -201,6 +207,17 @@ async function handleExport() {
   } finally {
     exportLoading.value = false
   }
+}
+
+async function exportInvoice(row) {
+  if (!row?.id || row.recordStatus !== 'CONFIRMED' || invoiceLoadingId.value !== null) return
+  invoiceLoadingId.value = String(row.id)
+  try {
+    const number = String(row.settlementNo || row.id).replace(/[^A-Za-z0-9_-]/g, '_')
+    await proxy.download(`wms/supplier-settlement/settlement/records/${row.id}/invoice`, {}, `Invoice_${number}.pdf`, {
+      timeout: 120000, skipHeaderTranslate: true, progressLabel: text('正在生成 Invoice', 'Generating Invoice')
+    })
+  } finally { invoiceLoadingId.value = null }
 }
 
 function goSettle(row) {

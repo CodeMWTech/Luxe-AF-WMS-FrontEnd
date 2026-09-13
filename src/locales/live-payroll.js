@@ -176,6 +176,8 @@ export default {
   "；说明：": "; Notes: ",
   "；支付凭据：": "; Payment reference: ",
   "导出本批次": "Export this batch",
+  "发票打印": "Export Invoice",
+  "正在生成 Invoice": "Generating Invoice",
   "请选择业务日期": "Select a business date",
   "请选择入账日期": "Select a posting date",
   "请至少添加一条特殊明细，并填写类型和金额": "Add at least one special item with a type and amount",
