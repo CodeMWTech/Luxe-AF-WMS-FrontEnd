@@ -1,18 +1,22 @@
 <template>
-  <p class="login-consent" :class="`is-${variant}`">
-    <span class="login-consent__icon" aria-hidden="true">i</span>
-    <span class="login-consent__text">
-      {{ $t('login.consentBefore') }}
-      <router-link class="login-consent__link" to="/terms" target="_blank" rel="noopener noreferrer">
-        {{ $t('login.termsLink') }}
-      </router-link>
-      {{ $t('login.consentAnd') }}
-      <router-link class="login-consent__link" to="/privacy" target="_blank" rel="noopener noreferrer">
-        {{ $t('login.privacyLink') }}
-      </router-link>
-      {{ $t('login.consentAfter') }}
-    </span>
-  </p>
+  <details class="login-consent" :class="`is-${variant}`" open>
+    <summary class="login-consent__summary">
+      <span class="login-consent__icon" aria-hidden="true">i</span>
+      <span class="login-consent__text">
+        {{ $t('login.consentSummary') }}
+        <router-link class="login-consent__link" to="/terms" target="_blank" rel="noopener noreferrer" @click.stop>
+          {{ $t('login.termsLink') }}
+        </router-link>
+        {{ $t('login.consentAnd') }}
+        <router-link class="login-consent__link" to="/privacy" target="_blank" rel="noopener noreferrer" @click.stop>
+          {{ $t('login.privacyLink') }}
+        </router-link>
+        {{ $t('login.consentAfter') }}
+        <span class="login-consent__more">{{ $t('login.consentMore') }}</span>
+      </span>
+    </summary>
+    <p class="login-consent__detail">{{ $t('login.consentDetail') }}</p>
+  </details>
 </template>
 
 <script setup>
@@ -26,12 +30,21 @@ defineProps({
 
 <style scoped lang="scss">
 .login-consent {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
   margin: 0;
   color: #606266;
   line-height: 1.5;
+}
+
+.login-consent__summary {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  list-style: none;
+  cursor: pointer;
+}
+
+.login-consent__summary::-webkit-details-marker {
+  display: none;
 }
 
 .login-consent__icon {
@@ -62,6 +75,39 @@ defineProps({
 
 .login-consent__link:hover {
   text-decoration: underline;
+}
+
+.login-consent__more {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 4px;
+  color: #409eff;
+  white-space: nowrap;
+}
+
+.login-consent__more::after {
+  content: '';
+  display: inline-block;
+  width: 0;
+  height: 0;
+  margin-left: 4px;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid #409eff;
+  transition: transform 0.16s ease;
+}
+
+.login-consent[open] .login-consent__more::after {
+  transform: rotate(180deg);
+}
+
+.login-consent__detail {
+  margin: 8px 0 0 24px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: #f4f6fb;
+  color: #606266;
+  line-height: 1.6;
 }
 
 .is-desktop {
