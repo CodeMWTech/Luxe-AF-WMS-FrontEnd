@@ -35,7 +35,7 @@
         <el-table-column :label="tr('金额')" :min-width="isEn ? 145 : 120"><template #default="s">{{ money(s.row.totalAmount) }}</template></el-table-column>
         <el-table-column prop="paymentReference" :label="tr('支付登记')" min-width="220" show-overflow-tooltip><template #default="s">{{ s.row.paymentReference || tr('未登记') }}</template></el-table-column>
         <el-table-column prop="confirmedBy" :label="tr('确认人')" :min-width="isEn ? 145 : 110" />
-        <el-table-column :label="tr('操作')" min-width="180"><template #default="s"><el-button link type="primary" @click="showBatch(s.row.id)">{{ tr('明细/导出') }}</el-button><el-button v-hasPermi="['wms:live:settlement:confirm']" link :disabled="s.row.paid" @click="registerPayment(s.row)">{{ tr('登记支付') }}</el-button></template></el-table-column>
+        <el-table-column :label="tr('操作')" min-width="310"><template #default="s"><el-button link type="primary" @click="showBatch(s.row.id)">{{ tr('明细/导出') }}</el-button><el-button v-hasPermi="['wms:live:settlement:list']" link type="primary" :loading="invoiceLoadingId === String(s.row.id)" :disabled="invoiceLoadingId !== null" @click="exportInvoice(s.row)">{{ tr('发票打印') }}</el-button><el-button v-hasPermi="['wms:live:settlement:confirm']" link :disabled="s.row.paid" @click="registerPayment(s.row)">{{ tr('登记支付') }}</el-button></template></el-table-column>
       </el-table>
       <pagination v-show="batchTotal > 0" :total="batchTotal" v-model:page="batchQuery.pageNum" v-model:limit="batchQuery.pageSize" @pagination="loadBatches" />
     </el-card>
@@ -60,7 +60,7 @@
         <p>{{ tr('确认人：') }}{{ detail.batch.confirmedBy }}{{ tr('；说明：') }}{{ detail.batch.remark }}{{ tr('；支付凭据：') }}{{ detail.batch.paymentReference || tr('未登记') }}</p>
         <el-table :data="detailRows" max-height="480"><el-table-column prop="typeLabel" :label="tr('来源')" :min-width="isEn ? 145 : 90" /><el-table-column prop="id" :label="tr('原记录编号')" min-width="180" /><el-table-column :label="tr('业务日期')" :min-width="isEn ? 150 : 125"><template #default="s">{{ displayDate(s.row.businessDate) }}</template></el-table-column><el-table-column :label="tr('入账日期')" :min-width="isEn ? 150 : 125"><template #default="s">{{ displayDate(s.row.postingDate) }}</template></el-table-column><el-table-column prop="accountLabel" :label="tr('平台')"><template #default="s"><LivePlatformTag :account="s.row" :accounts="options.accounts" /></template></el-table-column><el-table-column prop="description" :label="tr('说明')" /><el-table-column :label="tr('金额')"><template #default="s">{{ money(s.row.amount) }}</template></el-table-column></el-table>
       </template>
-      <template #footer><el-button @click="exportBatch">{{ tr('导出本批次') }}</el-button><el-button @click="detail.open=false">{{ tr('关闭') }}</el-button></template>
+      <template #footer><el-button v-hasPermi="['wms:live:settlement:list']" type="primary" :loading="invoiceLoadingId === String(detail.batch?.id)" :disabled="!detail.batch || invoiceLoadingId !== null" @click="exportInvoice(detail.batch)">{{ tr('发票打印') }}</el-button><el-button @click="exportBatch">{{ tr('导出本批次') }}</el-button><el-button @click="detail.open=false">{{ tr('关闭') }}</el-button></template>
     </el-dialog>
   </div>
 </template>
@@ -81,6 +81,7 @@ const batchQuery = reactive({ pageNum: 1, pageSize: 20 })
 const review = reactive({ open: false, date: isoDate(), remark: '', loading: false, saving: false, preview: null, command: null })
 const manualDialog = ref()
 const detail = reactive({ open: false, batch: null })
+const invoiceLoadingId = ref(null)
 const selectedAmount = computed(() => selection.value.reduce((total, row) => total + Number(row.amount), 0))
 const flatten = data => flattenSettlement(data, tr)
 const candidates = computed(() => flatten(candidateData.value))
@@ -136,6 +137,16 @@ async function showBatch(id) { const { data }=await getSettlement(id); detail.ba
 async function registerPayment(row) {
   const { value } = await proxy.$prompt(tr('填写付款、补发或扣减凭据；此操作仅登记支付结果。'), tr('登记支付'), { inputValidator:value => !!String(value || '').trim() || tr('凭据不能为空') })
   await markSettlementPaid(row.id,value); await loadBatches()
+}
+async function exportInvoice(batch) {
+  if (!batch?.id || invoiceLoadingId.value !== null) return
+  invoiceLoadingId.value = String(batch.id)
+  try {
+    const number = String(batch.settlementNo || batch.id).replace(/[^A-Za-z0-9_-]/g, '_')
+    await proxy.download(`wms/live/settlements/${batch.id}/invoice`, {}, `Invoice_${number}.pdf`, {
+      timeout: 120000, skipHeaderTranslate: true, progressLabel: tr('正在生成 Invoice')
+    })
+  } finally { invoiceLoadingId.value = null }
 }
 function exportBatch() {
   if (!detail.batch) return
