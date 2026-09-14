@@ -147,6 +147,10 @@
               <el-option :label="tr('全部税务身份')" value="" />
               <el-option v-for="item in availableTaxFormOptions" :key="item.value" :label="item.label" :value="item.value" />
             </el-select>
+            <el-select v-model="queryParams.filterPostId" class="filter-item" clearable :placeholder="tr('筛选岗位')" @change="handleQuery">
+              <el-option :label="tr('全部岗位')" value="" />
+              <el-option v-for="item in postOptions" :key="item.postId" :label="item.postName" :value="item.postId" />
+            </el-select>
             <el-select v-model="queryParams.filterHasAccount" class="filter-item" clearable :placeholder="tr('筛选账号')" @change="handleQuery">
               <el-option :label="tr('全部账号')" value="" />
               <el-option :label="tr('有账号')" :value="'1'" />
@@ -873,7 +877,8 @@ const data = reactive({
     viewMode: 'active',
     filterTaxFormType: '',
     filterEmployeeStatus: '',
-    filterHasAccount: ''
+    filterHasAccount: '',
+    filterPostId: ''
   },
   rules: {
     nameCn: [{ required: true, message: () => tr('姓名不能为空'), trigger: 'blur' }],
@@ -1224,14 +1229,19 @@ function loadCapabilities() {
 
 function syncPostIdsFromUser(userId) {
   if (!userId || !canLoadPostOptions.value) {
-    form.value.postIds = []
     return
   }
   getUser(userId).then(res => {
-    form.value.postIds = res.data?.postIds || []
-  }).catch(() => {
-    form.value.postIds = []
-  })
+    const ids = res.data?.postIds
+    if (Array.isArray(ids) && ids.length) {
+      form.value.postIds = ids
+    }
+  }).catch(() => {})
+}
+
+function applyEmployeePostIds(data) {
+  const ids = data?.postIds
+  return Array.isArray(ids) ? ids : []
 }
 
 function syncFormSelectors() {
@@ -1331,6 +1341,9 @@ function buildListParams() {
     params.filterHasAccount = '0'
   } else {
     delete params.filterHasAccount
+  }
+  if (params.filterPostId === '' || params.filterPostId === null || params.filterPostId === undefined) {
+    delete params.filterPostId
   }
   const deptVal = deptFilterValue.value
   if (deptVal === '__none__') {
@@ -1434,6 +1447,7 @@ function resetFilters() {
   queryParams.value.filterTaxFormType = ''
   queryParams.value.filterEmployeeStatus = ''
   queryParams.value.filterHasAccount = ''
+  queryParams.value.filterPostId = ''
   handleQuery()
 }
 
@@ -1480,7 +1494,7 @@ function handleUpdate(row) {
     reset()
     loadFormOptions()
     getEmployee(row.id).then(res => {
-      form.value = { ...res.data, postIds: [] }
+      form.value = { ...res.data, postIds: applyEmployeePostIds(res.data) }
       syncFormSelectors()
       syncPostIdsFromUser(res.data?.userId)
       open.value = true
@@ -1492,7 +1506,7 @@ function handleUpdate(row) {
   reset()
   loadFormOptions()
   getEmployee(row.id).then(res => {
-    form.value = { ...res.data, postIds: [] }
+    form.value = { ...res.data, postIds: applyEmployeePostIds(res.data) }
     syncFormSelectors()
     syncPostIdsFromUser(res.data?.userId)
     open.value = true
@@ -1509,6 +1523,10 @@ function submitForm() {
     if (!valid) return
     buttonLoading.value = true
     const payload = { ...form.value }
+    payload.postIds = Array.isArray(payload.postIds) ? payload.postIds.filter(id => id != null && id !== '') : []
+    if (!payload.postIds.length) {
+      payload.position = ''
+    }
     if (payload.deptId) {
       const node = findDeptNode(deptOptions.value, payload.deptId)
       payload.deptName = node?.label || payload.deptName

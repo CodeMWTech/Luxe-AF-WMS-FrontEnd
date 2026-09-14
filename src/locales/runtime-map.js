@@ -877,6 +877,8 @@ const zhToEnMap = {
   '无账号': 'No Account',
   '全部账号': 'All Accounts',
   '筛选账号': 'Filter by Account',
+  '全部岗位': 'All Posts',
+  '筛选岗位': 'Filter by Post',
   '新增员工': 'Add Employee',
   '用户管理（创建登录账号）': 'User Management (Create Login)',
   '管理公司员工档案与必备文件。系统用户会自动同步到此列表；也可直接新增无登录账号的员工。非公司员工的系统账号可从 HR 移除。': 'Manage employee records and required documents. System users sync here automatically; you can also add employees without login accounts. Non-employee accounts can be removed from HR.',
