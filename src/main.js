@@ -3,6 +3,7 @@ import { createApp } from 'vue'
 import Cookies from 'js-cookie'
 
 import ElementPlus from 'element-plus'
+import './plugins/flexibleDateParse'
 
 import '@/assets/styles/index.scss' // global css
 import App from './App'
