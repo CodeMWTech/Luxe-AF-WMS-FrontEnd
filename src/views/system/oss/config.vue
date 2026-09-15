@@ -83,7 +83,8 @@
       <el-table-column label="是否默认" align="center" prop="status" v-if="columns[8].visible">
         <template #default="scope">
           <el-switch
-            v-model="scope.row.status"
+            :model-value="scope.row.status"
+            :disabled="scope.row.status === '1'"
             active-value="1"
             inactive-value="0"
             @change="handleStatusChange(scope.row)"
@@ -287,7 +288,7 @@ function reset() {
     isHttps: "N",
     accessPolicy: "1",
     region: undefined,
-    status: "1",
+    status: "0",
     remark: undefined,
   };
   proxy.resetForm("ossConfigRef");
@@ -351,17 +352,13 @@ function submitForm() {
     }
   });
 }
-/** 用户状态修改  */
+/** Select the default storage. The current default cannot be switched off directly. */
 function handleStatusChange(row) {
-  let text = row.status === "1" ? "启用" : "停用";
-  proxy.$modal.confirm('确认要"' + text + '""' + row.configKey + '"配置吗?').then(() => {
-    return changeOssConfigStatus(row.ossConfigId, row.status, row.configKey);
+  proxy.$modal.confirm('确认将 "' + row.configKey + '" 设为默认存储配置吗？').then(() => {
+    return changeOssConfigStatus(row.ossConfigId, "1", row.configKey);
   }).then(() => {
-    getList()
-    proxy.$modal.msgSuccess(text + "成功");
-  }).catch(function () {
-    row.status = row.status === "0" ? "1" : "0";
-  });
+    proxy.$modal.msgSuccess("默认配置已更新");
+  }).catch(() => {}).finally(() => getList());
 }
 /** 删除按钮操作 */
 function handleDelete(row) {

@@ -42,8 +42,8 @@
               <el-button v-if="Number(selectedEmployee.employeeStatus) === 3" link type="warning" v-hasPermi="['wms:employee:edit']" @click="openDeparture">{{ tr('核实离职日期') }}</el-button><el-button v-else link type="warning" v-hasPermi="['wms:employee:archive']" @click="openDeparture">{{ tr('离职归档') }}</el-button><p>{{ selectedEmployee.nickName ? selectedEmployee.nickName + ' · ' : '' }}{{ employeeSummaryText }}</p></div>
             </div>
             <div class="live-actions">
-              <el-button size="small" @click="setAllGroups(0)">{{ tr('全部启用') }}</el-button>
-              <el-button size="small" @click="setAllGroups(1)">{{ tr('全部禁用') }}</el-button>
+              <el-button size="small" @click="setAllGroups(ENABLE_STATUS.ENABLED)">{{ tr('全部启用') }}</el-button>
+              <el-button size="small" @click="setAllGroups(ENABLE_STATUS.DISABLED)">{{ tr('全部禁用') }}</el-button>
             </div>
           </div>
 
@@ -53,12 +53,12 @@
                 <button type="button" class="account-collapse" @click="toggleExpanded(account.id)">
                   <el-icon><ArrowDown v-if="isExpanded(account.id)" /><ArrowRight v-else /></el-icon>
                   <LiveAccountLabel :account="account" />
-                  <el-tag v-if="account.status === 1" size="small" type="info">{{ tr('直播平台已停用') }}</el-tag>
+                  <el-tag v-if="account.status === ENABLE_STATUS.DISABLED" size="small" type="info">{{ tr('直播平台已停用') }}</el-tag>
                   <el-tag v-else size="small" :type="isGroupEnabled(account.id) ? 'success' : 'info'">{{ tr(isGroupEnabled(account.id) ? '已启用' : '未启用') }}</el-tag>
                   <small>{{ rateRecordLabel(accountRateCount(account.id)) }}</small>
                 </button>
                 <div class="account-actions" @click.stop>
-                  <el-switch :model-value="isGroupEnabled(account.id)" :disabled="account.status === 1" :loading="statusBusy === account.id" :title="tr('启用该直播平台分组')" @change="toggleGroupStatus(account, $event)" />
+                  <el-switch :model-value="isGroupEnabled(account.id)" :disabled="account.status === ENABLE_STATUS.DISABLED" :loading="statusBusy === account.id" :title="tr('启用该直播平台分组')" @change="toggleGroupStatus(account, $event)" />
                   <el-tooltip :content="tr('同步到其他直播平台')" placement="top"><el-button link :icon="Connection" :disabled="accountRateCount(account.id) === 0" @click="openSync(account)" /></el-tooltip>
                   <el-tooltip :content="tr('删除直播平台分组及其全部费率')" placement="top"><el-button link type="danger" :icon="Delete" :disabled="!hasAccountGroup(account.id)" @click="removeAccountGroup(account)" /></el-tooltip>
                 </div>
@@ -74,14 +74,14 @@
                       <span>{{ effectiveDateText(rateFor(account.id, type.id).effectiveDate) }}</span>
                     </div>
                     <div class="rate-actions">
-                      <el-button link type="primary" :disabled="!canConfigure(account) || type.status !== 0" @click="openDialog({}, account.id, type.id)">{{ tr('新增费率') }}</el-button>
+                      <el-button link type="primary" :disabled="!canConfigure(account) || type.status !== ENABLE_STATUS.ENABLED" @click="openDialog({}, account.id, type.id)">{{ tr('新增费率') }}</el-button>
                       <el-button link :icon="Edit" :title="tr('编辑')" :disabled="!canEditRate(rateFor(account.id, type.id))" @click="openDialog(rateFor(account.id, type.id))" />
                       <el-button link type="danger" :icon="Delete" :title="tr('删除')" @click="remove(rateFor(account.id, type.id))" />
                     </div>
                   </template>
                   <template v-else>
                     <span class="unconfigured">{{ tr('暂无生效费率') }}</span>
-                    <el-button link type="primary" :disabled="!canConfigure(account) || type.status !== 0" @click="openDialog({}, account.id, type.id)">{{ tr('+ 添加') }}</el-button>
+                    <el-button link type="primary" :disabled="!canConfigure(account) || type.status !== ENABLE_STATUS.ENABLED" @click="openDialog({}, account.id, type.id)">{{ tr('+ 添加') }}</el-button>
                   </template>
                 </div>
                 <el-collapse v-if="inactiveRatesFor(account.id).length" :key="selectedEmployeeId" class="inactive-rates">
@@ -121,7 +121,7 @@
           <el-form-item :label="tr('时薪')" prop="hourlyRate"><el-input-number v-model="dialog.form.hourlyRate" :precision="2" :min="0" /></el-form-item>
           <el-form-item :label="tr('生效日期')" prop="effectiveDate"><el-date-picker v-model="dialog.form.effectiveDate" type="date" value-format="YYYY-MM-DD" :format="LIVE_DATE_FORMAT" /></el-form-item>
           <el-form-item :label="tr('失效日期')"><el-date-picker v-model="dialog.form.expiryDate" type="date" value-format="YYYY-MM-DD" :format="LIVE_DATE_FORMAT" clearable /></el-form-item>
-          <el-form-item :label="tr('状态')"><el-radio-group v-model="dialog.form.status"><el-radio :label="0">{{ tr('启用') }}</el-radio><el-radio :label="1">{{ tr('停用') }}</el-radio></el-radio-group></el-form-item>
+          <el-form-item :label="tr('状态')"><el-radio-group v-model="dialog.form.status"><el-radio :label="ENABLE_STATUS.ENABLED">{{ tr('启用') }}</el-radio><el-radio :label="ENABLE_STATUS.DISABLED">{{ tr('停用') }}</el-radio></el-radio-group></el-form-item>
           <el-form-item class="wide" :label="tr('备注')"><el-input v-model="dialog.form.remark" /></el-form-item>
         </div>
       </el-form>
@@ -199,6 +199,7 @@
 </template>
 
 <script setup>
+import { ENABLE_STATUS } from '@/utils/status'
 import LiveAccountLabel from '../components/LiveAccountLabel.vue'
 import LiveAccountSelect from '../components/LiveAccountSelect.vue'
 import { useLiveI18n } from '../useLiveI18n'
@@ -227,12 +228,12 @@ const inactiveEmployeeRates = computed(() => selectedEmployeeRates.value.filter(
 const displayRateTypes = computed(() => {
   const types = new Map(options.rateTypes.map(type => [type.id, type]))
   selectedEmployeeRates.value.forEach(rate => {
-    if (!types.has(rate.rateTypeId)) types.set(rate.rateTypeId, { id: rate.rateTypeId, typeName: rate.rateTypeName, status: 1 })
+    if (!types.has(rate.rateTypeId)) types.set(rate.rateTypeId, { id: rate.rateTypeId, typeName: rate.rateTypeName, status: ENABLE_STATUS.DISABLED })
   })
   return [...types.values()]
 })
 const sortedAccounts = computed(() => [...options.accounts].sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0) || String(a.platform).localeCompare(String(b.platform)) || String(a.accountCode).localeCompare(String(b.accountCode))))
-const activeAccounts = computed(() => sortedAccounts.value.filter(v => v.status === 0))
+const activeAccounts = computed(() => sortedAccounts.value.filter(v => v.status === ENABLE_STATUS.ENABLED))
 const configurableAccounts = computed(() => activeAccounts.value.filter(v => isGroupEnabled(v.id)))
 const enabledGroupCount = computed(() => activeAccounts.value.filter(v => isGroupEnabled(v.id)).length)
 const employeeSummaryText = computed(() => isEn.value
@@ -251,8 +252,8 @@ function inactiveRatesFor(accountId) { return inactiveEmployeeRates.value.filter
 function canEditRate(rate) { return configurableAccounts.value.some(account => account.id === rate.accountId) && options.rateTypes.some(type => type.id === rate.rateTypeId) }
 function isExpanded(accountId) { return expandedAccounts.value.has(accountId) }
 function hasAccountGroup(accountId) { return groupLinks.value.some(v => v.accountId === accountId) || accountRateCount(accountId) > 0 }
-function isGroupEnabled(accountId) { return groupLinks.value.find(v => v.accountId === accountId)?.status === 0 }
-function canConfigure(account) { return account.status === 0 && isGroupEnabled(account.id) }
+function isGroupEnabled(accountId) { return groupLinks.value.find(v => v.accountId === accountId)?.status === ENABLE_STATUS.ENABLED }
+function canConfigure(account) { return account.status === ENABLE_STATUS.ENABLED && isGroupEnabled(account.id) }
 function toggleExpanded(accountId) { const next = new Set(expandedAccounts.value); next.has(accountId) ? next.delete(accountId) : next.add(accountId); expandedAccounts.value = next }
 function timeRange(row) { return `${String(row.startTime || '').slice(0, 5)}–${String(row.endTime || '').slice(0, 5)}` }
 
@@ -260,10 +261,10 @@ async function loadRates() { const res = await listRates({}); rows.value = res.r
 async function loadGroups() { if (!selectedEmployeeId.value) { groupLinks.value = []; return } groupLoading.value = true; try { const res = await listRateAccountGroups(selectedEmployeeId.value); groupLinks.value = res.data || [] } finally { groupLoading.value = false } }
 async function loadAll() { loading.value = true; try { const [liveOptions] = await Promise.all([getLiveOptions(true), loadRates()]); Object.assign(options, liveOptions); expandedAccounts.value = new Set(); if (!filteredEmployees.value.some(v => v.value === selectedEmployeeId.value)) selectedEmployeeId.value = filteredEmployees.value[0]?.value || null; await loadGroups() } finally { loading.value = false } }
 async function selectEmployee(employeeId) { if (selectedEmployeeId.value === employeeId) return; selectedEmployeeId.value = employeeId; expandedAccounts.value = new Set(); await loadGroups() }
-async function toggleGroupStatus(account, enabled) { statusBusy.value = account.id; try { await updateRateAccountGroupStatus({ employeeId: selectedEmployeeId.value, accountId: account.id, status: enabled ? 0 : 1 }); await loadGroups(); proxy.$modal.msgSuccess(enabled ? tr('直播平台分组已启用') : tr('直播平台分组已禁用')) } catch (error) { await showActionBlocked(error, enabled ? null : () => getRateAccountGroupUsage({ employeeId: selectedEmployeeId.value, accountId: account.id }), '停用', '该直播平台分组') } finally { statusBusy.value = null } }
-async function setAllGroups(status) { try { await updateAllRateAccountGroupStatuses({ employeeId: selectedEmployeeId.value, status }); await loadGroups(); proxy.$modal.msgSuccess(status === 0 ? tr('全部直播平台已启用') : tr('全部直播平台已禁用')) } catch (error) { await showActionBlocked(error, status === 1 ? () => getRateAccountGroupUsage({ employeeId: selectedEmployeeId.value }) : null, '停用', '该主播的直播平台分组') } }
+async function toggleGroupStatus(account, enabled) { statusBusy.value = account.id; try { await updateRateAccountGroupStatus({ employeeId: selectedEmployeeId.value, accountId: account.id, status: enabled ? ENABLE_STATUS.ENABLED : ENABLE_STATUS.DISABLED }); await loadGroups(); proxy.$modal.msgSuccess(enabled ? tr('直播平台分组已启用') : tr('直播平台分组已禁用')) } catch (error) { await showActionBlocked(error, enabled ? null : () => getRateAccountGroupUsage({ employeeId: selectedEmployeeId.value, accountId: account.id }), '停用', '该直播平台分组') } finally { statusBusy.value = null } }
+async function setAllGroups(status) { try { await updateAllRateAccountGroupStatuses({ employeeId: selectedEmployeeId.value, status }); await loadGroups(); proxy.$modal.msgSuccess(status === ENABLE_STATUS.ENABLED ? tr('全部直播平台已启用') : tr('全部直播平台已禁用')) } catch (error) { await showActionBlocked(error, status === ENABLE_STATUS.DISABLED ? () => getRateAccountGroupUsage({ employeeId: selectedEmployeeId.value }) : null, '停用', '该主播的直播平台分组') } }
 
-function openDialog(row = {}, accountId = null, rateTypeId = null) { const targetAccountId = row.accountId || accountId; if (targetAccountId && !isGroupEnabled(targetAccountId)) { proxy.$modal.msgWarning(tr('请先启用该直播平台分组')); return } if (!targetAccountId && !configurableAccounts.value.length) { proxy.$modal.msgWarning(tr('请先启用至少一个直播平台分组')); return } dialog.form = { id: row.id, employeeId: row.employeeId || selectedEmployeeId.value, accountId: targetAccountId, rateTypeId: row.rateTypeId || rateTypeId, hourlyRate: Number(row.hourlyRate || 0), effectiveDate: row.effectiveDate || isoDate(), expiryDate: row.expiryDate || null, status: row.status ?? 0, remark: row.remark || '', changeReason: '' }; dialog.error = ''; dialog.open = true }
+function openDialog(row = {}, accountId = null, rateTypeId = null) { const targetAccountId = row.accountId || accountId; if (targetAccountId && !isGroupEnabled(targetAccountId)) { proxy.$modal.msgWarning(tr('请先启用该直播平台分组')); return } if (!targetAccountId && !configurableAccounts.value.length) { proxy.$modal.msgWarning(tr('请先启用至少一个直播平台分组')); return } dialog.form = { id: row.id, employeeId: row.employeeId || selectedEmployeeId.value, accountId: targetAccountId, rateTypeId: row.rateTypeId || rateTypeId, hourlyRate: Number(row.hourlyRate || 0), effectiveDate: row.effectiveDate || isoDate(), expiryDate: row.expiryDate || null, status: row.status ?? ENABLE_STATUS.ENABLED, remark: row.remark || '', changeReason: '' }; dialog.error = ''; dialog.open = true }
 async function submit() {
   if (dialog.loading) return
   await formRef.value.validate()

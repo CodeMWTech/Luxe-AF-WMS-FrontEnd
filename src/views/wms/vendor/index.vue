@@ -491,6 +491,7 @@
 </template>
 
 <script setup name="SupplierSettlement">
+import { ENABLE_STATUS } from '@/utils/status'
 import { computed, getCurrentInstance, nextTick, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getCurrentSupplier, listSupplierNoPage } from '@/api/wms/supplier'
@@ -1228,7 +1229,7 @@ async function resolveIdentity() {
     if (isSupplierUser.value) {
       queryParams.supplierId = currentSupplierId.value
     } else {
-      const supplierResponse = await listSupplierNoPage({ status: 0 })
+      const supplierResponse = await listSupplierNoPage({ status: ENABLE_STATUS.ENABLED })
       supplierOptions.value = supplierResponse.data || []
     }
   } finally {
