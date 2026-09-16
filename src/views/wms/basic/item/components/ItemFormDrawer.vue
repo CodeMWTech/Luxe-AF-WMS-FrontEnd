@@ -2,7 +2,7 @@
     <el-drawer :title="dialog.title" v-model="dialog.visible" size="80%" append-to-body :close-on-click-modal="false">
       <div v-loading="skuLoading">
         <el-card>
-          <el-form ref="itemFormRef" :model="form" :rules="rules" label-width="108px">
+          <el-form ref="itemFormRef" :model="form" :rules="rules" label-width="120px">
             <!-- 1.商品名称 2.商品分类 -->
             <el-row :gutter="24">
               <el-col :span="12">
@@ -82,12 +82,12 @@
             <!-- 7.成本价 8.销售价 -->
             <el-row :gutter="24">
               <el-col :span="12" v-if="canViewCostPrice">
-                <el-form-item label="成本价">
+                <el-form-item label="成本价" prop="costPrice">
                   <el-input-number v-model="form.costPrice" :disabled="!canEditCostPrice" :min="0" :precision="2" :controls="false" style="width: 100%" @change="emit('cost-price-change', $event)"/>
                 </el-form-item>
               </el-col>
               <el-col :span="12" v-if="canViewSellingPrice">
-                <el-form-item label="销售价">
+                <el-form-item label="销售价" prop="sellingPrice">
                   <el-input-number v-model="form.sellingPrice" :disabled="!canEditSellingPrice" :min="0" :precision="2" :controls="false" style="width: 100%"/>
                 </el-form-item>
               </el-col>
@@ -108,7 +108,7 @@
                 </el-form-item>
               </el-col>
               <el-col :span="12">
-                <el-form-item label="数量">
+                <el-form-item label="数量" prop="defaultQty">
                   <el-input-number v-model="form.defaultQty" :min="0" :controls="false" style="width: 100%" />
                 </el-form-item>
               </el-col>
@@ -193,7 +193,61 @@
             <el-row :gutter="24">
               <el-col :span="24">
                 <el-form-item label="瑕疵" prop="defect">
-                  <el-input v-model="form.defect" placeholder="请输入瑕疵描述" />
+                  <el-input
+                    v-model="form.defect"
+                    type="textarea"
+                    :rows="2"
+                    placeholder="Click tags below or type English condition notes"
+                  />
+                  <div class="accessory-tags mt8">
+                    <el-tag
+                      v-for="tag in DEFECT_TAG_OPTIONS"
+                      :key="tag"
+                      class="accessory-tag defect-tag"
+                      type="info"
+                      effect="plain"
+                      @click="emit('append-defect-tag', tag)"
+                    >
+                      {{ tag }}
+                    </el-tag>
+                  </div>
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <!-- Size -->
+            <el-row :gutter="24">
+              <el-col :span="12">
+                <el-form-item label="Size" prop="size">
+                  <el-select v-model="form.size" placeholder="Select Size" clearable style="width: 100%">
+                    <el-option v-for="item in ITEM_SIZE_OPTIONS" :key="item" :label="item" :value="item"/>
+                  </el-select>
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <!-- Bag dimensions (inches) -->
+            <el-row :gutter="24">
+              <el-col :span="8">
+                <el-form-item label="Bag Width" prop="bagWidth">
+                  <div class="inch-field">
+                    <el-input-number v-model="form.bagWidth" :min="0" :precision="2" :controls="false" style="width: 100%" />
+                    <span class="inch-unit">in</span>
+                  </div>
+                </el-form-item>
+              </el-col>
+              <el-col :span="8">
+                <el-form-item label="Bag Height" prop="bagHeight">
+                  <div class="inch-field">
+                    <el-input-number v-model="form.bagHeight" :min="0" :precision="2" :controls="false" style="width: 100%" />
+                    <span class="inch-unit">in</span>
+                  </div>
+                </el-form-item>
+              </el-col>
+              <el-col :span="8">
+                <el-form-item label="Bag Depth" prop="bagDepth">
+                  <div class="inch-field">
+                    <el-input-number v-model="form.bagDepth" :min="0" :precision="2" :controls="false" style="width: 100%" />
+                    <span class="inch-unit">in</span>
+                  </div>
                 </el-form-item>
               </el-col>
             </el-row>
@@ -237,7 +291,7 @@
             <!-- 寄售信息 -->
             <el-row :gutter="24">
               <el-col :span="24">
-                <el-form-item label="寄售信息">
+                <el-form-item label="寄售信息" prop="consignInfo">
                   <el-input
                     v-model="form.consignInfo"
                     type="textarea"
@@ -390,6 +444,8 @@ defineProps({
   ITEM_CONDITION_OPTIONS: { type: Array, default: () => [] },
   AUTH_AGENCY_OPTIONS: { type: Array, default: () => [] },
   ACCESSORY_TAG_OPTIONS: { type: Array, default: () => [] },
+  DEFECT_TAG_OPTIONS: { type: Array, default: () => [] },
+  ITEM_SIZE_OPTIONS: { type: Array, default: () => [] },
   supplierOptions: { type: Array, default: () => [] },
   isSupplierUser: { type: Boolean, default: false },
   canViewCostPrice: { type: Boolean, default: false },
@@ -419,6 +475,7 @@ const emit = defineEmits([
   'cost-price-change',
   'material-change',
   'append-accessory-tag',
+  'append-defect-tag',
   'image-drag-start',
   'image-drop',
   'retry-image',
@@ -440,3 +497,31 @@ defineExpose({
   clearFiles: () => itemImageUploadRef.value?.clearFiles?.()
 })
 </script>
+
+<style scoped>
+.mt8 { margin-top: 8px; }
+.accessory-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.accessory-tag {
+  cursor: pointer;
+  white-space: normal;
+  height: auto;
+  line-height: 1.4;
+  padding: 4px 8px;
+}
+.accessory-tag:hover {
+  opacity: 0.85;
+}
+.inch-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.inch-unit {
+  color: #909399;
+  flex-shrink: 0;
+}
+</style>

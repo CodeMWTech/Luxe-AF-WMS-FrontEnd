@@ -731,6 +731,12 @@
     paramSellingPrice: '销售价',
     paramDefect: '瑕疵',
     paramAccessories: '配件',
+    paramConditionEn: '成色(英)',
+    paramSize: 'Size',
+    paramBagWidth: 'Bag Width',
+    paramBagHeight: 'Bag Height',
+    paramBagDepth: 'Bag Depth',
+    paramBagDimensions: 'Bag Dimensions',
     // 表单 Section
     sectionListingTitle: '刊登标题与类目',
     sectionItemSpecifics: '商品属性',

@@ -61,12 +61,14 @@
       :dialog="dialog"
       :sku-loading="skuLoading"
       :form="form"
-      :rules="rules"
+      :rules="formRules"
       :item-category-tree-select-list="itemCategoryTreeSelectList"
       :form-brand-options="formBrandOptions"
       :ITEM_CONDITION_OPTIONS="ITEM_CONDITION_OPTIONS"
       :AUTH_AGENCY_OPTIONS="AUTH_AGENCY_OPTIONS"
       :ACCESSORY_TAG_OPTIONS="ACCESSORY_TAG_OPTIONS"
+      :DEFECT_TAG_OPTIONS="DEFECT_TAG_OPTIONS"
+      :ITEM_SIZE_OPTIONS="ITEM_SIZE_OPTIONS"
       :supplier-options="supplierOptions"
       :is-supplier-user="isSupplierUser"
       :can-view-cost-price="canViewCostPrice"
@@ -93,6 +95,7 @@
       @cost-price-change="handleCostPriceChange"
       @material-change="handleMaterialChange"
       @append-accessory-tag="appendAccessoryTag"
+      @append-defect-tag="appendDefectTag"
       @image-drag-start="onImageDragStart"
       @image-drop="onImageDrop"
       @retry-image="retryItemImage"
@@ -514,6 +517,19 @@ const AUTH_AGENCY_OPTIONS = ['Entrupy', 'Real Authentication', 'Legitmark', 'Che
 const ITEM_CONDITION_OPTIONS = ['S', 'A', 'B', 'C', 'D']
 /** 配件常用选项（可点击快速填入，也可自行输入） */
 const ACCESSORY_TAG_OPTIONS = ['Dustbag', 'Box', 'ID card', 'Lock & Key', 'Strap', 'Receipt']
+/** 瑕疵气泡（仅英文，可多选） */
+const DEFECT_TAG_OPTIONS = [
+  'Brand New / Unused with protective seals intact',
+  'Pristine / Like New / No noticeable signs of wear',
+  'Like New / Faint hairline scratches on hardware only',
+  'Slight exterior scuffs / light surface rubbing',
+  'Minor rubbing at bottom corners / edges',
+  'Light wear / indentations on handle & shoulder strap',
+  'Visible scratches / tarnish on metal parts',
+  'Minor stains / indentations partially inside',
+  'Light overall wear across leather, corners & hardware'
+]
+const ITEM_SIZE_OPTIONS = ['Micro', 'Mini', 'Small', 'Medium', 'Large', 'Extra Large', 'Nano']
 
 /** 点击配件 tag 时追加到输入框（已包含则不重复添加） */
 const appendAccessoryTag = (tag) => {
@@ -521,6 +537,12 @@ const appendAccessoryTag = (tag) => {
   const parts = val.split(/[,，、\n]+/).map(s => s.trim()).filter(Boolean)
   if (parts.includes(tag)) return
   form.value.accessories = parts.length ? parts.concat(tag).join(', ') : tag
+}
+const appendDefectTag = (tag) => {
+  const val = form.value.defect || ''
+  const parts = val.split(/[,，、\n]+/).map(s => s.trim()).filter(Boolean)
+  if (parts.includes(tag)) return
+  form.value.defect = parts.length ? parts.concat(tag).join(', ') : tag
 }
 /** 列表主图缓存与加载状态（兜底按 itemId 请求） */
 const listMainImageUrlMap = ref(new Map())
@@ -592,6 +614,10 @@ const initFormData = {
   modelId: undefined,
   defect: undefined,
   accessories: undefined,
+  size: undefined,
+  bagWidth: undefined,
+  bagHeight: undefined,
+  bagDepth: undefined,
   remark: undefined,
   imageList: [], // 商品图片列表（编辑时由接口返回，项为 { id, url, isMain, sort }）
   skuCode: undefined, // SKU编码（与规格表第一行同步，主表校验与提示）
@@ -663,7 +689,43 @@ const data = reactive({
     ],
   }
 });
-const {queryParams, form, rules} = toRefs(data);
+const {queryParams, form} = toRefs(data);
+
+function requiredNumber(message) {
+  return {
+    validator: (rule, value, callback) => {
+      if (value === null || value === undefined || value === '') {
+        callback(new Error(message))
+        return
+      }
+      callback()
+    },
+    trigger: 'change'
+  }
+}
+
+const formRules = computed(() => {
+  const base = { ...data.rules }
+  if (form.value.id) {
+    return base
+  }
+  return {
+    ...base,
+    costPrice: canViewCostPrice.value ? [requiredNumber('成本价不能为空')] : [],
+    sellingPrice: canViewSellingPrice.value ? [requiredNumber('销售价不能为空')] : [],
+    authAgency: [{ type: 'array', required: true, min: 1, message: '鉴定机构不能为空', trigger: 'change' }],
+    defaultQty: [requiredNumber('数量不能为空')],
+    modelId: [{ required: true, message: '包型不能为空', trigger: 'change' }],
+    materialId: [{ required: true, message: '材质不能为空', trigger: 'change' }],
+    defect: [{ required: true, message: '瑕疵不能为空', trigger: 'blur' }],
+    size: [{ required: true, message: 'Size不能为空', trigger: 'change' }],
+    bagWidth: [requiredNumber('Bag Width不能为空')],
+    bagHeight: [requiredNumber('Bag Height不能为空')],
+    bagDepth: [requiredNumber('Bag Depth不能为空')],
+    accessories: [{ required: true, message: '配件不能为空', trigger: 'blur' }],
+    consignInfo: [{ required: true, message: '寄售信息不能为空', trigger: 'blur' }]
+  }
+})
 const appliedRouteSkuCode = ref('')
 
 function applyRouteSkuFilter() {
