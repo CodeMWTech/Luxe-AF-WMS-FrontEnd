@@ -1,13 +1,13 @@
 <template>
   <div class="schedule-board">
-    <section v-for="(week, index) in weeks" :key="week[0].date">
-      <h3>{{ index === 0 ? tr('所选周') : tr('下一周') }} · {{ displayDate(week[0].date) }} — {{ displayDate(week[6].date) }}</h3>
+    <section v-for="week in weeks" :key="week[0].date">
+      <h3>{{ tr('所选周') }} · {{ displayDate(week[0].date) }} — {{ displayDate(week[6].date) }}</h3>
       <div class="board-scroll" role="region" :aria-label="tr('排班计划')" tabindex="0">
         <table class="board-table">
           <thead><tr><th scope="col">{{ tr(dimensions[view]) }}</th><th v-for="day in week" :key="day.date" scope="col" :class="{ today: day.today }">{{ displayDate(day.date).slice(0, 5) }}<span>{{ tr(weekdays[new Date(`${day.date}T12:00:00`).getDay()]) }}</span></th></tr></thead>
           <tbody>
             <tr v-for="group in groups" :key="group.id">
-              <th scope="row"><strong>{{ group.id === 'unassigned' ? tr(group.label) : group.label }}</strong><small>{{ group.secondary }}</small></th>
+              <th scope="row"><strong>{{ group.id === 'unassigned' ? tr(group.label) : group.label }}</strong><small v-if="group.secondary">{{ group.secondary }}</small></th>
               <td v-for="day in week" :key="day.date" :class="{ today: day.today }">
                 <button v-for="entry in entries(group, day.date)" :key="entry.key" type="button" class="shift-card"
                   :class="{ pending: entry.row.scheduleStatus === 'PENDING', cancelled: entry.row.scheduleStatus === 'CANCELLED' }"

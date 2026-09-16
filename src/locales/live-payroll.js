@@ -1,5 +1,11 @@
 // 主播薪酬业务文案；参数只插值，不翻译姓名、备注等业务数据。
 export default {
+  "查看所选周排班": "View the selected week's schedule",
+  "原运营已不可用": "Previous operator is unavailable",
+  "请选择岗位为主播的人员": "Select an employee with the Host position",
+  "排班主播必须具有主播岗位": "The scheduled host must have the Host position",
+  "主播不存在或不可见": "The host does not exist or is not visible",
+
   "团队共享运营颜色": "Shared team operator colors",
   "排班详情": "Schedule details",
   "运营颜色": "Operator colors",

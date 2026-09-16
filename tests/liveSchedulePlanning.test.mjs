@@ -6,7 +6,7 @@ import * as vue from 'vue'
 async function sourceModule(path) { return import('data:text/javascript;base64,' + Buffer.from(await readFile(new URL(path, import.meta.url), 'utf8')).toString('base64')) }
 const display = await sourceModule('../src/views/wms/live/schedule/scheduleDisplay.js')
 const shared = await sourceModule('../src/views/wms/live/shared.js')
-const operator = (id, name = 'Same name', color = '#D9959C') => ({ employeeId: id, name, color, employeeStatus: 0, positions: ['主播', '直播运营'] })
+const operator = (id, name = 'Same name', color = '#D9959C') => ({ employeeId: id, name, color, employeeNo: 'EMP2069209589015789569', employeeStatus: 0, positions: ['主播', '直播运营'] })
 const schedule = (extra = {}) => ({ id: '10', scheduleDate: '2026-09-16', employeeId: '9007199254740993', employeeName: 'Host', accountId: '1', accountLabel: 'TK1', startTime: '10:00:00', endTime: '14:00:00', scheduleStatus: 'CONFIRMED', ...extra })
 const assignment = (id, start, end) => ({ employeeId: id, employeeName: 'Operator', startTime: `${start}:00`, endTime: `${end}:00` })
 
@@ -26,7 +26,7 @@ test('unassigned gaps appear independently and legacy sessions remain visible', 
 test('same names and large integer IDs stay separate and idle active operators are retained', () => {
   const operators = [operator('9007199254740992'), operator('9007199254740993'), { ...operator('3'), employeeStatus: 3 }]
   const groups = display.scheduleGroups([schedule({ operatorAssignments: [assignment('9007199254740993', '10:00', '14:00')] })], 'operator', operators)
-  assert.equal(groups.length, 2); assert.equal(groups[0].entries.length, 0); assert.equal(groups[1].entries.length, 1)
+  assert.ok(groups.every(group => group.secondary === '')); assert.equal(groups.length, 2); assert.equal(groups[0].entries.length, 0); assert.equal(groups[1].entries.length, 1)
   assert.equal(display.isActiveOperator({ ...operator('1'), positions: ['运营主管'] }), false)
   assert.equal(display.isActiveOperator({ ...operator('1'), visible: false }), false)
   assert.equal(display.isActiveOperator({ ...operator('1'), employeeStatus: null }), false)
@@ -51,7 +51,7 @@ async function pageFixture(api = {}, editable = true) {
     vue: { ...vue, onMounted() {}, onActivated() {}, getCurrentInstance: () => ({ proxy: { $modal: { msgSuccess() {}, msgWarning() {} } } }) },
     '../useLiveI18n': { useLiveI18n: () => ({ tr: text => text, isEn: vue.ref(false), messageNode: text => text }) },
     '@/utils/permission': { checkPermi: () => editable }, './scheduleDisplay': display, '../shared': shared,
-    '@/api/wms/livePayroll': { getLiveOptions: async () => ({ employees: [], accounts: [], rateTypes: [] }), listScheduleOperators: async () => ({ data: [operator('1'), operator('2')] }), listScheduleCalendar: async () => ({ data: [schedule()] }), ...api }
+    '@/api/wms/livePayroll': { getLiveOptions: async () => ({ employees: [], accounts: [], rateTypes: [] }), listScheduleOperators: async () => ({ data: [operator('1'), operator('2')] }), listScheduleCalendar: async () => ({ data: [schedule()] }), listScheduleHosts: async () => ({ data: [{ value: '9007199254740993', label: 'Host', employeeStatus: 0 }] }), listScheduleRateTypes: async () => ({ data: [{ id: '5' }] }), ...api }
   }
   const create = new Function('modules', compiled.replace(/^import \{([^}]+)\} from ['"]([^'"]+)['"];?$/gm, (_, bindings, name) => `const {${bindings.replace(/\bas\b/g, ':')}} = modules[${JSON.stringify(name)}]`).replace(/^import (\w+) from ['"]([^'"]+)['"];?$/gm, (_, binding, name) => `const ${binding} = modules[${JSON.stringify(name)}]`).replace('export default', 'return'))
   return create(modules).setup({}, { expose() {}, emit() {} })
@@ -93,4 +93,44 @@ test('a query started before a color save cannot overwrite the saved color', asy
   await page.saveColor(); resolveOld({ data: [operator('1')] }); await loading
   assert.equal(page.operators.value[0].color, '#123456')
   await page.load(); assert.equal(page.operators.value[0].color, '#D9959C')
+})
+
+test('single operator is a shift field, follows edited broadcast times and can be cleared', async () => {
+  const writes = []
+  const page = await pageFixture({ updateSchedule: async payload => { writes.push(payload) } })
+  await page.load(); page.formRef.value = { validate: async () => true }
+  await page.openDialog(schedule({ operatorAssignments: [assignment('1', '10:00', '14:00')] }))
+  assert.equal(page.dialog.form.operatorId, '1')
+  assert.equal('operatorAssignments' in page.dialog.form, false)
+  Object.assign(page.dialog.form, { startTime: '11:00:00', endTime: '15:00:00', hostEndTime: '15:15:00' })
+  await page.submit()
+  assert.deepEqual(writes[0].operatorAssignments, [{ employeeId: '1', startTime: '11:00:00', endTime: '15:00:00' }])
+  assert.equal('operatorId' in writes[0], false)
+  page.dialog.form.operatorId = null; await page.submit()
+  assert.deepEqual(writes[1].operatorAssignments, [])
+  await page.openDialog({ operatorId: '2' }); assert.equal(page.dialog.form.operatorId, '2')
+})
+
+test('editor uses dedicated host options and prevents selecting operator-only employees', async () => {
+  const writes = []
+  const page = await pageFixture({
+    getLiveOptions: async () => ({ employees: [{ value: '1', label: 'Operator only' }], accounts: [], rateTypes: [] }),
+    updateSchedule: async payload => { writes.push(payload) }
+  })
+  await page.load(); page.formRef.value = { validate: async () => true }
+  assert.deepEqual(page.hostOptions.value.map(p => p.value), ['9007199254740993'])
+  await page.openDialog(schedule({ employeeId: '1' })); await page.submit()
+  assert.equal(writes.length, 0)
+})
+
+test('single-operator cards retain their color through host arrival and departure without extra rows', () => {
+  const row = schedule({ hostStartTime: '09:45:00', hostEndTime: '14:15:00', operatorAssignments: [assignment('1', '10:00', '14:00')] })
+  for (const view of ['channel', 'operator', 'host']) {
+    const entries = display.scheduleSegments(row, view)
+    assert.equal(entries.length, 1); assert.equal(entries[0].operator.employeeId, '1')
+    assert.equal(entries[0].startTime, view === 'host' ? '09:45:00' : '10:00:00')
+    assert.equal(entries[0].endTime, view === 'host' ? '14:15:00' : '14:00:00')
+  }
+  assert.equal(display.assignmentSummary(row), 'Operator')
+  assert.equal(display.scheduleGroups([row], 'host', [], [], [{ value: row.employeeId, secondary: 'EMP999' }])[0].secondary, '')
 })

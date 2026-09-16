@@ -93,3 +93,5 @@ export const deleteManualAdjustment = id => request({ url: `${base}/settlements/
 
 export const listScheduleOperators = () => request({ url: `${base}/schedules/operators`, method: 'get' })
 export const updateScheduleOperatorColor = (employeeId, color) => request({ url: `${base}/schedules/operators/${employeeId}/color`, method: 'put', data: { color }, silentError: true })
+
+export const listScheduleHosts = () => request({ url: `${base}/schedules/hosts`, method: 'get', params: { includeInactive: true } })

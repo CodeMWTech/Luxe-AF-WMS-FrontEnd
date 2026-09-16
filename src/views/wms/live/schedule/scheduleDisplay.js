@@ -20,6 +20,12 @@ function partition(row, start, end) {
 }
 
 export function scheduleSegments(row, view) {
+  // 单运营覆盖全场时，主播到岗前后也保持同一颜色，无需额外运营时段。
+  const assigned = assignments(row)
+  if (assigned.length === 1 && assigned[0].startTime <= row.startTime && assigned[0].endTime >= row.endTime) {
+    return [{ row, operator: assigned[0], startTime: view === 'host' ? row.hostStartTime || row.startTime : row.startTime,
+      endTime: view === 'host' ? row.hostEndTime || row.endTime : row.endTime, key: `${idKey(row.id)}:${view}:0` }]
+  }
   let entries
   if (view === 'operator') {
     entries = assignments(row).map(operator => ({ row, operator, startTime: operator.startTime, endTime: operator.endTime }))
@@ -38,18 +44,18 @@ export function scheduleGroups(rows, view, operators = [], accounts = [], employ
     if (!groups.has(key)) groups.set(key, { id: key, label, secondary, entries: [] })
     return groups.get(key)
   }
-  if (view === 'operator') operators.filter(isActiveOperator).forEach(o => addGroup(o.employeeId, o.name, o.employeeNo))
+  if (view === 'operator') operators.filter(isActiveOperator).forEach(o => addGroup(o.employeeId, o.name))
   for (const row of rows) {
     for (const segment of scheduleSegments(row, view)) {
       let group
       if (view === 'operator') {
         const operator = segment.operator
         const person = operator && operators.find(o => idKey(o.employeeId) === idKey(operator.employeeId))
-        group = operator ? addGroup(operator.employeeId, person?.name || operator.employeeName || '-', person?.employeeNo || operator.employeeNo)
+        group = operator ? addGroup(operator.employeeId, person?.name || operator.employeeName || '-')
           : addGroup('unassigned', '待配运营')
       } else if (view === 'host') {
         const employee = employees.find(e => idKey(e.value) === idKey(row.employeeId))
-        group = addGroup(row.employeeId, row.employeeName || employee?.label || '-', employee?.secondary)
+        group = addGroup(row.employeeId, row.employeeName || employee?.label || '-')
       } else {
         const account = accounts.find(a => idKey(a.id) === idKey(row.accountId))
         group = addGroup(row.accountId, account?.accountCode || row.accountLabel || '-', account?.displayName || row.platform)
@@ -82,5 +88,5 @@ export function operatorColorStyle(color) {
 }
 
 export function assignmentSummary(row) {
-  return assignments(row).map(a => `${a.employeeName || a.employeeId} ${timeLabel(a.startTime)}-${timeLabel(a.endTime)}`).join('; ')
+  return [...new Set(assignments(row).map(a => a.employeeName || '-'))].join('; ')
 }
