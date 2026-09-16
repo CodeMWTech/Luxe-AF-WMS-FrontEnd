@@ -90,3 +90,6 @@ export const previewRateSync = data => request({ url: `${base}/rates/account-gro
 export const addManualAdjustment = data => request({ url: `${base}/settlements/manual-adjustments`, method: 'post', data })
 export const updateManualAdjustment = (id, data) => request({ url: `${base}/settlements/manual-adjustments/${id}`, method: 'put', data })
 export const deleteManualAdjustment = id => request({ url: `${base}/settlements/manual-adjustments/${id}`, method: 'delete' })
+
+export const listScheduleOperators = () => request({ url: `${base}/schedules/operators`, method: 'get' })
+export const updateScheduleOperatorColor = (employeeId, color) => request({ url: `${base}/schedules/operators/${employeeId}/color`, method: 'put', data: { color }, silentError: true })

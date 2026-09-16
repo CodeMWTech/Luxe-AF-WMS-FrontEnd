@@ -10,7 +10,10 @@ async function sourceModule(path) {
 }
 const shared=await sourceModule('../src/views/wms/live/shared.js')
 const display=await sourceModule('../src/views/wms/live/settlements/settlementDisplay.js')
+const scheduleDisplay=await sourceModule('../src/views/wms/live/schedule/scheduleDisplay.js')
 async function setup(file, modules, props={}) {
+  modules={ './scheduleDisplay': scheduleDisplay, '@/utils/permission': {checkPermi:()=>true}, ...modules }
+  modules['@/api/wms/livePayroll']={listScheduleOperators:async()=>({data:[]}),...modules['@/api/wms/livePayroll']}
   modules={ '../useLiveI18n':{useLiveI18n:()=>({tr:(text,values=[])=>text.replace(/\{(\d+)\}/g,(_,i)=>values[i]),isEn:vue.ref(false),messageNode:text=>text})}, ...modules }
   const source=await readFile(new URL('../src/views/wms/live/'+file,import.meta.url),'utf8')
   const {descriptor}=parse(source)
