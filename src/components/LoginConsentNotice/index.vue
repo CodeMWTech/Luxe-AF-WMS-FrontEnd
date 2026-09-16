@@ -1,38 +1,70 @@
 <template>
-  <details class="login-consent" :class="`is-${variant}`" open>
-    <summary class="login-consent__summary">
-      <span class="login-consent__icon" aria-hidden="true">i</span>
-      <span class="login-consent__text">
-        {{ $t('login.consentSummary') }}
-        <router-link class="login-consent__link" to="/terms" target="_blank" rel="noopener noreferrer" @click.stop>
-          {{ $t('login.termsLink') }}
-        </router-link>
-        {{ $t('login.consentAnd') }}
-        <router-link class="login-consent__link" to="/privacy" target="_blank" rel="noopener noreferrer" @click.stop>
-          {{ $t('login.privacyLink') }}
-        </router-link>
-        {{ $t('login.consentAfter') }}
-        <span class="login-consent__more">{{ $t('login.consentMore') }}</span>
-      </span>
-    </summary>
-    <p class="login-consent__detail">{{ $t('login.consentDetail') }}</p>
-  </details>
+  <div class="login-consent" :class="`is-${variant}`">
+    <el-checkbox
+      class="login-consent__check"
+      :model-value="modelValue"
+      @update:model-value="emit('update:modelValue', $event)"
+    >
+      {{ $t('login.consentCheckbox') }}
+    </el-checkbox>
+    <details class="login-consent__details" open>
+      <summary class="login-consent__summary">
+        <span class="login-consent__icon" aria-hidden="true">i</span>
+        <span class="login-consent__text">
+          {{ $t('login.consentSummary') }}
+          <router-link class="login-consent__link" to="/terms" target="_blank" rel="noopener noreferrer" @click.stop>
+            {{ $t('login.termsLink') }}
+          </router-link>
+          {{ $t('login.consentAnd') }}
+          <router-link class="login-consent__link" to="/privacy" target="_blank" rel="noopener noreferrer" @click.stop>
+            {{ $t('login.privacyLink') }}
+          </router-link>
+          {{ $t('login.consentAfter') }}
+          <span class="login-consent__more">{{ $t('login.consentMore') }}</span>
+        </span>
+      </summary>
+      <p class="login-consent__detail">{{ $t('login.consentDetail') }}</p>
+    </details>
+  </div>
 </template>
 
 <script setup>
 defineProps({
+  modelValue: {
+    type: Boolean,
+    default: false
+  },
   variant: {
     type: String,
     default: 'desktop'
   }
 })
+
+const emit = defineEmits(['update:modelValue'])
 </script>
 
 <style scoped lang="scss">
 .login-consent {
-  margin: 0;
   color: #606266;
   line-height: 1.5;
+}
+
+.login-consent__check {
+  display: flex;
+  align-items: flex-start;
+  height: auto;
+  white-space: normal;
+}
+
+.login-consent__check :deep(.el-checkbox__label) {
+  white-space: normal;
+  line-height: 1.45;
+  color: #303133;
+  font-weight: 500;
+}
+
+.login-consent__details {
+  margin-top: 8px;
 }
 
 .login-consent__summary {
@@ -97,7 +129,7 @@ defineProps({
   transition: transform 0.16s ease;
 }
 
-.login-consent[open] .login-consent__more::after {
+.login-consent__details[open] .login-consent__more::after {
   transform: rotate(180deg);
 }
 

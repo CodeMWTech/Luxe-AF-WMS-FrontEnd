@@ -24,6 +24,8 @@
     consentAfter: '.',
     consentMore: 'Details',
     consentDetail: 'Messages include livestream assignments, dates, and schedule changes. Message frequency varies. Msg & data rates may apply. Reply STOP to opt out or HELP for help.',
+    consentCheckbox: 'I agree to receive work-schedule SMS from Luxe AF',
+    ruleConsentRequired: 'Please check the box to agree to receive work-schedule SMS',
     ruleUsernameRequired: 'Please input your username',
     ruleUsernameLength: 'Account length must be between 2 and 50 characters',
     rulePasswordRequired: 'Please input your password',
