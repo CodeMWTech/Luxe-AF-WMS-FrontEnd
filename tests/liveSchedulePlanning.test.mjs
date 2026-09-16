@@ -13,7 +13,7 @@ const assignment = (id, start, end) => ({ employeeId: id, employeeName: 'Operato
 test('handover partitions a channel and a host while preserving the shared session identity', () => {
   const row = schedule({ hostStartTime: '09:45:00', hostEndTime: '14:15:00', operatorAssignments: [assignment('1', '09:30', '12:00'), assignment('2', '12:00', '14:30')] })
   assert.deepEqual(display.scheduleSegments(row, 'channel').map(x => [x.startTime, x.endTime, x.operator.employeeId]), [['10:00:00', '12:00:00', '1'], ['12:00:00', '14:00:00', '2']])
-  assert.deepEqual(display.scheduleSegments(row, 'host').map(x => [x.startTime, x.endTime]), [['09:45:00', '12:00:00'], ['12:00:00', '14:15:00']])
+  assert.deepEqual(display.scheduleSegments(row, 'host').map(x => [x.startTime, x.endTime]), [['10:00:00', '12:00:00'], ['12:00:00', '14:00:00']])
   assert.deepEqual(display.scheduleSegments(row, 'operator').map(x => [x.startTime, x.endTime]), [['09:30:00', '12:00:00'], ['12:00:00', '14:30:00']])
   assert.ok(display.scheduleSegments(row, 'channel').every(x => x.row.id === row.id))
 })
@@ -31,9 +31,11 @@ test('same names and large integer IDs stay separate and idle active operators a
   assert.equal(display.isActiveOperator({ ...operator('1'), visible: false }), false)
   assert.equal(display.isActiveOperator({ ...operator('1'), employeeStatus: null }), false)
 })
-test('conflicts consider arrival time across roles and ignore cancelled schedules', () => {
+test('conflicts use broadcast times across roles and ignore obsolete arrival fields and cancelled schedules', () => {
   const first = schedule({ hostStartTime: '09:30:00' })
   const second = schedule({ id: '20', employeeId: '2', startTime: '08:00:00', endTime: '09:45:00', operatorAssignments: [assignment(first.employeeId, '08:00', '09:45')] })
+  assert.equal(display.conflictingSchedules([first, second]).size, 0)
+  second.endTime = '10:15:00'; second.operatorAssignments[0].endTime = '10:15:00'
   assert.deepEqual([...display.conflictingSchedules([first, second])].sort(), ['10', '20'])
   second.scheduleStatus = 'CANCELLED'; assert.equal(display.conflictingSchedules([first, second]).size, 0)
 })
@@ -99,13 +101,15 @@ test('single operator is a shift field, follows edited broadcast times and can b
   const writes = []
   const page = await pageFixture({ updateSchedule: async payload => { writes.push(payload) } })
   await page.load(); page.formRef.value = { validate: async () => true }
-  await page.openDialog(schedule({ operatorAssignments: [assignment('1', '10:00', '14:00')] }))
+  await page.openDialog(schedule({ hostStartTime: '09:45:00', hostEndTime: '14:15:00', operatorAssignments: [assignment('1', '10:00', '14:00')] }))
   assert.equal(page.dialog.form.operatorId, '1')
   assert.equal('operatorAssignments' in page.dialog.form, false)
-  Object.assign(page.dialog.form, { startTime: '11:00:00', endTime: '15:00:00', hostEndTime: '15:15:00' })
+  assert.equal('hostStartTime' in page.dialog.form, false); assert.equal('hostEndTime' in page.dialog.form, false)
+  Object.assign(page.dialog.form, { startTime: '11:00:00', endTime: '15:00:00' })
   await page.submit()
   assert.deepEqual(writes[0].operatorAssignments, [{ employeeId: '1', startTime: '11:00:00', endTime: '15:00:00' }])
   assert.equal('operatorId' in writes[0], false)
+  assert.equal('hostStartTime' in writes[0], false); assert.equal('hostEndTime' in writes[0], false)
   page.dialog.form.operatorId = null; await page.submit()
   assert.deepEqual(writes[1].operatorAssignments, [])
   await page.openDialog({ operatorId: '2' }); assert.equal(page.dialog.form.operatorId, '2')
@@ -123,13 +127,13 @@ test('editor uses dedicated host options and prevents selecting operator-only em
   assert.equal(writes.length, 0)
 })
 
-test('single-operator cards retain their color through host arrival and departure without extra rows', () => {
+test('all three views use broadcast times and operator colors regardless of obsolete arrival values', () => {
   const row = schedule({ hostStartTime: '09:45:00', hostEndTime: '14:15:00', operatorAssignments: [assignment('1', '10:00', '14:00')] })
   for (const view of ['channel', 'operator', 'host']) {
     const entries = display.scheduleSegments(row, view)
     assert.equal(entries.length, 1); assert.equal(entries[0].operator.employeeId, '1')
-    assert.equal(entries[0].startTime, view === 'host' ? '09:45:00' : '10:00:00')
-    assert.equal(entries[0].endTime, view === 'host' ? '14:15:00' : '14:00:00')
+    assert.equal(entries[0].startTime, '10:00:00')
+    assert.equal(entries[0].endTime, '14:00:00')
   }
   assert.equal(display.assignmentSummary(row), 'Operator')
   assert.equal(display.scheduleGroups([row], 'host', [], [], [{ value: row.employeeId, secondary: 'EMP999' }])[0].secondary, '')

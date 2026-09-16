@@ -50,6 +50,7 @@ test('calendar fetch and export both use the visible seven days and employee sco
   page.exportRows()
   assert.equal(calls.export[2].length,2)
   assert.ok(calls.export[0].includes('2026-09-12'))
+  assert.ok(calls.export[1].every(column => !['hostStartTime', 'hostEndTime'].includes(column.key)))
 })
 test('employee picker hides inactive staff by default but preserves history selection',async()=>{
   const employees=[{value:'1',label:'A',employeeStatus:0},{value:'2',label:'B',employeeStatus:1},{value:'3',label:'C',employeeStatus:2},{value:'4',label:'D',employeeStatus:3}]

@@ -38,7 +38,7 @@
           <el-radio-button label="operator">{{ tr('按运营') }}</el-radio-button>
           <el-radio-button label="host">{{ tr('按主播') }}</el-radio-button>
         </el-radio-group>
-        <span>{{ tr(view === 'host' ? '显示人员到岗时段' : '显示直播时段') }}</span>
+        <span>{{ tr('显示直播时段') }}</span>
       </div>
       <ScheduleBoard :rows="rows" :operators="operators" :accounts="options.accounts" :employees="options.employees" :weeks="calendarWeeks" :view="view" :can-edit="canEdit" @open="openDialog" @add="openDialog" />
     </el-card>
@@ -64,8 +64,6 @@
           </el-form-item>
           <el-form-item :label="tr('开始时间')" prop="startTime"><el-time-picker v-model="dialog.form.startTime" value-format="HH:mm:ss" format="HH:mm" @change="formRef?.validateField('endTime')" /></el-form-item>
           <el-form-item :label="tr('结束时间')" prop="endTime"><el-time-picker v-model="dialog.form.endTime" value-format="HH:mm:ss" format="HH:mm" /></el-form-item>
-          <el-form-item :label="tr('主播到岗开始')"><el-time-picker v-model="dialog.form.hostStartTime" value-format="HH:mm:ss" format="HH:mm" /></el-form-item>
-          <el-form-item :label="tr('主播到岗结束')"><el-time-picker v-model="dialog.form.hostEndTime" value-format="HH:mm:ss" format="HH:mm" /></el-form-item>
           <el-form-item :label="tr('排班状态')"><el-select v-model="dialog.form.scheduleStatus"><el-option :label="tr('已确认')" value="CONFIRMED" /><el-option :label="tr('待确认')" value="PENDING" /><el-option :label="tr('已取消')" value="CANCELLED" /></el-select></el-form-item>
           <el-form-item :label="tr('运营')" prop="operatorId">
             <el-select v-model="dialog.form.operatorId" filterable clearable :placeholder="tr('请选择运营')">
@@ -200,7 +198,7 @@ async function refreshScheduleRateTypes() {
 async function handleScheduleScopeChange() { dialog.form.rateTypeId = null; await refreshScheduleRateTypes() }
 async function openDialog(row = {}) {
   if (!row.id && !canEdit.value) return
-  dialog.form = { id: row.id, employeeName: row.employeeName || '', scheduleDate: row.scheduleDate || defaultScheduleDate(), employeeId: row.employeeId || null, accountId: row.accountId || null, rateTypeId: row.rateTypeId || null, startTime: row.startTime || '09:00:00', endTime: row.endTime || '17:00:00', remark: row.remark || '', hostStartTime: row.hostStartTime || row.startTime || '09:00:00', hostEndTime: row.hostEndTime || row.endTime || '17:00:00', scheduleStatus: row.scheduleStatus || 'CONFIRMED', operatorId: row.operatorId || row.operatorAssignments?.[0]?.employeeId || null, operatorName: row.operatorAssignments?.[0]?.employeeName || '' }
+  dialog.form = { id: row.id, employeeName: row.employeeName || '', scheduleDate: row.scheduleDate || defaultScheduleDate(), employeeId: row.employeeId || null, accountId: row.accountId || null, rateTypeId: row.rateTypeId || null, startTime: row.startTime || '09:00:00', endTime: row.endTime || '17:00:00', remark: row.remark || '', scheduleStatus: row.scheduleStatus || 'CONFIRMED', operatorId: row.operatorId || row.operatorAssignments?.[0]?.employeeId || null, operatorName: row.operatorAssignments?.[0]?.employeeName || '' }
   if (dialog.form.operatorId != null) dialog.form.operatorId = operators.value.find(o => idKey(o.employeeId) === idKey(dialog.form.operatorId))?.employeeId || dialog.form.operatorId
   dialog.open = true
   await refreshScheduleRateTypes()
@@ -209,7 +207,6 @@ async function submit() {
   if (!canEdit.value || dialog.saving) return
   await formRef.value.validate()
   const form = dialog.form
-  if (!form.hostStartTime || !form.hostEndTime || form.hostStartTime > form.startTime || form.hostEndTime < form.endTime) return proxy.$modal.msgWarning(tr('主播到岗时段必须覆盖直播时段'))
   if (!hostOptions.value.some(host => idKey(host.value) === idKey(form.employeeId))) return proxy.$modal.msgWarning(tr('请选择岗位为主播的人员'))
   // 表单只选择一位运营，沿用已有存储格式，负责时间自动跟随本场直播。
   const { operatorId, operatorName, ...payload } = form
@@ -219,7 +216,7 @@ async function submit() {
   finally { dialog.saving = false }
 }
 async function remove(row) { if (!canEdit.value) return; await proxy.$modal.confirm(messageNode(tr('确认删除 {0} 的排班？', [row.employeeName]))); await deleteSchedule(row.id); proxy.$modal.msgSuccess(tr('删除成功')); dialog.open = false; load() }
-function exportRows() { downloadCsv(tr('主播排班-{0}-{1}.csv', [weekDateRange.value[0], weekDateRange.value[1]]), [{ key: 'scheduleDate', label: tr('日期') }, { key: 'employeeName', label: tr('主播') }, { key: 'accountLabel', label: tr('直播平台') }, { key: 'startTime', label: tr('开始时间') }, { key: 'endTime', label: tr('结束时间') }, { key: 'rateTypeName', label: tr('场次类型') }, { key: 'hostStartTime', label: tr('主播到岗开始') }, { key: 'hostEndTime', label: tr('主播到岗结束') }, { key: 'operators', label: tr('运营') }, { key: 'scheduleStatus', label: tr('排班状态') }, { key: 'remark', label: tr('备注') }], rows.value.map(row => ({ ...row, hostStartTime: row.hostStartTime || row.startTime, hostEndTime: row.hostEndTime || row.endTime, operators: assignmentSummary(row), scheduleDate: displayDate(row.scheduleDate) }))) }
+function exportRows() { downloadCsv(tr('主播排班-{0}-{1}.csv', [weekDateRange.value[0], weekDateRange.value[1]]), [{ key: 'scheduleDate', label: tr('日期') }, { key: 'employeeName', label: tr('主播') }, { key: 'accountLabel', label: tr('直播平台') }, { key: 'startTime', label: tr('开始时间') }, { key: 'endTime', label: tr('结束时间') }, { key: 'rateTypeName', label: tr('场次类型') }, { key: 'operators', label: tr('运营') }, { key: 'scheduleStatus', label: tr('排班状态') }, { key: 'remark', label: tr('备注') }], rows.value.map(row => ({ ...row, operators: assignmentSummary(row), scheduleDate: displayDate(row.scheduleDate) }))) }
 let mounted = false
 onMounted(() => { load(); mounted = true })
 onActivated(() => { if (mounted && !loading.value) load() })

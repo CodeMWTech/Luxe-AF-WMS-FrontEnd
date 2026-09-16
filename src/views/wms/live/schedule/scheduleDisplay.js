@@ -20,19 +20,17 @@ function partition(row, start, end) {
 }
 
 export function scheduleSegments(row, view) {
-  // 单运营覆盖全场时，主播到岗前后也保持同一颜色，无需额外运营时段。
+  // 单运营覆盖全场时，三个视图共用本场排班的起止时间和颜色。
   const assigned = assignments(row)
   if (assigned.length === 1 && assigned[0].startTime <= row.startTime && assigned[0].endTime >= row.endTime) {
-    return [{ row, operator: assigned[0], startTime: view === 'host' ? row.hostStartTime || row.startTime : row.startTime,
-      endTime: view === 'host' ? row.hostEndTime || row.endTime : row.endTime, key: `${idKey(row.id)}:${view}:0` }]
+    return [{ row, operator: assigned[0], startTime: row.startTime, endTime: row.endTime, key: `${idKey(row.id)}:${view}:0` }]
   }
   let entries
   if (view === 'operator') {
     entries = assignments(row).map(operator => ({ row, operator, startTime: operator.startTime, endTime: operator.endTime }))
     entries.push(...partition(row, row.startTime, row.endTime).filter(segment => !segment.operator))
   } else {
-    entries = partition(row, view === 'host' ? row.hostStartTime || row.startTime : row.startTime,
-      view === 'host' ? row.hostEndTime || row.endTime : row.endTime)
+    entries = partition(row, row.startTime, row.endTime)
   }
   return entries.map((entry, index) => ({ ...entry, key: `${idKey(row.id)}:${view}:${index}` }))
 }
@@ -69,7 +67,7 @@ export function scheduleGroups(rows, view, operators = [], accounts = [], employ
 
 export function conflictingSchedules(rows) {
   const duties = rows.filter(row => row.scheduleStatus !== 'CANCELLED').flatMap(row => [
-    { scheduleId: idKey(row.id), date: row.scheduleDate, employeeId: idKey(row.employeeId), start: row.hostStartTime || row.startTime, end: row.hostEndTime || row.endTime },
+    { scheduleId: idKey(row.id), date: row.scheduleDate, employeeId: idKey(row.employeeId), start: row.startTime, end: row.endTime },
     ...assignments(row).map(a => ({ scheduleId: idKey(row.id), date: row.scheduleDate, employeeId: idKey(a.employeeId), start: a.startTime, end: a.endTime }))
   ])
   const result = new Set()
