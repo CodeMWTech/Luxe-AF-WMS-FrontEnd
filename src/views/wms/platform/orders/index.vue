@@ -1,6 +1,9 @@
 <template>
   <div class="app-container platform-orders-page">
     <el-alert :title="t('platformOrders.shipmentHint')" type="info" :closable="false" show-icon class="page-hint" />
+    <el-alert v-if="queryParams.supplierSalesOnly" type="info" show-icon class="page-hint"
+      :title="isEn ? 'Supplier sales: completed sales shipments only, regardless of platform order status.' : '供应商平台已售明细：仅展示已完成销售出库对应的订单，不按平台订单状态筛选。'"
+      @close="queryParams.supplierSalesOnly = undefined; handleQuery()" />
     <el-card class="filter-card">
       <el-form
         ref="queryRef"
@@ -720,6 +723,7 @@ import { listAllPlatformShops, batchSyncOrders } from '@/api/wms/platformShop'
 import { formatDateTimeForQuery, formatLosAngelesTime } from '@/utils/laTime'
 import { getExportLanguageHeaders } from '@/utils/xlsxTranslate'
 import SkuSelect from '@/views/components/SkuSelect.vue'
+import useSettingsStore from '@/store/modules/settings'
 
 const InfoLine = defineComponent({
   name: 'InfoLine',
@@ -738,6 +742,8 @@ const InfoLine = defineComponent({
 
 const { proxy } = getCurrentInstance()
 const route = useRoute()
+const settingsStore = useSettingsStore()
+const isEn = computed(() => (settingsStore.language || 'zh-cn') === 'en')
 const t = (key, values) => proxy?.$t?.(key, values) || key
 
 const orderStatusOptions = ref([])
@@ -838,6 +844,7 @@ const queryParams = ref({
   sellerSku: undefined,
   skuMatched: '',
   shipmentStatus: '',
+  supplierSalesOnly: undefined,
   orderCreateTimeRange: []
 })
 
@@ -848,11 +855,13 @@ function applyRouteFilter() {
   const platformOrderId = String(route.query.platformOrderId || '').trim()
   const skuCode = String(route.query.skuCode || '').trim()
   const orderStatus = String(route.query.orderStatus || '').trim()
+  const supplierSalesOnly = String(route.query.supplierSalesOnly || '') === 'true'
+  const shipmentStatus = supplierSalesOnly ? 'FINISH' : String(route.query.shipmentStatus || '').trim()
   if (platformOrderId) {
     const filterKey = `order|${platformOrderId}`
     if (filterKey === appliedRouteFilterKey.value
       && queryParams.value.platformOrderId === platformOrderId
-      && !queryParams.value.sellerSku) return false
+      && !queryParams.value.sellerSku && !queryParams.value.supplierSalesOnly) return false
     Object.assign(queryParams.value, {
       pageNum: 1,
       platform: '',
@@ -863,18 +872,42 @@ function applyRouteFilter() {
       sellerSku: undefined,
       skuMatched: '',
       shipmentStatus: '',
+      supplierSalesOnly: undefined,
       orderCreateTimeRange: []
     })
     appliedRouteFilterKey.value = filterKey
     pendingSkuMissHint.value = false
     return true
   }
-  const filterKey = `sku|${skuCode}|${orderStatus}`
-  if (!skuCode || (filterKey === appliedRouteFilterKey.value && queryParams.value.sellerSku === skuCode && (!orderStatus || queryParams.value.orderStatus === orderStatus))) return false
-  queryParams.value.platformOrderId = undefined
-  queryParams.value.sellerSku = skuCode
-  if (orderStatus) queryParams.value.orderStatus = orderStatus
-  queryParams.value.pageNum = 1
+  if (!skuCode) {
+    const hadSalesScope = !!queryParams.value.supplierSalesOnly
+    queryParams.value.supplierSalesOnly = undefined
+    appliedRouteFilterKey.value = ''
+    return hadSalesScope
+  }
+  const filterKey = `sku|${skuCode}|${orderStatus}|${shipmentStatus}|${supplierSalesOnly}`
+  const expectedOrderStatus = supplierSalesOnly ? undefined : (orderStatus || undefined)
+  if (filterKey === appliedRouteFilterKey.value && queryParams.value.sellerSku === skuCode
+    && !!queryParams.value.supplierSalesOnly === supplierSalesOnly
+    && queryParams.value.orderStatus === expectedOrderStatus
+    && queryParams.value.shipmentStatus === shipmentStatus
+    && !queryParams.value.platform && !queryParams.value.shopAuthId
+    && !queryParams.value.platformOrderId && !queryParams.value.shipmentOrderNo
+    && !queryParams.value.skuMatched && !queryParams.value.orderCreateTimeRange?.length) return false
+  // A supplier drill-down must not inherit a previous shop, date or platform-status filter.
+  Object.assign(queryParams.value, {
+    pageNum: 1,
+    platform: '',
+    shopAuthId: undefined,
+    platformOrderId: undefined,
+    shipmentOrderNo: undefined,
+    sellerSku: skuCode,
+    orderStatus: expectedOrderStatus,
+    skuMatched: '',
+    shipmentStatus,
+    supplierSalesOnly: supplierSalesOnly || undefined,
+    orderCreateTimeRange: []
+  })
   appliedRouteFilterKey.value = filterKey
   pendingSkuMissHint.value = String(route.query.fromInventoryHistory || '') === '1'
   return true
@@ -1020,6 +1053,7 @@ function handleCreateTimeRangeChange() {
 
 function resetQuery() {
   proxy.resetForm('queryRef')
+  queryParams.value.supplierSalesOnly = undefined
   queryParams.value.orderCreateTimeRange = []
   handleQuery()
 }

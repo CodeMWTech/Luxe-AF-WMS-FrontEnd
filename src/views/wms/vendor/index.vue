@@ -977,13 +977,13 @@ const skuPageTargets = {
     route: { name: 'PlatformOrders' },
     permission: 'wms:platform:list',
     quantityField: 'platformSoldQuantity',
-    query: { orderStatus: 'DELIVERED' }
+    query: { supplierSalesOnly: 'true', shipmentStatus: 'FINISH' }
   },
   offPlatformSold: {
     route: { path: '/wms/order/shipmentOrder' },
     permission: 'wms:shipment:all',
     quantityField: 'offPlatformSoldQuantity',
-    query: { orderStatus: '1' }
+    query: { orderStatus: '1', optType: '2', salesSource: 'OFF_PLATFORM' }
   },
   returned: {
     route: { name: 'ReceiptOrder' },
