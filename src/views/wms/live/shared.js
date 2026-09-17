@@ -105,11 +105,11 @@ export function settlementStatusLabel(value) {
 export function adjustmentStatusLabel(value) {
   return ({ PENDING: '待确认', CONFIRMED: '待结算', SETTLED: '已结算', VOID: '已作废', APPLIED: '已重算' })[value] || value
 }
-export function twoWeekRange(selectedDate = isoDate()) {
+export function selectedWeekRange(selectedDate = isoDate()) {
   const [year, month, day] = selectedDate.split('-').map(Number)
   const sunday = new Date(year, month - 1, day)
   sunday.setDate(sunday.getDate() - sunday.getDay())
   const end = new Date(sunday)
-  end.setDate(sunday.getDate() + 13)
+  end.setDate(sunday.getDate() + 6)
   return [isoDate(sunday), isoDate(end)]
 }
