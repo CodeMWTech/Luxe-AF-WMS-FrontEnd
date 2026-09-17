@@ -1,5 +1,8 @@
 <template>
   <div class="app-container shipment-order-page" :class="{ 'is-en': isEn }">
+    <el-alert v-if="queryParams.salesSource" type="info" show-icon class="mb8"
+      :title="isEn ? 'Supplier sales: completed sales shipments, filtered by platform origin.' : '供应商已售明细：仅展示已完成销售出库，并按平台内外来源筛选。'"
+      @close="queryParams.salesSource = undefined; handleQuery()" />
     <el-card>
       <el-form :model="queryParams" ref="queryRef" :label-width="formLabelWidth" class="filter-form" @submit.prevent>
         <el-form-item class="filter-item filter-item-full" :label="tr('出库状态')" prop="orderStatus" :label-width="isEn ? '170px' : undefined">
@@ -269,6 +272,7 @@ const data = reactive({
     orderNo: undefined,
     skuCode: undefined,
     optType: -1,
+    salesSource: undefined,
     merchantId: undefined,
     totalAmount: undefined,
     orderStatus: -2,
@@ -282,12 +286,33 @@ function applyRouteSkuFilter() {
   const skuCode = String(route.query.skuCode || '').trim()
   const orderNo = String(route.query.orderNo || '').trim()
   const orderStatus = String(route.query.orderStatus || '').trim()
-  const filterKey = `${skuCode}|${orderNo}|${orderStatus}`
-  if ((!skuCode && !orderNo) || filterKey === appliedRouteFilterKey.value) return false
-  queryParams.value.skuCode = skuCode || undefined
-  queryParams.value.orderNo = orderNo || undefined
-  if (orderStatus) queryParams.value.orderStatus = Number(orderStatus)
-  queryParams.value.pageNum = 1
+  const optType = String(route.query.optType || '').trim()
+  const salesSource = ['PLATFORM', 'OFF_PLATFORM'].includes(route.query.salesSource) ? route.query.salesSource : undefined
+  if (!skuCode && !orderNo) {
+    const hadSalesScope = !!queryParams.value.salesSource
+    queryParams.value.salesSource = undefined
+    appliedRouteFilterKey.value = ''
+    return hadSalesScope
+  }
+  const filterKey = `${skuCode}|${orderNo}|${orderStatus}|${optType}|${salesSource || ''}`
+  const expectedStatus = salesSource ? 1 : (orderStatus ? Number(orderStatus) : -2)
+  const expectedType = salesSource ? 2 : (optType ? Number(optType) : -1)
+  if (filterKey === appliedRouteFilterKey.value
+    && queryParams.value.skuCode === (skuCode || undefined)
+    && queryParams.value.orderNo === (orderNo || undefined)
+    && queryParams.value.salesSource === salesSource
+    && queryParams.value.orderStatus === expectedStatus
+    && queryParams.value.optType === expectedType) return false
+  Object.assign(queryParams.value, {
+    pageNum: 1,
+    skuCode: skuCode || undefined,
+    orderNo: orderNo || undefined,
+    orderStatus: expectedStatus,
+    optType: expectedType,
+    salesSource,
+    merchantId: undefined,
+    totalAmount: undefined
+  })
   appliedRouteFilterKey.value = filterKey
   return true
 }
@@ -376,6 +401,7 @@ function handleQuery() {
 /** 重置按钮操作 */
 function resetQuery() {
   proxy.resetForm("queryRef");
+  queryParams.value.salesSource = undefined;
   handleQuery();
 }
 

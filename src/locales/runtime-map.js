@@ -476,6 +476,7 @@ const zhToEnMap = {
   归还入库: 'Return-to-stock Inbound',
   销售出库: 'Sales Outbound',
   生产出库: 'Production Outbound',
+  调整价格出库: 'Price Adjustment Outbound',
   退货出库: 'Return Outbound',
   'Sample样品': 'Sample',
   品牌管理: 'Brand Management',
