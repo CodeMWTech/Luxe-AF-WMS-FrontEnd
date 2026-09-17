@@ -198,7 +198,7 @@ async function refreshScheduleRateTypes() {
 async function handleScheduleScopeChange() { dialog.form.rateTypeId = null; await refreshScheduleRateTypes() }
 async function openDialog(row = {}) {
   if (!row.id && !canEdit.value) return
-  dialog.form = { id: row.id, employeeName: row.employeeName || '', scheduleDate: row.scheduleDate || defaultScheduleDate(), employeeId: row.employeeId || null, accountId: row.accountId || null, rateTypeId: row.rateTypeId || null, startTime: row.startTime || '09:00:00', endTime: row.endTime || '17:00:00', remark: row.remark || '', scheduleStatus: row.scheduleStatus || 'CONFIRMED', operatorId: row.operatorId || row.operatorAssignments?.[0]?.employeeId || null, operatorName: row.operatorAssignments?.[0]?.employeeName || '' }
+  dialog.form = { id: row.id, employeeName: row.employeeName || '', scheduleDate: row.scheduleDate || defaultScheduleDate(), employeeId: row.employeeId || null, accountId: row.accountId || null, rateTypeId: row.rateTypeId || null, startTime: row.startTime || '09:00:00', endTime: row.endTime || '17:00:00', remark: row.remark || '', scheduleStatus: row.scheduleStatus || 'CONFIRMED', operatorId: row.operatorEmployeeId ?? row.operatorId ?? null, operatorName: row.operatorName || '' }
   if (dialog.form.operatorId != null) dialog.form.operatorId = operators.value.find(o => idKey(o.employeeId) === idKey(dialog.form.operatorId))?.employeeId || dialog.form.operatorId
   dialog.open = true
   await refreshScheduleRateTypes()
@@ -208,9 +208,8 @@ async function submit() {
   await formRef.value.validate()
   const form = dialog.form
   if (!hostOptions.value.some(host => idKey(host.value) === idKey(form.employeeId))) return proxy.$modal.msgWarning(tr('请选择岗位为主播的人员'))
-  // 表单只选择一位运营，沿用已有存储格式，负责时间自动跟随本场直播。
   const { operatorId, operatorName, ...payload } = form
-  payload.operatorAssignments = operatorId ? [{ employeeId: operatorId, startTime: form.startTime, endTime: form.endTime }] : []
+  payload.operatorEmployeeId = operatorId || null
   dialog.saving = true
   try { await (form.id ? updateSchedule(payload) : addSchedule(payload)); proxy.$modal.msgSuccess(tr('保存成功')); dialog.open = false; await load() }
   finally { dialog.saving = false }

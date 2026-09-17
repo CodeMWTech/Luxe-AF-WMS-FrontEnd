@@ -4,35 +4,15 @@ export const isActiveOperator = employee => employee.visible !== false && employ
   Array.isArray(employee.positions) && employee.positions.some(position => ['运营', '直播运营'].includes(position))
 
 function assignments(row) {
-  return [...(row.operatorAssignments || [])].filter(a => a.employeeId != null && a.startTime && a.endTime)
-    .sort((a, b) => a.startTime.localeCompare(b.startTime))
-}
-
-function partition(row, start, end) {
-  if (!start || !end || start >= end) return []
-  const operators = assignments(row)
-  const points = [...new Set([start, end, ...operators.flatMap(a => [a.startTime, a.endTime]).filter(t => t > start && t < end)])].sort()
-  return points.slice(0, -1).map((point, index) => {
-    const next = points[index + 1]
-    const operator = operators.find(a => a.startTime <= point && a.endTime >= next)
-    return { row, operator, startTime: point, endTime: next }
-  })
+  return row.operatorEmployeeId == null ? [] : [{
+    employeeId: row.operatorEmployeeId, employeeName: row.operatorName,
+    startTime: row.startTime, endTime: row.endTime
+  }]
 }
 
 export function scheduleSegments(row, view) {
-  // 单运营覆盖全场时，三个视图共用本场排班的起止时间和颜色。
-  const assigned = assignments(row)
-  if (assigned.length === 1 && assigned[0].startTime <= row.startTime && assigned[0].endTime >= row.endTime) {
-    return [{ row, operator: assigned[0], startTime: row.startTime, endTime: row.endTime, key: `${idKey(row.id)}:${view}:0` }]
-  }
-  let entries
-  if (view === 'operator') {
-    entries = assignments(row).map(operator => ({ row, operator, startTime: operator.startTime, endTime: operator.endTime }))
-    entries.push(...partition(row, row.startTime, row.endTime).filter(segment => !segment.operator))
-  } else {
-    entries = partition(row, row.startTime, row.endTime)
-  }
-  return entries.map((entry, index) => ({ ...entry, key: `${idKey(row.id)}:${view}:${index}` }))
+  if (!row.startTime || !row.endTime || row.startTime >= row.endTime) return []
+  return [{ row, operator: assignments(row)[0], startTime: row.startTime, endTime: row.endTime, key: `${idKey(row.id)}:${view}:0` }]
 }
 
 export function scheduleGroups(rows, view, operators = [], accounts = [], employees = []) {
