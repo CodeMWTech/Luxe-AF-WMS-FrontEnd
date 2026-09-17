@@ -24,6 +24,8 @@
     consentAfter: '。',
     consentMore: '详情',
     consentDetail: '短信包括开播安排、时间与变更提醒。发送频率视排班情况而定。短信和流量费用可能由运营商收取。回复 STOP 退订，回复 HELP 获取帮助。',
+    consentCheckbox: '我同意接收 Luxe AF 发送的排班短信',
+    ruleConsentRequired: '请勾选同意接收排班短信',
     ruleUsernameRequired: '请输入您的账号',
     ruleUsernameLength: '账号长度必须在 2 到 50 个字符之间',
     rulePasswordRequired: '请输入您的密码',

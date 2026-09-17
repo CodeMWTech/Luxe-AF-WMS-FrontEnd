@@ -10,7 +10,10 @@ async function sourceModule(path) {
 }
 const shared=await sourceModule('../src/views/wms/live/shared.js')
 const display=await sourceModule('../src/views/wms/live/settlements/settlementDisplay.js')
+const scheduleDisplay=await sourceModule('../src/views/wms/live/schedule/scheduleDisplay.js')
 async function setup(file, modules, props={}) {
+  modules={ './scheduleDisplay': scheduleDisplay, '@/utils/permission': {checkPermi:()=>true}, ...modules }
+  modules['@/api/wms/livePayroll']={listScheduleOperators:async()=>({data:[]}),listScheduleHosts:async()=>({data:[]}),...modules['@/api/wms/livePayroll']}
   modules={ '../useLiveI18n':{useLiveI18n:()=>({tr:(text,values=[])=>text.replace(/\{(\d+)\}/g,(_,i)=>values[i]),isEn:vue.ref(false),messageNode:text=>text})}, ...modules }
   const source=await readFile(new URL('../src/views/wms/live/'+file,import.meta.url),'utf8')
   const {descriptor}=parse(source)
@@ -23,30 +26,31 @@ async function setup(file, modules, props={}) {
 }
 const vueModule={...vue,onMounted(){},onActivated(){},getCurrentInstance:()=>({proxy:{$modal:{msgSuccess(){},msgWarning(){}},$prompt:async()=>({value:'receipt'})}})}
 
-test('dual-week calendar handles Sunday, Saturday, year boundaries and leap day',()=>{
-  assert.deepEqual(shared.twoWeekRange('2026-09-06'),['2026-09-06','2026-09-19'])
-  assert.deepEqual(shared.twoWeekRange('2026-09-12'),['2026-09-06','2026-09-19'])
-  assert.deepEqual(shared.twoWeekRange('2026-12-31'),['2026-12-27','2027-01-09'])
-  assert.deepEqual(shared.twoWeekRange('2028-02-29'),['2028-02-27','2028-03-11'])
+test('single-week calendar handles Sunday, Saturday, year boundaries and leap day',()=>{
+  assert.deepEqual(shared.selectedWeekRange('2026-09-06'),['2026-09-06','2026-09-12'])
+  assert.deepEqual(shared.selectedWeekRange('2026-09-12'),['2026-09-06','2026-09-12'])
+  assert.deepEqual(shared.selectedWeekRange('2026-12-31'),['2026-12-27','2027-01-02'])
+  assert.deepEqual(shared.selectedWeekRange('2028-02-29'),['2028-02-27','2028-03-04'])
 })
-test('calendar fetch and export both use the full visible fourteen days and employee scope',async()=>{
+test('calendar fetch and export both use the visible seven days and employee scope',async()=>{
   const calls={query:null,export:null}
   const page=await setup('schedule/index.vue',{
     vue:vueModule,
     '../components/LiveEmployeeSelect.vue':{},'../components/LiveEmployeeName.vue':{},
-    '@/api/wms/livePayroll':{getLiveOptions:async()=>({employees:[],accounts:[],rateTypes:[]}),listScheduleCalendar:async q=>{calls.query=q;return{data:[{scheduleDate:'2026-09-06',employeeName:'A'},{scheduleDate:'2026-09-19',employeeName:'B'}]}}},
+    '@/api/wms/livePayroll':{getLiveOptions:async()=>({employees:[],accounts:[],rateTypes:[]}),listScheduleCalendar:async q=>{calls.query=q;return{data:[{scheduleDate:'2026-09-06',employeeName:'A'},{scheduleDate:'2026-09-12',employeeName:'B'}]}}},
     '@/store/modules/settings':()=>({language:'zh-cn'}),'@/locales/runtime-map':{translateByMap:t=>t},
     '../shared':{...shared,downloadCsv:(...args)=>{calls.export=args}}
   })
   page.selectedWeek.value='2026-09-08';page.query.employeeScope='INACTIVE'
   await page.load()
-  assert.equal(page.calendarWeeks.value.length,2)
-  assert.deepEqual(page.calendarWeeks.value.map(w=>w.length),[7,7])
-  assert.equal(calls.query.startDate,'2026-09-06');assert.equal(calls.query.endDate,'2026-09-19')
+  assert.equal(page.calendarWeeks.value.length,1)
+  assert.deepEqual(page.calendarWeeks.value.map(w=>w.length),[7])
+  assert.equal(calls.query.startDate,'2026-09-06');assert.equal(calls.query.endDate,'2026-09-12')
   assert.equal(calls.query.employeeScope,'INACTIVE')
   page.exportRows()
   assert.equal(calls.export[2].length,2)
-  assert.ok(calls.export[0].includes('2026-09-19'))
+  assert.ok(calls.export[0].includes('2026-09-12'))
+  assert.ok(calls.export[1].every(column => !['hostStartTime', 'hostEndTime'].includes(column.key)))
 })
 test('employee picker hides inactive staff by default but preserves history selection',async()=>{
   const employees=[{value:'1',label:'A',employeeStatus:0},{value:'2',label:'B',employeeStatus:1},{value:'3',label:'C',employeeStatus:2},{value:'4',label:'D',employeeStatus:3}]
