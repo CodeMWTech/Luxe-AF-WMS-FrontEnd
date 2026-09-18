@@ -307,6 +307,7 @@
 </template>
 
 <script setup name="Item">
+import { ENABLE_STATUS } from '@/utils/status'
 import {
   getItem,
   delItem,
@@ -371,7 +372,7 @@ async function initSupplierData() {
   // 非供应商用户加载全部供应商列表（用于筛选下拉）
   if (!isSupplierUser.value) {
     try {
-      const res = await listSupplierNoPage({ status: 0 });
+      const res = await listSupplierNoPage({ status: ENABLE_STATUS.ENABLED });
       supplierOptions.value = res.data || [];
     } catch (_) {
       supplierOptions.value = [];

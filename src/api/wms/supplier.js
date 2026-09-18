@@ -26,6 +26,14 @@ export function getSupplier(id) {
   })
 }
 
+// 读取所选角色下有效用户的联系方式（只读）
+export function getSupplierRoleContacts(roleId) {
+  return request({
+    url: '/wms/supplier/role/' + roleId + '/contacts',
+    method: 'get'
+  })
+}
+
 // 新增供应商
 export function addSupplier(data) {
   return request({

@@ -1,6 +1,12 @@
 import livePayrollMessages from './live-payroll'
 
 const zhToEnMap = {
+  '联系人加载失败，请重试': 'Failed to load contacts. Please retry.',
+  '请先选择关联角色': 'Select an associated role first',
+  '该角色下暂无用户': 'No users in this role',
+  '该角色用户均未填写联系电话': 'No users in this role have a phone number',
+  '未填写': 'Not provided',
+  '重试': 'Retry',
   首页: 'Home',
   系统概述: 'System Overview',
   个人中心: 'Profile',
