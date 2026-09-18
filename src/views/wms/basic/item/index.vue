@@ -517,17 +517,17 @@ const AUTH_AGENCY_OPTIONS = ['Entrupy', 'Real Authentication', 'Legitmark', 'Che
 const ITEM_CONDITION_OPTIONS = ['S', 'A', 'B', 'C', 'D']
 /** 配件常用选项（可点击快速填入，也可自行输入） */
 const ACCESSORY_TAG_OPTIONS = ['Dustbag', 'Box', 'ID card', 'Lock & Key', 'Strap', 'Receipt']
-/** 瑕疵气泡（仅英文，可多选） */
+/** 瑕疵气泡（字母角标 + 短标签，悬停看全文，写入仍用完整英文） */
 const DEFECT_TAG_OPTIONS = [
-  'Brand New / Unused with protective seals intact',
-  'Pristine / Like New / No noticeable signs of wear',
-  'Like New / Faint hairline scratches on hardware only',
-  'Slight exterior scuffs / light surface rubbing',
-  'Minor rubbing at bottom corners / edges',
-  'Light wear / indentations on handle & shoulder strap',
-  'Visible scratches / tarnish on metal parts',
-  'Minor stains / indentations partially inside',
-  'Light overall wear across leather, corners & hardware'
+  { code: 'A', short: 'New/Unused', value: 'Brand New / Unused with protective seals intact' },
+  { code: 'B', short: 'Like New', value: 'Pristine / Like New / No noticeable signs of wear' },
+  { code: 'C', short: 'Hairline', value: 'Like New / Faint hairline scratches on hardware only' },
+  { code: 'D', short: 'Scuffs', value: 'Slight exterior scuffs / light surface rubbing' },
+  { code: 'E', short: 'Corners', value: 'Minor rubbing at bottom corners / edges' },
+  { code: 'F', short: 'Handle', value: 'Light wear / indentations on handle & shoulder strap' },
+  { code: 'G', short: 'Hardware', value: 'Visible scratches / tarnish on metal parts' },
+  { code: 'H', short: 'Interior', value: 'Minor stains / indentations partially inside' },
+  { code: 'I', short: 'Overall', value: 'Light overall wear across leather, corners & hardware' }
 ]
 const ITEM_SIZE_OPTIONS = ['Micro', 'Mini', 'Small', 'Medium', 'Large', 'Extra Large', 'Nano']
 
@@ -636,7 +636,7 @@ function validateItemImages(rule, value, callback) {
     callback()
     return
   }
-  callback(new Error('商品图片不能为空'))
+  callback(new Error(tr('商品图片不能为空')))
 }
 
 function validateItemImagesOnNextTick() {
@@ -693,6 +693,7 @@ const {queryParams, form} = toRefs(data);
 
 function requiredNumber(message) {
   return {
+    required: true,
     validator: (rule, value, callback) => {
       if (value === null || value === undefined || value === '') {
         callback(new Error(message))
@@ -700,7 +701,7 @@ function requiredNumber(message) {
       }
       callback()
     },
-    trigger: 'change'
+    trigger: []
   }
 }
 
@@ -713,17 +714,15 @@ const formRules = computed(() => {
     ...base,
     costPrice: canViewCostPrice.value ? [requiredNumber('成本价不能为空')] : [],
     sellingPrice: canViewSellingPrice.value ? [requiredNumber('销售价不能为空')] : [],
-    authAgency: [{ type: 'array', required: true, min: 1, message: '鉴定机构不能为空', trigger: 'change' }],
+    authAgency: [{ type: 'array', required: true, min: 1, message: '鉴定机构不能为空', trigger: [] }],
     defaultQty: [requiredNumber('数量不能为空')],
-    modelId: [{ required: true, message: '包型不能为空', trigger: 'change' }],
-    materialId: [{ required: true, message: '材质不能为空', trigger: 'change' }],
-    defect: [{ required: true, message: '瑕疵不能为空', trigger: 'blur' }],
-    size: [{ required: true, message: 'Size不能为空', trigger: 'change' }],
+    defect: [{ required: true, message: '瑕疵不能为空', trigger: [] }],
+    size: [{ required: true, message: 'Size不能为空', trigger: [] }],
     bagWidth: [requiredNumber('Bag Width不能为空')],
     bagHeight: [requiredNumber('Bag Height不能为空')],
     bagDepth: [requiredNumber('Bag Depth不能为空')],
-    accessories: [{ required: true, message: '配件不能为空', trigger: 'blur' }],
-    consignInfo: [{ required: true, message: '寄售信息不能为空', trigger: 'blur' }]
+    accessories: [{ required: true, message: '配件不能为空', trigger: [] }],
+    consignInfo: [{ required: true, message: '寄售信息不能为空', trigger: [] }]
   }
 })
 const appliedRouteSkuCode = ref('')
@@ -1351,17 +1350,29 @@ const handleUpdate = (row) => {
     }
   });
 }
+function scrollToFirstFormError() {
+  nextTick(() => {
+    const errorItem = document.querySelector('.el-drawer__body .el-form-item.is-error')
+    errorItem?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  })
+}
+
 const submitForm = async () => {
-  if (!hasRequiredItemImage()) {
-    proxy?.$modal.msgError('商品图片不能为空')
-    validateItemImagesOnNextTick()
-    return
-  }
-  // 先校验商品主表（含商品名称、分类、品牌、成色、年份、SKU编码等）
   try {
     await itemFormRef.value.validate();
   } catch {
+    scrollToFirstFormError()
+    if (!hasRequiredItemImage()) {
+      proxy?.$modal.msgError(tr('商品图片不能为空'))
+    }
     return;
+  }
+
+  if (!hasRequiredItemImage()) {
+    proxy?.$modal.msgError(tr('商品图片不能为空'))
+    validateItemImagesOnNextTick()
+    scrollToFirstFormError()
+    return
   }
 
   // 将主表填的 SKU 编码同步到规格行，再提交

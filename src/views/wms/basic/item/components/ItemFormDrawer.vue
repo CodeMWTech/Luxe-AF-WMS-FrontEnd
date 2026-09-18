@@ -2,28 +2,28 @@
     <el-drawer :title="dialog.title" v-model="dialog.visible" size="80%" append-to-body :close-on-click-modal="false">
       <div v-loading="skuLoading">
         <el-card>
-          <el-form ref="itemFormRef" :model="form" :rules="rules" label-width="120px">
+          <el-form ref="itemFormRef" :model="form" :rules="rules" label-width="120px" :validate-on-rule-change="false">
             <!-- 1.商品名称 2.商品分类 -->
             <el-row :gutter="24">
               <el-col :span="12">
-                <el-form-item label="商品名称" prop="itemName">
+                <el-form-item :label="tr('商品名称')" prop="itemName">
                   <div class="item-name-with-tag">
-                    <el-input v-model="form.itemName" placeholder="请输入名称" class="item-name-input"/>
-                    <el-button type="primary" link title="预处理标签" @click="emit('open-name-tag-drawer')" class="name-tag-btn">
-                      <el-icon><Ticket /></el-icon><span class="name-tag-btn-text">标签</span>
+                    <el-input v-model="form.itemName" :placeholder="tr('请输入名称')" class="item-name-input"/>
+                    <el-button type="primary" link :title="tr('预处理标签')" @click="emit('open-name-tag-drawer')" class="name-tag-btn">
+                      <el-icon><Ticket /></el-icon><span class="name-tag-btn-text">{{ tr('标签') }}</span>
                     </el-button>
                   </div>
                 </el-form-item>
               </el-col>
               <el-col :span="10">
-                <el-form-item label="商品分类" prop="itemCategory">
+                <el-form-item :label="tr('商品分类')" prop="itemCategory">
                   <el-tree-select
                     ref="treeRef"
                     v-model="form.itemCategory"
                     :data="itemCategoryTreeSelectList"
                     :props="{ value: 'id', label: 'label', children: 'children' }"
                     value-key="id"
-                    placeholder="请选择分类"
+                    :placeholder="tr('请选择分类')"
                     check-strictly
                     style="width: 100%!important;"
                     @change="emit('category-change', $event)"
@@ -33,19 +33,19 @@
               <el-col :span="2">
                 <el-button link icon="Plus" type="primary" style="height: 32px!important;line-height: 32px!important;"
                            v-hasPermi="['wms:item:edit']"
-                           @click="emit('add-category')">新增分类
+                           @click="emit('add-category')">{{ tr('新增分类') }}
                 </el-button>
               </el-col>
             </el-row>
             <!-- 3.SKU编码 4.商品品牌 -->
             <el-row :gutter="24">
               <el-col :span="12">
-                <el-form-item label="SKU编码" prop="skuCode">
-                  <el-input v-model="form.skuCode" placeholder="请输入SKU编码"/>
+                <el-form-item :label="tr('SKU编码')" prop="skuCode">
+                  <el-input v-model="form.skuCode" :placeholder="tr('请输入SKU编码')"/>
                 </el-form-item>
               </el-col>
               <el-col :span="12">
-                <el-form-item label="商品品牌" prop="itemBrand">
+                <el-form-item :label="tr('商品品牌')" prop="itemBrand">
                   <el-select
                     v-model="form.itemBrand"
                     clearable
@@ -67,14 +67,14 @@
             <!-- 5.成色 6.年份 -->
             <el-row :gutter="24">
               <el-col :span="12">
-                <el-form-item label="成色" prop="itemCondition">
-                  <el-select v-model="form.itemCondition" placeholder="请选择成色" clearable style="width: 100%">
+                <el-form-item :label="tr('成色')" prop="itemCondition">
+                  <el-select v-model="form.itemCondition" :placeholder="tr('请选择成色')" clearable style="width: 100%">
                     <el-option v-for="item in ITEM_CONDITION_OPTIONS" :key="item" :label="item" :value="item"/>
                   </el-select>
                 </el-form-item>
               </el-col>
               <el-col :span="12">
-                <el-form-item label="年份" prop="year">
+                <el-form-item :label="tr('年份')" prop="year">
                   <el-input-number v-model="form.year" :min="0" :max="9999" :controls="false" style="width: 100%" />
                 </el-form-item>
               </el-col>
@@ -82,24 +82,25 @@
             <!-- 7.成本价 8.销售价 -->
             <el-row :gutter="24">
               <el-col :span="12" v-if="canViewCostPrice">
-                <el-form-item label="成本价" prop="costPrice">
+                <el-form-item :label="tr('成本价')" prop="costPrice">
                   <el-input-number v-model="form.costPrice" :disabled="!canEditCostPrice" :min="0" :precision="2" :controls="false" style="width: 100%" @change="emit('cost-price-change', $event)"/>
                 </el-form-item>
               </el-col>
               <el-col :span="12" v-if="canViewSellingPrice">
-                <el-form-item label="销售价" prop="sellingPrice">
+                <el-form-item :label="tr('销售价')" prop="sellingPrice">
                   <el-input-number v-model="form.sellingPrice" :disabled="!canEditSellingPrice" :min="0" :precision="2" :controls="false" style="width: 100%"/>
+                  <div class="price-hint">{{ tr('填写成本价后，系统会按成本价 × 1.8 自动计算销售价（保留两位小数）；也可以自行改成更高价格。') }}</div>
                 </el-form-item>
               </el-col>
             </el-row>
             <!-- 9.鉴定机构 10.数量 -->
             <el-row :gutter="24">
               <el-col :span="12">
-                <el-form-item label="鉴定机构" prop="authAgency">
+                <el-form-item :label="tr('鉴定机构')" prop="authAgency">
                   <el-select
                     v-model="form.authAgency"
                     multiple
-                    placeholder="请选择鉴定机构（可多选）"
+                    :placeholder="tr('请选择鉴定机构（可多选）')"
                     clearable
                     style="width: 100%"
                   >
@@ -108,7 +109,7 @@
                 </el-form-item>
               </el-col>
               <el-col :span="12">
-                <el-form-item label="数量" prop="defaultQty">
+                <el-form-item :label="tr('数量')" prop="defaultQty">
                   <el-input-number v-model="form.defaultQty" :min="0" :controls="false" style="width: 100%" />
                 </el-form-item>
               </el-col>
@@ -116,10 +117,10 @@
             <!-- 11.包型 12.材质 -->
             <el-row :gutter="24">
               <el-col :span="12">
-                <el-form-item label="包型" prop="modelId">
+                <el-form-item :label="tr('包型')" prop="modelId">
                   <el-select
                     v-model="form.modelId"
-                    placeholder="请选择包型"
+                    :placeholder="tr('请选择包型')"
                     clearable
                     filterable
                     class="image-select"
@@ -152,10 +153,10 @@
                 </el-form-item>
               </el-col>
               <el-col :span="12">
-                <el-form-item label="材质" prop="materialId">
+                <el-form-item :label="tr('材质')" prop="materialId">
                   <el-select
                     v-model="form.materialId"
-                    placeholder="请选择材质"
+                    :placeholder="tr('请选择材质')"
                     clearable
                     filterable
                     class="image-select"
@@ -192,25 +193,35 @@
             <!-- 13.瑕疵 -->
             <el-row :gutter="24">
               <el-col :span="24">
-                <el-form-item label="瑕疵" prop="defect">
+                <el-form-item :label="tr('瑕疵')" prop="defect">
                   <el-input
                     v-model="form.defect"
                     type="textarea"
                     :rows="2"
                     placeholder="Click tags below or type English condition notes"
                   />
-                  <div class="accessory-tags mt8">
-                    <el-tag
+                  <div class="accessory-tags mt8" :class="{ 'is-expanded': defectTagsExpanded }">
+                    <el-tooltip
                       v-for="tag in DEFECT_TAG_OPTIONS"
-                      :key="tag"
-                      class="accessory-tag defect-tag"
-                      type="info"
-                      effect="plain"
-                      @click="emit('append-defect-tag', tag)"
+                      :key="tag.value"
+                      :content="tag.value"
+                      placement="top"
+                      :show-after="200"
                     >
-                      {{ tag }}
-                    </el-tag>
+                      <el-tag
+                        class="accessory-tag defect-tag"
+                        type="info"
+                        effect="plain"
+                        @click="emit('append-defect-tag', tag.value)"
+                      >
+                        <span class="defect-tag-code">{{ tag.code }}</span>
+                        <span>{{ defectTagsExpanded ? tag.value : tag.short }}</span>
+                      </el-tag>
+                    </el-tooltip>
                   </div>
+                  <el-button class="defect-toggle" type="primary" link @click="defectTagsExpanded = !defectTagsExpanded">
+                    {{ defectTagsExpanded ? tr('收起') : tr('展开全文') }}
+                  </el-button>
                 </el-form-item>
               </el-col>
             </el-row>
@@ -254,7 +265,7 @@
             <!-- 是否已护理 -->
             <el-row :gutter="24">
               <el-col :span="12">
-                <el-form-item label="是否已护理">
+                <el-form-item :label="tr('是否已护理')">
                   <el-switch
                     v-model="form.cared"
                     active-text="Cared"
@@ -266,12 +277,12 @@
             <!-- 配件（多行，下方可点 tag 快速填入） -->
             <el-row :gutter="24">
               <el-col :span="24">
-                <el-form-item label="配件" prop="accessories">
+                <el-form-item :label="tr('配件')" prop="accessories">
                   <el-input
                     v-model="form.accessories"
                     type="textarea"
                     :rows="2"
-                    placeholder="请输入配件信息，或点击下方标签快速填入"
+                    :placeholder="tr('请输入配件信息，或点击下方标签快速填入')"
                   />
                   <div class="accessory-tags mt8">
                     <el-tag
@@ -291,12 +302,12 @@
             <!-- 寄售信息 -->
             <el-row :gutter="24">
               <el-col :span="24">
-                <el-form-item label="寄售信息" prop="consignInfo">
+                <el-form-item :label="tr('寄售信息')" prop="consignInfo">
                   <el-input
                     v-model="form.consignInfo"
                     type="textarea"
                     :rows="2"
-                    placeholder="请输入寄售信息（如寄售渠道、周期、分成等）"
+                    :placeholder="tr('请输入寄售信息（如寄售渠道、周期、分成等）')"
                   />
                 </el-form-item>
               </el-col>
@@ -304,12 +315,12 @@
             <!-- 12.备注 -->
             <el-row :gutter="24">
               <el-col :span="24">
-                <el-form-item label="备注" prop="remark">
+                <el-form-item :label="tr('备注')" prop="remark">
                   <el-input
                     v-model="form.remark"
                     type="textarea"
                     :rows="2"
-                    placeholder="请输入备注信息"
+                    :placeholder="tr('请输入备注信息')"
                   />
                 </el-form-item>
               </el-col>
@@ -317,8 +328,8 @@
             <!-- 供应商归属（仅 Luxeaf 后台可见） -->
             <el-row :gutter="24" v-if="!isSupplierUser">
               <el-col :span="12">
-                <el-form-item label="供应商">
-                  <el-select v-model="form.supplierId" placeholder="请选择供应商（不选归 Luxeaf）" clearable style="width: 100%">
+                <el-form-item :label="tr('供应商')">
+                  <el-select v-model="form.supplierId" :placeholder="tr('请选择供应商（不选归 Luxeaf）')" clearable style="width: 100%">
                     <el-option :label="tr('Luxeaf 自有')" :value="null" />
                     <el-option v-for="s in supplierOptions" :key="s.id" :label="s.supplierName" :value="s.id" />
                   </el-select>
@@ -328,7 +339,7 @@
             <!-- 13.商品图片 -->
             <el-row :gutter="24">
               <el-col :span="24">
-                <el-form-item label="商品图片" prop="imageList">
+                <el-form-item :label="tr('商品图片')" prop="imageList">
                   <div class="item-image-upload">
                     <!-- 图片列表（仅展示已关联到商品的图片状态） -->
                     <div class="image-list" v-if="form.id && form.imageList && form.imageList.length">
@@ -349,9 +360,9 @@
                           fit="cover"
                           class="thumb"
                         />
-                        <span v-if="idx === 0" class="main-tag">主图</span>
-                        <span v-if="img.uploadStatus === 'uploading'" class="status-tag status-uploading">上传中</span>
-                        <span v-else-if="img.uploadStatus === 'failed'" class="status-tag status-failed">上传失败</span>
+                        <span v-if="idx === 0" class="main-tag">{{ tr('主图') }}</span>
+                        <span v-if="img.uploadStatus === 'uploading'" class="status-tag status-uploading">{{ tr('上传中') }}</span>
+                        <span v-else-if="img.uploadStatus === 'failed'" class="status-tag status-failed">{{ tr('上传失败') }}</span>
                         <el-button
                           v-if="img.uploadStatus === 'failed'"
                           type="warning"
@@ -359,7 +370,7 @@
                           class="btn-retry"
                           @click="emit('retry-image', img, idx)"
                         >
-                          重试
+                          {{ tr('重试') }}
                         </el-button>
                         <el-button type="danger" link class="btn-remove" icon="Delete" @click="emit('remove-image', idx)" />
                       </div>
@@ -401,18 +412,18 @@
                       accept="image/*"
                     >
                       <el-icon class="avatar-uploader-icon"><Plus /></el-icon>
-                      <div class="upload-main-text">将图片拖拽到此处，或点击上传</div>
+                      <div class="upload-main-text">{{ tr('将图片拖拽到此处，或点击上传') }}</div>
                       <div class="upload-tip-text">
-                        请上传大小不超过 20MB 的图片，格式 png/jpg/jpeg，最多上传{{ IMAGE_LIMIT }}张图片。
+                        {{ tr('请上传大小不超过 20MB 的图片，格式 png/jpg/jpeg，最多上传 {0} 张图片。').replace('{0}', IMAGE_LIMIT) }}
                         <br />
-                        支持拖拽调整顺序，点击图片预览原图
+                        {{ tr('支持拖拽调整顺序，点击图片预览原图') }}
                       </div>
                     </el-upload>
                     <div class="image-rule-tip">
-                      图片上传规则：主图必须清晰展示商品正面，不得包含水印、拼图、无关背景或遮挡；如商品包含 COA 证书，必须上传清晰完整的 COA 图片且把 COA 图片放置为最后一张。
+                      {{ tr('图片上传规则：主图必须清晰展示商品正面，不得包含水印、拼图、无关背景或遮挡；如商品包含 COA 证书，必须上传清晰完整的 COA 图片且把 COA 图片放置为最后一张。') }}
                     </div>
                     <div v-if="form.id && hasUploadingImages" class="upload-state-tip">
-                      当前有 {{ uploadingImageCount }} 张图片上传中，上传完成后才可保存。
+                      {{ tr('当前有 {0} 张图片上传中，上传完成后才可保存。').replace('{0}', uploadingImageCount) }}
                     </div>
                   </div>
                 </el-form-item>
@@ -431,10 +442,10 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { Check, Plus, Ticket } from '@element-plus/icons-vue'
 
-defineProps({
+const props = defineProps({
   dialog: { type: Object, required: true },
   skuLoading: { type: Boolean, default: false },
   form: { type: Object, required: true },
@@ -489,6 +500,13 @@ const emit = defineEmits([
 
 const itemFormRef = ref(null)
 const itemImageUploadRef = ref(null)
+const defectTagsExpanded = ref(false)
+
+watch(() => props.dialog.visible, (visible) => {
+  if (visible) {
+    defectTagsExpanded.value = false
+  }
+})
 
 defineExpose({
   validate: () => itemFormRef.value?.validate?.(),
@@ -515,6 +533,40 @@ defineExpose({
 .accessory-tag:hover {
   opacity: 0.85;
 }
+.accessory-tags:not(.is-expanded) {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+}
+.defect-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.defect-tag-code {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  margin-right: 2px;
+  border-radius: 4px;
+  border: 1px solid #dcdfe6;
+  background: #f5f7fa;
+  color: #606266;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.accessory-tags:not(.is-expanded) .defect-tag {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.defect-toggle {
+  margin-top: 4px;
+  padding: 0;
+}
 .inch-field {
   display: flex;
   align-items: center;
@@ -523,5 +575,11 @@ defineExpose({
 .inch-unit {
   color: #909399;
   flex-shrink: 0;
+}
+.price-hint {
+  margin-top: 4px;
+  color: #909399;
+  font-size: 12px;
+  line-height: 1.5;
 }
 </style>
