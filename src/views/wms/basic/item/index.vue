@@ -61,12 +61,14 @@
       :dialog="dialog"
       :sku-loading="skuLoading"
       :form="form"
-      :rules="rules"
+      :rules="formRules"
       :item-category-tree-select-list="itemCategoryTreeSelectList"
       :form-brand-options="formBrandOptions"
       :ITEM_CONDITION_OPTIONS="ITEM_CONDITION_OPTIONS"
       :AUTH_AGENCY_OPTIONS="AUTH_AGENCY_OPTIONS"
       :ACCESSORY_TAG_OPTIONS="ACCESSORY_TAG_OPTIONS"
+      :DEFECT_TAG_OPTIONS="DEFECT_TAG_OPTIONS"
+      :ITEM_SIZE_OPTIONS="ITEM_SIZE_OPTIONS"
       :supplier-options="supplierOptions"
       :is-supplier-user="isSupplierUser"
       :can-view-cost-price="canViewCostPrice"
@@ -93,6 +95,7 @@
       @cost-price-change="handleCostPriceChange"
       @material-change="handleMaterialChange"
       @append-accessory-tag="appendAccessoryTag"
+      @append-defect-tag="appendDefectTag"
       @image-drag-start="onImageDragStart"
       @image-drop="onImageDrop"
       @retry-image="retryItemImage"
@@ -514,6 +517,19 @@ const AUTH_AGENCY_OPTIONS = ['Entrupy', 'Real Authentication', 'Legitmark', 'Che
 const ITEM_CONDITION_OPTIONS = ['S', 'A', 'B', 'C', 'D']
 /** 配件常用选项（可点击快速填入，也可自行输入） */
 const ACCESSORY_TAG_OPTIONS = ['Dustbag', 'Box', 'ID card', 'Lock & Key', 'Strap', 'Receipt']
+/** 瑕疵气泡（字母角标 + 短标签，悬停看全文，写入仍用完整英文） */
+const DEFECT_TAG_OPTIONS = [
+  { code: 'A', short: 'New/Unused', value: 'Brand New / Unused with protective seals intact' },
+  { code: 'B', short: 'Like New', value: 'Pristine / Like New / No noticeable signs of wear' },
+  { code: 'C', short: 'Hairline', value: 'Like New / Faint hairline scratches on hardware only' },
+  { code: 'D', short: 'Scuffs', value: 'Slight exterior scuffs / light surface rubbing' },
+  { code: 'E', short: 'Corners', value: 'Minor rubbing at bottom corners / edges' },
+  { code: 'F', short: 'Handle', value: 'Light wear / indentations on handle & shoulder strap' },
+  { code: 'G', short: 'Hardware', value: 'Visible scratches / tarnish on metal parts' },
+  { code: 'H', short: 'Interior', value: 'Minor stains / indentations partially inside' },
+  { code: 'I', short: 'Overall', value: 'Light overall wear across leather, corners & hardware' }
+]
+const ITEM_SIZE_OPTIONS = ['Micro', 'Mini', 'Small', 'Medium', 'Large', 'Extra Large', 'Nano']
 
 /** 点击配件 tag 时追加到输入框（已包含则不重复添加） */
 const appendAccessoryTag = (tag) => {
@@ -521,6 +537,12 @@ const appendAccessoryTag = (tag) => {
   const parts = val.split(/[,，、\n]+/).map(s => s.trim()).filter(Boolean)
   if (parts.includes(tag)) return
   form.value.accessories = parts.length ? parts.concat(tag).join(', ') : tag
+}
+const appendDefectTag = (tag) => {
+  const val = form.value.defect || ''
+  const parts = val.split(/[,，、\n]+/).map(s => s.trim()).filter(Boolean)
+  if (parts.includes(tag)) return
+  form.value.defect = parts.length ? parts.concat(tag).join(', ') : tag
 }
 /** 列表主图缓存与加载状态（兜底按 itemId 请求） */
 const listMainImageUrlMap = ref(new Map())
@@ -592,6 +614,10 @@ const initFormData = {
   modelId: undefined,
   defect: undefined,
   accessories: undefined,
+  size: undefined,
+  bagWidth: undefined,
+  bagHeight: undefined,
+  bagDepth: undefined,
   remark: undefined,
   imageList: [], // 商品图片列表（编辑时由接口返回，项为 { id, url, isMain, sort }）
   skuCode: undefined, // SKU编码（与规格表第一行同步，主表校验与提示）
@@ -610,7 +636,7 @@ function validateItemImages(rule, value, callback) {
     callback()
     return
   }
-  callback(new Error('商品图片不能为空'))
+  callback(new Error(tr('商品图片不能为空')))
 }
 
 function validateItemImagesOnNextTick() {
@@ -663,7 +689,42 @@ const data = reactive({
     ],
   }
 });
-const {queryParams, form, rules} = toRefs(data);
+const {queryParams, form} = toRefs(data);
+
+function requiredNumber(message) {
+  return {
+    required: true,
+    validator: (rule, value, callback) => {
+      if (value === null || value === undefined || value === '') {
+        callback(new Error(message))
+        return
+      }
+      callback()
+    },
+    trigger: []
+  }
+}
+
+const formRules = computed(() => {
+  const base = { ...data.rules }
+  if (form.value.id) {
+    return base
+  }
+  return {
+    ...base,
+    costPrice: canViewCostPrice.value ? [requiredNumber('成本价不能为空')] : [],
+    sellingPrice: canViewSellingPrice.value ? [requiredNumber('销售价不能为空')] : [],
+    authAgency: [{ type: 'array', required: true, min: 1, message: '鉴定机构不能为空', trigger: [] }],
+    defaultQty: [requiredNumber('数量不能为空')],
+    defect: [{ required: true, message: '瑕疵不能为空', trigger: [] }],
+    size: [{ required: true, message: 'Size不能为空', trigger: [] }],
+    bagWidth: [requiredNumber('Bag Width不能为空')],
+    bagHeight: [requiredNumber('Bag Height不能为空')],
+    bagDepth: [requiredNumber('Bag Depth不能为空')],
+    accessories: [{ required: true, message: '配件不能为空', trigger: [] }],
+    consignInfo: [{ required: true, message: '寄售信息不能为空', trigger: [] }]
+  }
+})
 const appliedRouteSkuCode = ref('')
 
 function applyRouteSkuFilter() {
@@ -1289,17 +1350,29 @@ const handleUpdate = (row) => {
     }
   });
 }
+function scrollToFirstFormError() {
+  nextTick(() => {
+    const errorItem = document.querySelector('.el-drawer__body .el-form-item.is-error')
+    errorItem?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  })
+}
+
 const submitForm = async () => {
-  if (!hasRequiredItemImage()) {
-    proxy?.$modal.msgError('商品图片不能为空')
-    validateItemImagesOnNextTick()
-    return
-  }
-  // 先校验商品主表（含商品名称、分类、品牌、成色、年份、SKU编码等）
   try {
     await itemFormRef.value.validate();
   } catch {
+    scrollToFirstFormError()
+    if (!hasRequiredItemImage()) {
+      proxy?.$modal.msgError(tr('商品图片不能为空'))
+    }
     return;
+  }
+
+  if (!hasRequiredItemImage()) {
+    proxy?.$modal.msgError(tr('商品图片不能为空'))
+    validateItemImagesOnNextTick()
+    scrollToFirstFormError()
+    return
   }
 
   // 将主表填的 SKU 编码同步到规格行，再提交
