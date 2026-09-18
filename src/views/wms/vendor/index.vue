@@ -107,7 +107,7 @@
           <span v-else>{{ quantity(row.productQuantity) }}</span>
         </template>
       </el-table-column>
-      <el-table-column :label="text('未入库', 'Not inbound')" align="right" min-width="105">
+      <el-table-column :label="text('在途中', 'In transit')" align="right" min-width="105">
         <template #default="{ row }"><span class="warning-text">{{ quantity(row.unreceivedQuantity) }}</span></template>
       </el-table-column>
       <el-table-column :label="text('已入库', 'Inbound')" align="right" min-width="100">
@@ -588,7 +588,7 @@ const isEnglish = computed(() => String(proxy?.$i18n?.locale || 'zh-cn').toLower
 const text = (zh, en) => isEnglish.value ? en : zh
 
 const statusOptions = computed(() => [
-  { value: 'UNRECEIVED', label: text('有未入库商品', 'Not inbound') },
+  { value: 'IN_TRANSIT', label: text('有在途中商品', 'In transit') },
   { value: 'RECEIVED', label: text('有入库商品', 'Inbound') },
   { value: 'IN_STOCK', label: text('当前在仓', 'In stock') },
   { value: 'SOLD', label: text('已有销售', 'Delivered') },
@@ -601,7 +601,7 @@ const statusOptions = computed(() => [
 const summaryCards = computed(() => [
   { key: 'sku', label: text('SKU 种类', 'SKUs'), value: summary.skuCount },
   { key: 'product', label: text('商品个数', 'Added'), value: summary.productQuantity },
-  { key: 'unreceived', label: text('未入库', 'Not inbound'), value: summary.unreceivedQuantity, className: 'warning' },
+  { key: 'unreceived', label: text('在途中', 'In transit'), value: summary.unreceivedQuantity, className: 'warning' },
   { key: 'received', label: text('已入库', 'Inbound'), value: summary.receivedQuantity },
   { key: 'inventory', label: text('在仓', 'In stock'), value: summary.inventoryQuantity },
   ...(!isSupplierUser.value ? [{ key: 'platformSold', label: text('平台已售', 'Platform sold'), value: summary.platformSoldQuantity },
