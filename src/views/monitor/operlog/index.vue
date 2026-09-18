@@ -1,23 +1,34 @@
 <template>
    <div class="app-container operlog-page" :class="{ 'is-en': isEn }">
       <el-form :model="queryParams" ref="queryRef" :inline="true" v-show="showSearch" :label-width="isEn ? '150px' : '68px'" class="filter-form">
-        <el-form-item :label="tr('操作地址')" prop="operIp">
+        <el-form-item :label="tr('日志编号')" prop="operId">
           <el-input
-            v-model="queryParams.operIp"
-            :placeholder="tr('请输入操作地址')"
+            v-model="queryParams.operId"
+            :placeholder="tr('请输入日志编号')"
             clearable
             style="width: 240px;"
             @keyup.enter="handleQuery"
           />
         </el-form-item>
-        <el-form-item :label="tr('系统模块')" prop="title">
-            <el-input
-               v-model="queryParams.title"
-               :placeholder="tr('请输入系统模块')"
+        <el-form-item :label="tr('系统模块')" prop="moduleId">
+            <el-tree-select
+               v-model="queryParams.moduleId"
+               :data="moduleTree"
+               :props="{ value: 'id', label: 'label', children: 'children' }"
+               value-key="id"
+               :placeholder="tr('请选择系统模块')"
                clearable
-               style="width: 240px;"
-               @keyup.enter="handleQuery"
-            />
+               filterable
+               check-strictly
+               :render-after-expand="false"
+               :filter-node-method="filterModuleNode"
+               style="width: 280px"
+               @change="handleModuleChange"
+            >
+               <template #default="{ data }">
+                  <span>{{ tr(data.label) }}</span>
+               </template>
+            </el-tree-select>
          </el-form-item>
          <el-form-item :label="tr('操作人员')" prop="operName">
             <el-input
@@ -113,7 +124,11 @@
       <el-table ref="operlogRef" v-loading="loading" :data="operlogList" @selection-change="handleSelectionChange" :default-sort="defaultSort" @sort-change="handleSortChange">
          <el-table-column type="selection" width="50" align="center" />
          <el-table-column :label="tr('日志编号')" align="center" prop="operId" />
-         <el-table-column :label="tr('系统模块')" align="center" prop="title" :show-overflow-tooltip="true" />
+         <el-table-column :label="tr('系统模块')" align="center" prop="title" :show-overflow-tooltip="true">
+            <template #default="scope">
+               <span>{{ displayModuleTitle(scope.row.title) }}</span>
+            </template>
+         </el-table-column>
          <el-table-column :label="tr('操作类型')" align="center" prop="businessType">
             <template #default="scope">
                <dict-tag :options="sys_oper_type" :value="scope.row.businessType" />
@@ -167,7 +182,7 @@
                   <el-form-item :label="isEn ? 'Request Info:' : '请求信息：'">{{ form.requestMethod }} {{form.operUrl }}</el-form-item>
                </el-col>
                <el-col :span="12">
-                  <el-form-item :label="isEn ? 'Module:' : '操作模块：'">{{ form.title }} / {{ typeFormat(form) }}</el-form-item>
+                  <el-form-item :label="isEn ? 'Module:' : '操作模块：'">{{ displayModuleTitle(form.title) }} / {{ typeFormat(form) }}</el-form-item>
                </el-col>
                <el-col :span="24">
                   <el-form-item :label="isEn ? 'Method:' : '操作方法：'">{{ form.method }}</el-form-item>
@@ -204,9 +219,11 @@
 </template>
 
 <script setup name="Operlog">
-import { list, delOperlog, cleanOperlog } from "@/api/monitor/operlog";
+import { list, listModules, delOperlog, cleanOperlog } from "@/api/monitor/operlog";
 import useSettingsStore from "@/store/modules/settings";
+import usePermissionStore from "@/store/modules/permission";
 import { translateByMap } from '@/locales/runtime-map'
+import { buildOperLogModuleTree, collectTreeTitles } from '@/views/monitor/operlog/moduleTree.js'
 
 const { proxy } = getCurrentInstance();
 const { sys_oper_type, sys_common_status } = proxy.useDict("sys_oper_type","sys_common_status");
@@ -226,13 +243,16 @@ const title = ref("");
 const dateRange = ref([]);
 const defaultSort = ref({ prop: "operTime", order: "descending" });
 
+const moduleTree = ref([]);
+
 const data = reactive({
   form: {},
   queryParams: {
     pageNum: 1,
     pageSize: 10,
-    operIp: undefined,
-    title: undefined,
+    operId: undefined,
+    moduleId: undefined,
+    titles: undefined,
     operName: undefined,
     businessType: undefined,
     status: undefined
@@ -241,12 +261,82 @@ const data = reactive({
 
 const { queryParams, form } = toRefs(data);
 
-/** 查询登录日志 */
+function findModuleNode(nodes, id) {
+  if (!id || !Array.isArray(nodes)) {
+    return null;
+  }
+  for (const node of nodes) {
+    if (node.id === id) {
+      return node;
+    }
+    const found = findModuleNode(node.children, id);
+    if (found) {
+      return found;
+    }
+  }
+  return null;
+}
+
+function handleModuleChange(id) {
+  const node = findModuleNode(moduleTree.value, id);
+  queryParams.value.titles = node?.titles?.length ? node.titles : undefined;
+}
+
+function filterModuleNode(value, data) {
+  if (!value) {
+    return true;
+  }
+  const keyword = String(value).toLowerCase();
+  return String(data.label || '').toLowerCase().includes(keyword)
+    || String(tr(data.label) || '').toLowerCase().includes(keyword);
+}
+
+function displayModuleTitle(title) {
+  if (title === '物料') {
+    return tr('商品管理');
+  }
+  if (title === '物料类型') {
+    return tr('商品分类');
+  }
+  return tr(title);
+}
+
+function buildListQuery() {
+  const query = proxy.addDateRange(queryParams.value, dateRange.value);
+  const operId = String(query.operId ?? '').trim();
+  return {
+    ...query,
+    moduleId: undefined,
+    operId: /^\d+$/.test(operId) ? operId : undefined,
+    titles: Array.isArray(query.titles) && query.titles.length ? query.titles : undefined
+  };
+}
+
+function loadModules() {
+  const permissionStore = usePermissionStore()
+  const sidebar = permissionStore.sidebarRouters || []
+  const buildTree = (titles) => {
+    try {
+      return buildOperLogModuleTree(sidebar, titles)
+    } catch (e) {
+      console.error(e)
+      return []
+    }
+  }
+  listModules().then(response => {
+    moduleTree.value = buildTree(collectTreeTitles(response.data || []))
+  }).catch(() => {
+    moduleTree.value = buildTree([])
+  })
+}
+
+/** 查询操作日志 */
 function getList() {
   loading.value = true;
-  list(proxy.addDateRange(queryParams.value, dateRange.value)).then(response => {
+  list(buildListQuery()).then(response => {
     operlogList.value = response.rows;
     total.value = response.total;
+  }).finally(() => {
     loading.value = false;
   });
 }
@@ -272,6 +362,7 @@ function handleQuery() {
 /** 重置按钮操作 */
 function resetQuery() {
   dateRange.value = [];
+  queryParams.value.titles = undefined;
   proxy.resetForm("queryRef");
   queryParams.value.pageNum = 1;
   proxy.$refs["operlogRef"].sort(defaultSort.value.prop, defaultSort.value.order);
@@ -314,10 +405,11 @@ function handleClean() {
 /** 导出按钮操作 */
 function handleExport() {
   proxy.download("monitor/operlog/export",{
-    ...queryParams.value,
+    ...buildListQuery(),
   }, `config_${new Date().getTime()}.xlsx`);
 }
 
+loadModules();
 getList();
 </script>
 <style scoped>
