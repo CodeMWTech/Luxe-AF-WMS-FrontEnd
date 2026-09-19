@@ -47,7 +47,7 @@
                style="width: 240px"
             >
                <el-option
-                  v-for="dict in sys_oper_type"
+                  v-for="dict in operTypeOptions"
                   :key="dict.value"
                   :label="dict.label"
                   :value="dict.value"
@@ -223,10 +223,15 @@ import { list, listModules, delOperlog, cleanOperlog } from "@/api/monitor/operl
 import useSettingsStore from "@/store/modules/settings";
 import usePermissionStore from "@/store/modules/permission";
 import { translateByMap } from '@/locales/runtime-map'
-import { buildOperLogModuleTree, collectTreeTitles } from '@/views/monitor/operlog/moduleTree.js'
+import { buildOperLogModuleTree, collectTreeTitles, resolveOperLogModuleLabel } from '@/views/monitor/operlog/moduleTree.js'
 
 const { proxy } = getCurrentInstance();
 const { sys_oper_type, sys_common_status } = proxy.useDict("sys_oper_type","sys_common_status");
+/** 强退、生成代码对应的在线用户/代码生成已从系统隐藏，筛选里不再提供 */
+const HIDDEN_OPER_TYPE_VALUES = new Set(['7', '8'])
+const operTypeOptions = computed(() =>
+  (sys_oper_type.value || []).filter(item => !HIDDEN_OPER_TYPE_VALUES.has(String(item.value)))
+)
 const settingsStore = useSettingsStore()
 const isEn = computed(() => settingsStore.language === 'en')
 const tr = (text) => translateByMap(text, settingsStore.language || 'zh-cn')
@@ -292,13 +297,7 @@ function filterModuleNode(value, data) {
 }
 
 function displayModuleTitle(title) {
-  if (title === '物料') {
-    return tr('商品管理');
-  }
-  if (title === '物料类型') {
-    return tr('商品分类');
-  }
-  return tr(title);
+  return tr(resolveOperLogModuleLabel(title));
 }
 
 function buildListQuery() {
