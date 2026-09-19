@@ -13,7 +13,7 @@
         <el-form-item :label="tr('系统模块')" prop="moduleId">
             <el-tree-select
                v-model="queryParams.moduleId"
-               :data="moduleTree"
+               :data="displayModuleTree"
                :props="{ value: 'id', label: 'label', children: 'children' }"
                value-key="id"
                :placeholder="tr('请选择系统模块')"
@@ -24,11 +24,7 @@
                :filter-node-method="filterModuleNode"
                style="width: 280px"
                @change="handleModuleChange"
-            >
-               <template #default="{ data }">
-                  <span>{{ tr(data.label) }}</span>
-               </template>
-            </el-tree-select>
+            />
          </el-form-item>
          <el-form-item :label="tr('操作人员')" prop="operName">
             <el-input
@@ -284,6 +280,17 @@ const defaultSort = ref({ prop: "operTime", order: "descending" });
 
 const moduleTree = ref([]);
 
+function translateModuleTree(nodes) {
+  return (nodes || []).map(node => ({
+    ...node,
+    rawLabel: node.rawLabel || node.label,
+    label: tr(node.rawLabel || node.label),
+    children: translateModuleTree(node.children)
+  }))
+}
+
+const displayModuleTree = computed(() => translateModuleTree(moduleTree.value))
+
 const data = reactive({
   form: {},
   queryParams: {
@@ -327,6 +334,7 @@ function syncBusinessTypeWithModule() {
   }
   if (!allowed.has(String(current))) {
     queryParams.value.businessType = undefined
+    proxy.$modal.msgWarning(tr('先选择的操作类型在该系统模块下不包含，请重新选择。'))
   }
 }
 
@@ -341,8 +349,10 @@ function filterModuleNode(value, data) {
     return true;
   }
   const keyword = String(value).toLowerCase();
+  const rawLabel = data.rawLabel || data.label
   return String(data.label || '').toLowerCase().includes(keyword)
-    || String(tr(data.label) || '').toLowerCase().includes(keyword);
+    || String(rawLabel || '').toLowerCase().includes(keyword)
+    || String(tr(rawLabel) || '').toLowerCase().includes(keyword);
 }
 
 function displayModuleTitle(title) {
