@@ -2,7 +2,7 @@ export const legalDocuments = {
   privacy: {
     en: {
       title: 'Privacy Policy',
-      updated: 'Last updated: September 12, 2026',
+      updated: 'Last updated: September 19, 2026',
       official: 'This English version is the official version used for Luxe AF SMS program compliance.',
       sections: [
         {
@@ -15,8 +15,8 @@ export const legalDocuments = {
         {
           heading: '2. Information we collect',
           paragraphs: [
-            'For scheduling notifications we use business contact details already stored in Luxe AF WMS, including your name, mobile phone number, livestream account assignment, scheduled date, and start/end time.',
-            'We do not use this SMS program to collect extra personal information. Message replies such as STOP or HELP are processed only to honor opt-out and support requests.'
+            'Livestream hosts and staff provide a mobile phone number on Luxe AF’s public SMS opt-in form at this website’s /sms-opt-in page. We also use business contact details already stored in Luxe AF WMS, including your name, livestream account assignment, scheduled date, and start/end time.',
+            'We do not use this SMS program to collect extra personal information beyond what is needed to send work-schedule notices. Message replies such as STOP or HELP are processed only to honor opt-out and support requests.'
           ]
         },
         {
@@ -31,15 +31,15 @@ export const legalDocuments = {
           heading: '4. How we share information',
           paragraphs: [
             'We share your phone number and message content with our SMS delivery provider, Twilio, solely to deliver, log, and support these work notifications.',
-            'We do not sell personal information. We do not share phone numbers with unaffiliated third parties for their own marketing.'
+            'We do not sell personal information. Mobile phone numbers are not shared with third parties or affiliates for marketing purposes.'
           ]
         },
         {
           heading: '5. Consent, opt-out, and help',
           paragraphs: [
-            'You consent to receive these messages by logging into Luxe AF WMS after seeing the login notice, and through the explanation provided by Luxe AF scheduling staff before you are enrolled.',
+            'You consent to receive these messages only by submitting the public SMS opt-in form, entering your mobile phone number, and checking the consent box. Logging into Luxe AF WMS does not enroll you in this SMS program.',
             'Reply STOP to unsubscribe. After you opt out, you will not receive further messages from this program unless you reply START or later provide new consent.',
-            'Reply HELP or INFO for help. Message and data rates may apply.'
+            'Reply HELP or INFO for help. Message frequency varies. Message and data rates may apply.'
           ]
         },
         {
@@ -59,7 +59,7 @@ export const legalDocuments = {
     },
     zh: {
       title: '隐私政策',
-      updated: '最近更新：2026年9月12日',
+      updated: '最近更新：2026年9月19日',
       official: '英文版本为 Luxe AF 短信项目合规所用的正式版本，本中文为对照译文。',
       sections: [
         {
@@ -72,8 +72,8 @@ export const legalDocuments = {
         {
           heading: '2. 我们收集哪些信息',
           paragraphs: [
-            '排班通知只会使用系统中已有的工作联系信息，包括姓名、手机号、直播账号、排班日期和开播/结束时间。',
-            '本短信项目不会额外收集其他个人信息。回复 STOP 或 HELP 仅用于退订和支持。'
+            '排班短信会收集您在本网站 /sms-opt-in 公开报名页提交的手机号。我们也会使用系统中已有的工作联系信息，包括姓名、直播账号、排班日期和开播/结束时间。',
+            '本短信项目不会额外收集发送工作通知以外的个人信息。回复 STOP 或 HELP 仅用于退订和支持。'
           ]
         },
         {
@@ -88,15 +88,15 @@ export const legalDocuments = {
           heading: '4. 我们如何共享信息',
           paragraphs: [
             '我们仅会将手机号和短信内容提供给短信服务商 Twilio，用于发送、记录和支持这些工作通知。',
-            '我们不会出售个人信息，也不会把手机号提供给无关第三方用于其自身营销。'
+            '我们不会出售个人信息。手机号码不会提供给第三方或关联方用于营销目的。'
           ]
         },
         {
           heading: '5. 同意、退订与帮助',
           paragraphs: [
-            '您在登录页看到告知后登录 Luxe AF WMS，即表示同意接收此类短信；排班同事在登记前也会说明短信用途。',
+            '只有在公开短信报名页填写手机号并勾选同意框后，您才会加入本短信项目。登录 Luxe AF WMS 并不会自动为您报名。',
             '回复 STOP 退订。退订后，除非您回复 START 或重新同意，否则不会再收到本项目短信。',
-            '回复 HELP 或 INFO 获取帮助。短信和流量费用可能由运营商收取。'
+            '回复 HELP 或 INFO 获取帮助。发送频率视排班情况而定。短信和流量费用可能由运营商收取。'
           ]
         },
         {
@@ -118,14 +118,14 @@ export const legalDocuments = {
   terms: {
     en: {
       title: 'Terms of Service',
-      updated: 'Last updated: September 12, 2026',
+      updated: 'Last updated: September 19, 2026',
       official: 'This English version is the official version used for Luxe AF SMS program compliance.',
       sections: [
         {
           heading: '1. Acceptance of these terms',
           paragraphs: [
             'These Terms of Service govern use of Luxe AF WMS, including work-schedule text messages sent to livestream hosts and other staff.',
-            'By logging into Luxe AF WMS, you acknowledge the login notice and agree to these Terms of Service and the Privacy Policy. Scheduling staff also explain the SMS program before you are enrolled.'
+            'By using Luxe AF WMS, you agree to these Terms of Service and the Privacy Policy. Work-schedule SMS enrollment is optional and is completed only on the public SMS opt-in form, not by logging in.'
           ]
         },
         {
@@ -139,9 +139,8 @@ export const legalDocuments = {
         {
           heading: '3. Consent to receive messages',
           paragraphs: [
-            'Logging into Luxe AF WMS after reviewing the login notice constitutes your written consent to receive these work-schedule text messages at the mobile number stored for you in the system.',
-            'You also understand that Luxe AF scheduling staff may confirm this program with you in person or by phone before enrollment.',
-            'Consent applies to program messages described in these terms. Message and data rates may apply.'
+            'You consent to receive these work-schedule text messages only after you visit the public SMS opt-in form, enter your mobile phone number, and check the consent box. Logging into Luxe AF WMS does not constitute SMS consent.',
+            'Consent applies only to program messages described in these terms. You may decline SMS and still use Luxe AF WMS. Message frequency varies. Message and data rates may apply.'
           ]
         },
         {
@@ -171,14 +170,14 @@ export const legalDocuments = {
     },
     zh: {
       title: '用户协议',
-      updated: '最近更新：2026年9月12日',
+      updated: '最近更新：2026年9月19日',
       official: '英文版本为 Luxe AF 短信项目合规所用的正式版本，本中文为对照译文。',
       sections: [
         {
           heading: '1. 接受本协议',
           paragraphs: [
             '本用户协议适用于 Luxe AF WMS 的使用，包括向直播主播及其他员工发送的排班短信。',
-            '您在登录页看到告知后登录 Luxe AF WMS，即表示同意本用户协议和隐私政策。排班同事在登记前也会说明短信用途。'
+            '使用 Luxe AF WMS 即表示您同意本用户协议和隐私政策。排班短信为自愿报名，只有在公开短信报名页完成填写后才会加入，登录本身不会自动报名。'
           ]
         },
         {
@@ -192,9 +191,8 @@ export const legalDocuments = {
         {
           heading: '3. 同意接收短信',
           paragraphs: [
-            '您在阅读登录告知后登录 Luxe AF WMS，即表示书面同意，系统可向为您保存的手机号发送这些排班短信。',
-            '您也理解，Luxe AF 排班同事可能在登记前当面或电话再次说明本项目。',
-            '该同意仅适用于本协议所述的工作通知。短信和流量费用可能由运营商收取。'
+            '只有在公开短信报名页填写手机号并勾选同意框后，您才同意接收这些排班短信。登录 Luxe AF WMS 本身不构成短信同意。',
+            '该同意仅适用于本协议所述的工作通知。您可以拒绝接收短信，仍继续使用系统。发送频率视排班情况而定。短信和流量费用可能由运营商收取。'
           ]
         },
         {

@@ -21,6 +21,8 @@
       <p class="legal-updated">{{ doc.updated }}</p>
       <p class="legal-official">{{ doc.official }}</p>
       <nav class="legal-switch">
+        <router-link to="/sms-opt-in">{{ chrome.optInLink }}</router-link>
+        <span aria-hidden="true">·</span>
         <router-link to="/terms">{{ chrome.termsLink }}</router-link>
         <span aria-hidden="true">·</span>
         <router-link to="/privacy">{{ chrome.privacyLink }}</router-link>
@@ -44,8 +46,8 @@ const pageLanguage = ref('en')
 const isEn = computed(() => pageLanguage.value === 'en')
 const doc = computed(() => getLegalDocument(route.meta.legalDoc, pageLanguage.value))
 const chrome = computed(() => isEn.value
-  ? { backToLogin: 'Back to login', termsLink: 'Terms of Service', privacyLink: 'Privacy Policy' }
-  : { backToLogin: '返回登录', termsLink: '用户协议', privacyLink: '隐私政策' }
+  ? { backToLogin: 'Back to login', optInLink: 'SMS Opt-In', termsLink: 'Terms of Service', privacyLink: 'Privacy Policy' }
+  : { backToLogin: '返回登录', optInLink: '短信报名', termsLink: '用户协议', privacyLink: '隐私政策' }
 )
 
 function toggleLanguage() {
@@ -161,6 +163,7 @@ watch(
 
 .legal-switch {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin-bottom: 32px;
   color: #98a2b3;

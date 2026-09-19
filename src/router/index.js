@@ -100,6 +100,12 @@ export const constantRoutes = [
     meta: { legalDoc: 'terms', title: '用户协议', titleEn: 'Terms of Service' }
   },
   {
+    path: '/sms-opt-in',
+    component: () => import('@/views/legal/sms-opt-in.vue'),
+    hidden: true,
+    meta: { title: '短信报名', titleEn: 'SMS Opt-In' }
+  },
+  {
     path: "/:pathMatch(.*)*",
     component: () => import('@/views/error/404'),
     hidden: true

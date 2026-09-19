@@ -72,9 +72,7 @@
         <div class="form-options">
           <el-checkbox v-model="loginForm.rememberMe">{{ $t('login.rememberMe') }}</el-checkbox>
         </div>
-        <el-form-item prop="smsConsent" class="login-consent-item">
-          <LoginConsentNotice v-model="loginForm.smsConsent" variant="desktop" />
-        </el-form-item>
+        <LoginSmsNotice variant="desktop" />
         <el-form-item class="login-action">
           <el-button
             :loading="loading"
@@ -101,7 +99,7 @@ import { encrypt, decrypt } from '@/utils/jsencrypt'
 import useUserStore from '@/store/modules/user'
 import { useI18n } from 'vue-i18n'
 import { resolvePostLoginRedirect } from '@/utils/mobileDevice'
-import LoginConsentNotice from '@/components/LoginConsentNotice/index.vue'
+import LoginSmsNotice from '@/components/LoginSmsNotice/index.vue'
 
 const loginVideoUrl = new URL('../../../videos/A_high-end,_minimalist_luxury_secondary_202607092241-remove-mark.mp4', import.meta.url).href
 const userStore = useUserStore()
@@ -114,7 +112,6 @@ const loginForm = ref({
   username: '',
   password: '',
   rememberMe: false,
-  smsConsent: false,
   code: '',
   uuid: ''
 })
@@ -125,14 +122,7 @@ const loginRules = computed(() => ({
     { min: 2, max: 50, trigger: 'blur', message: t('login.ruleUsernameLength') }
   ],
   password: [{ required: true, trigger: 'blur', message: t('login.rulePasswordRequired') }],
-  code: [{ required: true, trigger: 'change', message: t('login.ruleCodeRequired') }],
-  smsConsent: [{
-    validator: (_rule, value, callback) => {
-      if (!value) callback(new Error(t('login.ruleConsentRequired')))
-      else callback()
-    },
-    trigger: 'change'
-  }]
+  code: [{ required: true, trigger: 'change', message: t('login.ruleCodeRequired') }]
 }))
 
 const codeUrl = ref('')
@@ -181,7 +171,6 @@ function getCookie() {
     username: username === undefined ? loginForm.value.username : username,
     password: password === undefined ? loginForm.value.password : decrypt(password),
     rememberMe: rememberMe === undefined ? false : Boolean(rememberMe),
-    smsConsent: false,
     code: '',
     uuid: ''
   }
@@ -394,10 +383,6 @@ $login-muted: #606266;
   align-items: center;
   min-height: 28px;
   margin: 2px 0 18px;
-}
-
-.login-consent-item {
-  margin-bottom: 10px;
 }
 
 .login-action {

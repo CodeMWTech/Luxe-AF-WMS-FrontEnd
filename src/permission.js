@@ -19,7 +19,7 @@ import { getRouteTitle } from '@/utils/routeTitle'
 
 NProgress.configure({ showSpinner: false });
 
-const whiteList = ['/login', '/register', '/privacy', '/terms'];
+const whiteList = ['/login', '/register', '/privacy', '/terms', '/sms-opt-in'];
 
 router.beforeEach((to, from, next) => {
   NProgress.start()
