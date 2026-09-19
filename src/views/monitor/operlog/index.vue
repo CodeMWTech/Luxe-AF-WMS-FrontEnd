@@ -1,22 +1,29 @@
 <template>
    <div class="app-container operlog-page" :class="{ 'is-en': isEn }">
       <el-form :model="queryParams" ref="queryRef" :inline="true" v-show="showSearch" :label-width="isEn ? '150px' : '68px'" class="filter-form">
-        <el-form-item :label="tr('操作地址')" prop="operIp">
+        <el-form-item :label="tr('日志编号')" prop="operId">
           <el-input
-            v-model="queryParams.operIp"
-            :placeholder="tr('请输入操作地址')"
+            v-model="queryParams.operId"
+            :placeholder="tr('请输入日志编号')"
             clearable
             style="width: 240px;"
             @keyup.enter="handleQuery"
           />
         </el-form-item>
-        <el-form-item :label="tr('系统模块')" prop="title">
-            <el-input
-               v-model="queryParams.title"
-               :placeholder="tr('请输入系统模块')"
+        <el-form-item :label="tr('系统模块')" prop="moduleId">
+            <el-tree-select
+               v-model="queryParams.moduleId"
+               :data="displayModuleTree"
+               :props="{ value: 'id', label: 'label', children: 'children' }"
+               value-key="id"
+               :placeholder="tr('请选择系统模块')"
                clearable
-               style="width: 240px;"
-               @keyup.enter="handleQuery"
+               filterable
+               check-strictly
+               :render-after-expand="false"
+               :filter-node-method="filterModuleNode"
+               style="width: 280px"
+               @change="handleModuleChange"
             />
          </el-form-item>
          <el-form-item :label="tr('操作人员')" prop="operName">
@@ -36,7 +43,7 @@
                style="width: 240px"
             >
                <el-option
-                  v-for="dict in sys_oper_type"
+                  v-for="dict in operTypeOptions"
                   :key="dict.value"
                   :label="dict.label"
                   :value="dict.value"
@@ -113,10 +120,14 @@
       <el-table ref="operlogRef" v-loading="loading" :data="operlogList" @selection-change="handleSelectionChange" :default-sort="defaultSort" @sort-change="handleSortChange">
          <el-table-column type="selection" width="50" align="center" />
          <el-table-column :label="tr('日志编号')" align="center" prop="operId" />
-         <el-table-column :label="tr('系统模块')" align="center" prop="title" :show-overflow-tooltip="true" />
+         <el-table-column :label="tr('系统模块')" align="center" prop="title" :show-overflow-tooltip="true">
+            <template #default="scope">
+               <span>{{ displayModuleTitle(scope.row.title) }}</span>
+            </template>
+         </el-table-column>
          <el-table-column :label="tr('操作类型')" align="center" prop="businessType">
             <template #default="scope">
-               <dict-tag :options="sys_oper_type" :value="scope.row.businessType" />
+               <dict-tag :options="operTypeTagOptions(scope.row)" :value="operTypeTagValue(scope.row)" />
             </template>
          </el-table-column>
          <el-table-column :label="tr('请求方式')" align="center" prop="requestMethod" />
@@ -167,7 +178,7 @@
                   <el-form-item :label="isEn ? 'Request Info:' : '请求信息：'">{{ form.requestMethod }} {{form.operUrl }}</el-form-item>
                </el-col>
                <el-col :span="12">
-                  <el-form-item :label="isEn ? 'Module:' : '操作模块：'">{{ form.title }} / {{ typeFormat(form) }}</el-form-item>
+                  <el-form-item :label="isEn ? 'Module:' : '操作模块：'">{{ displayModuleTitle(form.title) }} / {{ typeFormat(form) }}</el-form-item>
                </el-col>
                <el-col :span="24">
                   <el-form-item :label="isEn ? 'Method:' : '操作方法：'">{{ form.method }}</el-form-item>
@@ -204,12 +215,53 @@
 </template>
 
 <script setup name="Operlog">
-import { list, delOperlog, cleanOperlog } from "@/api/monitor/operlog";
+import { list, listModules, delOperlog, cleanOperlog } from "@/api/monitor/operlog";
 import useSettingsStore from "@/store/modules/settings";
+import usePermissionStore from "@/store/modules/permission";
 import { translateByMap } from '@/locales/runtime-map'
+import {
+  buildOperLogModuleTree,
+  collectTreeTitles,
+  isListingDelistType,
+  isListingPublishType,
+  LISTING_DELIST_TITLE,
+  LISTING_OPER_TYPE,
+  LISTING_PUBLISH_TITLE,
+  operTypeValuesForTitles,
+  resolveOperLogModuleLabel,
+  resolveOperLogTypeLabel
+} from '@/views/monitor/operlog/moduleTree.js'
 
 const { proxy } = getCurrentInstance();
 const { sys_oper_type, sys_common_status } = proxy.useDict("sys_oper_type","sys_common_status");
+/** 强退、生成代码对应的在线用户/代码生成已从系统隐藏，筛选里不再提供 */
+const HIDDEN_OPER_TYPE_VALUES = new Set(['7', '8'])
+const LISTING_OPER_TYPE_OPTIONS = [
+  { value: LISTING_OPER_TYPE.PUBLISH, label: '上架', elTagType: 'primary' },
+  { value: LISTING_OPER_TYPE.DELIST, label: '下架', elTagType: 'warning' }
+]
+const allOperTypeOptions = computed(() => {
+  const dict = (sys_oper_type.value || []).filter(item => !HIDDEN_OPER_TYPE_VALUES.has(String(item.value)))
+  const extras = LISTING_OPER_TYPE_OPTIONS.map(item => ({ ...item, label: tr(item.label) }))
+  const result = []
+  for (const item of dict) {
+    result.push(item)
+    if (String(item.value) === '2') {
+      result.push(...extras)
+    }
+  }
+  if (!result.some(item => item.value === LISTING_OPER_TYPE.PUBLISH)) {
+    result.push(...extras)
+  }
+  return result
+})
+const operTypeOptions = computed(() => {
+  const allowed = operTypeValuesForTitles(queryParams.value.titles)
+  if (!allowed) {
+    return allOperTypeOptions.value
+  }
+  return allOperTypeOptions.value.filter(item => allowed.has(String(item.value)))
+})
 const settingsStore = useSettingsStore()
 const isEn = computed(() => settingsStore.language === 'en')
 const tr = (text) => translateByMap(text, settingsStore.language || 'zh-cn')
@@ -226,13 +278,27 @@ const title = ref("");
 const dateRange = ref([]);
 const defaultSort = ref({ prop: "operTime", order: "descending" });
 
+const moduleTree = ref([]);
+
+function translateModuleTree(nodes) {
+  return (nodes || []).map(node => ({
+    ...node,
+    rawLabel: node.rawLabel || node.label,
+    label: tr(node.rawLabel || node.label),
+    children: translateModuleTree(node.children)
+  }))
+}
+
+const displayModuleTree = computed(() => translateModuleTree(moduleTree.value))
+
 const data = reactive({
   form: {},
   queryParams: {
     pageNum: 1,
     pageSize: 10,
-    operIp: undefined,
-    title: undefined,
+    operId: undefined,
+    moduleId: undefined,
+    titles: undefined,
     operName: undefined,
     businessType: undefined,
     status: undefined
@@ -241,17 +307,152 @@ const data = reactive({
 
 const { queryParams, form } = toRefs(data);
 
-/** 查询登录日志 */
+function findModuleNode(nodes, id) {
+  if (!id || !Array.isArray(nodes)) {
+    return null;
+  }
+  for (const node of nodes) {
+    if (node.id === id) {
+      return node;
+    }
+    const found = findModuleNode(node.children, id);
+    if (found) {
+      return found;
+    }
+  }
+  return null;
+}
+
+function syncBusinessTypeWithModule() {
+  const allowed = operTypeValuesForTitles(queryParams.value.titles)
+  const current = queryParams.value.businessType
+  if (current == null || current === '') {
+    return
+  }
+  if (!allowed) {
+    return
+  }
+  if (!allowed.has(String(current))) {
+    queryParams.value.businessType = undefined
+    proxy.$modal.msgWarning(tr('先选择的操作类型在该系统模块下不包含，请重新选择。'))
+  }
+}
+
+function handleModuleChange(id) {
+  const node = findModuleNode(moduleTree.value, id);
+  queryParams.value.titles = node?.titles?.length ? node.titles : undefined;
+  syncBusinessTypeWithModule()
+}
+
+function filterModuleNode(value, data) {
+  if (!value) {
+    return true;
+  }
+  const keyword = String(value).toLowerCase();
+  const rawLabel = data.rawLabel || data.label
+  return String(data.label || '').toLowerCase().includes(keyword)
+    || String(rawLabel || '').toLowerCase().includes(keyword)
+    || String(tr(rawLabel) || '').toLowerCase().includes(keyword);
+}
+
+function displayModuleTitle(title) {
+  return tr(resolveOperLogModuleLabel(title));
+}
+
+function listingOperType(title) {
+  return resolveOperLogTypeLabel(title);
+}
+
+function operTypeTagValue(row) {
+  const custom = listingOperType(row?.title);
+  if (custom === '上架') {
+    return LISTING_OPER_TYPE.PUBLISH;
+  }
+  if (custom === '下架') {
+    return LISTING_OPER_TYPE.DELIST;
+  }
+  return row?.businessType;
+}
+
+function operTypeTagOptions(row) {
+  return listingOperType(row?.title) ? LISTING_OPER_TYPE_OPTIONS : sys_oper_type.value;
+}
+
+function intersectTitles(moduleTitles, requiredTitles) {
+  if (!Array.isArray(moduleTitles) || !moduleTitles.length) {
+    return requiredTitles;
+  }
+  const allowed = new Set(moduleTitles);
+  const hit = requiredTitles.filter(title => allowed.has(title));
+  return hit.length ? hit : ['__none__'];
+}
+
+function excludeTitles(moduleTitles, excludedTitles) {
+  if (!Array.isArray(moduleTitles) || !moduleTitles.length) {
+    return undefined;
+  }
+  return moduleTitles.filter(title => !excludedTitles.includes(title));
+}
+
+function buildListQuery() {
+  const query = proxy.addDateRange(queryParams.value, dateRange.value);
+  const operId = String(query.operId ?? '').trim();
+  let titles = Array.isArray(query.titles) && query.titles.length ? query.titles : undefined;
+  let businessType = query.businessType;
+  if (isListingPublishType(businessType)) {
+    businessType = 1;
+    titles = intersectTitles(titles, [LISTING_PUBLISH_TITLE]);
+  } else if (isListingDelistType(businessType)) {
+    businessType = 2;
+    titles = intersectTitles(titles, [LISTING_DELIST_TITLE]);
+  } else if (String(businessType) === '1') {
+    titles = excludeTitles(titles, [LISTING_PUBLISH_TITLE]) ?? titles;
+  } else if (String(businessType) === '2') {
+    titles = excludeTitles(titles, [LISTING_DELIST_TITLE]) ?? titles;
+  }
+  return {
+    ...query,
+    moduleId: undefined,
+    businessType,
+    operId: /^\d+$/.test(operId) ? operId : undefined,
+    titles
+  };
+}
+
+function loadModules() {
+  const permissionStore = usePermissionStore()
+  const sidebar = permissionStore.sidebarRouters || []
+  const buildTree = (titles) => {
+    try {
+      return buildOperLogModuleTree(sidebar, titles)
+    } catch (e) {
+      console.error(e)
+      return []
+    }
+  }
+  listModules().then(response => {
+    moduleTree.value = buildTree(collectTreeTitles(response.data || []))
+  }).catch(() => {
+    moduleTree.value = buildTree([])
+  })
+}
+
+/** 查询操作日志 */
 function getList() {
   loading.value = true;
-  list(proxy.addDateRange(queryParams.value, dateRange.value)).then(response => {
+  list(buildListQuery()).then(response => {
     operlogList.value = response.rows;
     total.value = response.total;
+  }).finally(() => {
     loading.value = false;
   });
 }
 /** 操作日志类型字典翻译 */
 function typeFormat(row, column) {
+  const custom = listingOperType(row.title);
+  if (custom) {
+    return tr(custom);
+  }
   return proxy.selectDictLabel(sys_oper_type.value, row.businessType);
 }
 /** 统一显示耗时；旧日志未记录耗时时不单独显示单位 */
@@ -272,6 +473,7 @@ function handleQuery() {
 /** 重置按钮操作 */
 function resetQuery() {
   dateRange.value = [];
+  queryParams.value.titles = undefined;
   proxy.resetForm("queryRef");
   queryParams.value.pageNum = 1;
   proxy.$refs["operlogRef"].sort(defaultSort.value.prop, defaultSort.value.order);
@@ -314,10 +516,11 @@ function handleClean() {
 /** 导出按钮操作 */
 function handleExport() {
   proxy.download("monitor/operlog/export",{
-    ...queryParams.value,
+    ...buildListQuery(),
   }, `config_${new Date().getTime()}.xlsx`);
 }
 
+loadModules();
 getList();
 </script>
 <style scoped>
