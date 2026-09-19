@@ -430,6 +430,113 @@ function pruneEmpty(nodes, existingSet) {
   return out
 }
 
+/** 上架 / 下架在库里仍是新增(1) / 修改(2)，筛选用独立值再映射回 title */
+export const LISTING_PUBLISH_TITLE = '商品上架'
+export const LISTING_DELIST_TITLE = '商品下架'
+export const LISTING_OPER_TYPE = {
+  PUBLISH: 'listing_publish',
+  DELIST: 'listing_delist'
+}
+
+const LISTING_OPER_TYPE_LABEL = {
+  [LISTING_PUBLISH_TITLE]: '上架',
+  [LISTING_DELIST_TITLE]: '下架'
+}
+
+export function resolveOperLogTypeLabel(title) {
+  return LISTING_OPER_TYPE_LABEL[String(title || '').trim()] || null
+}
+
+export function isListingPublishType(value) {
+  return String(value) === LISTING_OPER_TYPE.PUBLISH
+}
+
+export function isListingDelistType(value) {
+  return String(value) === LISTING_OPER_TYPE.DELIST
+}
+
+const OPER = {
+  OTHER: '0',
+  INSERT: '1',
+  UPDATE: '2',
+  DELETE: '3',
+  GRANT: '4',
+  EXPORT: '5',
+  IMPORT: '6',
+  CLEAN: '9',
+  PUBLISH: LISTING_OPER_TYPE.PUBLISH,
+  DELIST: LISTING_OPER_TYPE.DELIST
+}
+const CRUD_EXPORT = [OPER.INSERT, OPER.UPDATE, OPER.DELETE, OPER.EXPORT]
+
+/** 与默认 CRUD+导出不同的 @Log title；未列出的按 CRUD+导出处理 */
+const TITLE_OPER_TYPES = {
+  [LISTING_PUBLISH_TITLE]: [OPER.PUBLISH],
+  [LISTING_DELIST_TITLE]: [OPER.DELIST],
+  商品导入: [OPER.IMPORT],
+  商品图片: [OPER.INSERT, OPER.DELETE],
+  商品品牌图片: [OPER.INSERT, OPER.DELETE],
+  'Item Model Image': [OPER.INSERT, OPER.DELETE],
+  'Item Material Image': [OPER.INSERT, OPER.DELETE],
+  上架记录: [OPER.EXPORT],
+  上架记录删除: [OPER.DELETE],
+  上架重试: [OPER.UPDATE],
+  类目同步: [OPER.UPDATE],
+  平台订单: [OPER.EXPORT],
+  平台订单周报: [OPER.EXPORT],
+  供应商已采购商品: [OPER.EXPORT],
+  供应商结算确认: [OPER.INSERT],
+  供应商待结算单: [OPER.DELETE],
+  '供应商结算 Invoice': [OPER.EXPORT],
+  供应商已结算记录: [OPER.EXPORT],
+  未入库商品: [OPER.EXPORT],
+  库存统计: [OPER.EXPORT],
+  '库存统计-提交异步导出': [OPER.EXPORT],
+  '库存统计-批量导出Excel': [OPER.EXPORT],
+  '库存统计-提交批量异步导出': [OPER.EXPORT],
+  '库存统计-删除导出记录': [OPER.DELETE],
+  库存智能核查: [OPER.INSERT],
+  主播打卡: [OPER.IMPORT],
+  主播佣金: [OPER.INSERT, OPER.UPDATE, OPER.DELETE],
+  直播平台同步店铺: [OPER.UPDATE],
+  主播费率账号状态: [OPER.UPDATE],
+  主播费率批量同步: [OPER.UPDATE],
+  主播费率账号组: [OPER.DELETE],
+  主播离职归档及日期核实: [OPER.UPDATE],
+  主播薪酬确认结算: [OPER.INSERT],
+  主播薪酬登记支付: [OPER.UPDATE],
+  '主播结算 Invoice': [OPER.EXPORT],
+  主播薪酬调整: [OPER.EXPORT],
+  主播薪酬调整审核: [OPER.UPDATE],
+  操作日志: [OPER.DELETE, OPER.EXPORT, OPER.CLEAN],
+  登录日志: [OPER.DELETE, OPER.EXPORT, OPER.CLEAN],
+  账户解锁: [OPER.OTHER],
+  用户管理: [OPER.INSERT, OPER.UPDATE, OPER.DELETE, OPER.GRANT, OPER.EXPORT, OPER.IMPORT],
+  个人信息: [OPER.UPDATE],
+  用户头像: [OPER.UPDATE],
+  角色管理: [OPER.INSERT, OPER.UPDATE, OPER.DELETE, OPER.GRANT, OPER.EXPORT],
+  字典类型: [OPER.INSERT, OPER.UPDATE, OPER.DELETE, OPER.EXPORT, OPER.CLEAN],
+  参数管理: [OPER.INSERT, OPER.UPDATE, OPER.DELETE, OPER.EXPORT, OPER.CLEAN],
+  OSS对象存储: [OPER.INSERT, OPER.DELETE],
+  对象存储状态修改: [OPER.UPDATE],
+  员工档案: [OPER.OTHER, OPER.INSERT, OPER.UPDATE, OPER.DELETE, OPER.EXPORT],
+  员工档案附件: [OPER.INSERT, OPER.DELETE, OPER.EXPORT],
+  用户与员工档案: [OPER.INSERT]
+}
+
+/** 选中模块下的日志标题对应哪些操作类型；无模块时返回 null 表示展示全部 */
+export function operTypeValuesForTitles(titles) {
+  if (!Array.isArray(titles) || !titles.length) {
+    return null
+  }
+  const values = new Set()
+  for (const title of titles) {
+    const mapped = TITLE_OPER_TYPES[String(title || '').trim()] || CRUD_EXPORT
+    mapped.forEach(value => values.add(String(value)))
+  }
+  return values
+}
+
 /** 将后端 @Log title 显示为侧边栏对应菜单名 */
 export function resolveOperLogModuleLabel(title) {
   const trimmed = String(title || '').trim()

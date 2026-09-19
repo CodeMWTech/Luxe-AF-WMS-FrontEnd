@@ -131,7 +131,7 @@
          </el-table-column>
          <el-table-column :label="tr('操作类型')" align="center" prop="businessType">
             <template #default="scope">
-               <dict-tag :options="sys_oper_type" :value="scope.row.businessType" />
+               <dict-tag :options="operTypeTagOptions(scope.row)" :value="operTypeTagValue(scope.row)" />
             </template>
          </el-table-column>
          <el-table-column :label="tr('请求方式')" align="center" prop="requestMethod" />
@@ -223,15 +223,49 @@ import { list, listModules, delOperlog, cleanOperlog } from "@/api/monitor/operl
 import useSettingsStore from "@/store/modules/settings";
 import usePermissionStore from "@/store/modules/permission";
 import { translateByMap } from '@/locales/runtime-map'
-import { buildOperLogModuleTree, collectTreeTitles, resolveOperLogModuleLabel } from '@/views/monitor/operlog/moduleTree.js'
+import {
+  buildOperLogModuleTree,
+  collectTreeTitles,
+  isListingDelistType,
+  isListingPublishType,
+  LISTING_DELIST_TITLE,
+  LISTING_OPER_TYPE,
+  LISTING_PUBLISH_TITLE,
+  operTypeValuesForTitles,
+  resolveOperLogModuleLabel,
+  resolveOperLogTypeLabel
+} from '@/views/monitor/operlog/moduleTree.js'
 
 const { proxy } = getCurrentInstance();
 const { sys_oper_type, sys_common_status } = proxy.useDict("sys_oper_type","sys_common_status");
 /** 强退、生成代码对应的在线用户/代码生成已从系统隐藏，筛选里不再提供 */
 const HIDDEN_OPER_TYPE_VALUES = new Set(['7', '8'])
-const operTypeOptions = computed(() =>
-  (sys_oper_type.value || []).filter(item => !HIDDEN_OPER_TYPE_VALUES.has(String(item.value)))
-)
+const LISTING_OPER_TYPE_OPTIONS = [
+  { value: LISTING_OPER_TYPE.PUBLISH, label: '上架', elTagType: 'primary' },
+  { value: LISTING_OPER_TYPE.DELIST, label: '下架', elTagType: 'warning' }
+]
+const allOperTypeOptions = computed(() => {
+  const dict = (sys_oper_type.value || []).filter(item => !HIDDEN_OPER_TYPE_VALUES.has(String(item.value)))
+  const extras = LISTING_OPER_TYPE_OPTIONS.map(item => ({ ...item, label: tr(item.label) }))
+  const result = []
+  for (const item of dict) {
+    result.push(item)
+    if (String(item.value) === '2') {
+      result.push(...extras)
+    }
+  }
+  if (!result.some(item => item.value === LISTING_OPER_TYPE.PUBLISH)) {
+    result.push(...extras)
+  }
+  return result
+})
+const operTypeOptions = computed(() => {
+  const allowed = operTypeValuesForTitles(queryParams.value.titles)
+  if (!allowed) {
+    return allOperTypeOptions.value
+  }
+  return allOperTypeOptions.value.filter(item => allowed.has(String(item.value)))
+})
 const settingsStore = useSettingsStore()
 const isEn = computed(() => settingsStore.language === 'en')
 const tr = (text) => translateByMap(text, settingsStore.language || 'zh-cn')
@@ -282,9 +316,24 @@ function findModuleNode(nodes, id) {
   return null;
 }
 
+function syncBusinessTypeWithModule() {
+  const allowed = operTypeValuesForTitles(queryParams.value.titles)
+  const current = queryParams.value.businessType
+  if (current == null || current === '') {
+    return
+  }
+  if (!allowed) {
+    return
+  }
+  if (!allowed.has(String(current))) {
+    queryParams.value.businessType = undefined
+  }
+}
+
 function handleModuleChange(id) {
   const node = findModuleNode(moduleTree.value, id);
   queryParams.value.titles = node?.titles?.length ? node.titles : undefined;
+  syncBusinessTypeWithModule()
 }
 
 function filterModuleNode(value, data) {
@@ -300,14 +349,63 @@ function displayModuleTitle(title) {
   return tr(resolveOperLogModuleLabel(title));
 }
 
+function listingOperType(title) {
+  return resolveOperLogTypeLabel(title);
+}
+
+function operTypeTagValue(row) {
+  const custom = listingOperType(row?.title);
+  if (custom === '上架') {
+    return LISTING_OPER_TYPE.PUBLISH;
+  }
+  if (custom === '下架') {
+    return LISTING_OPER_TYPE.DELIST;
+  }
+  return row?.businessType;
+}
+
+function operTypeTagOptions(row) {
+  return listingOperType(row?.title) ? LISTING_OPER_TYPE_OPTIONS : sys_oper_type.value;
+}
+
+function intersectTitles(moduleTitles, requiredTitles) {
+  if (!Array.isArray(moduleTitles) || !moduleTitles.length) {
+    return requiredTitles;
+  }
+  const allowed = new Set(moduleTitles);
+  const hit = requiredTitles.filter(title => allowed.has(title));
+  return hit.length ? hit : ['__none__'];
+}
+
+function excludeTitles(moduleTitles, excludedTitles) {
+  if (!Array.isArray(moduleTitles) || !moduleTitles.length) {
+    return undefined;
+  }
+  return moduleTitles.filter(title => !excludedTitles.includes(title));
+}
+
 function buildListQuery() {
   const query = proxy.addDateRange(queryParams.value, dateRange.value);
   const operId = String(query.operId ?? '').trim();
+  let titles = Array.isArray(query.titles) && query.titles.length ? query.titles : undefined;
+  let businessType = query.businessType;
+  if (isListingPublishType(businessType)) {
+    businessType = 1;
+    titles = intersectTitles(titles, [LISTING_PUBLISH_TITLE]);
+  } else if (isListingDelistType(businessType)) {
+    businessType = 2;
+    titles = intersectTitles(titles, [LISTING_DELIST_TITLE]);
+  } else if (String(businessType) === '1') {
+    titles = excludeTitles(titles, [LISTING_PUBLISH_TITLE]) ?? titles;
+  } else if (String(businessType) === '2') {
+    titles = excludeTitles(titles, [LISTING_DELIST_TITLE]) ?? titles;
+  }
   return {
     ...query,
     moduleId: undefined,
+    businessType,
     operId: /^\d+$/.test(operId) ? operId : undefined,
-    titles: Array.isArray(query.titles) && query.titles.length ? query.titles : undefined
+    titles
   };
 }
 
@@ -341,6 +439,10 @@ function getList() {
 }
 /** 操作日志类型字典翻译 */
 function typeFormat(row, column) {
+  const custom = listingOperType(row.title);
+  if (custom) {
+    return tr(custom);
+  }
   return proxy.selectDictLabel(sys_oper_type.value, row.businessType);
 }
 /** 统一显示耗时；旧日志未记录耗时时不单独显示单位 */

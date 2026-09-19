@@ -761,6 +761,8 @@ const zhToEnMap = {
   '该sku在平台中无销售记录，请和相关人员确认是否是线下交易或者忘记写seller note':
     'No sales record for this SKU on the platform. Please confirm with the relevant person whether it was an offline transaction or the seller note was forgotten.',
   '平台订单': 'Platform Orders',
+  '上架': 'Publish',
+  '下架': 'Delist',
   '上架管理': 'Listing Management',
   '商品上架': 'Product Listings',
   '上架模板': 'Listing Templates',
