@@ -31,12 +31,15 @@
               <el-form-item :label="tr('出库类型')" prop="optType">
                 <el-radio-group v-model="form.optType">
                   <el-radio-button
-                    v-for="item in wms_shipment_type"
+                    v-for="item in translatedBackendShipmentTypeOptions"
                     :key="item.value"
                     :label="item.value"
                   >{{ item.label }}
-                  </el-radio-button
-                  >
+                  </el-radio-button>
+                  <el-radio-button
+                    v-if="!hasBackendSampleShipmentType"
+                    :label="SAMPLE_SHIPMENT_OPT_TYPE"
+                  >{{ tr(SAMPLE_SHIPMENT_TYPE_OPTION.label) }}</el-radio-button>
                 </el-radio-group>
               </el-form-item>
             </el-col>
@@ -193,7 +196,7 @@
 </template>
 
 <script setup name="ShipmentOrderEdit">
-import {computed, getCurrentInstance, onMounted, reactive, ref, toRef, toRefs, watch} from "vue";
+import {computed, getCurrentInstance, h, onMounted, reactive, ref, toRef, toRefs, watch} from "vue";
 import {addShipmentOrder, getShipmentOrder, updateShipmentOrder, shipment} from "@/api/wms/shipmentOrder";
 import {delShipmentOrderDetail} from "@/api/wms/shipmentOrderDetail";
 import {ElMessage, ElMessageBox} from "element-plus";
@@ -204,14 +207,12 @@ import InventorySelect from "@/views/components/InventorySelect.vue";
 import {getWarehouseAndSkuKey} from "@/utils/wmsUtil"
 import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
-import useTagsViewStore from '@/store/modules/tagsView'
 import { useOrderEditLeaveGuard } from '@/views/wms/order/composables/useOrderEditLeaveGuard'
 
 const {proxy} = getCurrentInstance();
 const route = useRoute();
 const {wms_shipment_type} = proxy.useDict("wms_shipment_type");
 const wmsStore = useWmsStore()
-const tagsViewStore = useTagsViewStore()
 const settingsStore = useSettingsStore()
 const isEn = computed(() => (settingsStore.language || 'zh-cn') === 'en')
 const tr = (text) => translateByMap(text, settingsStore.language || 'zh-cn')
@@ -219,6 +220,47 @@ const priceAmountLabel = computed(() => (isEn.value ? 'Price Amount' : tr('金�
 const selectPlaceholder = (field) => (isEn.value ? `Please select ${tr(field).toLowerCase()}` : tr('请选择') + tr(field))
 const enterPlaceholder = (field) => (isEn.value ? `Please enter ${tr(field)}` : tr('请输入') + tr(field))
 const formLabelWidth = computed(() => (isEn.value ? '138px' : '108px'))
+const SAMPLE_SHIPMENT_OPT_TYPE = '4'
+const SAMPLE_SHIPMENT_TYPE_OPTION = { label: 'Sample样品', value: SAMPLE_SHIPMENT_OPT_TYPE, elTagType: 'warning', elTagClass: '' }
+const backendShipmentTypeOptions = computed(() => wms_shipment_type.value || [])
+const hasBackendSampleShipmentType = computed(() => backendShipmentTypeOptions.value.some(item => String(item.value) === SAMPLE_SHIPMENT_OPT_TYPE))
+const translatedBackendShipmentTypeOptions = computed(() => backendShipmentTypeOptions.value.map(item => ({ ...item, label: tr(item.label) })))
+
+const showAutoDelistNotice = async (result = {}) => {
+  const skuList = result.autoDelistSkus || []
+  if (!skuList.length) {
+    ElMessage.success(isEn.value ? 'Outbound completed successfully' : '出库成功')
+    return
+  }
+  const total = Number(result.autoDelistListingCount || 0)
+  const rows = skuList.map((item, index) => {
+    const platformParts = []
+    if (Number(item.tiktokListingCount || 0) > 0) platformParts.push(`TikTok ${item.tiktokListingCount}`)
+    if (Number(item.ebayListingCount || 0) > 0) platformParts.push(`eBay ${item.ebayListingCount}`)
+    const itemName = item.itemName ? `｜${item.itemName}` : ''
+    return h('div', {
+      style: 'padding:8px 10px;margin-top:6px;border:1px solid #f3d19e;border-radius:4px;background:#fdf6ec;line-height:1.5;word-break:break-all;'
+    }, `${index + 1}. SKU：${item.skuCode || item.skuId}${itemName}｜${platformParts.join(' / ')}｜${isEn.value ? 'Listings' : '已上架商品'} ${item.listingCount}`)
+  })
+  const title = isEn.value ? 'Out-of-stock automatic delisting' : '无库存自动下架提示'
+  const summary = isEn.value
+    ? `Outbound completed. The following ${skuList.length} SKU(s) are out of stock. ${total} active listing(s) are being delisted automatically:`
+    : `出库成功。以下 ${skuList.length} 个 SKU 库存已归零，系统正在自动下架共 ${total} 条已上架商品：`
+  await ElMessageBox.alert(
+    h('div', [
+      h('div', { style: 'margin-bottom:10px;line-height:1.6;' }, summary),
+      h('div', { style: 'max-height:360px;overflow-y:auto;padding-right:4px;' }, rows)
+    ]),
+    title,
+    {
+      confirmButtonText: isEn.value ? 'OK' : '我知道了',
+      showClose: false,
+      closeOnClickModal: false,
+      closeOnPressEscape: false,
+      customClass: 'auto-delist-sku-notice'
+    }
+  )
+}
 
 const loading = ref(false)
 const initFormData = {
@@ -257,16 +299,10 @@ const cancel = async () => {
   await proxy?.$modal.confirm('确认取消编辑出库单吗？');
   close()
 }
-const getClosePath = (fallbackPath) => {
-  const activeMenu = route.meta?.activeMenu
-  if (activeMenu && activeMenu !== route.path) return activeMenu
-  const latestView = [...tagsViewStore.visitedViews].reverse().find(view => view.path !== route.path)
-  return latestView?.fullPath || fallbackPath
-}
 const close = () => {
   markAllowLeave()
-  const obj = {path: getClosePath("/wms/order/shipmentOrder")};
-  proxy?.$tab.closeOpenPage(obj);
+  // Always return to the outbound list, not the last visited tab (e.g. platform orders).
+  proxy?.$tab.closeOpenPage({ path: '/wms/order/shipmentOrder' });
 }
 const inventorySelectShow = ref(false)
 const getBrandName = (brandId) => {
@@ -496,18 +532,20 @@ const doShipment = async () => {
     if (invalidQuantityList?.length) {
       return ElMessage.error('请选择数量')
     }
-    const invalidAmountList = form.value.details.filter(
-      it => it.amount === null || it.amount === undefined || it.amount === '' || Number(it.amount) === 0
-    )
-    if (invalidAmountList?.length) {
-      return ElMessage.warning('出库商品金额不能为空且不能为0')
+    if (String(form.value.optType) !== SAMPLE_SHIPMENT_OPT_TYPE) {
+      const invalidAmountList = form.value.details.filter(
+        it => it.amount === null || it.amount === undefined || it.amount === '' || Number(it.amount) === 0
+      )
+      if (invalidAmountList?.length) {
+        return ElMessage.warning('出库商品金额不能为空且不能为0')
+      }
     }
     const params = getParamsBeforeSave(1)
 
     loading.value = true
-    shipment(params).then((res) => {
+    shipment(params).then(async (res) => {
       if (res.code === 200) {
-        ElMessage.success('出库成功')
+        await showAutoDelistNotice(res.data || {})
         close()
       } else {
         ElMessage.error(res.msg)
@@ -641,5 +679,9 @@ const handleDeleteDetail = (row, index) => {
 
 .el-statistic__content {
   font-size: 14px;
+}
+
+:global(.auto-delist-sku-notice) {
+  width: min(680px, 92vw);
 }
 </style>

@@ -158,13 +158,11 @@ import {generateNo} from '@/utils/ruoyi'
 import SkuSelect from "@/views/components/SkuSelect.vue";
 import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
-import useTagsViewStore from '@/store/modules/tagsView'
 import { useOrderEditLeaveGuard } from '@/views/wms/order/composables/useOrderEditLeaveGuard'
 
 const {proxy} = getCurrentInstance();
 const route = useRoute();
 const wmsStore = useWmsStore()
-const tagsViewStore = useTagsViewStore()
 const settingsStore = useSettingsStore()
 const isEn = computed(() => (settingsStore.language || 'zh-cn') === 'en')
 const tr = (text) => translateByMap(text, settingsStore.language || 'zh-cn')
@@ -196,16 +194,10 @@ const cancel = async () => {
   await proxy?.$modal.confirm('确认取消编辑盘库单吗？');
   close()
 }
-const getClosePath = (fallbackPath) => {
-  const activeMenu = route.meta?.activeMenu
-  if (activeMenu && activeMenu !== route.path) return activeMenu
-  const latestView = [...tagsViewStore.visitedViews].reverse().find(view => view.path !== route.path)
-  return latestView?.fullPath || fallbackPath
-}
 const close = () => {
   markAllowLeave()
-  const obj = {path: getClosePath("/wms/order/checkOrder")};
-  proxy?.$tab.closeOpenPage(obj);
+  // Always return to the stocktake list, not the last visited tab (e.g. platform orders).
+  proxy?.$tab.closeOpenPage({ path: '/wms/order/checkOrder' });
 }
 const skuSelectShow = ref(false)
 const getBrandName = (brandId) => {

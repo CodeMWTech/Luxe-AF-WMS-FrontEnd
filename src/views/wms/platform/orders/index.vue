@@ -1,6 +1,9 @@
 <template>
   <div class="app-container platform-orders-page">
     <el-alert :title="t('platformOrders.shipmentHint')" type="info" :closable="false" show-icon class="page-hint" />
+    <el-alert v-if="queryParams.supplierSalesOnly" type="info" show-icon class="page-hint"
+      :title="isEn ? 'Supplier sales: completed sales shipments only, regardless of platform order status.' : '供应商平台已售明细：仅展示已完成销售出库对应的订单，不按平台订单状态筛选。'"
+      @close="queryParams.supplierSalesOnly = undefined; handleQuery()" />
     <el-card class="filter-card">
       <el-form
         ref="queryRef"
@@ -24,7 +27,7 @@
               :value="shop.id"
             >
               <span class="shop-option">
-                <el-tag :type="shop.platform === 'TIKTOK' ? 'danger' : ''" size="small" effect="plain" class="shop-option-tag">{{ shop.platform }}</el-tag>
+                <el-tag :type="getPlatformTagType(shop.platform)" size="small" effect="plain" class="shop-option-tag">{{ getPlatformLabel(shop.platform) }}</el-tag>
                 <span>{{ formatShopLabel(shop) }}</span>
               </span>
             </el-option>
@@ -53,6 +56,14 @@
             @keyup.enter.prevent="handleQuery"
           />
         </el-form-item>
+        <el-form-item class="filter-item" :label="t('platformOrders.filterShipmentOrderNo')" prop="shipmentOrderNo">
+          <el-input
+            v-model="queryParams.shipmentOrderNo"
+            :placeholder="t('platformOrders.filterShipmentOrderNoPlaceholder')"
+            clearable
+            @keyup.enter.prevent="handleQuery"
+          />
+        </el-form-item>
         <el-form-item class="filter-item" :label="t('platformOrders.filterSku')" prop="sellerSku">
           <el-input
             v-model="queryParams.sellerSku"
@@ -71,6 +82,7 @@
             <el-option :label="t('platformOrders.skuMatchAll')" value="" />
             <el-option :label="t('platformOrders.skuMatchMatched')" value="MATCHED" />
             <el-option :label="t('platformOrders.skuMatchUnmatched')" value="UNMATCHED" />
+            <el-option :label="t('platformOrders.skuMatchNoStock')" value="NO_STOCK" />
           </el-select>
         </el-form-item>
         <el-form-item class="filter-item" :label="t('platformOrders.filterStatus')" prop="orderStatus">
@@ -155,6 +167,7 @@
         <div class="platform-tags">
           <el-tag class="platform-soft-tag tiktok-tag" effect="plain">TikTok Shop</el-tag>
           <el-tag class="platform-soft-tag ebay-tag" effect="plain">eBay</el-tag>
+          <el-tag class="platform-soft-tag whatnot-tag" effect="plain">Whatnot</el-tag>
         </div>
       </div>
 
@@ -176,7 +189,15 @@
             <div class="summary-cell order-id-cell">
               <span class="cell-label">{{ t('platformOrders.orderId') }}</span>
               <span class="primary-value with-copy" @click.stop>
-                {{ displayValue(getOrderId(order)) }}
+                <a
+                  v-if="getPlatformOrderExternalUrl(order)"
+                  class="platform-order-link"
+                  :href="getPlatformOrderExternalUrl(order)"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  @click.stop
+                >{{ displayValue(getOrderId(order)) }}</a>
+                <span v-else>{{ displayValue(getOrderId(order)) }}</span>
                 <el-button
                   v-if="getOrderId(order)"
                   link
@@ -191,12 +212,12 @@
             <div class="summary-cell meta-cell">
               <span class="cell-label">{{ t('platformOrders.labelTime') }}</span>
               <span class="meta-time">{{ formatPlatformOrderTime(getCreateTime(order)) }}</span>
-              <span class="meta-shop">{{ displayValue(getShopName(order)) }} · {{ getPlatform(order) === 'TIKTOK' ? 'TikTok' : 'eBay' }}</span>
+              <span class="meta-shop">{{ formatOrderShopLabel(order) }}</span>
             </div>
 
             <div class="summary-cell platform-cell">
-              <el-tag :class="['platform-soft-tag', getPlatform(order) === 'TIKTOK' ? 'tiktok-tag' : 'ebay-tag']" effect="plain">
-                {{ getPlatform(order) === 'TIKTOK' ? 'TikTok Shop' : 'eBay' }}
+              <el-tag :class="['platform-soft-tag', getPlatformTagClass(getPlatform(order))]" effect="plain">
+                {{ getPlatformLabel(getPlatform(order)) }}
               </el-tag>
             </div>
 
@@ -211,11 +232,14 @@
               <span class="primary-value ellipsis">{{ displayValue(getFirstItem(order).productName) }}</span>
             </div>
 
-            <div class="summary-cell sku-cell" :class="{ 'sku-cell-problem': hasSkuIssue(order, index) }">
+            <div class="summary-cell sku-cell" :class="{ 'sku-cell-problem': hasSkuIssue(order, index), 'sku-cell-no-stock': hasNoStock(order, index), 'sku-cell-shipped': isShipmentCompleted(getDisplayOrder(order, index)) }">
               <span class="cell-label">{{ t('platformOrders.sku') }}</span>
               <div class="sku-row">
-                <span :class="['secondary-value', 'ellipsis', { 'sku-value-problem': hasSkuIssue(order, index) }]">{{ displayValue(getSkuText(getFirstItem(order))) }}</span>
-                <el-tag v-if="hasSkuIssue(order, index)" type="danger" effect="dark" size="small" class="sku-problem-tag">{{ getSkuIssueText(order, index) }}</el-tag>
+                <span :class="['secondary-value', 'ellipsis', { 'sku-value-problem': hasSkuIssue(order, index), 'sku-value-no-stock': hasNoStock(order, index), 'sku-value-shipped': isShipmentCompleted(getDisplayOrder(order, index)) }]">{{ displayValue(getSkuText(getFirstItem(order))) }}</span>
+                <el-tag v-if="isShipmentCompleted(getDisplayOrder(order, index))" type="success" effect="dark" size="small" class="sku-problem-tag">{{ t('platformOrders.skuShipped') }}</el-tag>
+                <el-tag v-else-if="isShipmentPending(getDisplayOrder(order, index))" type="info" size="small" class="sku-problem-tag">{{ t('platformOrders.skuShipmentCreated') }}</el-tag>
+                <el-tag v-if="hasSkuIssue(order, index) || hasNoStock(order, index)" :type="hasSkuIssue(order, index) ? 'danger' : 'warning'" effect="dark" size="small" class="sku-problem-tag">{{ getSkuStatusText(getFirstItem(getDisplayOrder(order, index))) }}</el-tag>
+                <el-tag v-if="isBrushOrder(getDisplayOrder(order, index))" type="info" size="small" class="sku-problem-tag">{{ t('platformOrders.skuIssueBrushOrder') }}</el-tag>
                 <el-button v-if="canEditSku(order, index)" link size="small" class="sku-edit-btn" :icon="Edit" @click.stop="startSkuEdit(order, index, getFirstItem(order))" v-hasPermi="['wms:platform:edit']">{{ t('platformOrders.labelEditSku') }}</el-button>
               </div>
             </div>
@@ -251,8 +275,8 @@
             </div>
 
             <div class="summary-cell money-cell">
-              <span class="cell-label">{{ t('platformOrders.grossProfit') }}</span>
-              <span class="secondary-value">{{ formatOptionalMoney(order.grossProfit, getCurrency(order)) }}</span>
+              <span class="cell-label">{{ t('platformOrders.netProfit') }}</span>
+              <span class="secondary-value">{{ formatNetProfit(order) }}</span>
             </div>
 
             <div class="summary-cell status-cell">
@@ -267,7 +291,7 @@
           </button>
 
           <transition name="order-expand">
-            <div v-show="isExpanded(order, index)" class="detail-area">
+            <div v-if="isExpanded(order, index)" class="detail-area">
               <div class="order-info-bar">
                 <div class="order-info-item">
                   <span class="order-info-label">{{ t('platformOrders.orderInfoId') }}</span>
@@ -296,6 +320,9 @@
                     <InfoLine :label="t('platformOrders.itemSkuId')" :value="item.skuId" />
                     <InfoLine :label="t('platformOrders.itemSkuName')" :value="item.skuName" />
                     <InfoLine :label="t('platformOrders.itemSellerSku')" :value="item.sellerSku" />
+                    <InfoLine :label="t('platformOrders.itemSkuStatus')">
+                      <span :class="{ 'sku-value-shipped': isShipmentCompleted(getDisplayOrder(order, index)) }">{{ getSkuStatusText(item, getDisplayOrder(order, index)) }}</span>
+                    </InfoLine>
                     <InfoLine :label="t('platformOrders.itemQuantity')" :value="formatQuantity(item.quantity)" />
                     <InfoLine :label="t('platformOrders.itemOriginalPrice')" :value="formatMoney(item.originalPrice, item.currency || getCurrency(getDisplayOrder(order, index)))" />
                     <InfoLine :label="t('platformOrders.itemSalePrice')" :value="formatMoney(item.salePrice, item.currency || getCurrency(getDisplayOrder(order, index)))" strong />
@@ -393,6 +420,12 @@
                       </span>
                     </InfoLine>
                     <InfoLine :label="t('platformOrders.labelAddress')" :value="getRecipient(getDisplayOrder(order, index)).addressLine1 || getRecipient(getDisplayOrder(order, index)).fullAddress" />
+                    <InfoLine :label="t('platformOrders.labelCityStateZip')" :value="formatJoin([
+                      getRecipient(getDisplayOrder(order, index)).city,
+                      getRecipient(getDisplayOrder(order, index)).stateOrProvince,
+                      getRecipient(getDisplayOrder(order, index)).postalCode
+                    ])" />
+                    <InfoLine :label="t('platformOrders.labelCountry')" :value="formatCountry(getRecipient(getDisplayOrder(order, index)).countryCode)" />
                     <InfoLine :label="t('platformOrders.labelPostalCode')" :value="getRecipient(getDisplayOrder(order, index)).postalCode" />
                     <InfoLine :label="t('platformOrders.labelRegion')" :value="getRecipient(getDisplayOrder(order, index)).regionCode" />
                     <InfoLine :label="t('platformOrders.buyerMessage')" :value="getDisplayOrder(order, index).buyerMessage || rawField(getDisplayOrder(order, index), 'buyer_message')" />
@@ -477,7 +510,7 @@
                   <template v-for="(item, itemIndex) in getLineItems(getDisplayOrder(order, index))" :key="'pay-item-' + (item.lineItemId || item.skuId || itemIndex)">
                     <InfoLine :label="t('platformOrders.itemSubtotal')" :value="formatOptionalMoney(item.subtotal, item.currency || getCurrency(getDisplayOrder(order, index)))" />
                   </template>
-                  <InfoLine v-if="getPlatform(getDisplayOrder(order, index)) === 'EBAY'" :label="t('platformOrders.paymentEbayNetProfit')" :value="formatEbayNetProfit(getDisplayOrder(order, index))" strong />
+                  <InfoLine v-if="getPlatform(getDisplayOrder(order, index)) === 'EBAY'" :label="t('platformOrders.paymentEbayNetProfit')" :value="formatNetProfit(getDisplayOrder(order, index))" strong />
                 </section>
               </div>
 
@@ -547,15 +580,14 @@
                 >
                   <span class="shop-check-label">
                     <el-tag
-                      :type="shop.platform === 'TIKTOK' ? 'danger' : ''"
+                      :type="getPlatformTagType(shop.platform)"
                       size="small"
                       effect="dark"
                       class="platform-mini-tag"
                     >
-                      {{ shop.platform }}
+                      {{ getPlatformLabel(shop.platform) }}
                     </el-tag>
-                    <span>{{ shop.shopName || shop.shopId }}</span>
-                    <span v-if="shop.region" class="shop-region">({{ shop.region }})</span>
+                    <span>{{ formatShopLabel(shop) }}</span>
                     <el-tag
                       :type="shop.authStatus === 'AUTHORIZED' ? 'success' : 'warning'"
                       size="small"
@@ -631,7 +663,15 @@
     />
 
     <!-- 导入 Note 弹窗 -->
-    <el-dialog v-model="notesImportOpen" :title="t('platformOrders.importNotesTitle')" width="520px" @close="cancelImportNotes">
+    <el-dialog
+      v-model="notesImportOpen"
+      :title="t('platformOrders.importNotesTitle')"
+      width="min(600px, 92vw)"
+      :close-on-click-modal="!notesImportLoading"
+      :close-on-press-escape="!notesImportLoading"
+      :show-close="!notesImportLoading"
+      @close="cancelImportNotes"
+    >
       <el-alert
         :title="t('platformOrders.importNotesHelp')"
         type="info"
@@ -639,19 +679,24 @@
         :closable="false"
         class="mb20"
       />
-      <el-form label-width="130px" class="notes-import-form">
-        <el-form-item :label="t('platformOrders.importNotesSelectFile')">
+      <el-form class="notes-import-form">
+        <el-form-item>
           <el-upload
             ref="importUploadRef"
             class="notes-import-upload"
             :auto-upload="false"
-            :limit="1"
-            accept=".csv"
+            drag
+            multiple
+            accept=".csv,text/csv"
+            :disabled="notesImportLoading"
             :on-change="handleImportFileChange"
             :on-remove="handleImportFileRemove"
             :file-list="importFileList"
           >
-            <el-button type="primary" icon="FolderOpened">{{ t('platformOrders.importNotesSelectFile') }}</el-button>
+            <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
+            <div class="el-upload__text">
+              {{ t('platformOrders.importNotesDropFiles') }}<em>{{ t('platformOrders.importNotesBrowseFiles') }}</em>
+            </div>
             <template #tip>
               <div class="el-upload__tip">{{ t('platformOrders.importNotesFileHint') }}</div>
             </template>
@@ -659,9 +704,9 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="cancelImportNotes">{{ t('platformOrders.cancel') }}</el-button>
-        <el-button type="primary" :loading="notesImportLoading" :disabled="!notesImportFile" @click="submitImportNotes">
-          {{ t('platformOrders.importNotesStart') }}
+        <el-button :disabled="notesImportLoading" @click="cancelImportNotes">{{ t('platformOrders.cancel') }}</el-button>
+        <el-button type="primary" :loading="notesImportLoading" :disabled="importFileList.length === 0" @click="submitImportNotes">
+          {{ notesImportLoading ? notesImportProgress : t('platformOrders.importNotesStart') }}
         </el-button>
       </template>
     </el-dialog>
@@ -669,13 +714,16 @@
 </template>
 
 <script setup name="PlatformOrders">
-import { computed, defineComponent, getCurrentInstance, h, onMounted, reactive, ref } from 'vue'
+import { computed, defineComponent, getCurrentInstance, h, onActivated, onMounted, reactive, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { ArrowDown, ArrowRight, CopyDocument, Edit } from '@element-plus/icons-vue'
-import { listPlatformOrders, getOrderStatusMap, updateOrderSku, createShipments, exportPlatformOrders, exportPlatformOrderWeeklyReport, importNotes, getAutoCreateConfig, updateAutoCreateConfig } from '@/api/wms/platformOrder'
+import { ArrowDown, ArrowRight, CopyDocument, Edit, UploadFilled } from '@element-plus/icons-vue'
+import { listPlatformOrders, getPlatformOrder, getOrderStatusMap, updateOrderSku, createShipments, exportPlatformOrders, exportPlatformOrderWeeklyReport, importNotes, getAutoCreateConfig, updateAutoCreateConfig } from '@/api/wms/platformOrder'
 import { listAllPlatformShops, batchSyncOrders } from '@/api/wms/platformShop'
 import { formatDateTimeForQuery, formatLosAngelesTime } from '@/utils/laTime'
+import { getExportLanguageHeaders } from '@/utils/xlsxTranslate'
 import SkuSelect from '@/views/components/SkuSelect.vue'
+import useSettingsStore from '@/store/modules/settings'
 
 const InfoLine = defineComponent({
   name: 'InfoLine',
@@ -693,6 +741,9 @@ const InfoLine = defineComponent({
 })
 
 const { proxy } = getCurrentInstance()
+const route = useRoute()
+const settingsStore = useSettingsStore()
+const isEn = computed(() => (settingsStore.language || 'zh-cn') === 'en')
 const t = (key, values) => proxy?.$t?.(key, values) || key
 
 const orderStatusOptions = ref([])
@@ -700,7 +751,8 @@ const orderStatusMap = ref({})
 const platformOptions = [
   { label: () => t('platformOrders.allPlatforms'), value: '' },
   { label: 'TikTok Shop', value: 'TIKTOK' },
-  { label: 'eBay', value: 'EBAY' }
+  { label: 'eBay', value: 'EBAY' },
+  { label: 'Whatnot', value: 'SHOPIFY' }
 ]
 
 const defaultTime = reactive([new Date(2000, 0, 1, 0, 0, 0), new Date(2000, 0, 1, 23, 59, 59)])
@@ -750,7 +802,7 @@ function getByPath(obj, path) {
   return cur ?? null
 }
 
-/** 从订单 raw JSON 获取字段（TikTok 和 eBay 字段路径不同） */
+/** 从订单 raw JSON 获取平台专有字段（目前用于 TikTok 和 eBay） */
 function rawField(order, tiktokPath, ebayPath) {
   const json = parseOrderJson(order)
   if (!json) return null
@@ -776,23 +828,90 @@ function formatIsoTime(str) {
 const syncOpen = ref(false)
 const syncShopList = ref([])
 const notesImportOpen = ref(false)
-const notesImportFile = ref(null)
 const notesImportLoading = ref(false)
+const notesImportProgress = ref('')
 const queryRef = ref(null)
 const syncRef = ref(null)
 
 const queryParams = ref({
   pageNum: 1,
-  pageSize: 10,
+  pageSize: 20,
   platform: '',
   shopAuthId: undefined,
   platformOrderId: undefined,
+  shipmentOrderNo: undefined,
   orderStatus: undefined,
   sellerSku: undefined,
   skuMatched: '',
   shipmentStatus: '',
+  supplierSalesOnly: undefined,
   orderCreateTimeRange: []
 })
+
+const appliedRouteFilterKey = ref('')
+const pendingSkuMissHint = ref(false)
+
+function applyRouteFilter() {
+  const platformOrderId = String(route.query.platformOrderId || '').trim()
+  const skuCode = String(route.query.skuCode || '').trim()
+  const orderStatus = String(route.query.orderStatus || '').trim()
+  const supplierSalesOnly = String(route.query.supplierSalesOnly || '') === 'true'
+  const shipmentStatus = supplierSalesOnly ? 'FINISH' : String(route.query.shipmentStatus || '').trim()
+  if (platformOrderId) {
+    const filterKey = `order|${platformOrderId}`
+    if (filterKey === appliedRouteFilterKey.value
+      && queryParams.value.platformOrderId === platformOrderId
+      && !queryParams.value.sellerSku && !queryParams.value.supplierSalesOnly) return false
+    Object.assign(queryParams.value, {
+      pageNum: 1,
+      platform: '',
+      shopAuthId: undefined,
+      platformOrderId,
+      shipmentOrderNo: undefined,
+      orderStatus: undefined,
+      sellerSku: undefined,
+      skuMatched: '',
+      shipmentStatus: '',
+      supplierSalesOnly: undefined,
+      orderCreateTimeRange: []
+    })
+    appliedRouteFilterKey.value = filterKey
+    pendingSkuMissHint.value = false
+    return true
+  }
+  if (!skuCode) {
+    const hadSalesScope = !!queryParams.value.supplierSalesOnly
+    queryParams.value.supplierSalesOnly = undefined
+    appliedRouteFilterKey.value = ''
+    return hadSalesScope
+  }
+  const filterKey = `sku|${skuCode}|${orderStatus}|${shipmentStatus}|${supplierSalesOnly}`
+  const expectedOrderStatus = supplierSalesOnly ? undefined : (orderStatus || undefined)
+  if (filterKey === appliedRouteFilterKey.value && queryParams.value.sellerSku === skuCode
+    && !!queryParams.value.supplierSalesOnly === supplierSalesOnly
+    && queryParams.value.orderStatus === expectedOrderStatus
+    && queryParams.value.shipmentStatus === shipmentStatus
+    && !queryParams.value.platform && !queryParams.value.shopAuthId
+    && !queryParams.value.platformOrderId && !queryParams.value.shipmentOrderNo
+    && !queryParams.value.skuMatched && !queryParams.value.orderCreateTimeRange?.length) return false
+  // A supplier drill-down must not inherit a previous shop, date or platform-status filter.
+  Object.assign(queryParams.value, {
+    pageNum: 1,
+    platform: '',
+    shopAuthId: undefined,
+    platformOrderId: undefined,
+    shipmentOrderNo: undefined,
+    sellerSku: skuCode,
+    orderStatus: expectedOrderStatus,
+    skuMatched: '',
+    shipmentStatus,
+    supplierSalesOnly: supplierSalesOnly || undefined,
+    orderCreateTimeRange: []
+  })
+  appliedRouteFilterKey.value = filterKey
+  pendingSkuMissHint.value = String(route.query.fromInventoryHistory || '') === '1'
+  return true
+}
 
 const syncForm = ref({
   startTime: undefined,
@@ -836,6 +955,7 @@ const isIndeterminate = computed(() => syncSelectedCount.value > 0 && !allShopsS
 function normalizeQuery() {
   const query = { ...queryParams.value }
   query.platformOrderId = query.platformOrderId?.trim() || undefined
+  query.shipmentOrderNo = query.shipmentOrderNo?.trim() || undefined
   query.sellerSku = query.sellerSku?.trim() || undefined
   query.skuMatched = query.skuMatched || undefined
   query.shipmentStatus = query.shipmentStatus || undefined
@@ -869,7 +989,16 @@ async function getList() {
       await getList()
       return
     }
+    // 从库存记录（出库）跳转过来且未匹配到平台订单时给出业务提示
+    // 传中文原文，英文界面由 runtime-map 整句映射，避免被逐词乱译
+    if (pendingSkuMissHint.value) {
+      pendingSkuMissHint.value = false
+      if (!orderList.value.length && total.value === 0) {
+        proxy.$modal.msgWarning('该sku在平台中无销售记录，请和相关人员确认是否是线下交易或者忘记写seller note')
+      }
+    }
   } catch (e) {
+    pendingSkuMissHint.value = false
     handleApiError(e)
   } finally {
     loading.value = false
@@ -880,7 +1009,8 @@ function loadShops() {
   shopLoading.value = true
   return listAllPlatformShops().then(response => {
     const data = response.data || {}
-    shopList.value = response.rows || data.rows || data.records || (Array.isArray(data) ? data : [])
+    const shops = response.rows || data.rows || data.records || (Array.isArray(data) ? data : [])
+    shopList.value = sortShops(shops)
   }).catch(handleApiError).finally(() => {
     shopLoading.value = false
   })
@@ -896,11 +1026,20 @@ function toggleOrder(order, index) {
   ensureDetail(order, index)
 }
 
-function ensureDetail(order, index) {
-  // 列表数据已包含展开所需的全部字段，无需额外请求
+async function ensureDetail(order, index) {
   const key = orderKey(order, index)
   if (detailCache[key]) return
-  detailCache[key] = order
+  const orderId = getOrderId(order)
+  if (!orderId || !order?.platform) {
+    detailCache[key] = order
+    return
+  }
+  try {
+    const res = await getPlatformOrder(orderId, order.platform, order.shopAuthId)
+    detailCache[key] = { ...order, ...(res.data || {}) }
+  } catch {
+    detailCache[key] = order
+  }
 }
 
 function handleQuery() {
@@ -914,6 +1053,7 @@ function handleCreateTimeRangeChange() {
 
 function resetQuery() {
   proxy.resetForm('queryRef')
+  queryParams.value.supplierSalesOnly = undefined
   queryParams.value.orderCreateTimeRange = []
   handleQuery()
 }
@@ -964,15 +1104,20 @@ async function handleAutoCreateToggle(value) {
 }
 
 function handleExport() {
-  proxy.$modal.confirm(t('platformOrders.exportConfirm')).then(() => {
+  proxy.$modal.confirm(t('platformOrders.exportConfirm'), {
+    confirmButtonText: t('platformOrders.confirm'),
+    cancelButtonText: t('platformOrders.cancel')
+  }).then(() => {
     exporting.value = true
     const params = normalizeQuery()
     delete params.pageNum
     delete params.pageSize
-    exportPlatformOrders(params).then((blob) => {
+    const isEnglish = (localStorage.getItem('language') || 'zh-cn').toLowerCase().startsWith('en')
+    const languageHeaders = getExportLanguageHeaders(isEnglish)
+    exportPlatformOrders(params, languageHeaders).then((blob) => {
       const link = document.createElement('a')
       link.href = URL.createObjectURL(blob)
-      link.download = `平台订单_${new Date().toISOString().slice(0, 10)}.xlsx`
+      link.download = `${t('platformOrders.exportFileName')}_${new Date().toISOString().slice(0, 10)}.xlsx`
       link.click()
       URL.revokeObjectURL(link.href)
       proxy.$modal.msgSuccess(t('platformOrders.exportSuccess'))
@@ -985,7 +1130,10 @@ function handleExport() {
 }
 
 function handleWeeklyReportExport() {
-  proxy.$modal.confirm(t('platformOrders.weeklyReportExportConfirm')).then(() => {
+  proxy.$modal.confirm(t('platformOrders.weeklyReportExportConfirm'), {
+    confirmButtonText: t('platformOrders.confirm'),
+    cancelButtonText: t('platformOrders.cancel')
+  }).then(() => {
     weeklyReportExporting.value = true
     const params = normalizeQuery()
     delete params.pageNum
@@ -1050,7 +1198,11 @@ function submitSync() {
       syncOpen.value = false
       syncLoading.value = false
       proxy.$modal.msgSuccess(t('platformOrders.syncStarted', { count: shopCount }))
-      // 延迟刷新列表，给后台同步一些时间      setTimeout(() => { getList(); loadShops() }, 5000)
+      // 延迟刷新列表，给后台同步一些时间
+      setTimeout(() => {
+        getList()
+        loadShops()
+      }, 5000)
     }).catch(() => {
       syncLoading.value = false
       proxy.$modal.msgError(t('platformOrders.syncRequestFailed'))
@@ -1084,6 +1236,104 @@ function getOrderId(order) {
 
 function getPlatform(order) {
   return order?.platform || ''
+}
+
+function getPlatformLabel(platform) {
+  const normalized = String(platform || '').toUpperCase()
+  if (normalized === 'TIKTOK') return 'TikTok Shop'
+  if (normalized === 'EBAY') return 'eBay'
+  if (normalized === 'SHOPIFY') return 'Whatnot'
+  return platform || '-'
+}
+
+function getPlatformTagClass(platform) {
+  const normalized = String(platform || '').toUpperCase()
+  if (normalized === 'TIKTOK') return 'tiktok-tag'
+  if (normalized === 'SHOPIFY') return 'whatnot-tag'
+  return 'ebay-tag'
+}
+
+function getPlatformTagType(platform) {
+  const normalized = String(platform || '').toUpperCase()
+  if (normalized === 'TIKTOK') return 'danger'
+  if (normalized === 'SHOPIFY') return 'success'
+  return ''
+}
+
+function resolveTikTokSellerHost(region) {
+  const key = String(region || '').toUpperCase()
+  // 注意：美区域名是 seller-us（连字符），不是 seller.us
+  if (!key || key.includes('US') || key.includes('UNITED_STATES')) {
+    return 'https://seller-us.tiktok.com'
+  }
+  if (key.includes('GB') || key.includes('UK')) {
+    return 'https://seller-uk.tiktok.com'
+  }
+  if (key.includes('EU') || key.includes('DE') || key.includes('FR') || key.includes('IT') || key.includes('ES')) {
+    return 'https://seller.eu.tiktokglobalshop.com'
+  }
+  if (key.includes('SEA') || key.includes('SG') || key.includes('MY') || key.includes('TH') || key.includes('VN') || key.includes('PH') || key.includes('ID')) {
+    return 'https://seller.tiktokglobalshop.com'
+  }
+  return 'https://seller.tiktok.com'
+}
+
+function resolveTikTokShopRegion(region) {
+  const key = String(region || '').trim().toUpperCase()
+  const normalizedKey = key.replace(/[\s-]+/g, '_')
+  if (!key || ['US', 'USA', 'UNITED_STATES'].includes(normalizedKey)) return 'US'
+  if (['UK', 'GB', 'UNITED_KINGDOM'].includes(normalizedKey)) return 'GB'
+  return key
+}
+
+function resolveEbaySiteHost(region) {
+  const key = String(region || '').toUpperCase()
+  if (key.includes('GB') || key.includes('UK')) return 'https://www.ebay.co.uk'
+  if (key.includes('DE')) return 'https://www.ebay.de'
+  if (key.includes('AU')) return 'https://www.ebay.com.au'
+  if (key.includes('CA')) return 'https://www.ebay.ca'
+  if (key.includes('FR')) return 'https://www.ebay.fr'
+  if (key.includes('IT')) return 'https://www.ebay.it'
+  if (key.includes('ES')) return 'https://www.ebay.es'
+  return 'https://www.ebay.com'
+}
+
+/** 根据平台订单构造外部跳转链接，跳转到对应平台的订单详情 */
+function getPlatformOrderExternalUrl(order) {
+  const orderId = String(getOrderId(order) || '').trim()
+  if (!orderId) return ''
+  const platform = String(getPlatform(order) || '').toUpperCase()
+  const shop = shopList.value.find(item => String(item.id) === String(order?.shopAuthId))
+  const region = shop?.region || order?.regionCode || ''
+
+  if (platform === 'EBAY') {
+    const host = resolveEbaySiteHost(region)
+    const returnParams = new URLSearchParams({
+      search: `ordernumber:${orderId}`,
+      filter: 'status:ALL_ORDERS',
+      partialRefresh: 'true'
+    })
+    const returnUrl = `${host}/sh/ord/?${returnParams.toString()}`
+    const params = new URLSearchParams({
+      mode: 'SH',
+      orderid: orderId,
+      source: 'Orders',
+      ru: returnUrl
+    })
+    return `${host}/mesh/ord/details?${params.toString()}`
+  }
+  if (platform === 'TIKTOK') {
+    const host = resolveTikTokSellerHost(region)
+    const shopRegion = resolveTikTokShopRegion(region)
+    return `${host}/order/detail?order_no=${encodeURIComponent(orderId)}&shop_region=${encodeURIComponent(shopRegion)}`
+  }
+  if (platform === 'SHOPIFY') {
+    const shopifyOrderId = String(order?.shopifyOrderId || '').trim()
+    const shopHandle = String(shop?.shopId || order?.platformShopId || '').trim().replace(/\.myshopify\.com$/i, '')
+    if (!shopifyOrderId || !shopHandle) return ''
+    return `https://admin.shopify.com/store/${encodeURIComponent(shopHandle)}/orders/${encodeURIComponent(shopifyOrderId)}`
+  }
+  return ''
 }
 
 function getStatus(order) {
@@ -1136,6 +1386,7 @@ function getRecipient(order) {
     city: order?.city,
     stateOrProvince: order?.stateOrProvince,
     postalCode: order?.postalCode,
+    countryCode: order?.countryCode,
     regionCode: order?.regionCode
   }
 }
@@ -1167,19 +1418,37 @@ function isBrushOrder(order) {
   return Number(order?.brushOrder || order?.isBrushOrder || 0) === 1
 }
 
-function hasSkuIssue(order, index) {
-  const ord = getDisplayOrder(order, index)
-  if (isBrushOrder(ord)) return true
-  const sku = String(getSkuText(getFirstItem(ord)) || '').trim()
-  if (!sku || sku === '-' || sku.toLowerCase() === 'empty') return true
-  const reason = String(ord?.skipReason || '')
-  return /SKU not matched|Seller SKU is empty|SKU未匹配|商家SKU为空/i.test(reason)
+function isShipmentCompleted(order) {
+  return Boolean(order?.shipmentOrderId) && Number(order.shipmentOrderStatus) === 1
 }
 
-function getSkuIssueText(order, index) {
-  const ord = getDisplayOrder(order, index)
-  if (isBrushOrder(ord)) return t('platformOrders.skuIssueBrushOrder')
-  return t('platformOrders.skuIssue')
+function isShipmentPending(order) {
+  // 未返回状态或关联单已失效时，不把空值转换成暂存状态 0。
+  return Boolean(order?.shipmentOrderId)
+    && (order.shipmentOrderStatus === 0 || order.shipmentOrderStatus === '0')
+}
+
+function hasSkuIssue(order, index) {
+  const displayOrder = getDisplayOrder(order, index)
+  return !isShipmentCompleted(displayOrder) && getFirstItem(displayOrder).skuStatus === 'UNMATCHED'
+}
+
+function hasNoStock(order, index) {
+  const displayOrder = getDisplayOrder(order, index)
+  return !isShipmentCompleted(displayOrder) && getFirstItem(displayOrder).skuStatus === 'NO_STOCK'
+}
+
+function getSkuStatusText(item, order) {
+  if (isShipmentCompleted(order)) return t('platformOrders.skuShipped')
+  const key = {
+    UNMATCHED: 'skuNotFound',
+    NO_STOCK: 'skuNoStock',
+    IN_STOCK: 'skuInStock'
+  }[item?.skuStatus]
+  const stockText = key ? t(`platformOrders.${key}`) : '-'
+  return isShipmentPending(order)
+    ? [t('platformOrders.skuShipmentCreated'), stockText].join(' · ')
+    : stockText
 }
 
 function getCurrency(order) {
@@ -1245,11 +1514,21 @@ function formatGrossProfit(order) {
   return formatMoney(order.grossProfit, getCurrency(order))
 }
 
-/** eBay 净毛利 = 售价(totalAmount) - 平台交易费(totalMarketplaceFee) - 成本(costPrice) */
-function formatEbayNetProfit(order) {
-  const totalAmount = order.totalAmount
+/** TikTok 汇总单品预估利润 subtotal；eBay 净毛利 = 售价 - 平台交易费 - 成本。 */
+function formatNetProfit(order) {
+  if (getPlatform(order) === 'TIKTOK') {
+    const estimatedProfits = getLineItems(order)
+      .map(item => Number(item.subtotal))
+      .filter(Number.isFinite)
+    if (!estimatedProfits.length) return '-'
+    return formatMoney(
+      estimatedProfits.reduce((sum, profit) => sum + profit, 0),
+      getCurrency(order)
+    )
+  }
+  const totalAmount = order.totalAmount ?? getSaleAmount(order)
   const fee = order.totalMarketplaceFee
-  const cost = order.costPrice
+  const cost = order.costPrice ?? order.cost
   // 成本未匹配（null 或 0）时显示 -
   if (totalAmount == null || cost == null) return '-'
   const ta = Number(totalAmount)
@@ -1354,6 +1633,11 @@ function formatTaxes(taxes, currency) {
 
 function formatSkipReason(reason) {
   if (!reason) return ''
+  const exactKey = `platformOrders.skipReason['${reason}']`
+  const exactText = t(exactKey)
+  if (exactText && exactText !== exactKey) {
+    return exactText
+  }
   // 处理 "Order status not allowed: XXX" 格式：翻译前半部分，保留状态值
   const colonIdx = reason.indexOf(':')
   if (colonIdx > 0) {
@@ -1383,9 +1667,73 @@ function getStatusClass(status, platform) {
   return 'info'
 }
 
+const SHOP_ALIASES = [
+  { platform: 'TIKTOK', shopName: 'luxe af', alias: 'TK1' },
+  { platform: 'TIKTOK', shopName: '777 luxury', alias: 'TK2' },
+  { platform: 'EBAY', shopName: 'luxury_bagparty', alias: 'Ebay1' },
+  { platform: 'EBAY', shopName: 'the_attraction', alias: 'Ebay2' },
+  { platform: 'EBAY', shopName: 'truestluxury', alias: 'Ebay3' },
+  { platform: 'EBAY', shopName: 'luxeaf', alias: 'Ebay4' },
+  { platform: 'SHOPIFY', shopName: 'luxury bagparty', alias: 'Whatnot1' }
+]
+
+const SHOP_SORT_ORDER = [
+  ['EBAY', 'luxury_bagparty'],
+  ['EBAY', 'the_attraction'],
+  ['EBAY', 'truestluxury'],
+  ['EBAY', 'luxeaf'],
+  ['TIKTOK', 'luxe af'],
+  ['TIKTOK', '777 luxury'],
+  ['TIKTOK', 'truest luxury'],
+  ['SHOPIFY', 'luxury bagparty']
+]
+
+function normalizeShopName(value) {
+  return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ')
+}
+
+function getShopAlias(shop) {
+  if (!shop) return ''
+  const platform = String(shop.platform || '').toUpperCase()
+  const shopNames = [shop.shopName, shop.shopId, shop.platformShopId]
+    .map(normalizeShopName)
+    .filter(Boolean)
+  return SHOP_ALIASES.find(item => item.platform === platform && shopNames.includes(item.shopName))?.alias || ''
+}
+
+function getShopSortIndex(shop) {
+  const platform = String(shop?.platform || '').toUpperCase()
+  const shopNames = [shop?.shopName, shop?.shopId, shop?.platformShopId]
+    .map(normalizeShopName)
+    .filter(Boolean)
+  return SHOP_SORT_ORDER.findIndex(([itemPlatform, itemShopName]) => (
+    itemPlatform === platform && shopNames.includes(itemShopName)
+  ))
+}
+
+function sortShops(shops) {
+  return [...shops].sort((left, right) => {
+    const leftIndex = getShopSortIndex(left)
+    const rightIndex = getShopSortIndex(right)
+    if (leftIndex !== -1 || rightIndex !== -1) {
+      if (leftIndex === -1) return 1
+      if (rightIndex === -1) return -1
+      return leftIndex - rightIndex
+    }
+    return formatShopLabel(left).localeCompare(formatShopLabel(right), undefined, { sensitivity: 'base' })
+  })
+}
+
 function formatShopLabel(shop) {
   const suffix = shop.region ? ` (${shop.region})` : ''
-  return `${shop.shopName || shop.shopId || shop.id}${suffix}`
+  const alias = getShopAlias(shop)
+  return `${shop.shopName || shop.shopId || shop.id}${suffix}${alias ? ` · ${alias}` : ''}`
+}
+
+function formatOrderShopLabel(order) {
+  const matchingShop = shopList.value.find(shop => String(shop.id) === String(order?.shopAuthId))
+  const alias = getShopAlias(matchingShop || order)
+  return `${displayValue(getShopName(order))}${alias ? ` · ${alias}` : ''}`
 }
 
 function copyTextSuccess() {
@@ -1429,10 +1777,15 @@ function saveSkuEdit() {
     return
   }
   const ord = getDisplayOrder(skuEditOrder.value, skuEditIndex.value)
+  const rowId = ord.id
   const orderId = getOrderId(ord)
   const platform = getPlatform(ord)
+  if (!rowId) {
+    proxy.$modal.msgError(t('platformOrders.skuUpdateFailed'))
+    return
+  }
   skuSaving.value = true
-  updateOrderSku(orderId, platform, skuEditForm.value.newSku.trim()).then(() => {
+  updateOrderSku(rowId, orderId, platform, skuEditForm.value.newSku.trim()).then(() => {
     proxy.$modal.msgSuccess(t('platformOrders.skuUpdateSuccess'))
     cancelSkuEdit()
     getList()
@@ -1468,73 +1821,162 @@ const importFileList = ref([])
 
 function openImportNotesDialog() {
   notesImportOpen.value = true
-  notesImportFile.value = null
+  notesImportProgress.value = ''
   importFileList.value = []
 }
 
-function handleImportFileChange(uploadFile) {
-  notesImportFile.value = uploadFile.raw
+function handleImportFileChange(uploadFile, uploadFiles) {
+  const validFiles = uploadFiles.filter(file => file.name?.toLowerCase().endsWith('.csv'))
+  if (validFiles.length !== uploadFiles.length) {
+    proxy.$modal.msgWarning(t('platformOrders.importNotesInvalidFile'))
+  }
+  importFileList.value = validFiles
 }
 
-function handleImportFileRemove() {
-  notesImportFile.value = null
+function handleImportFileRemove(uploadFile, uploadFiles) {
+  importFileList.value = uploadFiles
 }
 
 function cancelImportNotes() {
   notesImportOpen.value = false
-  notesImportFile.value = null
+  notesImportProgress.value = ''
   importFileList.value = []
 }
 
-function submitImportNotes() {
-  if (!notesImportFile.value) {
+function summarizeImportResults(results) {
+  const summary = {
+    platforms: new Set(),
+    totalRows: 0,
+    updated: 0,
+    matched: 0,
+    noStock: 0,
+    brushOrder: 0,
+    readyToShip: 0,
+    notReadyToShip: 0,
+    alreadyShipped: 0,
+    cancelled: 0,
+    statusNotAllowed: 0,
+    shipmentSkuUnmatched: 0,
+    shipmentNoStock: 0,
+    shipmentNoWarehouse: 0,
+    unmatched: 0,
+    notFound: 0,
+    errors: []
+  }
+  results.forEach(({ fileName, data }) => {
+    if (data.platform) summary.platforms.add(data.platform)
+    summary.totalRows += data.totalRows ?? 0
+    summary.updated += data.updated ?? 0
+    summary.matched += data.matched ?? 0
+    summary.noStock += data.noStock ?? 0
+    summary.brushOrder += data.brushOrder ?? 0
+    summary.readyToShip += data.readyToShip ?? 0
+    const notReadyToShip = data.notReadyToShip ?? data.statusNotAllowed ?? 0
+    summary.notReadyToShip += notReadyToShip
+    summary.alreadyShipped += data.alreadyShipped
+      ?? Math.max(0, (data.updated ?? 0) - (data.readyToShip ?? 0) - notReadyToShip)
+    summary.cancelled += data.cancelled ?? 0
+    summary.statusNotAllowed += data.statusNotAllowed ?? 0
+    summary.shipmentSkuUnmatched += data.shipmentSkuUnmatched ?? 0
+    summary.shipmentNoStock += data.shipmentNoStock ?? 0
+    summary.shipmentNoWarehouse += data.shipmentNoWarehouse ?? 0
+    summary.unmatched += data.unmatched ?? 0
+    summary.notFound += data.notFound ?? 0
+    ;(data.errors || []).forEach(error => summary.errors.push(`${fileName}: ${error}`))
+  })
+  return summary
+}
+
+async function submitImportNotes() {
+  const files = importFileList.value.filter(file => file.raw)
+  if (files.length === 0) {
     proxy.$modal.msgWarning(t('platformOrders.importNotesSelectFile'))
     return
   }
+
   notesImportLoading.value = true
-  importNotes(notesImportFile.value).then(response => {
-    const data = response.data || response
-    const matched = data.matched ?? 0
-    const noStock = data.noStock ?? 0
-    ElMessage({
-      message: t('platformOrders.importNoteResult', {
-        platform: data.platform || '-',
-        total: data.totalRows ?? 0,
-        updated: data.updated ?? 0,
-        skipped: data.skipped ?? 0,
-        skuMatched: matched + noStock,
-        noStock: noStock,
-        expectShip: matched,
-        brushOrder: data.brushOrder ?? 0,
-        unmatched: data.unmatched ?? 0,
-        notFound: data.notFound ?? 0
-      }),
-      type: 'success',
-      duration: 60000,
-      showClose: true
-    })
-    if (data.errors && data.errors.length > 0) {
-      setTimeout(() => {
-        ElMessage({ message: data.errors.slice(0, 3).join('; '), type: 'warning', duration: 60000, showClose: true })
-      }, 500)
+  const succeeded = []
+  const failed = []
+  try {
+    for (let index = 0; index < files.length; index += 1) {
+      const uploadFile = files[index]
+      notesImportProgress.value = t('platformOrders.importNotesProgress', {
+        current: index + 1,
+        total: files.length
+      })
+      try {
+        const response = await importNotes(uploadFile.raw)
+        succeeded.push({ fileName: uploadFile.name, data: response.data || response })
+      } catch {
+        uploadFile.status = 'fail'
+        failed.push({ uploadFile })
+      }
     }
-    if (data.unmatched > 0) {
-      setTimeout(() => {
+
+    if (succeeded.length > 0) {
+      const summary = summarizeImportResults(succeeded)
+      ElMessage({
+        message: t('platformOrders.importNoteBatchResult', {
+          files: succeeded.length,
+          platform: Array.from(summary.platforms).join(' / ') || '-',
+          total: summary.totalRows,
+          updated: summary.updated,
+          skuMatched: summary.matched + summary.noStock,
+          noStock: summary.noStock,
+          brushOrder: summary.brushOrder,
+          shipmentChecked: summary.readyToShip + summary.notReadyToShip + summary.alreadyShipped,
+          readyToShip: summary.readyToShip,
+          notReadyToShip: summary.notReadyToShip,
+          alreadyShipped: summary.alreadyShipped,
+          cancelled: summary.cancelled,
+          statusNotAllowed: summary.statusNotAllowed,
+          shipmentSkuUnmatched: summary.shipmentSkuUnmatched,
+          shipmentNoStock: summary.shipmentNoStock,
+          shipmentNoWarehouse: summary.shipmentNoWarehouse,
+          unmatched: summary.unmatched,
+          notFound: summary.notFound
+        }),
+        type: 'success',
+        duration: 60000,
+        showClose: true
+      })
+      if (summary.errors.length > 0) {
         ElMessage({
-          message: t('platformOrders.importNotesUnmatchedHint', { count: data.unmatched }),
+          message: summary.errors.slice(0, 3).join('; '),
           type: 'warning',
           duration: 60000,
           showClose: true
         })
-      }, 800)
+      }
+      if (summary.unmatched > 0) {
+        ElMessage({
+          message: t('platformOrders.importNotesUnmatchedHint', { count: summary.unmatched }),
+          type: 'warning',
+          duration: 60000,
+          showClose: true
+        })
+      }
+      getList()
     }
-    cancelImportNotes()
-    getList()
-  }).catch(() => {
-    proxy.$modal.msgError(t('platformOrders.importNotesFailed'))
-  }).finally(() => {
+
+    if (failed.length > 0) {
+      importFileList.value = failed.map(item => item.uploadFile)
+      ElMessage({
+        message: t('platformOrders.importNotesPartialFailed', {
+          count: failed.length,
+          files: failed.map(item => item.uploadFile.name).join(', ')
+        }),
+        type: 'error',
+        duration: 60000,
+        showClose: true
+      })
+    } else {
+      cancelImportNotes()
+    }
+  } finally {
     notesImportLoading.value = false
-  })
+    notesImportProgress.value = ''
+  }
 }
 
 function handleApiError(error) {
@@ -1563,10 +2005,15 @@ function loadStatusMap() {
 onMounted(() => {
   loadShops()
   loadStatusMap()
+  applyRouteFilter()
   getList()
   if (canManageAutoCreateConfig.value) {
     fetchAutoCreateConfig()
   }
+})
+
+onActivated(() => {
+  if (applyRouteFilter()) getList()
 })
 </script>
 
@@ -1653,6 +2100,21 @@ onMounted(() => {
 .platform-orders-page .notes-import-upload {
   width: 100%;
   min-width: 0;
+
+}
+.platform-orders-page .notes-import-upload .el-upload,
+.platform-orders-page .notes-import-upload .el-upload-dragger {
+  width: 100%;
+}
+
+.platform-orders-page .notes-import-upload .el-upload-dragger {
+  padding: 28px 16px;
+}
+
+.platform-orders-page .notes-import-upload .el-upload-list {
+  max-height: 180px;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .platform-orders-page .notes-import-upload .el-upload-list {
@@ -1740,6 +2202,12 @@ onMounted(() => {
   color: #175cd3;
   background: #eff8ff;
   border-color: #d1e4ff;
+}
+
+.platform-soft-tag.whatnot-tag {
+  color: #067647;
+  background: #ecfdf3;
+  border-color: #abefc6;
 }
 
 // ==================== Order Card ====================
@@ -1920,6 +2388,17 @@ onMounted(() => {
 // ==================== Shipment Order Cell ====================
 .shipment-cell {
   min-width: 0;
+}
+
+.platform-order-link {
+  color: #175cd3;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.platform-order-link:hover {
+  color: #1849a9;
 }
 
 .shipment-order-no {
@@ -2206,9 +2685,26 @@ onMounted(() => {
 
 .sku-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 4px;
   min-width: 0;
+}
+
+.sku-row > .secondary-value {
+  max-width: 100%;
+}
+
+.sku-cell-shipped {
+  padding: 6px 8px;
+  border: 1px solid #67c23a;
+  border-radius: 6px;
+  background: #f0f9eb;
+}
+
+.sku-value-shipped {
+  color: #529b2e;
+  font-weight: 700;
 }
 
 .sku-cell-problem {
@@ -2223,11 +2719,26 @@ onMounted(() => {
   font-weight: 700;
 }
 
+.sku-cell-no-stock {
+  padding: 6px 8px;
+  border: 1px solid #e6a23c;
+  border-radius: 6px;
+  background: #fdf6ec;
+}
+
+.sku-value-no-stock {
+  color: #b26a00;
+  font-weight: 700;
+}
+
 .sku-problem-tag {
   flex-shrink: 0;
-  height: 18px;
+  max-width: 100%;
+  min-height: 18px;
+  height: auto;
   line-height: 16px;
   padding: 0 5px;
+  white-space: normal;
 }
 
 .sku-edit-btn {

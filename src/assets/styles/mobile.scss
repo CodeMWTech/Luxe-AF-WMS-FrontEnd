@@ -257,7 +257,12 @@ html.mobile-app {
 }
 
 .mobile-login__remember {
-  margin: 0 0 18px;
+  margin: 0 0 10px;
+}
+
+.mobile-login__consent-item {
+  width: 100%;
+  margin-bottom: 8px;
 }
 
 .mobile-login__submit-item {

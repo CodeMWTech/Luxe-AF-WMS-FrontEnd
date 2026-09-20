@@ -1,6 +1,6 @@
 <template>
    <el-form ref="userRef" :model="user" :rules="rules" :label-width="isEn ? '110px' : '80px'">
-      <el-form-item :label="tr('用户昵称')" prop="nickName">
+      <el-form-item :label="tr('用户信息')" prop="nickName">
          <el-input v-model="user.nickName" maxlength="30" />
       </el-form-item>
       <el-form-item :label="tr('手机号码')" prop="phonenumber">
@@ -39,7 +39,7 @@ const isEn = computed(() => (settingsStore.language || 'zh-cn') === 'en')
 const tr = (text) => translateByMap(text, settingsStore.language || 'zh-cn')
 
 const rules = ref({
-  nickName: [{ required: true, message: "用户昵称不能为空", trigger: "blur" }],
+  nickName: [{ required: true, message: "用户信息不能为空", trigger: "blur" }],
   email: [{ required: true, message: "邮箱地址不能为空", trigger: "blur" }, { type: "email", message: "请输入正确的邮箱地址", trigger: ["blur", "change"] }]
 });
 

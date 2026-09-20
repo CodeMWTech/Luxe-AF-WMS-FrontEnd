@@ -67,15 +67,50 @@
         <el-button type="primary" icon="Download" :loading="exportLoading" :disabled="loading" @click="handleExportExcel">{{ tr('\u5bfc\u51faExcel') }}</el-button>
       </div>
       <el-table v-loading="loading" :data="inventoryHistoryList" border class="mt20" :empty-text="tr('暂无库存记录')" cell-class-name="vertical-top-cell">
-        <el-table-column :label="tr('操作单号')" prop="orderNo" width="220" show-overflow-tooltip header-class-name="nowrap-header" class-name="nowrap-cell"/>
-        <el-table-column :label="tr('商品名称')" min-width="180" show-overflow-tooltip>
+        <el-table-column :label="tr('操作单号')" prop="orderNo" width="220" show-overflow-tooltip header-class-name="nowrap-header" class-name="nowrap-cell">
           <template #default="{ row }">
-            <div>{{ row.item.itemName }}</div>
+            <el-link
+              v-if="canOpenOrderNoLink(row)"
+              type="primary"
+              :underline="true"
+              class="sku-history-link"
+              @click.stop="openOrderNoLink(row)"
+            >{{ row.orderNo }}</el-link>
+            <span v-else>{{ row.orderNo || '-' }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column :label="tr('商品名称')" min-width="180">
+          <template #default="{ row }">
+            <div class="item-name-two-line" :title="row.item?.itemName || ''">{{ row.item?.itemName || '-' }}</div>
+          </template>
+        </el-table-column>
+        <el-table-column :label="tr('商品图片')" width="110" align="center">
+          <template #default="{ row }">
+            <el-image
+              v-if="row.itemImage"
+              :src="row.itemImage"
+              fit="cover"
+              class="item-main-image"
+              :preview-src-list="[row.itemImage]"
+              preview-teleported
+            >
+              <template #error>
+                <div class="image-empty">{{ tr('暂无图片') }}</div>
+              </template>
+            </el-image>
+            <div v-else class="image-empty">{{ tr('暂无图片') }}</div>
           </template>
         </el-table-column>
         <el-table-column :label="tr('SKU编号')" min-width="150" show-overflow-tooltip>
           <template #default="{ row }">
-            <div v-if="row.itemSku?.skuCode">{{ row.itemSku.skuCode }}</div>
+            <el-link
+              v-if="canOpenSkuLink(row)"
+              type="primary"
+              :underline="true"
+              class="sku-history-link"
+              @click.stop="openSkuLink(row)"
+            >{{ row.itemSku.skuCode }}</el-link>
+            <div v-else-if="row.itemSku?.skuCode">{{ row.itemSku.skuCode }}</div>
             <div v-else>-</div>
           </template>
         </el-table-column>
@@ -139,13 +174,29 @@
 <script setup name="InventoryHistory">
 import { exportInventoryHistory, listInventoryHistory } from "@/api/wms/inventoryHistory";
 import {computed, getCurrentInstance, onMounted, reactive, ref} from "vue";
+import { useRouter } from 'vue-router'
 import {useWmsStore} from '@/store/modules/wms'
 import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
 import { formatDateTimeForQuery, formatLosAngelesTime } from '@/utils/laTime'
 import { blobValidate } from '@/utils/ruoyi'
+import { downloadXlsx, getExportLanguageHeaders, prepareLanguageXlsx } from '@/utils/xlsxTranslate'
+
+const ORDER_TYPE_RECEIPT = 1
+const ORDER_TYPE_SHIPMENT = 2
+const skuLinkTargets = {
+  [ORDER_TYPE_RECEIPT]: {
+    route: { name: 'Item' },
+    permission: 'wms:item:list'
+  },
+  [ORDER_TYPE_SHIPMENT]: {
+    route: { name: 'PlatformOrders' },
+    permission: 'wms:platform:list'
+  }
+}
 const defaultTime = reactive([new Date(2000,0,1,0,0,0), new Date(2000,0,1,23,59,59)])
 const {proxy} = getCurrentInstance();
+const router = useRouter()
 const {wms_inventory_history_type} = proxy.useDict('wms_inventory_history_type');
 const settingsStore = useSettingsStore()
 
@@ -156,7 +207,7 @@ const total = ref(0);
 const queryRef = ref(null)
 const queryParams = ref({
   pageNum: 1,
-  pageSize: 10,
+  pageSize: 20,
   orderType: -1,
   orderNo: undefined,
   itemName: undefined,
@@ -208,25 +259,20 @@ async function handleExportExcel() {
     const query = buildRequestQuery()
     delete query.pageNum
     delete query.pageSize
-    const blobData = await exportInventoryHistory(query)
+    const blobData = await exportInventoryHistory(query, {
+      headers: getExportLanguageHeaders(isEn.value)
+    })
     const isBlob = blobValidate(blobData)
     if (!isBlob) {
       const resText = await blobData.text()
       const rspObj = JSON.parse(resText)
-      throw new Error(rspObj?.msg || tr('\u5bfc\u51fa\u5931\u8d25'))
+      throw new Error(rspObj?.msg || tr('导出失败'))
     }
-    const blob = new Blob([blobData], {
-      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    })
-    const url = window.URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = 'MichaelStudioWMS-\u5e93\u5b58\u8bb0\u5f55.xlsx'
-    a.click()
-    window.URL.revokeObjectURL(url)
-    proxy.$modal.msgSuccess(tr('\u5bfc\u51fa\u6210\u529f'))
+    const excelData = await prepareLanguageXlsx(blobData, isEn.value)
+    downloadXlsx(excelData, isEn.value ? 'LuxeAFWMS-Inventory History.xlsx' : 'LuxeAFWMS-库存记录.xlsx')
+    proxy.$modal.msgSuccess(tr('导出成功'))
   } catch (e) {
-    proxy.$modal.msgError(e?.message || tr('\u5bfc\u51fa\u5931\u8d25'))
+    proxy.$modal.msgError(e?.message || tr('导出失败'))
   } finally {
     exportLoading.value = false
   }
@@ -241,6 +287,57 @@ function handleQuery() {
 function resetQuery() {
   proxy.resetForm("queryRef");
   handleQuery();
+}
+
+function getSkuCode(row) {
+  return String(row?.itemSku?.skuCode || '').trim()
+}
+
+function getSkuLinkTarget(row) {
+  return skuLinkTargets[Number(row?.orderType)]
+}
+
+function canOpenSkuLink(row) {
+  const skuCode = getSkuCode(row)
+  const target = getSkuLinkTarget(row)
+  return !!skuCode && !!target && !!proxy?.$auth?.hasPermi(target.permission)
+}
+
+function openSkuLink(row) {
+  if (!canOpenSkuLink(row)) return
+  const target = getSkuLinkTarget(row)
+  const query = { skuCode: getSkuCode(row) }
+  // 出库跳转平台订单时标记来源，便于无匹配时给出业务提示
+  if (Number(row?.orderType) === ORDER_TYPE_SHIPMENT) {
+    query.fromInventoryHistory = '1'
+  }
+  router.push({
+    ...target.route,
+    query
+  }).catch(() => {})
+}
+
+function getOrderNo(row) {
+  return String(row?.orderNo || '').trim()
+}
+
+function canOpenOrderNoLink(row) {
+  const orderNo = getOrderNo(row)
+  const orderType = Number(row?.orderType)
+  return !!orderNo && (orderType === ORDER_TYPE_RECEIPT || orderType === ORDER_TYPE_SHIPMENT)
+}
+
+function openOrderNoLink(row) {
+  if (!canOpenOrderNoLink(row)) return
+  const orderNo = getOrderNo(row)
+  const orderType = Number(row?.orderType)
+  if (orderType === ORDER_TYPE_RECEIPT) {
+    router.push({ name: 'ReceiptOrder', query: { orderNo } }).catch(() => {})
+    return
+  }
+  if (orderType === ORDER_TYPE_SHIPMENT) {
+    router.push({ path: '/wms/order/shipmentOrder', query: { orderNo } }).catch(() => {})
+  }
 }
 
 onMounted(() => {
@@ -345,6 +442,42 @@ onMounted(() => {
 
 .inventory-history-page .table-toolbar .el-button {
   margin-left: auto;
+}
+
+.inventory-history-page .item-name-two-line {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  word-break: break-word;
+  white-space: normal;
+  line-height: 1.4;
+  max-height: 2.8em;
+}
+
+.inventory-history-page .item-main-image {
+  width: 72px;
+  height: 72px;
+  border-radius: 6px;
+  display: inline-block;
+}
+
+.inventory-history-page .image-empty {
+  width: 72px;
+  height: 72px;
+  border-radius: 6px;
+  border: 1px dashed var(--el-border-color, #dcdfe6);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--el-text-color-secondary, #909399);
+  font-size: 12px;
+}
+
+.inventory-history-page .sku-history-link {
+  font-weight: 600;
+  text-decoration: underline;
 }
 
 </style>

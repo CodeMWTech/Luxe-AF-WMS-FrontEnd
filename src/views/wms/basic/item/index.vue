@@ -36,34 +36,19 @@
           :query-params="queryParams"
           :total="total"
           :loading="loading"
-          :multiple="multiple"
-          :is-supplier-user="isSupplierUser"
-          :can-select-purchase="canSelectPurchase"
-          :can-supplier-ship="canSupplierShip"
-          :can-show-selection-column="canShowSelectionColumn"
           :can-view-cost-price="canViewCostPrice"
           :can-view-selling-price="canViewSellingPrice"
           :amount-column-label="amountColumnLabel"
           :span-method="spanMethod"
           :get-item-row-key="getItemRowKey"
-          :is-purchase-selectable="isPurchaseSelectable"
-          :is-row-selectable="isRowSelectable"
-          :get-purchase-selected-qty="getPurchaseSelectedQty"
-          :get-purchase-pending-qty="getPurchasePendingQty"
-          :get-purchase-available-qty="getPurchaseAvailableQty"
           :field-label="fieldLabel"
-          :purchase-status-type="purchaseStatusType"
-          :purchase-status-label="purchaseStatusLabel"
           :get-main-image-url="getMainImageUrl"
           :tr="tr"
           @toggle-category="toggleCategoryPanel"
           @export="handleExport"
           @import="openImportDialog"
           @import-log="openImportLogDialog"
-          @select-purchase="openQuantityDialog('purchase')"
-          @supplier-ship="openQuantityDialog('supplierShip')"
           @add="handleAdd"
-          @selection-change="handleSelectionChange"
           @delete="handleDelete"
           @update="handleUpdate"
           @pagination="getList"
@@ -78,6 +63,7 @@
       :form="form"
       :rules="rules"
       :item-category-tree-select-list="itemCategoryTreeSelectList"
+      :form-brand-options="formBrandOptions"
       :ITEM_CONDITION_OPTIONS="ITEM_CONDITION_OPTIONS"
       :AUTH_AGENCY_OPTIONS="AUTH_AGENCY_OPTIONS"
       :ACCESSORY_TAG_OPTIONS="ACCESSORY_TAG_OPTIONS"
@@ -103,6 +89,7 @@
       :tr="tr"
       @open-name-tag-drawer="openNameTagDrawer"
       @add-category="handleAddType(true)"
+      @category-change="handleFormCategoryChange"
       @cost-price-change="handleCostPriceChange"
       @material-change="handleMaterialChange"
       @append-accessory-tag="appendAccessoryTag"
@@ -136,109 +123,181 @@
       @remove="removeNameTag"
       @insert="insertNameTag"
     />
-    <el-dialog v-model="quantityDialog.visible" :title="quantityDialog.title" width="980px" append-to-body>
-      <el-table :data="quantityDialog.rows" border max-height="420">
-        <el-table-column :label="tr('商品名称')" prop="itemName" min-width="220" show-overflow-tooltip />
-        <el-table-column label="SKU" prop="skuCode" min-width="140" show-overflow-tooltip />
-        <el-table-column :label="quantityColumnLabel('已选购')" prop="selectedQty" width="110" align="right" />
-        <el-table-column :label="quantityColumnLabel('审核中')" prop="pendingQty" width="110" align="right" />
-        <el-table-column :label="quantityColumnLabel('可选购')" prop="availableQty" width="110" align="right" />
-        <el-table-column :label="quantityColumnLabel('选购数量')" prop="quantity" width="160" align="center">
-          <template #default="{ row }">
-            <el-input-number v-model="row.quantity" :min="1" :max="row.availableQty" :controls="false" style="width: 120px" />
-          </template>
-        </el-table-column>
-      </el-table>
+    <el-dialog v-model="importDialog.visible" :title="tr('导入Excel')" width="680px" append-to-body :close-on-click-modal="false">
+      <div class="import-dialog">
+        <el-alert
+          :title="tr('请上传商品Excel和图片Zip压缩包，系统会创建导入任务并在后台处理。')"
+          type="info"
+          show-icon
+          :closable="false"
+          class="import-dialog__alert"
+        />
+        <div class="import-dialog__toolbar">
+          <el-button type="primary" plain icon="Download" @click="handleDownloadImportTemplate">{{ tr('下载模板') }}</el-button>
+          <el-button
+            plain
+            icon="Delete"
+            :disabled="importDialog.loading || (!importDialog.excelFile && !importDialog.zipFile)"
+            @click="clearImportFiles"
+          >{{ tr('清空文件') }}</el-button>
+        </div>
+        <div class="import-upload-grid">
+          <div class="import-upload-card" :class="{ 'import-upload-card--selected': !!importDialog.excelFile }">
+            <div class="import-upload-card__label">Excel</div>
+            <el-upload
+              ref="importExcelUploadRef"
+              class="import-upload-drop"
+              :class="{ 'import-upload-drop--selected': !!importDialog.excelFile }"
+              action="#"
+              drag
+              :auto-upload="false"
+              :limit="1"
+              accept=".xlsx"
+              :disabled="importDialog.loading"
+              :show-file-list="false"
+              :on-change="handleImportExcelChange"
+              :on-remove="handleImportExcelRemove"
+              :on-exceed="handleImportExcelExceed"
+            >
+              <template v-if="importDialog.excelFile">
+                <el-icon class="import-upload-drop__icon import-upload-drop__icon--success"><CircleCheckFilled /></el-icon>
+                <div class="import-upload-drop__filename" :title="importDialog.excelFile.name">{{ importDialog.excelFile.name }}</div>
+                <div class="import-upload-drop__meta">{{ formatImportFileSize(importDialog.excelFile.size) }}</div>
+                <div class="import-upload-drop__hint">{{ tr('已选择，点击可更换') }}</div>
+              </template>
+              <template v-else>
+                <el-icon class="import-upload-drop__icon"><UploadFilled /></el-icon>
+                <div class="import-upload-drop__text">
+                  {{ tr('将Excel拖到此处，或') }}<em>{{ tr('点击选择') }}</em>
+                </div>
+              </template>
+              <template #tip>
+                <div class="import-upload-drop__tip">{{ tr('仅支持 .xlsx 格式，文件大小不超过 100MB') }}</div>
+              </template>
+            </el-upload>
+          </div>
+          <div class="import-upload-card" :class="{ 'import-upload-card--selected': !!importDialog.zipFile }">
+            <div class="import-upload-card__label">Zip</div>
+            <el-upload
+              ref="importZipUploadRef"
+              class="import-upload-drop"
+              :class="{ 'import-upload-drop--selected': !!importDialog.zipFile }"
+              action="#"
+              drag
+              :auto-upload="false"
+              :limit="1"
+              accept=".zip"
+              :disabled="importDialog.loading"
+              :show-file-list="false"
+              :on-change="handleImportZipChange"
+              :on-remove="handleImportZipRemove"
+              :on-exceed="handleImportZipExceed"
+            >
+              <template v-if="importDialog.zipFile">
+                <el-icon class="import-upload-drop__icon import-upload-drop__icon--success"><CircleCheckFilled /></el-icon>
+                <div class="import-upload-drop__filename" :title="importDialog.zipFile.name">{{ importDialog.zipFile.name }}</div>
+                <div class="import-upload-drop__meta">{{ formatImportFileSize(importDialog.zipFile.size) }}</div>
+                <div class="import-upload-drop__hint">{{ tr('已选择，点击可更换') }}</div>
+              </template>
+              <template v-else>
+                <el-icon class="import-upload-drop__icon"><UploadFilled /></el-icon>
+                <div class="import-upload-drop__text">
+                  {{ tr('将Zip拖到此处，或') }}<em>{{ tr('点击选择') }}</em>
+                </div>
+              </template>
+              <template #tip>
+                <div class="import-upload-drop__tip">{{ tr('仅支持 .zip 格式，文件大小不超过 10GB') }}</div>
+              </template>
+            </el-upload>
+          </div>
+        </div>
+        <div v-if="importDialog.loading" class="import-upload-progress">
+          <div class="import-upload-progress__label">
+            <span>{{ tr('正在上传文件') }}</span>
+            <span>{{ importDialog.uploadProgress }}%</span>
+          </div>
+          <el-progress
+            :percentage="importDialog.uploadProgress"
+            :stroke-width="10"
+            striped
+            striped-flow
+          />
+          <div class="import-upload-progress__tip">{{ tr('大文件上传可能需要较长时间，请勿关闭窗口') }}</div>
+        </div>
+      </div>
       <template #footer>
-        <el-button @click="quantityDialog.visible = false">{{ tr('取消') }}</el-button>
-        <el-button type="primary" :loading="quantityDialog.loading" @click="submitQuantityDialog">{{ tr('确认') }}</el-button>
-      </template>
-    </el-dialog>
-    <el-dialog v-model="importDialog.visible" :title="tr('导入Excel')" width="640px" append-to-body :close-on-click-modal="false">
-      <el-alert
-        :title="tr('请上传商品Excel和图片Zip压缩包，系统会创建导入任务并在后台处理。')"
-        type="info"
-        show-icon
-        :closable="false"
-        class="mb10"
-      />
-      <el-button type="primary" plain icon="Download" @click="handleDownloadImportTemplate" class="mb10">{{ tr('下载模板') }}</el-button>
-      <el-form label-width="120px">
-        <el-form-item label="Excel">
-          <el-upload
-            action="#"
-            :auto-upload="false"
-            :limit="1"
-            accept=".xlsx"
-            :on-change="handleImportExcelChange"
-            :on-remove="handleImportExcelRemove"
-          >
-            <el-button icon="Upload">{{ tr('选择Excel') }}</el-button>
-          </el-upload>
-        </el-form-item>
-        <el-form-item label="Zip">
-          <el-upload
-            action="#"
-            :auto-upload="false"
-            :limit="1"
-            accept=".zip"
-            :on-change="handleImportZipChange"
-            :on-remove="handleImportZipRemove"
-          >
-            <el-button icon="Upload">{{ tr('选择图片Zip') }}</el-button>
-          </el-upload>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="importDialog.visible = false">{{ tr('取消') }}</el-button>
+        <el-button :disabled="importDialog.loading" @click="importDialog.visible = false">{{ tr('取消') }}</el-button>
         <el-button type="primary" :loading="importDialog.loading" @click="submitImportDialog">{{ tr('开始导入') }}</el-button>
       </template>
     </el-dialog>
-    <el-dialog v-model="importLogDialog.visible" :title="tr('上传日志')" width="980px" append-to-body>
-      <el-table :data="importTasks" border v-loading="importLogDialog.loading">
-        <el-table-column :label="tr('任务ID')" prop="id" width="100" />
-        <el-table-column :label="tr('文件名')" prop="fileName" min-width="220" show-overflow-tooltip />
-        <el-table-column :label="tr('状态')" prop="status" width="120" align="center">
-          <template #default="{ row }">
-            <el-tag :type="importStatusType(row.status)">{{ importStatusLabel(row.status) }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column :label="tr('成功')" prop="successCount" width="90" align="right" />
-        <el-table-column :label="tr('失败')" prop="failCount" width="90" align="right" />
-        <el-table-column :label="tr('创建时间')" prop="createTime" width="180" />
-        <el-table-column :label="tr('操作')" width="100" align="center">
-          <template #default="{ row }">
-            <el-button link type="primary" @click="openImportDetail(row)">{{ tr('明细') }}</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-      <pagination v-show="importTaskTotal > 0" :total="importTaskTotal" v-model:page="importLogQuery.pageNum" v-model:limit="importLogQuery.pageSize" @pagination="loadImportTasks" />
+    <el-dialog v-model="importLogDialog.visible" :title="tr('上传日志')" width="980px" append-to-body class="import-log-dialog">
+      <div class="import-log-dialog__body">
+        <el-table :data="importTasks" border v-loading="importLogDialog.loading">
+          <el-table-column :label="tr('任务ID')" prop="id" min-width="180" show-overflow-tooltip />
+          <el-table-column :label="tr('状态')" prop="status" width="120" align="center">
+            <template #default="{ row }">
+              <el-tag :type="importStatusType(row.status)">{{ importStatusLabel(row.status) }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column :label="tr('成功')" prop="successCount" width="90" align="right" />
+          <el-table-column :label="tr('失败')" prop="failCount" width="90" align="right" />
+          <el-table-column :label="tr('创建时间')" prop="createTime" width="180" />
+          <el-table-column :label="tr('操作')" width="100" align="center" header-align="left">
+            <template #default="{ row }">
+              <el-button link type="primary" @click="openImportDetail(row)">{{ tr('明细') }}</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+        <div class="import-dialog-pagination" v-show="importTaskTotal > 0">
+          <pagination
+            :total="importTaskTotal"
+            v-model:page="importLogQuery.pageNum"
+            v-model:limit="importLogQuery.pageSize"
+            layout="total, sizes, prev, pager, next"
+            @pagination="loadImportTasks"
+          />
+        </div>
+      </div>
       <template #footer>
         <el-button icon="Refresh" @click="loadImportTasks">{{ tr('刷新') }}</el-button>
         <el-button @click="importLogDialog.visible = false">{{ tr('关闭') }}</el-button>
       </template>
     </el-dialog>
-    <el-dialog v-model="importDetailDialog.visible" :title="tr('导入明细')" width="1080px" append-to-body>
-      <el-table :data="importDetails" border v-loading="importDetailDialog.loading">
-        <el-table-column :label="tr('Excel行号')" prop="rowNum" width="100" align="right" />
-        <el-table-column :label="tr('商品名称')" prop="itemName" min-width="180" show-overflow-tooltip />
-        <el-table-column label="SKU" prop="skuCode" min-width="140" show-overflow-tooltip />
-        <el-table-column :label="tr('状态')" prop="status" width="100" align="center">
-          <template #default="{ row }">
-            <el-tag :type="Number(row.status) === 1 ? 'success' : 'danger'">{{ Number(row.status) === 1 ? tr('成功') : tr('失败') }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column :label="tr('商品ID')" prop="itemId" width="150" />
-        <el-table-column :label="tr('失败原因')" prop="errorMsg" min-width="320">
-          <template #default="{ row }">
-            <el-tooltip v-if="row.errorMsg" effect="dark" placement="top" :content="row.errorMsg">
-              <span class="import-error-text">{{ shortImportError(row.errorMsg) }}</span>
-            </el-tooltip>
-            <span v-else>-</span>
-          </template>
-        </el-table-column>
-      </el-table>
-      <pagination v-show="importDetailTotal > 0" :total="importDetailTotal" v-model:page="importDetailQuery.pageNum" v-model:limit="importDetailQuery.pageSize" @pagination="loadImportDetails" />
+    <el-dialog v-model="importDetailDialog.visible" :title="tr('导入明细')" width="1080px" append-to-body class="import-detail-dialog">
+      <div class="import-detail-dialog__body">
+        <el-table :data="importDetails" border v-loading="importDetailDialog.loading">
+          <el-table-column :label="tr('Excel行号')" prop="rowNum" width="100" align="right" />
+          <el-table-column :label="tr('商品名称')" prop="itemName" min-width="180" show-overflow-tooltip />
+          <el-table-column label="SKU" prop="skuCode" min-width="140" show-overflow-tooltip />
+          <el-table-column :label="tr('状态')" prop="status" width="100" align="center">
+            <template #default="{ row }">
+              <el-tag :type="Number(row.status) === 1 ? 'success' : 'danger'">{{ Number(row.status) === 1 ? tr('成功') : tr('失败') }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column :label="tr('商品ID')" prop="itemId" min-width="180" show-overflow-tooltip>
+            <template #default="{ row }">
+              <span>{{ row.itemId || '-' }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column :label="tr('失败原因')" prop="errorMsg" min-width="280" show-overflow-tooltip>
+            <template #default="{ row }">
+              <el-tooltip v-if="row.errorMsg" effect="dark" placement="top" :content="formatImportError(row.errorMsg)">
+                <span class="import-error-text">{{ formatImportError(row.errorMsg) }}</span>
+              </el-tooltip>
+              <span v-else>-</span>
+            </template>
+          </el-table-column>
+        </el-table>
+        <div class="import-dialog-pagination" v-show="importDetailTotal > 0">
+          <pagination
+            :total="importDetailTotal"
+            v-model:page="importDetailQuery.pageNum"
+            v-model:limit="importDetailQuery.pageSize"
+            layout="total, sizes, prev, pager, next"
+            @pagination="loadImportDetails"
+          />
+        </div>
+      </div>
     </el-dialog>
     <div id="outSkuIdBox" style="display: none">
       <img :src="qrcode"/>
@@ -256,15 +315,13 @@ import {
   uploadItemImage,
   deleteItemImage,
   getItemImages,
-  selectItemsForPurchase,
-  supplierShipItems,
   downloadItemImportTemplate,
   importItemsByExcel,
   listItemImportTasks,
   listItemImportDetails
 } from '@/api/wms/item';
 import { listSupplierNoPage, getCurrentSupplier } from '@/api/wms/supplier';
-import { computed, getCurrentInstance, nextTick, onBeforeUnmount, onMounted, reactive, ref, toRefs, watch } from 'vue';
+import { computed, getCurrentInstance, nextTick, onActivated, onBeforeUnmount, onMounted, reactive, ref, toRefs, watch } from 'vue';
 import { ElForm, ElMessage } from 'element-plus';
 import {getRowspanMethod} from "@/utils/getRowSpanMethod";
 import {listItemSkuPage, delItemSku, listItemSku, exportItemSku} from "@/api/wms/itemSku";
@@ -274,8 +331,10 @@ import JSBarcode from 'jsbarcode'
 import {useWmsStore} from '@/store/modules/wms'
 import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
+import { CircleCheckFilled, UploadFilled } from '@element-plus/icons-vue'
 import { formatDateTimeForQuery } from '@/utils/laTime'
-import { listItemModelMaterialOptions } from '@/api/wms/itemModel'
+import { listItemModel, listItemModelBrandOptions, listItemModelMaterialOptions } from '@/api/wms/itemModel'
+import { listItemMaterial } from '@/api/wms/itemMaterial'
 import { blobValidate } from '@/utils/ruoyi'
 import { downloadXlsx, getExportLanguageHeaders, getExportLanguagePayload, prepareLanguageXlsx } from '@/utils/xlsxTranslate'
 import { saveAs } from 'file-saver'
@@ -287,6 +346,7 @@ import ItemCategoryDialog from './components/ItemCategoryDialog.vue'
 import ItemNameTagDrawer from './components/ItemNameTagDrawer.vue'
 import { useItemNameTags } from './composables/useItemNameTags'
 import { useItemCategory } from './composables/useItemCategory'
+import { parseBrandIdList } from '@/utils/itemBrand'
 
 const barcode = ref(null)
 const route = useRoute()
@@ -296,7 +356,6 @@ const tr = (text) => translateByMap(text, settingsStore.language || 'zh-cn')
 const isEn = computed(() => (settingsStore.language || 'zh-cn') === 'en')
 const supplierOptions = ref([]);
 const isSupplierUser = ref(false);
-const supplierResolved = ref(false);
 
 /** 初始化供应商相关数据 */
 async function initSupplierData() {
@@ -318,38 +377,13 @@ async function initSupplierData() {
       supplierOptions.value = [];
     }
   }
-  supplierResolved.value = true;
 }
 const amountColumnLabel = computed(() => isEn.value ? 'Amount($)' : '金额($)')
 const fieldLabel = (text) => `${tr(text)}${isEn.value ? ': ' : '：'}`
-const quantityDialogLabels = {
-  已选购: 'Selected',
-  审核中: 'In Review',
-  可选购: 'Available',
-  选购数量: 'Purchase Qty'
-}
-const quantityColumnLabel = (text) => isEn.value ? quantityDialogLabels[text] : tr(text)
-const PURCHASE_STATUS_LABELS = {
-  0: '未选购',
-  1: '待审核',
-  2: '已选购',
-  3: '已拒绝'
-}
-const purchaseStatusLabel = (status) => tr(PURCHASE_STATUS_LABELS[Number(status ?? 0)] || '未选购')
-const purchaseStatusType = (status) => {
-  const value = Number(status ?? 0)
-  if (value === 1) return 'warning'
-  if (value === 2) return 'success'
-  if (value === 3) return 'danger'
-  return 'info'
-}
 const canViewSellingPrice = computed(() => proxy?.$auth?.hasPermi('wms:itemSellingPrice:view'));
 const canEditSellingPrice = computed(() => proxy?.$auth?.hasPermi('wms:itemSellingPrice:edit'));
 const canViewCostPrice = computed(() => proxy?.$auth?.hasPermi('wms:itemCostPrice:view'));
 const canEditCostPrice = computed(() => proxy?.$auth?.hasPermi('wms:itemCostPrice:edit'));
-const canSelectPurchase = computed(() => supplierResolved.value && !isSupplierUser.value && !!proxy?.$auth?.hasPermi('wms:item:purchase'))
-const canSupplierShip = computed(() => supplierResolved.value && isSupplierUser.value && !!proxy?.$auth?.hasPermi('wms:item:supplierShip'))
-const canShowSelectionColumn = computed(() => canSelectPurchase.value || canSupplierShip.value)
 /** 成本价变更时，销售价 = 成本价 × 该系数（保留两位小数） */
 const SELLING_PRICE_FROM_COST_MULTIPLIER = 1.8
 /**
@@ -376,20 +410,15 @@ function handleMaterialChange(id) {
 }
 const itemList = ref([]);
 const itemTableRef = ref(null);
-const selectedItemMap = ref(new Map());
-const quantityDialog = reactive({
-  visible: false,
-  title: '',
-  action: '',
-  rows: [],
-  loading: false
-})
 const importDialog = reactive({
   visible: false,
   loading: false,
+  uploadProgress: 0,
   excelFile: null,
   zipFile: null
 })
+const MAX_IMPORT_EXCEL_SIZE_BYTES = 100 * 1024 * 1024
+const MAX_IMPORT_ZIP_SIZE_BYTES = 10 * 1024 * 1024 * 1024
 const importLogDialog = reactive({
   visible: false,
   loading: false
@@ -411,7 +440,7 @@ const importDetailQuery = reactive({
   pageNum: 1,
   pageSize: 10
 })
-const isCategoryPanelCollapsed = ref(false);
+const isCategoryPanelCollapsed = ref(true);
 const layoutItemTable = () => itemTableRef.value?.doLayout?.();
 const toggleCategoryPanel = () => {
   isCategoryPanelCollapsed.value = !isCategoryPanelCollapsed.value;
@@ -430,9 +459,6 @@ const itemCategoryTreeOptionsList = computed(() => {
 const buttonLoading = ref(false);
 const loading = ref(true);
 const showSearch = ref(true);
-const ids = ref([]);
-const single = ref(true);
-const multiple = ref(true);
 const total = ref(0);
 const skuLoading = ref(false)
 /** 创建时间选择器默认时间：当天 00:00:00 - 23:59:59（参考库存记录） */
@@ -440,6 +466,8 @@ const defaultTime = reactive([new Date(2000, 0, 1, 0, 0, 0), new Date(2000, 0, 1
 const queryFormRef = ref(ElForm);
 const itemFormRef = ref(ElForm);
 const itemCategoryFormRef = ref(ElForm);
+const importExcelUploadRef = ref(null);
+const importZipUploadRef = ref(null);
 const spanMethod = computed(() => getRowspanMethod(itemList.value, rowSpanArray.value))
 const rowSpanArray = ref(['itemId'])
 const qrcode = ref(null)
@@ -447,6 +475,38 @@ const dialog = reactive({
   visible: false,
   title: ''
 });
+
+/** 鉴定机构多选：接口存逗号分隔字符串，表单用数组 */
+function parseAuthAgencyList(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item).trim()).filter(Boolean)
+  }
+  if (value == null || value === '') return []
+  return String(value)
+    .split(/[,，]/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
+function serializeAuthAgency(value) {
+  const list = parseAuthAgencyList(value)
+  return list.length ? list.join(', ') : undefined
+}
+
+function resolveFormBrandId(itemBrandIds, itemBrand) {
+  const list = useWmsStore().itemBrandList || []
+  const candidates = []
+  if (itemBrand != null && itemBrand !== '') {
+    candidates.push(String(itemBrand))
+  }
+  candidates.push(...parseBrandIdList(itemBrandIds))
+  for (const id of candidates) {
+    if (list.some((b) => String(b?.id) === id)) {
+      return id
+    }
+  }
+  return undefined
+}
 
 /** 鉴定机构固定选项（仅可选，不可手输） */
 const AUTH_AGENCY_OPTIONS = ['Entrupy', 'Real Authentication', 'Legitmark', 'CheckCheck', 'N/A']
@@ -487,7 +547,7 @@ const ensureMainImageLoaded = (row) => {
   listMainImageLoadingSet.value.add(itemId)
   ;(async () => {
     try {
-      const res = await getItemImages(itemId)
+      const res = await getItemImages(itemId, { silentError: true })
       const imageList = getImageListFromResponse(res) || []
       if (!imageList.length) {
         listMainImageNoImageSet.value.add(itemId)
@@ -524,7 +584,7 @@ const initFormData = {
   itemCondition: undefined,
   year: undefined,
   cared: false,
-  authAgency: undefined,
+  authAgency: [],
   consignInfo: undefined,
   defaultQty: 1,
   material: undefined,
@@ -566,13 +626,13 @@ const data = reactive({
     pageSize: 10,
     itemName: undefined,
     skuCode: undefined,         // SKU编码
-    itemBrand: undefined,       // 品牌
+    itemBrand: [],              // 列表筛选：品牌多选
     itemCategory: undefined,    // 分类
     itemCondition: undefined,   // 成色
     year: undefined,            // 年份
     cared: undefined,           // 是否已护理
     defaultQty: undefined,      // 默认数量
-    authAgency: undefined,      // 鉴定机构
+    authAgency: [],             // 列表筛选：鉴定机构多选
     consignInfo: undefined,     // 寄售信息
     createTimeRange: [],        // 创建时间区间 [开始, 结束]
     sellingPriceMin: undefined, // 销售价下限(元)
@@ -587,7 +647,7 @@ const data = reactive({
       {required: true, message: "分类不能为空", trigger: "blur"}
     ],
     itemBrand: [
-      {required: true, message: "品牌不能为空", trigger: "change"}
+      { required: true, message: "品牌不能为空", trigger: "change" }
     ],
     itemCondition: [
       {required: true, message: "成色不能为空", trigger: "blur"}
@@ -604,6 +664,16 @@ const data = reactive({
   }
 });
 const {queryParams, form, rules} = toRefs(data);
+const appliedRouteSkuCode = ref('')
+
+function applyRouteSkuFilter() {
+  const skuCode = String(route.query.skuCode || '').trim()
+  if (!skuCode || (skuCode === appliedRouteSkuCode.value && queryParams.value.skuCode === skuCode)) return false
+  queryParams.value.skuCode = skuCode
+  queryParams.value.pageNum = 1
+  appliedRouteSkuCode.value = skuCode
+  return true
+}
 const {
   nameTagDrawerVisible,
   nameTagList,
@@ -615,7 +685,44 @@ const {
 } = useItemNameTags({ queryParams, form })
 
 const modelMaterialIds = ref([]);
+const formModelList = ref([])
+const formMaterialList = ref([])
+/** Brand ids allowed for current form category (legacy originals vs Rebag tree). */
+const formBrandIds = ref([])
 
+const formBrandOptions = computed(() => {
+  const all = useWmsStore().itemBrandList || []
+  if (!form.value.itemCategory) return []
+  const idSet = new Set(formBrandIds.value.map(String))
+  return all.filter(item => idSet.has(String(item.id)))
+})
+
+async function refreshFormBrandOptions({ keepCurrentBrand = false } = {}) {
+  formBrandIds.value = []
+  if (!form.value.itemCategory) return
+  try {
+    const res = await listItemModelBrandOptions(form.value.itemCategory)
+    formBrandIds.value = res.data || []
+  } catch (_) {
+    formBrandIds.value = []
+  }
+  if (
+    keepCurrentBrand
+    && form.value.itemBrand
+    && !formBrandIds.value.map(String).includes(String(form.value.itemBrand))
+  ) {
+    formBrandIds.value = [...formBrandIds.value, form.value.itemBrand]
+  }
+}
+
+async function handleFormCategoryChange() {
+  form.value.itemBrand = undefined
+  form.value.modelId = undefined
+  form.value.materialId = undefined
+  form.value.material = undefined
+  modelMaterialIds.value = []
+  await refreshFormBrandOptions()
+}
 
 const hasItemModelContext = computed(() => !!form.value.itemBrand && !!form.value.itemCategory)
 const hasItemMaterialContext = computed(() => hasItemModelContext.value && !!form.value.modelId)
@@ -624,7 +731,7 @@ const filteredItemModelList = computed(() => {
   const brand = form.value.itemBrand
   const category = form.value.itemCategory
   if (!brand || !category) return []
-  return useWmsStore().itemModelList.filter(item => {
+  return formModelList.value.filter(item => {
     return String(item.itemBrand) === String(brand) && String(item.itemCategory) === String(category)
   })
 })
@@ -635,7 +742,7 @@ const filteredItemMaterialList = computed(() => {
   const model = form.value.modelId
   if (!brand || !category || !model) return []
   const materialIdSet = new Set(modelMaterialIds.value.map(id => String(id)))
-  return useWmsStore().itemMaterialList.filter(item => {
+  return formMaterialList.value.filter(item => {
     const materialModelId = item.modelId
     const brandMatched = String(item.itemBrand) === String(brand)
     const categoryMatched = String(item.itemCategory) === String(category)
@@ -645,15 +752,44 @@ const filteredItemMaterialList = computed(() => {
   })
 })
 
+async function loadFormModels() {
+  const brand = form.value.itemBrand
+  const category = form.value.itemCategory
+  if (!brand || !category) {
+    formModelList.value = []
+    return
+  }
+  try {
+    const res = await listItemModel({
+      status: '1',
+      itemBrand: brand,
+      itemCategory: category
+    })
+    formModelList.value = res.data || []
+  } catch (_) {
+    formModelList.value = []
+  }
+}
+
 async function loadModelMaterialOptions(modelId) {
   if (!modelId) {
     modelMaterialIds.value = []
+    formMaterialList.value = []
     form.value.materialId = undefined
     form.value.material = undefined
     return
   }
-  const res = await listItemModelMaterialOptions(modelId)
-  modelMaterialIds.value = res.data || []
+  try {
+    const [idsRes, listRes] = await Promise.all([
+      listItemModelMaterialOptions(modelId),
+      listItemMaterial({ status: '1', modelId })
+    ])
+    modelMaterialIds.value = idsRes.data || []
+    formMaterialList.value = listRes.data || []
+  } catch (_) {
+    modelMaterialIds.value = []
+    formMaterialList.value = []
+  }
   if (form.value.materialId && modelMaterialIds.value.length > 0 && !modelMaterialIds.value.some(id => String(id) === String(form.value.materialId))) {
     form.value.materialId = undefined
     form.value.material = undefined
@@ -664,25 +800,24 @@ function findSelectOptionById(list, id) {
   return list.find(item => String(item.id) === String(id)) || null
 }
 
-const selectedItemModel = computed(() => findSelectOptionById(useWmsStore().itemModelList, form.value.modelId))
-const selectedItemMaterial = computed(() => findSelectOptionById(useWmsStore().itemMaterialList, form.value.materialId))
+const selectedItemModel = computed(() => findSelectOptionById(formModelList.value, form.value.modelId))
+const selectedItemMaterial = computed(() => findSelectOptionById(formMaterialList.value, form.value.materialId))
 
 watch(
   () => [form.value.itemBrand, form.value.itemCategory],
-  () => {
+  async () => {
     if (!hasItemModelContext.value) {
+      formModelList.value = []
+      formMaterialList.value = []
+      modelMaterialIds.value = []
+      return
+    }
+    const keepModelId = form.value.modelId
+    await loadFormModels()
+    if (keepModelId && !filteredItemModelList.value.some(item => String(item.id) === String(keepModelId))) {
       form.value.modelId = undefined
       form.value.materialId = undefined
       form.value.material = undefined
-      return
-    }
-    if (form.value.modelId) {
-      const exists = filteredItemModelList.value.some(item => String(item.id) === String(form.value.modelId))
-      if (!exists) {
-        form.value.modelId = undefined
-        form.value.materialId = undefined
-        form.value.material = undefined
-      }
     }
   }
 )
@@ -707,7 +842,7 @@ watch(
     }
   }
 )
-const getList = async () => {
+const getList = async (requestConfig = {}) => {
   const query = { ...queryParams.value };
   if (!canViewSellingPrice.value) {
     delete query.sellingPriceMin;
@@ -718,16 +853,34 @@ const getList = async () => {
     query.endTime = formatDateTimeForQuery(query.createTimeRange[1]);
   }
   loading.value = true;
-  const res = await listItemSkuPage(query);
-  const content = [...res.rows];
-  itemList.value = content.map((it) => ({...it, id: it.skuId,itemId: it?.item?.id}));
-  listMainImageLoadingSet.value.clear()
-  listMainImageNoImageSet.value.clear()
-  listMainImageErrorAtMap.value.clear()
-  preloadMainImages(itemList.value)
-  total.value = res.total;
-  await restoreItemSelection()
-  loading.value = false;
+  try {
+    const res = await listItemSkuPage(query, requestConfig);
+    const content = [...res.rows];
+    itemList.value = content.map((it) => ({...it, id: it.skuId,itemId: it?.item?.id}));
+    listMainImageLoadingSet.value.clear()
+    listMainImageNoImageSet.value.clear()
+    listMainImageErrorAtMap.value.clear()
+    preloadMainImages(itemList.value)
+    total.value = res.total;
+  } finally {
+    loading.value = false;
+  }
+}
+
+/** 保存已经成功后再刷新列表；刷新失败不能反向误报为保存失败 */
+async function refreshListAfterSave(uploadTasks = []) {
+  if (uploadTasks.length) {
+    const results = await Promise.allSettled(uploadTasks)
+    if (results.some((result) => result.status === 'rejected')) {
+      proxy?.$modal.msgWarning('商品已保存，但部分图片上传失败，可在修改中重新上传')
+    }
+  }
+  try {
+    await getList({ timeout: 30000, silentError: true })
+  } catch (error) {
+    console.warn('商品已保存，但列表自动刷新失败', error)
+    proxy?.$modal.msgWarning('商品已保存，列表刷新较慢，请稍后手动刷新查看')
+  }
 }
 const {
   categoryDialog,
@@ -1046,6 +1199,11 @@ const handleDeleteItemSku = async (row, index) => {
   const res = await getItem(row.itemId);
   skuForm.itemSkuList = res.data.sku
   form.value = res.data
+  form.value.itemBrand = resolveFormBrandId(form.value.itemBrandIds, form.value.itemBrand)
+  form.value.authAgency = parseAuthAgencyList(form.value.authAgency)
+  await refreshFormBrandOptions({ keepCurrentBrand: true })
+  await loadFormModels()
+  await loadModelMaterialOptions(form.value.modelId)
 }
 const cancel = () => {
   reset();
@@ -1063,6 +1221,9 @@ const reset = () => {
   itemFormRef.value?.clearFiles?.()
   form.value = {...initFormData};
   modelMaterialIds.value = [];
+  formBrandIds.value = [];
+  formModelList.value = [];
+  formMaterialList.value = [];
   itemFormRef.value?.resetFields();
 }
 
@@ -1078,171 +1239,9 @@ const resetQuery = () => {
   handleQuery();
 }
 
-/** 多选框选中数据 */
-let suppressItemSelectionChange = false
-
-const getItemSelectionKey = (row) => {
-  const key = row?.itemId || row?.item?.id
-  return key || null
-}
-
-const getItemRowKey = (row) => row?.skuId ? String(row.skuId) : String(getItemSelectionKey(row) || '')
-
-function syncSelectedItemIds() {
-  ids.value = Array.from(selectedItemMap.value.keys())
-  single.value = ids.value.length !== 1
-  multiple.value = ids.value.length === 0
-}
-
-async function restoreItemSelection() {
-  await nextTick()
-  suppressItemSelectionChange = true
-  itemTableRef.value?.clearSelection()
-  const restoredKeySet = new Set()
-  itemList.value.forEach(row => {
-    const key = getItemSelectionKey(row)
-    if (key && selectedItemMap.value.has(key) && !restoredKeySet.has(key) && isRowSelectable(row)) {
-      itemTableRef.value?.toggleRowSelection(row, true)
-      restoredKeySet.add(key)
-    }
-  })
-  await nextTick()
-  suppressItemSelectionChange = false
-  syncSelectedItemIds()
-}
-
-function clearItemSelection() {
-  selectedItemMap.value.clear()
-  syncSelectedItemIds()
-  itemTableRef.value?.clearSelection()
-}
-
-const handleSelectionChange = (selection) => {
-  if (suppressItemSelectionChange) return
-  const selectedKeySet = new Set(selection.map(getItemSelectionKey).filter(Boolean))
-  const selectedRowMap = new Map()
-  selection.forEach(row => {
-    const key = getItemSelectionKey(row)
-    if (key && !selectedRowMap.has(key)) {
-      selectedRowMap.set(key, row)
-    }
-  })
-  const currentKeySet = new Set(itemList.value.map(getItemSelectionKey).filter(Boolean))
-  currentKeySet.forEach(key => {
-    if (selectedKeySet.has(key)) {
-      selectedItemMap.value.set(key, toSelectedItem(selectedRowMap.get(key)))
-    } else {
-      selectedItemMap.value.delete(key)
-    }
-  })
-  syncSelectedItemIds()
-}
-
-function getRowAvailableQty(row) {
-  const qty = Number(row?.item?.defaultQty ?? 0)
-  return Number.isFinite(qty) ? Math.max(0, qty) : 0
-}
-
-function getPurchaseSelectedQty(row) {
-  const value = row?.item?.purchaseSelectedQuantity
-  if (value !== null && value !== undefined) {
-    const qty = Number(value)
-    return Number.isFinite(qty) ? Math.max(0, qty) : 0
-  }
-  const status = Number(row?.item?.purchaseStatus ?? 0)
-  return status === 2 ? Math.max(0, Number(row?.item?.purchaseQuantity ?? 0) || 0) : 0
-}
-
-function getPurchasePendingQty(row) {
-  const value = row?.item?.purchasePendingQuantity
-  if (value !== null && value !== undefined) {
-    const qty = Number(value)
-    return Number.isFinite(qty) ? Math.max(0, qty) : 0
-  }
-  const status = Number(row?.item?.purchaseStatus ?? 0)
-  return status === 1 ? Math.max(0, Number(row?.item?.purchaseQuantity ?? 0) || 0) : 0
-}
-
-function getPurchaseAvailableQty(row) {
-  return Math.max(0, getRowAvailableQty(row) - getPurchasePendingQty(row))
-}
-
-function toSelectedItem(row) {
-  const isPurchaseAction = canSelectPurchase.value
-  return {
-    itemId: row.itemId,
-    itemName: row?.item?.itemName || '',
-    skuCode: row?.itemSku?.skuCode || '',
-    selectedQty: isPurchaseAction ? getPurchaseSelectedQty(row) : 0,
-    pendingQty: isPurchaseAction ? getPurchasePendingQty(row) : 0,
-    availableQty: isPurchaseAction ? getPurchaseAvailableQty(row) : getRowAvailableQty(row),
-    quantity: 1
-  }
-}
-
-function isPurchaseSelectable(row) {
-  return !!row?.item?.supplierId && getPurchaseAvailableQty(row) > 0
-}
-
-function isSupplierShipSelectable(row) {
-  const status = Number(row?.item?.purchaseStatus ?? 0)
-  return !!row?.item?.supplierId && status !== 1 && status !== 2 && getRowAvailableQty(row) > 0
-}
-
-function isRowSelectable(row) {
-  if (canSupplierShip.value) return isSupplierShipSelectable(row)
-  return isPurchaseSelectable(row)
-}
-
-function openQuantityDialog(action) {
-  if (!ids.value.length) {
-    proxy?.$modal.msgWarning(tr('请选择商品'))
-    return
-  }
-  quantityDialog.action = action
-  quantityDialog.title = action === 'supplierShip' ? tr('确认批量发货数量') : tr('确认选购数量')
-  quantityDialog.rows = Array.from(selectedItemMap.value.values()).map(item => ({
-    ...item,
-    quantity: Math.min(Math.max(Number(item.quantity || 1), 1), item.availableQty)
-  }))
-  quantityDialog.visible = true
-}
-
-async function submitQuantityDialog() {
-  const rows = quantityDialog.rows
-  if (!rows.length) {
-    proxy?.$modal.msgWarning(tr('请选择商品'))
-    return
-  }
-  const invalid = rows.find(row => !row.quantity || row.quantity < 1 || row.quantity > row.availableQty)
-  if (invalid) {
-    proxy?.$modal.msgWarning(tr('操作数量不能超过可用数量'))
-    return
-  }
-  const selectedIds = rows.map(row => row.itemId)
-  const quantityMap = rows.reduce((acc, row) => {
-    acc[row.itemId] = Number(row.quantity)
-    return acc
-  }, {})
-  const confirmText = quantityDialog.action === 'supplierShip'
-    ? tr('确认将选中的商品批量发货？')
-    : tr('确认将选中的商品提交选购审核？')
-  await proxy?.$modal.confirm(confirmText)
-  quantityDialog.loading = true
-  try {
-    if (quantityDialog.action === 'supplierShip') {
-      await supplierShipItems(selectedIds, quantityMap)
-    } else {
-      await selectItemsForPurchase(selectedIds, quantityMap)
-    }
-    proxy?.$modal.msgSuccess(tr('提交成功'))
-    clearItemSelection()
-    quantityDialog.visible = false
-    getList()
-  } finally {
-    quantityDialog.loading = false
-  }
-}
+const getItemRowKey = (row) => row?.skuId
+  ? String(row.skuId)
+  : String(row?.itemId || row?.item?.id || '')
 
 /** 新增按钮操作 */
 const handleAdd = () => {
@@ -1262,15 +1261,22 @@ const handleUpdate = (row) => {
   nextTick(async () => {
     try {
       reset();
-      const _id = row?.itemId || ids.value[0]
+      const _id = row?.itemId
       const [skuRes, itemRes] = await Promise.all([
         listItemSku({ itemId: _id }),
-        getItem(_id)
+        getItem(_id),
+        initItemBrandDataIfNeeded()
       ])
       Object.assign(skuForm.itemSkuList, skuRes.data)
       const itemData = itemRes.data || {}
       const imageList = (itemData.imageList || itemData.images || []).map((img, idx) => normalizeServerImage(img, idx))
       form.value = { ...form.value, ...row.item, ...itemData, imageList }
+      // 表单品牌为单选（字符串 ID，避免雪花精度问题）；鉴定机构为多选
+      form.value.itemBrand = resolveFormBrandId(form.value.itemBrandIds, form.value.itemBrand)
+      form.value.authAgency = parseAuthAgencyList(form.value.authAgency)
+      await refreshFormBrandOptions({ keepCurrentBrand: true })
+      await loadFormModels()
+      await loadModelMaterialOptions(form.value.modelId)
       normalizeUploadedImageMeta()
       form.value.skuCode = skuForm.itemSkuList[0]?.skuCode ?? ''
       form.value.costPrice = canViewCostPrice.value ? (skuForm.itemSkuList[0]?.costPrice ?? null) : null
@@ -1329,19 +1335,30 @@ const submitForm = async () => {
 
   buttonLoading.value = true;
   try {
+    if (form.value.itemBrand == null || form.value.itemBrand === '') {
+      proxy?.$modal.msgError('品牌不能为空')
+      buttonLoading.value = false
+      return
+    }
     // 先保存商品，拿到 itemId（新增时后端返回 Long 类型 itemId）
     let itemId = form.value.id;
     if (itemId) {
       normalizeUploadedImageMeta()
       const payload = {
         ...form.value,
+        itemBrand: form.value.itemBrand,
+        authAgency: serializeAuthAgency(form.value.authAgency),
         ...(canEditCostPrice.value ? {} : { costPrice: undefined }),
         ...(canEditSellingPrice.value ? {} : { sellingPrice: undefined }),
         imageList: buildImageListPayload()
       }
+      delete payload.itemBrands
       await updateItem(payload);
     } else {
       const payload = { ...form.value };
+      payload.itemBrand = form.value.itemBrand
+      payload.authAgency = serializeAuthAgency(form.value.authAgency);
+      delete payload.itemBrands
       payload.pendingImageCount = pendingImageFiles.value.length;
       if (!canEditCostPrice.value) {
         delete payload.costPrice;
@@ -1357,21 +1374,19 @@ const submitForm = async () => {
       }
     }
 
-    // 如果有待上传图片，后台入队上传，不阻塞界面
+    // 如果有待上传图片，后台入队上传，不阻塞界面；上传完成后再刷新列表，
+    // 避免列表查询和图片处理并发导致查询超时并被误认为提交失败。
+    let uploadTasks = []
     if (itemId && pendingImageFiles.value.length) {
       ElMessage({ type: 'success', message: '图片在上传队列中（后台异步上传请勿重复提交）', duration: 5000 })
       const files = [...pendingImageFiles.value];
-      files.forEach((item, index) => {
-        uploadItemImage(itemId, item.file, index === 0, index).catch(() => {
-          proxy?.$modal.msgWarning('商品已保存，但部分图片未能加入上传队列，可在修改中重新上传');
-        });
-      });
+      uploadTasks = files.map((item, index) => uploadItemImage(itemId, item.file, index === 0, index))
     }
 
-      proxy?.$modal.msgSuccess(tr('修改成功'));
+    proxy?.$modal.msgSuccess(tr('修改成功'));
     dialog.visible = false;
     pendingImageFiles.value = [];
-    await getList();
+    refreshListAfterSave(uploadTasks)
   } catch (err) {
     proxy?.$modal.msgError(err?.message || err?.msg || tr('失败'));
   } finally {
@@ -1400,7 +1415,7 @@ async function pollItemImagesIfNeeded() {
     return
   }
   try {
-    const res = await getItemImages(form.value.id)
+    const res = await getItemImages(form.value.id, { silentError: true })
     const serverList = getImageListFromResponse(res)
     if (!serverList || !serverList.length) {
       form.value.imageList.forEach((img) => {
@@ -1509,22 +1524,9 @@ const initItemBrandDataIfNeeded = async () => {
     await wmsStore.getItemBrandList()
   }
 }
-const initMaterialModelDataIfNeeded = async () => {
-  const wmsStore = useWmsStore()
-  const tasks = []
-  if (!Array.isArray(wmsStore.itemMaterialList) || wmsStore.itemMaterialList.length === 0) {
-    tasks.push(wmsStore.getItemMaterialList())
-  }
-  if (!Array.isArray(wmsStore.itemModelList) || wmsStore.itemModelList.length === 0) {
-    tasks.push(wmsStore.getItemModelList())
-  }
-  if (tasks.length > 0) {
-    await Promise.all(tasks)
-  }
-}
 /** 删除按钮操作 */
 const handleDelete = async (row) => {
-  const _ids = row?.itemId || ids.value;
+  const _ids = row?.itemId;
   await proxy?.$modal.confirm(tr('确认删除') + tr('商品') + '【' + row?.item.itemName + '】' + '？');
   loading.value = true;
   await delItem(_ids).finally(()=> loading.value = false);
@@ -1563,7 +1565,7 @@ const handleExport = async () => {
     return
   }
   const excelData = await prepareLanguageXlsx(blobData, isEn.value)
-  downloadXlsx(excelData, isEn.value ? 'MichaelStudioWMS-Item Management.xlsx' : 'MichaelStudioWMS-商品管理.xlsx')
+  downloadXlsx(excelData, isEn.value ? 'LuxeAFWMS-Item Management.xlsx' : 'LuxeAFWMS-商品管理.xlsx')
 }
 
 const IMPORT_STATUS_LABELS = {
@@ -1587,20 +1589,81 @@ function importStatusType(status) {
   return 'info'
 }
 
-function shortImportError(message) {
-  if (!message) return '-'
-  const text = String(message)
-  return text.length > 120 ? `${text.slice(0, 120)}...` : text
+function formatImportError(message) {
+  if (!message) return ''
+  let text = String(message).trim()
+  while (/^[A-Za-z_$][\w$.]*(?:Exception)?:\s*/.test(text)) {
+    const next = text.replace(/^[A-Za-z_$][\w$.]*(?:Exception)?:\s*/, '')
+    if (next === text) break
+    text = next
+  }
+  text = text.replace(/\/tmp\/\S+/g, '').replace(/[A-Za-z]:\\[^\s,]+/gi, '')
+
+  const lower = text.toLowerCase()
+  if (lower.includes('no space left on device')) {
+    return '服务器临时目录磁盘空间不足，请清理临时文件或联系管理员后重试'
+  }
+  if (lower.includes('error reading png metadata') || lower.includes('error reading png')) {
+    return 'PNG 图片无法读取，文件可能已损坏或格式不兼容，请重新导出后重试'
+  }
+  if (lower.includes('no suitable imagereader')) {
+    return '无法识别图片格式，请确认文件为 JPG/PNG 且未损坏'
+  }
+  if (lower.includes('not a png file') || lower.includes('invalid png') || lower.includes('bad png signature')) {
+    return 'PNG 文件格式无效或已损坏，请重新导出后重试'
+  }
+
+  if (text.includes('->')) {
+    const reasonIdx = text.lastIndexOf(': ')
+    if (reasonIdx >= 0) {
+      const tail = text.slice(reasonIdx + 2).trim()
+      if (tail && !tail.includes('/')) {
+        const mapped = formatImportError(tail)
+        if (mapped !== tail) return mapped
+        return tail
+      }
+    }
+  }
+
+  text = text.replace(/\s{2,}/g, ' ').trim()
+  return text || String(message).trim()
 }
 
 function openImportDialog() {
+  importDialog.visible = true
+  nextTick(() => clearImportFiles())
+}
+
+function resetImportUploadProgress() {
+  importDialog.uploadProgress = 0
+}
+
+function formatImportFileSize(size) {
+  const bytes = Number(size || 0)
+  if (bytes <= 0) return '0 B'
+  const units = ['B', 'KB', 'MB', 'GB']
+  let value = bytes
+  let unitIndex = 0
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024
+    unitIndex += 1
+  }
+  const digits = unitIndex === 0 ? 0 : value >= 100 ? 0 : value >= 10 ? 1 : 2
+  return `${value.toFixed(digits)} ${units[unitIndex]}`
+}
+
+function clearImportFiles() {
   importDialog.excelFile = null
   importDialog.zipFile = null
-  importDialog.visible = true
+  resetImportUploadProgress()
+  importExcelUploadRef.value?.clearFiles?.()
+  importZipUploadRef.value?.clearFiles?.()
 }
 
 async function handleDownloadImportTemplate() {
-  const data = await downloadItemImportTemplate()
+  const data = await downloadItemImportTemplate({
+    headers: getExportLanguageHeaders(isEn.value)
+  })
   const isBlob = blobValidate(data)
   if (!isBlob) {
     const resText = await data.text()
@@ -1617,6 +1680,13 @@ function handleImportExcelChange(uploadFile) {
   if (!file.name.toLowerCase().endsWith('.xlsx')) {
     proxy?.$modal.msgError(tr('请选择xlsx格式Excel文件'))
     importDialog.excelFile = null
+    importExcelUploadRef.value?.clearFiles?.()
+    return
+  }
+  if (file.size > MAX_IMPORT_EXCEL_SIZE_BYTES) {
+    proxy?.$modal.msgError(tr('Excel文件不能超过 100MB'))
+    importDialog.excelFile = null
+    importExcelUploadRef.value?.clearFiles?.()
     return
   }
   importDialog.excelFile = file
@@ -1626,12 +1696,27 @@ function handleImportExcelRemove() {
   importDialog.excelFile = null
 }
 
+function handleImportExcelExceed(files) {
+  importExcelUploadRef.value?.clearFiles?.()
+  const file = files[0]
+  if (file) {
+    importExcelUploadRef.value?.handleStart?.(file)
+  }
+}
+
 function handleImportZipChange(uploadFile) {
   const file = uploadFile?.raw
   if (!file) return
   if (!file.name.toLowerCase().endsWith('.zip')) {
     proxy?.$modal.msgError(tr('请选择zip压缩包'))
     importDialog.zipFile = null
+    importZipUploadRef.value?.clearFiles?.()
+    return
+  }
+  if (file.size > MAX_IMPORT_ZIP_SIZE_BYTES) {
+    proxy?.$modal.msgError(tr('图片Zip包不能超过 10GB'))
+    importDialog.zipFile = null
+    importZipUploadRef.value?.clearFiles?.()
     return
   }
   importDialog.zipFile = file
@@ -1639,6 +1724,14 @@ function handleImportZipChange(uploadFile) {
 
 function handleImportZipRemove() {
   importDialog.zipFile = null
+}
+
+function handleImportZipExceed(files) {
+  importZipUploadRef.value?.clearFiles?.()
+  const file = files[0]
+  if (file) {
+    importZipUploadRef.value?.handleStart?.(file)
+  }
 }
 
 async function submitImportDialog() {
@@ -1651,13 +1744,26 @@ async function submitImportDialog() {
     return
   }
   importDialog.loading = true
+  resetImportUploadProgress()
   try {
-    await importItemsByExcel(importDialog.excelFile, importDialog.zipFile)
+    await importItemsByExcel(importDialog.excelFile, importDialog.zipFile, {
+      onUploadProgress: (event) => {
+        if (event.total > 0) {
+          importDialog.uploadProgress = Math.min(99, Math.round((event.loaded * 100) / event.total))
+          return
+        }
+        if (event.loaded > 0 && importDialog.uploadProgress < 95) {
+          importDialog.uploadProgress += 1
+        }
+      }
+    })
+    importDialog.uploadProgress = 100
     proxy?.$modal.msgSuccess(tr('导入任务已提交'))
     importDialog.visible = false
     openImportLogDialog()
   } finally {
     importDialog.loading = false
+    resetImportUploadProgress()
   }
 }
 
@@ -1725,25 +1831,228 @@ const downloadQrcode = async (row) => {
   // this.$message.warn('下载中，请稍后...')
 }
 onMounted(async () => {
-  try {
-    await Promise.all([
-      initItemCategoryDataIfNeeded(),
-      initItemBrandDataIfNeeded(),
-      initMaterialModelDataIfNeeded()
-    ])
-  } catch (_) {
-    // 分类数据加载失败不阻断列表渲染
-  }
   initSupplierData();
   nextTick(() => {
+    applyRouteSkuFilter()
     getList();
     if (route.query.openDrawer) {
       handleAdd()
     }
   })
+  Promise.all([
+    initItemCategoryDataIfNeeded(),
+    initItemBrandDataIfNeeded()
+  ]).catch(() => {})
 });
+
+onActivated(() => {
+  if (applyRouteSkuFilter()) getList()
+})
 </script>
 <style>
+.import-dialog__alert {
+  margin-bottom: 0;
+}
+
+.import-dialog__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #ebeef5;
+}
+
+.import-upload-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.import-upload-card {
+  min-width: 0;
+}
+
+.import-upload-card__label {
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #606266;
+}
+
+.import-upload-card--selected .import-upload-card__label {
+  color: var(--el-color-success);
+}
+
+.import-upload-drop {
+  width: 100%;
+}
+
+.import-upload-drop :deep(.el-upload) {
+  width: 100%;
+}
+
+.import-upload-drop :deep(.el-upload-dragger) {
+  width: 100%;
+  height: 148px;
+  padding: 16px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.import-upload-drop--selected :deep(.el-upload-dragger) {
+  border-color: var(--el-color-success-light-5);
+  background: var(--el-color-success-light-9);
+}
+
+.import-upload-drop__icon {
+  font-size: 40px;
+  color: #c0c4cc;
+  margin-bottom: 8px;
+}
+
+.import-upload-drop__icon--success {
+  color: var(--el-color-success);
+}
+
+.import-upload-drop__filename {
+  max-width: 100%;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 20px;
+  color: #303133;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.import-upload-drop__meta {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 18px;
+  color: #909399;
+}
+
+.import-upload-drop__hint {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--el-color-primary);
+}
+
+.import-upload-progress {
+  margin-top: 20px;
+  padding: 14px 16px;
+  border: 1px solid #ebeef5;
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+.import-upload-progress__label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #606266;
+}
+
+.import-upload-progress__tip {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 18px;
+  color: #909399;
+}
+
+.import-upload-drop__text {
+  font-size: 13px;
+  line-height: 20px;
+  color: #606266;
+  text-align: center;
+}
+
+.import-upload-drop__text em {
+  color: var(--el-color-primary);
+  font-style: normal;
+}
+
+.import-upload-drop__tip {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 18px;
+  color: #909399;
+  text-align: center;
+}
+
+.import-log-dialog__body,
+.import-detail-dialog__body {
+  padding: 0 16px 8px;
+  overflow-x: hidden;
+}
+
+.import-log-dialog .el-dialog__body,
+.import-detail-dialog .el-dialog__body {
+  padding-top: 10px;
+  padding-bottom: 16px;
+  overflow-x: hidden;
+}
+
+.import-dialog-pagination {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 14px 12px 6px;
+  margin-top: 4px;
+  border-top: 1px solid #ebeef5;
+}
+
+.import-dialog-pagination .pagination-container {
+  position: static !important;
+  height: auto !important;
+  width: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+}
+
+.import-dialog-pagination .pagination-container .el-pagination {
+  position: static !important;
+  right: auto !important;
+  left: auto !important;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.import-error-text {
+  display: inline-block;
+  max-width: 100%;
+  line-height: 1.5;
+  word-break: break-word;
+  vertical-align: middle;
+}
+
+@media (max-width: 560px) {
+  .import-upload-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.import-dialog-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .item-content-layout {
   display: flex;
   align-items: flex-start;

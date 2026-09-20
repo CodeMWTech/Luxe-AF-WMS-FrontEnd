@@ -188,14 +188,12 @@ import InventorySelect from "@/views/components/InventorySelect.vue";
 import {getSourceWarehouseAndSkuKey, getWarehouseAndSkuKey} from "@/utils/wmsUtil";
 import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
-import useTagsViewStore from '@/store/modules/tagsView'
 import { useOrderEditLeaveGuard } from '@/views/wms/order/composables/useOrderEditLeaveGuard'
 
 const {proxy} = getCurrentInstance();
 const route = useRoute();
 const {wms_shipment_type} = proxy.useDict("wms_shipment_type");
 const wmsStore = useWmsStore()
-const tagsViewStore = useTagsViewStore()
 const settingsStore = useSettingsStore()
 const isEn = computed(() => (settingsStore.language || 'zh-cn') === 'en')
 const tr = (text) => translateByMap(text, settingsStore.language || 'zh-cn')
@@ -238,16 +236,10 @@ const cancel = async () => {
   await proxy?.$modal.confirm('确认取消编辑移库单吗？');
   close()
 }
-const getClosePath = (fallbackPath) => {
-  const activeMenu = route.meta?.activeMenu
-  if (activeMenu && activeMenu !== route.path) return activeMenu
-  const latestView = [...tagsViewStore.visitedViews].reverse().find(view => view.path !== route.path)
-  return latestView?.fullPath || fallbackPath
-}
 const close = () => {
   markAllowLeave()
-  const obj = {path: getClosePath("/wms/order/movementOrder")};
-  proxy?.$tab.closeOpenPage(obj);
+  // Always return to the transfer list, not the last visited tab (e.g. platform orders).
+  proxy?.$tab.closeOpenPage({ path: '/wms/order/movementOrder' });
 }
 const inventorySelectShow = ref(false)
 const getBrandName = (brandId) => {

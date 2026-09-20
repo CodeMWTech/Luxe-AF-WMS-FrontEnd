@@ -62,7 +62,7 @@
         </el-table-column>
         <el-table-column :label="tr('创建时间')" prop="createTime" min-width="160" show-overflow-tooltip />
         <el-table-column :label="tr('备注')" prop="remark" min-width="150" show-overflow-tooltip />
-        <el-table-column v-hasPermi="['wms:supplier:edit']" :label="tr('操作')" align="center" class-name="small-padding fixed-width" width="160">
+        <el-table-column v-hasPermi="['wms:supplier:edit']" :label="tr('操作')" align="center" header-align="left" class-name="small-padding fixed-width" width="160">
           <template #default="scope">
             <el-button link type="primary" icon="Edit" @click="handleUpdate(scope.row)" v-hasPermi="['wms:supplier:edit']">{{ tr('修改') }}</el-button>
             <el-button link type="primary" icon="Delete" @click="handleDelete(scope.row)" v-hasPermi="['wms:supplier:edit']">{{ tr('删除') }}</el-button>

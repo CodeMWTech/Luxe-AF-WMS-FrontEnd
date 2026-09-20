@@ -6,6 +6,11 @@ import { listItemMaterial } from "@/api/wms/itemMaterial";
 import { listItemModel } from "@/api/wms/itemModel";
 import {defineStore} from "pinia";
 import {ref} from "vue";
+import { sortByCatalogName } from '@/utils/wmsUtil'
+
+const sortItemBrands = (brands = []) => sortByCatalogName(brands, 'brandName')
+const sortItemModels = (models = []) => sortByCatalogName(models, 'modelName')
+const sortItemMaterials = (materials = []) => sortByCatalogName(materials, 'materialName')
 
 export const useWmsStore = defineStore('wms', () => {
 
@@ -74,10 +79,12 @@ export const useWmsStore = defineStore('wms', () => {
   const getItemBrandList =  () => {
     return new Promise((resolve, reject) => {
       listItemBrand({}).then(res => {
-        itemBrandList.value = res.data
+        itemBrandList.value = sortItemBrands(res.data || [])
         const map = new Map()
         itemBrandList.value.forEach(supplier => {
-          map.set(supplier.id, {...supplier})
+          // 同时用原始 id 与字符串 key，避免雪花 ID 精度/类型不一致导致查不到名称
+          map.set(supplier.id, { ...supplier })
+          map.set(String(supplier.id), { ...supplier })
         })
         itemBrandMap.value = map
         resolve()
@@ -91,7 +98,7 @@ export const useWmsStore = defineStore('wms', () => {
   const getItemMaterialList = () => {
     return new Promise((resolve, reject) => {
       listItemMaterial({ status: '1' }).then(res => {
-        itemMaterialList.value = res.data || []
+        itemMaterialList.value = sortItemMaterials(res.data || [])
         const map = new Map()
         itemMaterialList.value.forEach(item => {
           map.set(item.id, { ...item })
@@ -108,7 +115,7 @@ export const useWmsStore = defineStore('wms', () => {
   const getItemModelList = () => {
     return new Promise((resolve, reject) => {
       listItemModel({ status: '1' }).then(res => {
-        itemModelList.value = res.data || []
+        itemModelList.value = sortItemModels(res.data || [])
         const map = new Map()
         itemModelList.value.forEach(item => {
           map.set(item.id, { ...item })

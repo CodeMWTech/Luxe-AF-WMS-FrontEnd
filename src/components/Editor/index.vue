@@ -29,6 +29,7 @@
 <script setup>
 import { QuillEditor, Quill } from '@vueup/vue-quill';
 import '@vueup/vue-quill/dist/vue-quill.snow.css';
+import { insertTextIntoEditor } from "@/utils/textSelection";
 import { getToken } from "@/utils/auth";
 
 const props = defineProps({
@@ -86,7 +87,7 @@ const options = ref({
         [{ color: [] }, { background: [] }],             // 字体颜色、字体背景颜色
         [{ align: [] }],                                 // 对齐方式
         ["clean"],                                       // 清除文本格式
-        ["link", "image", "video"]                       // 链接、图片、视频
+        ["link", "image"]                                // 链接、图片
       ],
       handlers: {
         image: function (value) {
@@ -167,6 +168,14 @@ function handleUploadError(err) {
   proxy.$modal.msgError("上传文件失败");
 }
 
+function insertTextAtSelection(text) {
+  const editor = quillEditorRef.value && toRaw(quillEditorRef.value);
+  const quill = editor?.getQuill?.();
+  return insertTextIntoEditor(quill, text);
+}
+
+defineExpose({ insertTextAtSelection });
+
 </script>
 
 <style>
@@ -187,10 +196,6 @@ function handleUploadError(err) {
   border-right: 0px;
   content: "保存";
   padding-right: 0px;
-}
-
-.ql-snow .ql-tooltip[data-mode="video"]::before {
-  content: "请输入视频地址:";
 }
 
 .ql-snow .ql-picker.ql-size .ql-picker-label::before,

@@ -19,6 +19,7 @@
           v-model="loginForm.username"
           type="text"
           auto-complete="off"
+          maxlength="50"
           :placeholder="$t('login.usernamePlaceholder')"
         >
           <template #prefix><svg-icon icon-class="user" class="input-icon" /></template>
@@ -55,6 +56,9 @@
       <el-checkbox v-model="loginForm.rememberMe" class="mobile-login__remember">
         {{ $t('login.rememberMe') }}
       </el-checkbox>
+      <el-form-item prop="smsConsent" class="mobile-login__consent-item">
+        <LoginConsentNotice v-model="loginForm.smsConsent" variant="mobile" />
+      </el-form-item>
       <el-form-item class="mobile-login__submit-item">
         <el-button
           type="primary"
@@ -79,6 +83,7 @@ import { decrypt, encrypt } from '@/utils/jsencrypt'
 import useUserStore from '@/store/modules/user'
 import { useMobileLanguage } from '@/views/mobile/composables/useMobileLanguage'
 import { resolvePostLoginRedirect } from '@/utils/mobileDevice'
+import LoginConsentNotice from '@/components/LoginConsentNotice/index.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -95,14 +100,25 @@ const loginForm = ref({
   username: '',
   password: '',
   rememberMe: false,
+  smsConsent: false,
   code: '',
   uuid: ''
 })
 
 const loginRules = computed(() => ({
-  username: [{ required: true, trigger: 'blur', message: t('login.ruleUsernameRequired') }],
+  username: [
+    { required: true, trigger: 'blur', message: t('login.ruleUsernameRequired') },
+    { min: 2, max: 50, trigger: 'blur', message: t('login.ruleUsernameLength') }
+  ],
   password: [{ required: true, trigger: 'blur', message: t('login.rulePasswordRequired') }],
-  code: [{ required: true, trigger: 'change', message: t('login.ruleCodeRequired') }]
+  code: [{ required: true, trigger: 'change', message: t('login.ruleCodeRequired') }],
+  smsConsent: [{
+    validator: (_rule, value, callback) => {
+      if (!value) callback(new Error(t('login.ruleConsentRequired')))
+      else callback()
+    },
+    trigger: 'change'
+  }]
 }))
 
 const loginSubtitle = computed(() => {
@@ -152,6 +168,7 @@ function getCookie() {
     username: username === undefined ? loginForm.value.username : username,
     password: password === undefined ? loginForm.value.password : decrypt(password),
     rememberMe: rememberMe === undefined ? false : Boolean(rememberMe),
+    smsConsent: false,
     code: '',
     uuid: ''
   }

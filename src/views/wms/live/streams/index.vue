@@ -1,0 +1,294 @@
+<template>
+  <div data-runtime-i18n-ignore="true" class="live-page">
+    <div class="live-hero"><div><h2>{{ tr('开播录入') }}</h2><p>{{ tr('记录开播数据并自动计算薪酬') }}</p></div><div class="live-actions"><el-button @click="exportRows">{{ tr('导出 Excel') }}</el-button><el-button type="primary" v-hasPermi="['wms:live:stream:edit']" @click="openDialog()">{{ tr('新增开播记录') }}</el-button></div></div>
+    <div class="metric-grid"><el-card v-for="item in metrics" :key="item.label" class="metric-card" shadow="never"><div class="metric-label">{{ item.label }}</div><div class="metric-value">{{ item.value }}</div><div class="metric-hint">{{ tr('当前筛选页汇总') }}</div></el-card></div>
+    <el-card class="live-filter" shadow="never"><el-form :inline="true"><el-form-item :label="tr('日期')"><el-date-picker v-model="dateRange" type="daterange" value-format="YYYY-MM-DD" :format="LIVE_DATE_FORMAT" /></el-form-item><el-form-item><el-input v-model="query.keyword" clearable :placeholder="tr('搜索录入人/备注')" /></el-form-item><el-form-item><LiveEmployeeSelect v-model="query.employeeId"   :placeholder="tr('全部主播')" :employees="options.employees" /></el-form-item><el-form-item><LiveAccountSelect v-model="query.accountId" clearable :placeholder="tr('全部直播平台')" :accounts="options.accounts" /></el-form-item><el-form-item><el-select v-model="query.rateTypeId" clearable :placeholder="tr('全部费率类型')"><el-option v-for="v in options.rateTypes" :key="v.id" :label="v.typeName" :value="v.id" /></el-select></el-form-item><el-form-item><el-button type="primary" @click="load">{{ tr('查询') }}</el-button><el-button @click="reset">{{ tr('重置') }}</el-button></el-form-item><el-form-item :label="tr('主播状态')"><el-select v-model="query.employeeScope" @change="query.pageNum = 1; load()"><el-option :label="tr('全部')" value="ALL" /><el-option :label="tr('在职/试用期')" value="ACTIVE" /><el-option :label="tr('已归档')" value="INACTIVE" /></el-select></el-form-item></el-form></el-card>
+    <el-card class="live-card" shadow="never"><el-table v-loading="loading" :data="rows" stripe><el-table-column prop="streamDate" :label="tr('日期')" :min-width="isEn ? 145 : 120"><template #default="s">{{ displayDate(s.row.streamDate) }}</template></el-table-column><el-table-column prop="accountLabel" :label="tr('直播平台')" min-width="180"><template #default="s"><LivePlatformTag :account="s.row" :accounts="options.accounts" /></template></el-table-column><el-table-column :label="tr('结算状态')" :min-width="isEn ? 145 : 110"><template #default="s"><el-tag :type="s.row.settlementStatus === 'SETTLED' ? 'success' : 'info'">{{ tr(settlementStatusLabel(s.row.settlementStatus)) }}</el-tag></template></el-table-column><el-table-column prop="employeeName" :label="tr('主播')" ><template #default="s"><LiveEmployeeName :name="s.row.employeeName" :status="s.row.employeeStatus" /></template></el-table-column><el-table-column :label="tr('时间')" :min-width="isEn ? 175 : 150"><template #default="s">{{ shortTime(s.row.startTime) }} - {{ shortTime(s.row.endTime) }}</template></el-table-column><el-table-column :label="tr('工时')"><template #default="s">{{ Number(s.row.durationHours || 0).toFixed(2) }}h</template></el-table-column><el-table-column prop="rateTypeName" :label="tr('费率类型')" min-width="180"><template #default="s"><el-tag class="type-tag">{{ s.row.rateTypeName }}</el-tag></template></el-table-column><el-table-column :label="tr('时薪')"><template #default="s">{{ money(s.row.hourlyRate) }}<sup v-if="s.row.manualRate">*</sup></template></el-table-column><el-table-column :label="tr('特殊')"><template #default="s"><span :class="Number(s.row.specialAmount) >= 0 ? 'positive' : 'negative'">{{ money(s.row.specialAmount) }}</span></template></el-table-column><el-table-column :label="tr('总金额')"><template #default="s"><strong>{{ money(s.row.totalAmount) }}</strong></template></el-table-column><el-table-column prop="enteredBy" :label="tr('录入人')" /><el-table-column :label="tr('操作')" :min-width="isEn ? 155 : 130" fixed="right"><template #default="s"><el-button link type="primary" :disabled="s.row.settlementStatus !== 'OPEN'" @click="openDialog(s.row)">{{ tr('编辑') }}</el-button><el-button link type="danger" :disabled="s.row.settlementStatus !== 'OPEN'" @click="remove(s.row)">{{ tr('删除') }}</el-button></template></el-table-column></el-table><pagination v-show="total>0" class="stream-pagination" :total="total" v-model:page="query.pageNum" v-model:limit="query.pageSize" @pagination="load" /></el-card>
+
+    <el-dialog data-runtime-i18n-ignore="true" v-model="dialog.open" class="stream-entry-dialog" :title="dialog.form.id ? tr('编辑开播记录') : tr('新增开播记录')" width="900px" append-to-body destroy-on-close>
+      <el-form ref="formRef" :model="dialog.form" :rules="rules" label-position="top">
+        <div class="stream-form-section">
+          <div class="stream-section-title"><span>1</span><div><strong>{{ tr('直播信息') }}</strong><small>{{ tr('选择日期和主播后，将按排班自动填写直播平台、费率类型和时间') }}</small></div></div>
+          <div class="dialog-grid stream-info-grid">
+            <el-form-item :label="tr('日期')" prop="streamDate"><el-date-picker v-model="dialog.form.streamDate" type="date" value-format="YYYY-MM-DD" :format="LIVE_DATE_FORMAT" @change="handleStreamRateScopeChange" /></el-form-item>
+            <el-form-item :label="tr('主播')" prop="employeeId"><LiveEmployeeSelect v-model="dialog.form.employeeId"  @change="handleStreamRateScopeChange" :employees="options.employees" /></el-form-item>
+            <el-form-item :label="tr('直播平台')" prop="accountId"><LiveAccountSelect v-model="dialog.form.accountId" filterable @change="handleStreamAccountChange" :accounts="options.accounts" /></el-form-item>
+            <el-form-item :label="tr('费率类型')" prop="rateTypeId">
+              <div class="stream-rate-type-field">
+                <el-select v-model="dialog.form.rateTypeId" :loading="dialog.loadingRateTypes" :disabled="!hasStreamRateScope" :placeholder="rateTypePlaceholder" @change="handleStreamRateTypeChange">
+                  <el-option v-for="v in dialog.rateTypes" :key="v.id" :label="v.typeName" :value="v.id" />
+                </el-select>
+                <small v-if="hasStreamRateScope && !dialog.loadingRateTypes && !dialog.rateTypes.length">{{ tr('请先在费率配置中启用当前组合对应的费率类型') }}</small>
+              </div>
+            </el-form-item>
+          </div>
+        </div>
+
+        <div class="stream-form-section">
+          <div class="stream-section-title"><span>2</span><div><strong>{{ tr('直播时段与薪资') }}</strong><small>{{ tr('时间默认来自排班计划，工时由系统自动计算') }}</small></div></div>
+          <el-alert v-if="dialog.scheduleMissing" class="stream-schedule-warning" :title="tr('未找到该主播当天的匹配排班计划')" type="error" :closable="false" show-icon />
+          <div class="dialog-grid stream-time-grid">
+            <el-form-item :label="tr('开始时间')" prop="startTime"><el-time-picker v-model="dialog.form.startTime" value-format="HH:mm:ss" format="HH:mm" @change="formRef?.validateField('endTime')" /></el-form-item>
+            <el-form-item :label="tr('结束时间')" prop="endTime"><el-time-picker v-model="dialog.form.endTime" value-format="HH:mm:ss" format="HH:mm" /></el-form-item>
+            <el-form-item :label="tr('工时')"><el-input :model-value="streamDurationText" disabled :title="tr('根据开始时间和结束时间自动计算')" /></el-form-item>
+          </div>
+          <div class="stream-pay-row">
+            <div class="manual-rate-control">
+              <div><strong>{{ tr('手工时薪') }}</strong><small>{{ tr('开启后可覆盖系统费率，仅影响本条记录') }}</small></div>
+              <el-switch v-model="dialog.form.manualRate" />
+            </div>
+            <el-form-item class="hourly-rate-item" :label="tr('时薪')">
+              <el-input-number v-model="dialog.form.hourlyRate" class="hourly-rate-input" :disabled="!dialog.form.manualRate" :min="0" :precision="2" />
+            </el-form-item>
+          </div>
+        </div>
+
+        <div class="stream-form-section">
+          <div class="stream-section-title stream-special-title"><span>3</span><div><strong>{{ tr('特殊明细') }}</strong><small>{{ tr('记录补贴、扣款或其他特殊金额') }}</small></div><div class="special-total">{{ tr('合计') }} <strong>{{ money(specialTotal) }}</strong></div></div>
+          <el-form-item class="special-details-item">
+            <SpecialDetailsEditor ref="specialEditor" v-model="dialog.specials" :types="options.specialTypes" />
+          </el-form-item>
+        </div>
+
+        <div class="stream-form-section stream-remark-section">
+          <el-form-item :label="tr('备注')"><el-input v-model="dialog.form.remark" type="textarea" :rows="3" :placeholder="tr('可填写本次直播的补充说明')" /></el-form-item>
+        </div>
+      </el-form>
+      <template #footer><el-button @click="dialog.open=false">{{ tr('取消') }}</el-button><el-button type="primary" :loading="dialog.submitting" :disabled="dialog.loadingRateTypes || dialog.loadingSchedule" @click="submit">{{ tr('确认保存') }}</el-button></template>
+    </el-dialog>
+  </div>
+</template>
+
+<script setup>
+import LiveAccountSelect from '../components/LiveAccountSelect.vue'
+import LivePlatformTag from '../components/LivePlatformTag.vue'
+import { useLiveI18n } from '../useLiveI18n'
+import SpecialDetailsEditor from '../components/SpecialDetailsEditor.vue'
+import { normalizeSpecialInput as normalizeSpecial, specialTotal as sumSpecials, serializeSpecialDetails } from '../components/specialDetails'
+import LiveEmployeeSelect from '../components/LiveEmployeeSelect.vue'
+import LiveEmployeeName from '../components/LiveEmployeeName.vue'
+import { onActivated, computed, getCurrentInstance, onMounted, reactive, ref } from 'vue'
+import { addStream, deleteStream, getLiveOptions, listStreamRateTypes, listStreamScheduleOptions, listStreams, updateStream } from '@/api/wms/livePayroll'
+import useUserStore from '@/store/modules/user'
+import { settlementStatusLabel, accountLabel, displayDate, isoDate, LIVE_DATE_FORMAT, money } from '../shared'
+const { tr, isEn, messageNode } = useLiveI18n()
+const userStore = useUserStore()
+const { proxy } = getCurrentInstance()
+const loading = ref(false), rows = ref([]), total = ref(0), formRef = ref(), specialEditor = ref()
+const dateRange = ref(null), options = reactive({ employees: [], accounts: [], rateTypes: [], specialTypes: [] })
+const query = reactive({ employeeScope: 'ALL', pageNum: 1, pageSize: 20, keyword: '', employeeId: null, accountId: null, rateTypeId: null })
+const dialog = reactive({ open: false, form: {}, specials: [], rateTypes: [], schedules: [], loadingRateTypes: false, loadingSchedule: false, scheduleMissing: false, submitting: false })
+const STREAM_PREFERENCE_KEY = 'live-payroll:stream:last-selection'
+let rateTypeRequestSequence = 0
+let scheduleRequestSequence = 0
+let streamScopeRequestSequence = 0
+const hasStreamScheduleScope = computed(() => Boolean(dialog.form.streamDate && dialog.form.employeeId))
+const hasStreamRateScope = computed(() => Boolean(dialog.form.streamDate && dialog.form.employeeId && dialog.form.accountId))
+const rateTypePlaceholder = computed(() => {
+  if (!hasStreamRateScope.value) return tr('请先选择日期、主播和直播平台')
+  if (dialog.loadingRateTypes) return tr('正在加载费率类型')
+  return tr(dialog.rateTypes.length ? '请选择费率类型' : '当前组合无已激活费率')
+})
+const validateEndTime = (_rule, value, callback) => { if (!value) return callback(new Error(tr('请选择结束时间'))); if (dialog.form.startTime === value) return callback(new Error(tr('结束时间不能等于开始时间'))); callback() }
+const rules = computed(() => ({ streamDate: [{ required: true, message: tr('请选择日期') }], employeeId: [{ required: true, message: tr('请选择主播') }], accountId: [{ required: true, message: tr('请选择直播平台') }], rateTypeId: [{ required: true, message: tr('请选择费率类型') }], startTime: [{ required: true, message: tr('请选择开始时间') }], endTime: [{ required: true, message: tr('请选择结束时间') }, { validator: validateEndTime, trigger: 'change' }] }))
+const specialTotal = computed(() => sumSpecials(dialog.specials, options.specialTypes))
+const streamDurationText = computed(() => {
+  const startMinutes = timeInMinutes(dialog.form.startTime)
+  const endMinutes = timeInMinutes(dialog.form.endTime)
+  if (startMinutes == null || endMinutes == null || startMinutes === endMinutes) return '—'
+  const durationMinutes = endMinutes > startMinutes ? endMinutes - startMinutes : endMinutes + 24 * 60 - startMinutes
+  return `${(durationMinutes / 60).toFixed(2)}h`
+})
+const metrics = computed(() => { const hours = rows.value.reduce((s,v)=>s+Number(v.durationHours||0),0), pay = rows.value.reduce((s,v)=>s+Number(v.totalAmount||0),0), types = new Set(rows.value.map(v=>v.rateTypeId)).size; return [{ label:tr('总场次'), value: total.value }, { label:tr('当前页工时'), value:`${hours.toFixed(2)}h` }, { label:tr('费率类型数'), value:types }, { label:tr('当前页薪酬'), value:money(pay) }] })
+function listQueryParams() {
+  const params = { ...query }
+  if (dateRange.value?.length === 2) [params.startDate, params.endDate] = dateRange.value
+  return params
+}
+async function load() { loading.value = true; try { Object.assign(options, await getLiveOptions()); const res = await listStreams(listQueryParams()); rows.value = res.rows || []; total.value = res.total || 0 } finally { loading.value = false } }
+function reset() { dateRange.value = null; Object.assign(query, { employeeScope:'ALL', pageNum:1, keyword:'', employeeId:null, accountId:null, rateTypeId:null }); load() }
+function shortTime(value) { return String(value || '').slice(0,5) }
+function timeInMinutes(value) {
+  const match = String(value || '').match(/^(\d{1,2}):(\d{2})/)
+  if (!match) return null
+  return Number(match[1]) * 60 + Number(match[2])
+}
+function preferenceStorageKey() { return `${STREAM_PREFERENCE_KEY}:${userStore.id || userStore.name || 'anonymous'}` }
+function loadStreamPreference() {
+  try { return JSON.parse(localStorage.getItem(preferenceStorageKey()) || '{}') }
+  catch (_) { return {} }
+}
+function saveStreamPreference(form) {
+  try {
+    localStorage.setItem(preferenceStorageKey(), JSON.stringify({
+      employeeId: String(form.employeeId),
+      accountId: String(form.accountId),
+      rateTypeId: String(form.rateTypeId)
+    }))
+  } catch (_) {}
+}
+async function refreshStreamRateTypes() {
+  const requestSequence = ++rateTypeRequestSequence
+  dialog.rateTypes = []
+  if (!hasStreamRateScope.value) { dialog.form.rateTypeId = null; dialog.loadingRateTypes = false; return }
+  dialog.loadingRateTypes = true
+  try {
+    const res = await listStreamRateTypes({ employeeId: dialog.form.employeeId, accountId: dialog.form.accountId, streamDate: dialog.form.streamDate })
+    if (requestSequence !== rateTypeRequestSequence) return
+    dialog.rateTypes = res.data || []
+    dialog.form.rateTypeId = dialog.rateTypes.find(type => String(type.id) === String(dialog.form.rateTypeId))?.id || null
+  } finally {
+    if (requestSequence === rateTypeRequestSequence) dialog.loadingRateTypes = false
+  }
+}
+function applyScheduledDefaults() {
+  const schedule = dialog.schedules[0]
+  if (!schedule) return
+  dialog.form.accountId = schedule.accountId
+  dialog.form.rateTypeId = schedule.rateTypeId
+  dialog.form.startTime = schedule.startTime
+  dialog.form.endTime = schedule.endTime
+}
+function applyScheduledTimesForRateType() {
+  const schedules = dialog.schedules.filter(item => String(item.accountId) === String(dialog.form.accountId))
+  const schedule = schedules.find(item => String(item.rateTypeId) === String(dialog.form.rateTypeId)) || schedules[0]
+  if (!schedule) return
+  dialog.form.startTime = schedule.startTime
+  dialog.form.endTime = schedule.endTime
+}
+async function refreshStreamSchedule(accountId) {
+  const requestSequence = ++scheduleRequestSequence
+  dialog.schedules = []
+  dialog.scheduleMissing = false
+  if (!hasStreamScheduleScope.value) { dialog.loadingSchedule = false; return }
+  dialog.loadingSchedule = true
+  try {
+    const res = await listStreamScheduleOptions({ employeeId: dialog.form.employeeId, accountId, streamDate: dialog.form.streamDate })
+    if (requestSequence !== scheduleRequestSequence) return
+    dialog.schedules = res.data || []
+    dialog.scheduleMissing = dialog.schedules.length === 0
+  } finally {
+    if (requestSequence === scheduleRequestSequence) dialog.loadingSchedule = false
+  }
+}
+async function refreshStreamDefaults({ preserveForm = false, filterByAccount = false } = {}) {
+  const requestSequence = ++streamScopeRequestSequence
+  // 排班先确定平台，再查询该平台费率；切换条件时立即作废旧费率请求。
+  ++rateTypeRequestSequence
+  dialog.rateTypes = []
+  dialog.loadingRateTypes = false
+  if (!preserveForm) {
+    dialog.form.rateTypeId = null
+    dialog.form.startTime = null
+    dialog.form.endTime = null
+  }
+  await refreshStreamSchedule(filterByAccount ? dialog.form.accountId : undefined)
+  if (requestSequence !== streamScopeRequestSequence) return
+  if (!preserveForm) applyScheduledDefaults()
+  await refreshStreamRateTypes()
+}
+function handleStreamRateScopeChange() { return refreshStreamDefaults() }
+function handleStreamAccountChange() { return refreshStreamDefaults({ filterByAccount: true }) }
+function handleStreamRateTypeChange() { if (!dialog.form.id) applyScheduledTimesForRateType() }
+async function openDialog(row = {}) {
+  let specials=[]
+  try { specials = JSON.parse(row.specialDetails || '[]') } catch (_) {}
+  const preference = row.id ? {} : loadStreamPreference()
+  const rememberedEmployee = options.employees.find(item => String(item.value) === String(preference.employeeId))?.value
+  const rememberedAccount = options.accounts.find(item => String(item.id) === String(preference.accountId))?.id
+  dialog.form = { id:row.id, streamDate:row.streamDate || isoDate(), employeeId:row.employeeId || rememberedEmployee || null, accountId:row.accountId || rememberedAccount || null, rateTypeId:row.rateTypeId || preference.rateTypeId || null, startTime:row.startTime || null, endTime:row.endTime || null, manualRate:Boolean(row.manualRate), hourlyRate:Number(row.hourlyRate || 0), remark:row.remark || '' }
+  dialog.specials=specials.map(item => { const normalized = { ...item }; normalizeSpecialInput(normalized); return normalized })
+  dialog.submitting = false
+  dialog.open=true
+  await refreshStreamDefaults({ preserveForm: Boolean(row.id), filterByAccount: Boolean(row.id) })
+}
+function normalizeSpecialInput(item) { normalizeSpecial(item, options.specialTypes) }
+async function submit() {
+  const valid = await formRef.value.validate().catch(() => false)
+  if (!valid) return
+  if (!specialEditor.value.validate()) { proxy.$modal.msgWarning(tr('请填写特殊明细类型和金额，或删除该明细')); return }
+  const payload = { ...dialog.form, specialAmount: specialTotal.value, specialDetails: serializeSpecialDetails(dialog.specials, options.specialTypes) }
+  dialog.submitting = true
+  try {
+    await (payload.id ? updateStream(payload) : addStream(payload))
+    saveStreamPreference(payload)
+    proxy.$modal.msgSuccess(tr('保存成功'))
+    dialog.open = false
+    load()
+  } catch (error) {
+    const message = error?.message || '保存失败，请稍后重试'
+    if (message.includes('已存在开播记录')) proxy.$modal.alertWarning(messageNode(message))
+    else proxy.$modal.msgError(message)
+  } finally {
+    dialog.submitting = false
+  }
+}
+async function remove(row) { await proxy.$modal.confirm(messageNode(tr('确认删除 {0} {1} 的开播记录？', [row.employeeName, displayDate(row.streamDate)]))); await deleteStream(row.id); proxy.$modal.msgSuccess(tr('删除成功')); load() }
+function exportRows() {
+  const rangeLabel = dateRange.value?.length === 2 ? dateRange.value.join('-') : tr('全部')
+  proxy.download('/wms/live/streams/export', listQueryParams(), tr('开播记录-{0}.xlsx', [rangeLabel]), { skipHeaderTranslate: true })
+}
+onMounted(async()=>{ Object.assign(options,await getLiveOptions());load() })
+onActivated(async () => { Object.assign(options, await getLiveOptions()) })
+</script>
+<style scoped lang="scss">
+@import '../live.scss';
+.type-tag { max-width: 100%; height: auto; min-height: 24px; white-space: normal; overflow-wrap: anywhere; line-height: 20px; }
+.stream-rate-type-field { width: 100%; }
+.stream-rate-type-field small { display: block; margin-top: 6px; color: #9099aa; font-size: 12px; line-height: 1.45; }
+.stream-schedule-warning { margin: 0 0 16px; }
+</style>
+<style lang="scss">
+.stream-entry-dialog {
+  width: min(900px, calc(100vw - 32px)) !important;
+  overflow: hidden;
+  border-radius: 12px;
+
+  .el-dialog__header { margin-right: 0; padding: 20px 24px 16px; border-bottom: 1px solid var(--el-border-color-lighter); }
+  .el-dialog__title { font-size: 18px; font-weight: 650; }
+  .el-dialog__headerbtn { top: 4px; }
+  .el-dialog__body { max-height: calc(100vh - 190px); padding: 18px 24px; overflow-y: auto; background: #f6f8fb; }
+  .el-dialog__footer { padding: 14px 24px; border-top: 1px solid var(--el-border-color-lighter); background: #fff; }
+  .stream-form-section { margin-bottom: 14px; padding: 18px; border: 1px solid var(--el-border-color-lighter); border-radius: 10px; background: #fff; }
+  .stream-form-section:last-child { margin-bottom: 0; }
+  .stream-section-title { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
+  .stream-section-title > span { display: inline-flex; flex: 0 0 26px; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; color: var(--el-color-primary); background: var(--el-color-primary-light-9); font-size: 13px; font-weight: 700; }
+  .stream-section-title > div:not(.special-total) { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
+  .stream-section-title strong { color: var(--el-text-color-primary); font-size: 14px; line-height: 20px; }
+  .stream-section-title small { color: var(--el-text-color-secondary); font-size: 12px; line-height: 18px; }
+  .dialog-grid { display: grid; align-items: start; gap: 0 16px; }
+  .stream-info-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 2px; }
+  .stream-time-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .el-form-item { min-width: 0; margin-bottom: 16px; }
+  .el-form-item__label { height: auto; padding: 0 0 7px; color: var(--el-text-color-regular); font-size: 13px; font-weight: 600; line-height: 20px; white-space: nowrap; }
+  .el-form-item__content { min-width: 0; }
+  .el-input,
+  .el-select,
+  .el-date-editor,
+  .el-time-picker,
+  .hourly-rate-input { width: 100%; }
+  .stream-pay-row { display: grid; grid-template-columns: minmax(0, 1fr) 240px; align-items: end; gap: 16px; }
+  .manual-rate-control { display: flex; min-height: 58px; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 14px; border: 1px solid var(--el-border-color); border-radius: 6px; background: var(--el-fill-color-lighter); box-sizing: border-box; }
+  .manual-rate-control > div { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
+  .manual-rate-control strong { color: var(--el-text-color-primary); font-size: 13px; }
+  .manual-rate-control small { color: var(--el-text-color-secondary); font-size: 12px; line-height: 17px; }
+  .hourly-rate-item { margin-bottom: 0; }
+  .stream-special-title { margin-bottom: 14px; }
+  .special-total { margin-left: auto; color: var(--el-text-color-secondary); font-size: 13px; white-space: nowrap; }
+  .special-total strong { margin-left: 6px; color: var(--el-text-color-primary); font-size: 15px; }
+  .special-details-item { margin-bottom: 0; }
+  .stream-remark-section { padding-bottom: 2px; }
+  .stream-remark-section .el-form-item { margin-bottom: 16px; }
+
+  @media (max-width: 720px) {
+    .el-dialog__header { padding: 18px 18px 14px; }
+    .el-dialog__body { padding: 14px; }
+    .el-dialog__footer { padding: 12px 18px; }
+    .stream-form-section { padding: 15px; }
+    .stream-info-grid,
+    .stream-time-grid,
+    .stream-pay-row { grid-template-columns: 1fr; }
+    .special-total { margin-left: 0; }
+  }
+}
+</style>

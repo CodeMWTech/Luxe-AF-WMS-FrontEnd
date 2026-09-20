@@ -27,7 +27,11 @@ function isInDataArea(node) {
     el.closest('.el-picker-panel') ||
     el.closest('.el-date-picker') ||
     el.closest('.el-date-range-picker') ||
-    el.closest('.el-popper')
+    el.closest('.el-popper') ||
+    // HR 员工档案：用户自定义批次名 / 上传文件名不应被运行时中英替换
+    el.closest('.hr-user-content') ||
+    el.closest('.other-batch-file-name') ||
+    el.closest('.other-batch-title')
   )
 }
 

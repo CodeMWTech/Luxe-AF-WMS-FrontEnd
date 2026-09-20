@@ -15,6 +15,9 @@ export const WMS_EXPORT_HEADER_MAP = {
   '\u7455\u75b5': 'Defect',
   '\u7f3a\u9677': 'Defect',
   '\u914d\u4ef6': 'Accessories',
+  // 完整短语必须保留，避免「未护理」被短词「护理」替换成「未Care」
+  '\u5df2\u62a4\u7406': 'Cared',
+  '\u672a\u62a4\u7406': 'Not Cared',
   '\u62a4\u7406': 'Care',
   '\u662f\u5426\u5df2\u62a4\u7406': 'Cared',
   '\u9274\u5b9a\u673a\u6784': 'Agency',
@@ -62,7 +65,99 @@ export const WMS_EXPORT_HEADER_MAP = {
   '\u8d27\u4e3b': 'Owner',
   '\u5546\u6237': 'Merchant',
   '\u6761\u7801': 'Barcode',
-  '\u5305\u578b': 'Model'
+  '\u5305\u578b': 'Model',
+  // Sheet names / common modules
+  '\u672a\u5165\u5e93\u5546\u54c1': 'Unstocked Items',
+  '\u672a\u5165\u5e93': 'Not Inbound',
+  '\u5546\u54c1\u4fe1\u606f': 'Item Info',
+  '\u5e93\u5b58': 'Inventory',
+  '\u5e93\u5b58\u7edf\u8ba1': 'Inventory Statistics',
+  '\u5e93\u5b58\u8bb0\u5f55': 'Inventory History',
+  '\u5458\u5de5\u6863\u6848': 'Employee Archive',
+  '\u5546\u54c1\u54c1\u724c': 'Item Brand',
+  '\u5f80\u6765\u5355\u4f4d': 'Merchant',
+  '\u4f9b\u5e94\u5546': 'Supplier',
+  '\u5df2\u91c7\u8d2d\u5546\u54c1': 'Purchased Items',
+  '\u5df2\u7ed3\u7b97\u8bb0\u5f55': 'Settlement Records',
+  '\u7528\u6237\u6570\u636e': 'User Data',
+  '\u89d2\u8272\u6570\u636e': 'Role Data',
+  '\u5c97\u4f4d\u6570\u636e': 'Post Data',
+  '\u5b57\u5178\u7c7b\u578b': 'Dict Type',
+  '\u5b57\u5178\u6570\u636e': 'Dict Data',
+  '\u53c2\u6570\u6570\u636e': 'Config Data',
+  '\u64cd\u4f5c\u65e5\u5fd7': 'Operation Log',
+  '\u767b\u5f55\u65e5\u5fd7': 'Login Log',
+  // HR employee roster
+  '\u5458\u5de5\u7f16\u53f7': 'Employee No.',
+  '\u59d3\u540d': 'Name',
+  '\u82f1\u6587\u540d': 'English Name',
+  '\u6027\u522b': 'Gender',
+  '\u51fa\u751f\u65e5\u671f': 'Date of Birth',
+  '\u8054\u7cfb\u7535\u8bdd': 'Phone',
+  '\u90ae\u7bb1': 'Email',
+  '\u5730\u5740': 'Address',
+  '\u7d27\u6025\u8054\u7cfb\u4eba': 'Emergency Contact',
+  '\u7d27\u6025\u8054\u7cfb\u4eba\u7535\u8bdd': 'Emergency Phone',
+  '\u90e8\u95e8': 'Department',
+  '\u5c97\u4f4d': 'Position',
+  '\u5165\u804c\u65e5\u671f': 'Hire Date',
+  '\u8bd5\u7528\u671f\u5f00\u59cb': 'Probation Start',
+  '\u8bd5\u7528\u671f\u7ed3\u675f': 'Probation End',
+  '\u8f6c\u6b63\u65e5\u671f': 'Confirmation Date',
+  '\u5458\u5de5\u72b6\u6001': 'Employee Status',
+  '\u76f4\u5c5e\u4e0a\u7ea7': 'Direct Manager',
+  '\u5de5\u4f5c\u5730\u70b9': 'Work Location',
+  '\u7a0e\u52a1\u8eab\u4efd': 'Tax Form Type',
+  '\u85aa\u8d44\u7c7b\u578b': 'Salary Type',
+  '\u57fa\u672c\u5de5\u8d44': 'Base Salary',
+  '\u5de5\u8d44\u8d26\u6237\u4fe1\u606f': 'Bank Account Info',
+  '\u5408\u540c\u5f00\u59cb': 'Contract Start',
+  '\u5408\u540c\u7ed3\u675f': 'Contract End',
+  '\u5408\u540c\u7c7b\u578b': 'Contract Type',
+  // Inventory history
+  '\u8ba2\u5355\u7c7b\u578b': 'Order Type',
+  '\u64cd\u4f5c\u524d': 'Before',
+  '\u64cd\u4f5c\u540e': 'After',
+  // Vendor purchased / settlement
+  '\u5546\u54c1\u6570\u91cf': 'Item Qty',
+  '\u672a\u5165\u5e93\u6570\u91cf': 'Unstocked Qty',
+  '\u5df2\u5165\u5e93\u6570\u91cf': 'Received Qty',
+  '\u5546\u54c1\u4e0a\u67b6\u65f6\u95f4': 'Listed At',
+  '\u9996\u6b21\u5165\u5e93\u65f6\u95f4': 'First Inbound Time',
+  '\u5f53\u524d\u5e93\u5b58\u6570\u91cf': 'Current Stock Qty',
+  '\u5df2\u552e\u6570\u91cf': 'Sold Qty',
+  '\u9000\u8d27\u6570\u91cf': 'Returned Qty',
+  '\u7ed3\u7b97\u5355\u4ef7($USD)': 'Unit Cost ($USD)',
+  '\u7d2f\u8ba1\u5df2\u7ed3\u7b97\u91d1\u989d($USD)': 'Settled Amount ($USD)',
+  '\u603b\u7ed3\u7b97\u91d1\u989d($USD)': 'Total Settlement ($USD)',
+  '\u5f85\u7ed3\u7b97/\u62b5\u6263\u91d1\u989d($USD)': 'Pending / Deduction ($USD)',
+  '\u7d2f\u8ba1\u9000\u8d27\u62b5\u6263\u91d1\u989d($USD)': 'Return Deduction ($USD)',
+  '\u7ed3\u7b97\u5355\u53f7': 'Settlement No.',
+  '\u5e01\u79cd': 'Currency',
+  'SKU\u6570\u91cf': 'SKU Count',
+  '\u9500\u552e\u6210\u672c\u603b\u989d': 'Gross Sales Cost',
+  '\u9000\u8d27\u62b5\u6263\u91d1\u989d': 'Return Deduction',
+  '\u603b\u7ed3\u7b97\u91d1\u989d': 'Total Settlement',
+  '\u7ed3\u7b97\u524d\u7d2f\u8ba1\u91d1\u989d': 'Amount Before Settlement',
+  '\u672c\u6b21\u7ed3\u7b97\u91d1\u989d': 'This Settlement Amount',
+  '\u9884\u89c8\u751f\u6210\u65f6\u95f4': 'Preview Generated At',
+  '\u786e\u8ba4\u4eba': 'Confirmed By',
+  '\u786e\u8ba4\u65f6\u95f4': 'Confirmed At',
+  '\u8ba1\u7b97\u7248\u672c': 'Calc Version',
+  '\u660e\u7ec6SKU': 'Detail SKU',
+  '\u660e\u7ec6\u5546\u54c1\u540d\u79f0': 'Detail Item Name',
+  '\u660e\u7ec6\u5546\u54c1\u6570\u91cf': 'Detail Item Qty',
+  '\u660e\u7ec6\u5df2\u552e\u6570\u91cf': 'Detail Sold Qty',
+  '\u660e\u7ec6\u9000\u8d27\u6570\u91cf': 'Detail Returned Qty',
+  '\u660e\u7ec6\u51c0\u7ed3\u7b97\u6570\u91cf': 'Detail Net Qty',
+  '\u660e\u7ec6\u7ed3\u7b97\u5355\u4ef7': 'Detail Unit Price',
+  '\u660e\u7ec6\u9500\u552e\u6210\u672c': 'Detail Gross Cost',
+  '\u660e\u7ec6\u9000\u8d27\u62b5\u6263\u91d1\u989d': 'Detail Return Deduction',
+  '\u660e\u7ec6\u603b\u7ed3\u7b97\u91d1\u989d': 'Detail Total Settlement',
+  '\u660e\u7ec6\u7ed3\u7b97\u524d\u7d2f\u8ba1\u91d1\u989d': 'Detail Amount Before Settlement',
+  '\u660e\u7ec6\u672c\u6b21\u7ed3\u7b97\u91d1\u989d': 'Detail This Settlement',
+  '\u660e\u7ec6\u7ed3\u7b97\u7c7b\u578b': 'Detail Settlement Type',
+  '\u660e\u7ec6\u5907\u6ce8': 'Detail Remark'
 }
 
 export function getExportLanguagePayload(isEnglish) {
@@ -159,9 +254,11 @@ async function getZipEntryContent(zipData, entry) {
 
 function replaceHeaderText(xmlText, headerMap) {
   let next = xmlText
-  Object.entries(headerMap).forEach(([source, target]) => {
-    next = next.split(source).join(target)
-  })
+  Object.entries(headerMap)
+    .sort((a, b) => b[0].length - a[0].length)
+    .forEach(([source, target]) => {
+      next = next.split(source).join(target)
+    })
   return next
 }
 
@@ -276,7 +373,7 @@ export async function translateXlsxHeaders(blobData, headerMap = WMS_EXPORT_HEAD
   const entries = parseZipEntries(zipData)
 
   const translatedEntries = await Promise.all(entries.map(async entry => {
-    const shouldTranslate = /^xl\/(sharedStrings|worksheets\/.*)\.xml$/i.test(entry.name)
+    const shouldTranslate = /^xl\/(sharedStrings|workbook|worksheets\/.*)\.xml$/i.test(entry.name)
     if (!shouldTranslate) {
       return {
         ...entry,

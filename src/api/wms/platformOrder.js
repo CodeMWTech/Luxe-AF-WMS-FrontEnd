@@ -1,6 +1,6 @@
 import request from '@/utils/request'
 
-// 统一分页查询平台订单（TikTok + eBay）
+// 统一分页查询平台订单（TikTok + eBay + Whatnot）
 export function listPlatformOrders(query) {
   return request({
     url: '/wms/platform/orders',
@@ -27,12 +27,12 @@ export function getOrderStatusMap() {
 }
 
 // 更新订单 SKU
-export function updateOrderSku(orderId, platform, newSku) {
+export function updateOrderSku(rowId, orderId, platform, newSku) {
   return request({
     url: `/wms/platform/orders/${orderId}/sku`,
     method: 'put',
     params: { platform },
-    data: { newSku }
+    data: { rowId: String(rowId), newSku }
   })
 }
 
@@ -52,16 +52,17 @@ export function importNotes(file) {
     url: '/wms/platform/orders/import-notes',
     method: 'post',
     data: formData,
-    headers: { 'Content-Type': 'multipart/form-data' }
+    headers: { 'Content-Type': 'multipart/form-data', repeatSubmit: false }
   })
 }
 
 // 导出平台订单 Excel
-export function exportPlatformOrders(query) {
+export function exportPlatformOrders(query, headers = {}) {
   return request({
     url: '/wms/platform/orders/export',
     method: 'post',
     params: query,
+    headers,
     responseType: 'blob'
   })
 }

@@ -8,14 +8,30 @@
         class="statistic-query-form mt12"
         @submit.prevent="handleQuery"
       >
-        <!-- 维度切换单独占一行 -->
+        <!-- 维度与库存快照日期 -->
         <el-row :gutter="16">
-          <el-col :span="24">
+          <el-col :xs="24" :sm="12">
             <el-form-item :label="tr('维度')" prop="itemId">
               <el-radio-group v-model="queryType" size="default" @change="handleSortTypeChange">
                 <el-radio-button label="item">{{ tr('商品') }}</el-radio-button>
                 <el-radio-button label="warehouse">{{ tr('仓库') }}</el-radio-button>
               </el-radio-group>
+            </el-form-item>
+          </el-col>
+          <el-col :xs="24" :sm="12">
+            <el-form-item :label="tr('库存日期')" prop="snapshotDate">
+              <el-date-picker
+                v-model="queryParams.snapshotDate"
+                type="date"
+                format="MM/DD/YYYY"
+                value-format="YYYY-MM-DD"
+                :placeholder="snapshotDatePlaceholder"
+                :disabled-date="disableFutureSnapshotDate"
+                :editable="true"
+                clearable
+                style="width: 100%"
+                @change="handleSnapshotDateChange"
+              />
             </el-form-item>
           </el-col>
         </el-row>
@@ -58,9 +74,16 @@
         <el-row :gutter="16">
           <el-col :xs="24" :sm="12" :md="6" :lg="6">
             <el-form-item :label="tr('商品品牌')" prop="itemBrand">
-              <el-select v-model="queryParams.itemBrand" clearable filterable style="width: 100%">
+              <el-select
+                v-model="selectedBrandGroups"
+                multiple
+                clearable
+                filterable
+                :placeholder="tr('可多选')"
+                style="width: 100%"
+              >
                 <el-option
-                  v-for="item in useWmsStore().itemBrandList"
+                  v-for="item in brandGroups"
                   :key="item.id"
                   :label="item.brandName"
                   :value="item.id"
@@ -82,7 +105,13 @@
           </el-col>
           <el-col :xs="24" :sm="12" :md="6" :lg="6">
             <el-form-item :label="tr('鉴定机构')" prop="authAgency">
-              <el-select v-model="queryParams.authAgency" clearable style="width: 100%" :placeholder="tr('请选择')">
+              <el-select
+                v-model="queryParams.authAgency"
+                multiple
+                clearable
+                style="width: 100%"
+                :placeholder="tr('可多选')"
+              >
                 <el-option v-for="opt in AUTH_AGENCY_OPTIONS" :key="opt" :label="opt" :value="opt" />
               </el-select>
             </el-form-item>
@@ -95,11 +124,24 @@
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="12" :md="6" :lg="6">
+            <el-form-item :label="tr('周转天数')" prop="turnoverDaysMin">
+              <el-input-number
+                v-model="queryParams.turnoverDaysMin"
+                :min="0"
+                :precision="0"
+                :controls="false"
+                :placeholder="tr('最小周转天数')"
+                style="width: 100%"
+                @keyup.enter="handleQuery"
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :xs="24" :sm="12" :md="6" :lg="6">
             <el-form-item :label="tr('已护理')" prop="cared">
               <el-switch v-model="queryParams.cared" active-text="Yes" inactive-text="No" :active-value="true" :inactive-value="false" />
             </el-form-item>
           </el-col>
-          <el-col :xs="24" :sm="24" :md="12" :lg="12">
+          <el-col :xs="24" :sm="12" :md="6" :lg="6">
             <el-form-item :label="tr('寄售信息')" prop="consignInfo">
               <el-input v-model="queryParams.consignInfo" clearable :placeholder="tr('请输入')" @keyup.enter="handleQuery" />
             </el-form-item>
@@ -178,8 +220,12 @@
       <el-row :gutter="10" class="mb8" type="flex" justify="space-between">
         <el-col :span="12">
           <span class="page-title">{{ tr('库存统计') }}</span>
+          <el-tag v-if="queryParams.snapshotDate" class="ml10" type="info">
+            {{ tr('日终库存快照') }}：{{ queryParams.snapshotDate }}
+          </el-tag>
         </el-col>
         <el-col :span="12" class="toolbar-right">
+          <el-checkbox v-model="filterNonZero" :label="tr('过滤掉库存不为0的商品')" size="large" @change="handleChangeFilterNonZero"/>
           <el-checkbox v-model="filterable" :label="tr('过滤掉库存为0的商品')" size="large" @change="handleChangeFilterZero"/>
           <el-button
             :type="batchMode ? 'warning' : 'default'"
@@ -195,6 +241,11 @@
           >
             {{ tr('导出Excel') }}
           </el-button>
+          <el-button
+            @click="openExportTaskDialog"
+          >
+            {{ tr('导出记录') }}
+          </el-button>
         </el-col>
       </el-row>
 
@@ -202,7 +253,34 @@
       <div v-if="batchMode" class="batch-action-bar">
         <div class="batch-action-left">
           <el-icon class="batch-action-icon"><Select /></el-icon>
-          <span class="batch-action-info">{{ tr('已选择 {count} 个商品').replace('{count}', selectedRows.length) }}</span>
+          <span class="batch-action-info">
+            {{
+              isAllFilteredSelected
+                ? tr('已选择全部 {count} 个商品').replace('{count}', selectedRows.length)
+                : tr('已选择 {count} 个商品').replace('{count}', selectedRows.length)
+            }}
+          </span>
+          <el-button
+            v-if="!isAllFilteredSelected && total > 0"
+            type="primary"
+            icon="CircleCheck"
+            class="batch-select-action-btn"
+            :loading="selectAllLoading"
+            @click="handleSelectAllFiltered"
+          >
+            {{ tr('全部勾选') }}
+          </el-button>
+          <el-button
+            v-if="selectedRows.length > 0"
+            type="warning"
+            plain
+            icon="Close"
+            class="batch-select-action-btn"
+            :disabled="selectAllLoading"
+            @click="clearInventorySelection"
+          >
+            {{ tr('取消全选') }}
+          </el-button>
         </div>
         <div class="batch-action-right">
           <el-button
@@ -227,7 +305,8 @@
           <el-button
             type="success"
             icon="Upload"
-            :disabled="selectedRows.length === 0"
+            :disabled="selectedRows.length === 0 || !!queryParams.snapshotDate"
+            :title="queryParams.snapshotDate ? tr('历史快照不可用于批量上架') : ''"
             @click="handleBatchPublish"
           >
             {{ tr('批量上架') }}
@@ -299,6 +378,7 @@
                 class="item-main-image"
                 :preview-src-list="[getItemImage(row)]"
                 preview-teleported
+                :hide-on-click-modal="true"
                 @show="setPreviewImageContext([{ url: getItemImage(row) }], 0, getPreviewImageTitle(row))"
                 @switch="setPreviewImageIndex"
               >
@@ -366,6 +446,7 @@
                 class="item-main-image"
                 :preview-src-list="[getItemImage(row)]"
                 preview-teleported
+                :hide-on-click-modal="true"
                 @show="setPreviewImageContext([{ url: getItemImage(row) }], 0, getPreviewImageTitle(row))"
                 @switch="setPreviewImageIndex"
               >
@@ -441,7 +522,7 @@
         <!-- ========== 新增列：周转天数 ========== -->
         <el-table-column :label="tr('周转天数')" prop="turnoverDays" :width="isEn ? 150 : 125" align="center" sortable="custom">
           <template #default="{ row }">
-            <span v-if="row.turnoverDays != null">{{ row.turnoverDays }}</span>
+            <span v-if="row.turnoverDays != null" :class="{ 'turnover-days-alert': isTurnoverDaysAlert(row.turnoverDays) }">{{ row.turnoverDays }}</span>
             <span v-else>--</span>
           </template>
         </el-table-column>
@@ -470,7 +551,7 @@
               - 有出库时显示历史累计利润
               - null 显示 --（兜底）
             -->
-            {{ formatProfit(row.totalProfit) }}
+            <span :class="{ 'profit-margin-alert': isHighProfitMargin(row) }">{{ formatProfit(row.totalProfit) }}</span>
           </template>
         </el-table-column>
       </el-table>
@@ -544,6 +625,7 @@
                   :preview-src-list="detailImagePreviewList"
                   :initial-index="idx"
                   preview-teleported
+                  :hide-on-click-modal="true"
                   fit="cover"
                   class="detail-image"
                   @show="setPreviewImageContext(detailImages, idx, getDetailPreviewImageTitle())"
@@ -569,6 +651,49 @@
       </div>
     </el-drawer>
 
+    <el-dialog v-model="exportTaskDialogVisible" :title="tr('导出记录')" width="860px">
+      <el-table :data="exportTaskList" v-loading="exportTaskListLoading" border>
+        <el-table-column prop="fileName" :label="tr('文件名')" min-width="250">
+          <template #default="{ row }">
+            {{ row.fileName || (row.exportType === 'BATCH' ? tr('库存统计批量导出') : tr('库存统计')) }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="rowCount" :label="tr('数据量')" width="90" align="center">
+          <template #default="{ row }">{{ row.rowCount ?? '--' }}</template>
+        </el-table-column>
+        <el-table-column :label="tr('状态')" width="110" align="center">
+          <template #default="{ row }">
+            <el-tag :type="exportTaskStatusType(row.status)">{{ exportTaskStatusText(row.status) }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="createTime" :label="tr('创建时间')" width="170" />
+        <el-table-column :label="tr('操作')" width="150" align="center" fixed="right">
+          <template #default="{ row }">
+            <el-button
+              link
+              type="primary"
+              :disabled="row.status !== EXPORT_TASK_STATUS_SUCCESS"
+              @click="downloadCompletedExportTask(row)"
+            >
+              {{ tr('下载') }}
+            </el-button>
+            <el-button
+              link
+              type="danger"
+              :loading="deletingExportTaskId === row.id"
+              @click="deleteExportTaskRecord(row)"
+            >
+              {{ tr('删除') }}
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+      <template #footer>
+        <el-button :loading="exportTaskListLoading" @click="loadExportTaskList">{{ tr('刷新') }}</el-button>
+        <el-button type="primary" @click="exportTaskDialogVisible = false">{{ tr('关闭') }}</el-button>
+      </template>
+    </el-dialog>
+
     <!-- 批量上架对话框 -->
     <PublishDialog ref="publishDialogRef" @success="getList" />
   </div>
@@ -576,20 +701,27 @@
 
 <script setup name="Inventory">
 import {
-  batchExportInventoryBoardExcel,
-  exportInventoryBoardItem,
+  deleteInventoryExportTask,
+  downloadInventoryExportTask,
+  getInventoryExportTask,
   listInventoryBoard,
-  listInventoryBoardWarehouseSummary
+  listInventoryExportTasks,
+  listInventoryBoardWarehouseSummary,
+  submitInventoryBoardBatchExportTask,
+  submitInventoryBoardExportTask
 } from '@/api/wms/inventory'
 import { downloadItemImage, getItemImages } from '@/api/wms/item'
-import { computed, getCurrentInstance, nextTick, onMounted, ref } from 'vue'
+import { computed, getCurrentInstance, nextTick, onActivated, onMounted, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import { getRowspanMethod } from '@/utils/getRowSpanMethod'
 import { useWmsStore } from '@/store/modules/wms'
 import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
 import { blobValidate } from '@/utils/ruoyi'
-import { formatDateTimeForQuery } from '@/utils/laTime'
+import { formatDateForQuery, formatDateTimeForQuery } from '@/utils/laTime'
+import { formatBrandNames, parseBrandIdList } from '@/utils/itemBrand'
 import PublishDialog from '@/views/wms/platform/listings/components/PublishDialog.vue'
+const route = useRoute()
 
 const { proxy } = getCurrentInstance()
 const settingsStore = useSettingsStore()
@@ -609,9 +741,15 @@ const loading = ref(true)
 const exportLoading = ref(false)
 const batchExportExcelLoading = ref(false)
 const batchExportPdfLoading = ref(false)
+const exportTaskDialogVisible = ref(false)
+const exportTaskListLoading = ref(false)
+const exportTaskList = ref([])
+const deletingExportTaskId = ref(null)
 const selectedRows = ref([])
 const selectedRowMap = ref(new Map())
+const selectAllLoading = ref(false)
 const total = ref(0)
+const isAllFilteredSelected = computed(() => total.value > 0 && selectedRows.value.length >= total.value)
 const tableRef = ref(null)
 let suppressInventorySelectionChange = false
 const rowSpanArray = ref(['itemGroupKey', 'skuGroupKey', 'skuWarehouseGroupKey'])
@@ -661,10 +799,15 @@ const detailFieldList = computed(() => {
 })
 
 function getDetailExportLabels() {
-  const labels = ['\u5546\u54c1\u5206\u7c7b', '\u5546\u54c1\u54c1\u724c', '\u5e74\u4efd', '\u6210\u8272', '\u5305\u578b', '\u6750\u8d28']
-  if (canViewCostPrice.value) labels.push('\u6210\u672c\u4ef7')
-  if (canViewSellingPrice.value) labels.push('\u9500\u552e\u4ef7')
-  labels.push('\u6570\u91cf', '\u662f\u5426\u5df2\u62a4\u7406', '\u9274\u5b9a\u673a\u6784', '\u5bc4\u552e\u4fe1\u606f', '\u7455\u75b5', '\u914d\u4ef6', '\u5907\u6ce8')
+  // 与 detailFieldList 顺序一致，跟随界面语言
+  const labels = [
+    tr('商品分类'), tr('商品品牌'), tr('年份'), tr('成色'), tr('包型'), tr('材质')
+  ]
+  if (canViewCostPrice.value) labels.push(tr('成本价'))
+  if (canViewSellingPrice.value) labels.push(tr('销售价'))
+  labels.push(
+    tr('数量'), tr('是否已护理'), tr('鉴定机构'), tr('寄售信息'), tr('瑕疵'), tr('配件'), tr('备注')
+  )
   return labels
 }
 
@@ -673,7 +816,20 @@ const DEFAULT_INVENTORY_SORT = {
   order: 'descending'
 }
 
+const getLosAngelesToday = () => new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'America/Los_Angeles',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit'
+}).format(new Date())
+
+const snapshotDatePlaceholder = (() => {
+  const [year, month, day] = getLosAngelesToday().split('-')
+  return `${month}/${day}/${year}`
+})()
+
 const filterable = ref(true)
+const filterNonZero = ref(false)
 const batchMode = ref(false)
 const publishDialogRef = ref(null)
 const queryType = ref('item')
@@ -685,34 +841,87 @@ const queryParams = ref({
   itemName: undefined,
   skuCode: undefined,
   itemCategory: undefined,
-  itemBrand: undefined,
+  itemBrand: [],
   itemCondition: undefined,
   year: undefined,
   cared: undefined,
   defaultQty: undefined,
-  authAgency: undefined,
+  authAgency: [],
   consignInfo: undefined,
   createTimeRange: [],
   receiptTimeRange: [],
+  snapshotDate: undefined,
   costPriceMin: undefined,
   costPriceMax: undefined,
   sellingPriceMin: undefined,
   sellingPriceMax: undefined,
+  turnoverDaysMin: undefined,
   minQuantity: undefined,
+  maxQuantity: undefined,
   orderByColumn: DEFAULT_INVENTORY_SORT.prop,
   isAsc: DEFAULT_INVENTORY_SORT.order
 })
 
+// 与商品管理一致：同名品牌合并显示，保留不同分类下的全部品牌 ID。
+const brandGroups = computed(() => {
+  const groups = new Map()
+  for (const brand of useWmsStore().itemBrandList || []) {
+    if (brand?.id == null || brand.id === '') continue
+    const id = String(brand.id)
+    const brandName = String(brand.brandName || '').trim()
+    const key = brandName ? `name:${brandName}` : `id:${id}`
+    if (!groups.has(key)) {
+      groups.set(key, { id, brandName: brandName || id, brandIds: [] })
+    }
+    const group = groups.get(key)
+    if (!group.brandIds.includes(id)) group.brandIds.push(id)
+  }
+  return [...groups.values()]
+})
+
+const selectedBrandGroups = computed({
+  get() {
+    const selectedIds = new Set(parseBrandIdList(queryParams.value.itemBrand))
+    return brandGroups.value
+      .filter(group => group.brandIds.some(id => selectedIds.has(id)))
+      .map(group => group.id)
+  },
+  set(values) {
+    const selectedGroups = new Set(values)
+    // 列表、仓库汇总和导出均使用这份完整的品牌筛选范围。
+    queryParams.value.itemBrand = brandGroups.value
+      .filter(group => selectedGroups.has(group.id))
+      .flatMap(group => group.brandIds)
+  }
+})
+
+const appliedRouteFilterKey = ref('')
+
+function applyRouteSkuFilter() {
+  const skuCode = String(route.query.skuCode || '').trim()
+  const inStockOnly = String(route.query.inStock || '') === '1'
+  const filterKey = `${skuCode}|${inStockOnly}`
+  if (!skuCode || (filterKey === appliedRouteFilterKey.value && queryParams.value.skuCode === skuCode && (!inStockOnly || filterable.value))) return false
+  queryParams.value.skuCode = skuCode
+  if (inStockOnly) {
+    filterable.value = true
+    filterNonZero.value = false
+  }
+  queryParams.value.pageNum = 1
+  appliedRouteFilterKey.value = filterKey
+  return true
+}
+
 // ───────────── 格式化工具函数 ─────────────
 
 /**
- * 金额格式化：null/undefined → '--'，否则保留两位小数
+ * 金额格式化：null/undefined → '--'，否则显示 $ + 千分位 + 两位小数
  */
 function formatMoney(v) {
   if (v === null || v === undefined) return '--'
   const n = Number(v)
   if (!Number.isFinite(n)) return '--'
-  return n.toFixed(2)
+  return `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
 function displayValue(value) {
@@ -901,13 +1110,14 @@ function exportDetailPdf() {
   const item = detailItem.value || {}
   const sku = detailSku.value || {}
   const title = displayValue(item.itemName)
+  const caredLabel = tr('是否已护理')
   const exportLabels = getDetailExportLabels()
   const rows = detailFieldList.value.map((field, index) => {
     const label = exportLabels[index] || field.label
     const value = field.type === 'accessories' && accessoryList.value.length
       ? accessoryList.value.join(', ')
-      : label === '\u662f\u5426\u5df2\u62a4\u7406' && detailItem.value?.cared !== null && detailItem.value?.cared !== undefined
-        ? (detailItem.value.cared ? '\u5df2\u62a4\u7406' : '\u672a\u62a4\u7406')
+      : label === caredLabel && detailItem.value?.cared !== null && detailItem.value?.cared !== undefined
+        ? (detailItem.value.cared ? tr('已护理') : tr('未护理'))
         : field.value
     return `<tr><th>${escapeHtml(label)}</th><td>${escapeHtml(value)}</td></tr>`
   }).join('')
@@ -915,7 +1125,7 @@ function exportDetailPdf() {
     .map((img, idx) => {
       const url = getImageUrl(img)
       if (!url) return ''
-      return `<figure><img src="${escapeHtml(url)}" alt="image-${idx + 1}" /><figcaption>${escapeHtml('\u5546\u54c1\u56fe\u7247')} ${idx + 1}</figcaption></figure>`
+      return `<figure><img src="${escapeHtml(url)}" alt="image-${idx + 1}" /><figcaption>${escapeHtml(tr('商品图片'))} ${idx + 1}</figcaption></figure>`
     })
     .join('')
   const printWindow = window.open('', '_blank')
@@ -923,12 +1133,13 @@ function exportDetailPdf() {
     proxy.$modal.msgError(tr('导出失败'))
     return
   }
+  const detailTitleFallback = tr('商品详情')
   printWindow.document.write(`
 <!doctype html>
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>${escapeHtml(safeFileName(`${sku.skuCode || ''}-${item.itemName || '商品详情'}`, '商品详情'))}</title>
+  <title>${escapeHtml(safeFileName(`${sku.skuCode || ''}-${item.itemName || detailTitleFallback}`, detailTitleFallback))}</title>
   <style>
     * { box-sizing: border-box; }
     body { margin: 0; padding: 28px; font-family: Arial, "Microsoft YaHei", sans-serif; color: #1f2329; }
@@ -964,9 +1175,10 @@ function exportDetailPdf() {
 }
 
 function getBrandName(item) {
+  if (item?.brandNames) return item.brandNames
   if (item?.brandName) return item.brandName
-  if (!item?.itemBrand) return ''
-  return useWmsStore().itemBrandMap.get(item.itemBrand)?.brandName || ''
+  const store = useWmsStore()
+  return formatBrandNames(item, store.itemBrandMap, store.itemBrandList)
 }
 
 function getCategoryName(item) {
@@ -978,14 +1190,31 @@ function getCategoryName(item) {
 }
 
 /**
- * 利润格式化：null → '--'，0 → '0.00'，其余保留两位小数
+ * 利润格式化：null → '--'，0 → '$0.00'，其余显示 $ + 千分位 + 两位小数
  * totalProfit 无出库时后端返回 0，不应显示 '--'
  */
 function formatProfit(v) {
   if (v === null || v === undefined) return '--'
   const n = Number(v)
   if (!Number.isFinite(n)) return '--'
-  return n.toFixed(2)
+  return `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+}
+
+/** 周转天数 ≥ 30 高亮 */
+function isTurnoverDaysAlert(days) {
+  const n = Number(days)
+  return Number.isFinite(n) && n >= 30
+}
+
+/**
+ * 利润率 = (平均销售价 - 平均成本价) / 平均成本价
+ * 高于 40% 时高亮利润列
+ */
+function isHighProfitMargin(row) {
+  const cost = Number(row?.avgReceiptCost)
+  const sell = Number(row?.avgShipmentPrice)
+  if (!Number.isFinite(cost) || cost <= 0 || !Number.isFinite(sell)) return false
+  return (sell - cost) / cost > 0.4
 }
 
 /**
@@ -1097,12 +1326,21 @@ const getCurrentQuery = () => {
     query.receiptEndTime = formatDateTimeForQuery(query.receiptTimeRange[1])
   }
   delete query.receiptTimeRange
-  if (filterable.value) {
+  if (filterNonZero.value) {
+    query.minQuantity = 0
+    query.maxQuantity = 0
+  } else if (filterable.value) {
     query.minQuantity = 1
+    query.maxQuantity = undefined
   } else {
     query.minQuantity = undefined
+    query.maxQuantity = undefined
   }
   return query
+}
+
+const disableFutureSnapshotDate = (date) => {
+  return formatDateForQuery(date) > getLosAngelesToday()
 }
 
 const getExportLanguagePayload = () => {
@@ -1409,6 +1647,49 @@ const openDetailDrawer = async (row) => {
   }
 }
 
+const SELECT_ALL_PAGE_SIZE = 500
+
+function filterInventoryBoardRows(rows) {
+  if (filterNonZero.value) return rows.filter(it => Number(it.quantity) === 0)
+  if (filterable.value) return rows.filter(it => Number(it.quantity) !== 0)
+  return rows
+}
+
+function normalizeInventoryBoardRows(rows) {
+  rows.forEach(it => {
+    const warehouseKey = getWarehouseGroupKey(it)
+    const itemKey = String(it.itemName ?? '')
+    const skuKey = String(it.skuCode ?? '')
+
+    it.warehouseGroupKey = warehouseKey
+    it.itemGroupKey = itemKey
+    it.skuGroupKey = skuKey
+    it.warehouseItemGroupKey = `${warehouseKey}-${itemKey}`
+    it.skuWarehouseGroupKey = `${skuKey}-${warehouseKey}`
+  })
+  return rows
+}
+
+async function fetchAllInventoryBoardRows() {
+  const baseQuery = getCurrentQuery()
+  const allRows = []
+  let pageNum = 1
+  let totalCount = 0
+
+  while (true) {
+    const res = await listInventoryBoard(
+      { ...baseQuery, pageNum, pageSize: SELECT_ALL_PAGE_SIZE },
+      queryType.value
+    )
+    const rows = normalizeInventoryBoardRows(filterInventoryBoardRows(res.rows || []))
+    allRows.push(...rows)
+    totalCount = res.total ?? allRows.length
+    if (rows.length === 0 || allRows.length >= totalCount) break
+    pageNum += 1
+  }
+  return allRows
+}
+
 const getList = async () => {
   const query = getCurrentQuery()
   loading.value = true
@@ -1428,22 +1709,7 @@ const getList = async () => {
       warehouseSummaryMap.value = new Map()
       res = await listInventoryBoard(query, queryType.value)
     }
-    let rows = res.rows || []
-    if (filterable.value) {
-      rows = rows.filter(it => Number(it.quantity) !== 0)
-    }
-
-    rows.forEach(it => {
-      const warehouseKey = getWarehouseGroupKey(it)
-      const itemKey = String(it.itemName ?? '')
-      const skuKey = String(it.skuCode ?? '')
-
-      it.warehouseGroupKey = warehouseKey
-      it.itemGroupKey = itemKey
-      it.skuGroupKey = skuKey
-      it.warehouseItemGroupKey = `${warehouseKey}-${itemKey}`
-      it.skuWarehouseGroupKey = `${skuKey}-${warehouseKey}`
-    })
+    const rows = normalizeInventoryBoardRows(filterInventoryBoardRows(res.rows || []))
 
     suppressInventorySelectionChange = true
     inventoryList.value = rows
@@ -1458,7 +1724,7 @@ const handleExportExcel = async () => {
   try {
     exportLoading.value = true
     const exportLanguage = getExportLanguagePayload()
-    const blobData = await exportInventoryBoardItem(
+    const response = await submitInventoryBoardExportTask(
       {
         ...getCurrentQuery(),
         ...exportLanguage
@@ -1470,28 +1736,126 @@ const handleExportExcel = async () => {
         }
       }
     )
-    const isBlob = blobValidate(blobData)
-    if (!isBlob) {
-      const resText = await blobData.text()
-      const rspObj = JSON.parse(resText)
-      const errMsg = rspObj?.msg || tr('导出失败')
-      throw new Error(errMsg)
-    }
-    const excelData = isEn.value ? await translateInventoryExportXlsx(blobData) : blobData
-    const blob = new Blob([excelData], {
-      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    })
-    const url = window.URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = isEn.value ? 'MichaelStudioWMS-Inventory Statistics.xlsx' : 'MichaelStudioWMS-库存统计.xlsx'
-    a.click()
-    window.URL.revokeObjectURL(url)
+    proxy.$modal.msgSuccess(tr('导出任务已提交，文件正在后台生成'))
+    await waitForInventoryExportTask(
+      response.data,
+      isEn.value ? 'LuxeAFWMS-Inventory Statistics.xlsx' : 'LuxeAFWMS-库存统计.xlsx'
+    )
     proxy.$modal.msgSuccess(tr('导出成功'))
   } catch (e) {
     proxy.$modal.msgError(e?.message || tr('导出失败'))
   } finally {
     exportLoading.value = false
+  }
+}
+
+const EXPORT_TASK_STATUS_SUCCESS = 2
+const EXPORT_TASK_STATUS_FAILED = 3
+const EXPORT_TASK_STATUS_EXPIRED = 4
+const EXPORT_TASK_POLL_INTERVAL = 2000
+const EXPORT_TASK_MAX_WAIT = 30 * 60 * 1000
+
+const delay = milliseconds => new Promise(resolve => window.setTimeout(resolve, milliseconds))
+
+async function waitForInventoryExportTask(taskId, fallbackFileName) {
+  const startedAt = Date.now()
+  while (Date.now() - startedAt < EXPORT_TASK_MAX_WAIT) {
+    const response = await getInventoryExportTask(taskId, { silentError: true })
+    const task = response.data || {}
+    if (task.status === EXPORT_TASK_STATUS_SUCCESS) {
+      await downloadInventoryTaskFile(taskId, task.fileName || fallbackFileName)
+      return
+    }
+    if (task.status === EXPORT_TASK_STATUS_FAILED) {
+      throw new Error(task.errorMsg || tr('导出失败'))
+    }
+    if (task.status === EXPORT_TASK_STATUS_EXPIRED) {
+      throw new Error(tr('导出文件已过期，请重新导出'))
+    }
+    await delay(EXPORT_TASK_POLL_INTERVAL)
+  }
+  throw new Error(tr('导出任务仍在后台生成，请稍后重试'))
+}
+
+async function downloadInventoryTaskFile(taskId, fileName) {
+  const blobData = await downloadInventoryExportTask(taskId, { silentError: true })
+  if (!blobValidate(blobData)) {
+    const responseText = await blobData.text()
+    const responseBody = JSON.parse(responseText)
+    throw new Error(responseBody?.msg || tr('导出失败'))
+  }
+  const blob = new Blob([blobData], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  })
+  const url = window.URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = fileName || 'inventory-export.xlsx'
+  anchor.click()
+  window.URL.revokeObjectURL(url)
+}
+
+function exportTaskStatusText(status) {
+  return {
+    0: tr('待处理'),
+    1: tr('生成中'),
+    2: tr('已完成'),
+    3: tr('失败'),
+    4: tr('已过期')
+  }[status] || '--'
+}
+
+function exportTaskStatusType(status) {
+  return {
+    0: 'info',
+    1: 'warning',
+    2: 'success',
+    3: 'danger',
+    4: 'info'
+  }[status] || 'info'
+}
+
+async function loadExportTaskList() {
+  try {
+    exportTaskListLoading.value = true
+    const response = await listInventoryExportTasks({ pageNum: 1, pageSize: 20 }, { silentError: true })
+    exportTaskList.value = response.rows || []
+  } catch (error) {
+    proxy.$modal.msgError(error?.message || tr('查询导出记录失败'))
+  } finally {
+    exportTaskListLoading.value = false
+  }
+}
+
+function openExportTaskDialog() {
+  exportTaskDialogVisible.value = true
+  loadExportTaskList()
+}
+
+async function downloadCompletedExportTask(task) {
+  try {
+    await downloadInventoryTaskFile(task.id, task.fileName)
+  } catch (error) {
+    proxy.$modal.msgError(error?.message || tr('导出失败'))
+    await loadExportTaskList()
+  }
+}
+
+async function deleteExportTaskRecord(task) {
+  try {
+    await proxy.$modal.confirm(tr('确认删除该导出记录吗？删除后文件将无法恢复。'))
+  } catch {
+    return
+  }
+  try {
+    deletingExportTaskId.value = task.id
+    await deleteInventoryExportTask(task.id, { silentError: true })
+    proxy.$modal.msgSuccess(tr('删除成功'))
+    await loadExportTaskList()
+  } catch (error) {
+    proxy.$modal.msgError(error?.message || tr('删除失败'))
+  } finally {
+    deletingExportTaskId.value = null
   }
 }
 
@@ -1543,6 +1907,29 @@ function handleSelectionChange(selection) {
   syncSelectedRows()
 }
 
+async function handleSelectAllFiltered() {
+  if (total.value === 0 || isAllFilteredSelected.value) return
+  try {
+    selectAllLoading.value = true
+    suppressInventorySelectionChange = true
+    const allRows = await fetchAllInventoryBoardRows()
+    selectedRowMap.value.clear()
+    allRows.forEach(row => {
+      const key = getInventorySelectionKey(row)
+      if (key) selectedRowMap.value.set(key, row)
+    })
+    syncSelectedRows()
+    await restoreInventorySelection()
+    if (selectedRows.value.length === 0) {
+      proxy.$modal.msgWarning(tr('没有可选择的库存记录'))
+    }
+  } catch (e) {
+    proxy.$modal.msgError(e?.message || tr('全选失败'))
+  } finally {
+    selectAllLoading.value = false
+  }
+}
+
 async function handleBatchExportExcel() {
   if (selectedRows.value.length === 0) {
     proxy.$modal.msgWarning(tr('请至少选择一条库存记录'))
@@ -1555,8 +1942,8 @@ async function handleBatchExportExcel() {
       warehouseId: row.warehouseId
     }))
     const exportLanguage = getExportLanguagePayload()
-    const blobData = await batchExportInventoryBoardExcel(
-      { rows },
+    const response = await submitInventoryBoardBatchExportTask(
+      { rows, snapshotDate: queryParams.value.snapshotDate },
       {
         headers: {
           'Content-Language': exportLanguage.contentLanguage,
@@ -1564,22 +1951,11 @@ async function handleBatchExportExcel() {
         }
       }
     )
-    const isBlob = blobValidate(blobData)
-    if (!isBlob) {
-      const resText = await blobData.text()
-      const rspObj = JSON.parse(resText)
-      throw new Error(rspObj?.msg || tr('批量导出失败'))
-    }
-    const excelData = isEn.value ? await translateInventoryExportXlsx(blobData) : blobData
-    const blob = new Blob([excelData], {
-      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    })
-    const url = window.URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = isEn.value ? 'MichaelStudioWMS-Inventory Batch Export.xlsx' : 'MichaelStudioWMS-库存统计批量导出.xlsx'
-    a.click()
-    window.URL.revokeObjectURL(url)
+    proxy.$modal.msgSuccess(tr('导出任务已提交，文件正在后台生成'))
+    await waitForInventoryExportTask(
+      response.data,
+      isEn.value ? 'LuxeAFWMS-Inventory Batch Export.xlsx' : 'LuxeAFWMS-库存统计批量导出.xlsx'
+    )
     proxy.$modal.msgSuccess(tr('批量导出成功'))
   } catch (e) {
     proxy.$modal.msgError(e?.message || tr('批量导出失败'))
@@ -1589,8 +1965,8 @@ async function handleBatchExportExcel() {
 }
 
 /**
- * 批量导出 PDF（参考详细信息页面的 exportDetailPdf 实现方式：
- * 前端构建 HTML，新窗口打开后自动触发浏览器打印为 PDF）。
+ * 批量导出 PDF：前端构建可配置的打印页面。
+ * 用户可在打印页面调整平均成本价系数、隐藏任意列，再手动触发打印。
  */
 function handleBatchExportPdf() {
   if (selectedRows.value.length === 0) {
@@ -1602,40 +1978,68 @@ function handleBatchExportPdf() {
     const canViewCost = canViewCostPrice.value
     const canViewSelling = canViewSellingPrice.value
 
-    // ── 表头 ──
-    const headers = [
-      tr('商品图片'), tr('商品名称'), tr('SKU编号'), tr('仓库'), tr('库存数量'),
-      tr('入库时间'), tr('出库时间'), tr('出库平台'), tr('周转天数')
+    // 列定义同时驱动表头、数据单元格和显隐设置，隐藏后不会占据表格空间。
+    const columns = [
+      {
+        key: 'image',
+        label: tr('商品图片'),
+        className: 'image-cell',
+        render: row => {
+          const imgUrl = row.itemImage || ''
+          return imgUrl
+            ? `<img src="${escapeHtml(imgUrl)}" alt="" />`
+            : escapeHtml(tr('暂无图片'))
+        }
+      },
+      { key: 'itemName', label: tr('商品名称'), render: row => escapeHtml(row.itemName || '--') },
+      { key: 'skuCode', label: tr('SKU编号'), render: row => escapeHtml(row.skuCode || '--') },
+      { key: 'warehouse', label: tr('仓库'), render: row => escapeHtml(row.warehouseName || '--') },
+      { key: 'quantity', label: tr('库存数量'), className: 'number-cell', render: row => row.quantity != null ? escapeHtml(row.quantity) : '--' },
+      { key: 'receiptTime', label: tr('入库时间'), render: row => escapeHtml(formatTime(row.receiptTime)) },
+      { key: 'shipmentTime', label: tr('出库时间'), render: row => escapeHtml(formatTime(row.shipmentTime)) },
+      { key: 'platform', label: tr('出库平台'), render: row => escapeHtml(row.outboundPlatform || '--') },
+      { key: 'turnoverDays', label: tr('周转天数'), className: 'number-cell', render: row => row.turnoverDays != null ? escapeHtml(row.turnoverDays) : '--' }
     ]
-    if (canViewCost) headers.push(tr('平均成本价'))
-    if (canViewSelling) headers.push(tr('平均销售价'))
-    if (canViewCost && canViewSelling) headers.push(tr('利润'))
-    headers.push(tr('成色'), tr('瑕疵'))
-    const headerHtml = headers.map(h => `<th>${escapeHtml(h)}</th>`).join('')
+    if (canViewCost) {
+      columns.push({
+        key: 'avgCost',
+        label: tr('平均成本价'),
+        className: 'number-cell',
+        render: row => {
+          const rawCost = Number(row.avgReceiptCost)
+          const rawValue = row.avgReceiptCost !== null && row.avgReceiptCost !== undefined && Number.isFinite(rawCost)
+            ? String(rawCost)
+            : ''
+          return `<span data-cost-value="${escapeHtml(rawValue)}">${escapeHtml(formatMoney(row.avgReceiptCost))}</span>`
+        }
+      })
+    }
+    if (canViewSelling) {
+      columns.push({ key: 'avgSelling', label: tr('平均销售价'), className: 'number-cell', render: row => escapeHtml(formatMoney(row.avgShipmentPrice)) })
+    }
+    if (canViewCost && canViewSelling) {
+      columns.push({ key: 'profit', label: tr('利润'), className: 'number-cell', render: row => escapeHtml(formatProfit(row.totalProfit)) })
+    }
+    columns.push(
+      { key: 'condition', label: tr('成色'), render: row => escapeHtml(row.itemCondition || '--') },
+      { key: 'defect', label: tr('瑕疵'), render: row => escapeHtml(row.defect || '--') }
+    )
 
-    // ── 数据行 ──
+    const headerHtml = columns
+      .map(column => `<th data-column="${column.key}" class="${column.className || ''}">${escapeHtml(column.label)}</th>`)
+      .join('')
     const rowsHtml = selectedRows.value.map(row => {
-      const cells = []
-      // 图片列（参考前端 72×72 展示尺寸）
-      const imgUrl = row.itemImage || ''
-      cells.push(imgUrl
-        ? `<img src="${escapeHtml(imgUrl)}" style="width:72px;height:72px;object-fit:cover;border-radius:4px;display:block;margin:0 auto;" />`
-        : escapeHtml(tr('暂无图片')))
-      cells.push(escapeHtml(row.itemName || '--'))
-      cells.push(escapeHtml(row.skuCode || '--'))
-      cells.push(escapeHtml(row.warehouseName || '--'))
-      cells.push(row.quantity != null ? row.quantity : '--')
-      cells.push(formatTime(row.receiptTime))
-      cells.push(formatTime(row.shipmentTime))
-      cells.push(escapeHtml(row.outboundPlatform || '--'))
-      cells.push(row.turnoverDays != null ? row.turnoverDays : '--')
-      if (canViewCost) cells.push(formatMoney(row.avgReceiptCost))
-      if (canViewSelling) cells.push(formatMoney(row.avgShipmentPrice))
-      if (canViewCost && canViewSelling) cells.push(formatProfit(row.totalProfit))
-      cells.push(escapeHtml(row.itemCondition || '--'))
-      cells.push(escapeHtml(row.defect || '--'))
-      return `<tr>${cells.map(c => `<td>${c}</td>`).join('')}</tr>`
+      const cells = columns.map(column => (
+        `<td data-column="${column.key}" class="${column.className || ''}">${column.render(row)}</td>`
+      )).join('')
+      return `<tr>${cells}</tr>`
     }).join('')
+    const columnOptionsHtml = columns.map(column => `
+      <label class="column-option">
+        <input type="checkbox" data-column-toggle value="${column.key}" checked />
+        <span>${escapeHtml(column.label)}</span>
+      </label>
+    `).join('')
 
     // ── 报表标题与导出时间 ──
     const title = tr('库存统计报表')
@@ -1645,6 +2049,25 @@ function handleBatchExportPdf() {
     const metaText = isEn.value
       ? `${nowStr} | ${count} records`
       : `${nowStr} | 共 ${count} 条记录`
+    const pageText = isEn.value
+      ? {
+          settings: 'PDF settings',
+          costCoefficient: 'Avg cost coefficient',
+          costHint: 'The average cost price in the report will be multiplied by this coefficient.',
+          visibleColumns: 'Visible columns',
+          print: 'Print',
+          invalidCoefficient: 'Please enter a valid coefficient.',
+          emptyColumns: 'Please keep at least one column visible.'
+        }
+      : {
+          settings: 'PDF 设置',
+          costCoefficient: '平均成本价系数',
+          costHint: '报表中的平均成本价将乘以此系数。',
+          visibleColumns: '显示的表头',
+          print: '打印',
+          invalidCoefficient: '请输入有效的系数。',
+          emptyColumns: '请至少保留一个显示字段。'
+        }
     const printWindow = window.open('', '_blank')
     if (!printWindow) {
       proxy.$modal.msgError(tr('批量导出失败'))
@@ -1659,40 +2082,131 @@ function handleBatchExportPdf() {
   <title>${escapeHtml(safeFileName(title, title))}</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: Arial, "Microsoft YaHei", sans-serif; padding: 20px; color: #1f2329; }
+    body { font-family: Arial, "Microsoft YaHei", sans-serif; padding: 20px; color: #1f2329; background: #f5f7fa; }
+    button, input { font: inherit; }
+    .settings-panel { max-width: 1480px; margin: 0 auto 16px; padding: 16px 18px; border: 1px solid #dfe3eb; border-radius: 8px; background: #fff; box-shadow: 0 2px 8px rgba(31, 35, 41, .06); }
+    .settings-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+    .settings-title { font-size: 17px; font-weight: 700; }
+    .print-button { min-width: 92px; padding: 8px 18px; border: 1px solid #409eff; border-radius: 5px; color: #fff; background: #409eff; cursor: pointer; }
+    .print-button:hover { background: #337ecc; border-color: #337ecc; }
+    .setting-row { display: flex; align-items: flex-start; gap: 14px; padding-top: 12px; border-top: 1px solid #edf0f5; }
+    .setting-row + .setting-row { margin-top: 12px; }
+    .setting-label { flex: 0 0 150px; padding-top: 5px; color: #4b5563; font-weight: 600; }
+    .setting-content { flex: 1; min-width: 0; }
+    .coefficient-input { width: 180px; height: 32px; padding: 0 10px; border: 1px solid #cfd5df; border-radius: 4px; outline: none; }
+    .coefficient-input:focus { border-color: #409eff; box-shadow: 0 0 0 2px rgba(64, 158, 255, .15); }
+    .setting-hint { margin-top: 6px; color: #7b8494; font-size: 12px; }
+    .column-options { display: flex; flex-wrap: wrap; gap: 8px 18px; }
+    .column-option { display: inline-flex; align-items: center; gap: 6px; min-width: 112px; line-height: 28px; cursor: pointer; user-select: none; }
+    .column-option input { width: 16px; height: 16px; accent-color: #409eff; }
+    .report-content { max-width: 1480px; margin: 0 auto; padding: 20px; background: #fff; }
     h1 { font-size: 18px; margin-bottom: 4px; }
     .meta { color: #667085; font-size: 11px; margin-bottom: 16px; }
     table { width: 100%; border-collapse: collapse; font-size: 11px; table-layout: auto; }
     th, td { border: 1px solid #dfe3eb; padding: 4px 6px; text-align: left; vertical-align: middle; overflow-wrap: break-word; }
     th { background: #f5f7fa; color: #4b5563; font-weight: 600; white-space: nowrap; }
     tr:nth-child(even) td { background: #fafbfc; }
-    td:first-child { width: 80px; text-align: center; }
-    .cell-num { text-align: right; white-space: nowrap; }
+    th[hidden], td[hidden] { display: none; }
+    .image-cell { width: 80px; text-align: center; }
+    td.image-cell img { width: 72px; height: 72px; object-fit: cover; border-radius: 4px; display: block; margin: 0 auto; }
+    .number-cell { text-align: right; white-space: nowrap; }
     @page { size: landscape; margin: 6mm; }
     @media print {
-      body { padding: 0; }
+      body { padding: 0; background: #fff; }
+      .no-print { display: none !important; }
+      .report-content { max-width: none; margin: 0; padding: 0; }
       table { font-size: 8px; }
       th, td { padding: 2px 3px; }
       th { white-space: normal; }
-      td:first-child { width: 56px; }
-      td:first-child img { width: 48px; height: 48px; }
+      .image-cell { width: 56px; }
+      td.image-cell img { width: 48px; height: 48px; }
       h1 { font-size: 14px; }
       .meta { font-size: 8px; margin-bottom: 8px; }
     }
   </style>
 </head>
 <body>
-  <h1>${escapeHtml(title)}</h1>
-  <div class="meta">${escapeHtml(metaText)}</div>
-  <table><thead><tr>${headerHtml}</tr></thead><tbody>${rowsHtml}</tbody></table>
+  <section class="settings-panel no-print">
+    <div class="settings-header">
+      <div class="settings-title">${escapeHtml(pageText.settings)}</div>
+      <button id="print-button" class="print-button" type="button">${escapeHtml(pageText.print)}</button>
+    </div>
+    ${canViewCost ? `
+    <div class="setting-row">
+      <div class="setting-label">${escapeHtml(pageText.costCoefficient)}</div>
+      <div class="setting-content">
+        <input id="cost-coefficient" class="coefficient-input" type="number" value="1" step="0.01" />
+        <div class="setting-hint">${escapeHtml(pageText.costHint)}</div>
+      </div>
+    </div>` : ''}
+    <div class="setting-row">
+      <div class="setting-label">${escapeHtml(pageText.visibleColumns)}</div>
+      <div class="setting-content column-options">${columnOptionsHtml}</div>
+    </div>
+  </section>
+  <main class="report-content">
+    <h1>${escapeHtml(title)}</h1>
+    <div class="meta">${escapeHtml(metaText)}</div>
+    <table><thead><tr>${headerHtml}</tr></thead><tbody>${rowsHtml}</tbody></table>
+  </main>
+  <script>
+    (function () {
+      var toggles = Array.prototype.slice.call(document.querySelectorAll('[data-column-toggle]'));
+      var coefficientInput = document.getElementById('cost-coefficient');
+      var printButton = document.getElementById('print-button');
+
+      function syncColumns() {
+        toggles.forEach(function (toggle) {
+          var cells = document.querySelectorAll('[data-column="' + toggle.value + '"]');
+          Array.prototype.forEach.call(cells, function (cell) {
+            cell.hidden = !toggle.checked;
+          });
+        });
+      }
+
+      function syncCostValues() {
+        if (!coefficientInput) return;
+        var coefficient = Number(coefficientInput.value);
+        var isValid = coefficientInput.value.trim() !== '' && Number.isFinite(coefficient);
+        var formatter = new Intl.NumberFormat('en-US', {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2
+        });
+        var values = document.querySelectorAll('[data-cost-value]');
+        Array.prototype.forEach.call(values, function (valueElement) {
+          var rawValue = valueElement.getAttribute('data-cost-value');
+          var cost = Number(rawValue);
+          valueElement.textContent = isValid && rawValue !== '' && Number.isFinite(cost)
+            ? '$' + formatter.format(cost * coefficient)
+            : '--';
+        });
+      }
+
+      toggles.forEach(function (toggle) {
+        toggle.addEventListener('change', syncColumns);
+      });
+      if (coefficientInput) coefficientInput.addEventListener('input', syncCostValues);
+      printButton.addEventListener('click', function () {
+        if (!toggles.some(function (toggle) { return toggle.checked; })) {
+          window.alert('${escapeHtml(pageText.emptyColumns)}');
+          return;
+        }
+        if (coefficientInput && (coefficientInput.value.trim() === '' || !Number.isFinite(Number(coefficientInput.value)))) {
+          window.alert('${escapeHtml(pageText.invalidCoefficient)}');
+          coefficientInput.focus();
+          return;
+        }
+        window.print();
+      });
+
+      syncColumns();
+      syncCostValues();
+    })();
+  <\/script>
 </body>
 </html>
     `)
     printWindow.document.close()
-    // 等新窗口渲染完成后自动呼出浏览器打印对话框
-    setTimeout(function () {
-      try { printWindow.print(); } catch (e) { /* 用户可能已关闭窗口 */ }
-    }, 800)
     proxy.$modal.msgSuccess(tr('批量导出成功'))
   } catch (e) {
     proxy.$modal.msgError(e?.message || tr('批量导出失败'))
@@ -1707,6 +2221,12 @@ const handleQuery = () => {
   getList()
 }
 
+const handleSnapshotDateChange = () => {
+  clearInventorySelection()
+  queryParams.value.pageNum = 1
+  getList()
+}
+
 let suppressSortChangeQuery = false
 
 const applyDefaultInventorySort = () => {
@@ -1717,6 +2237,7 @@ const applyDefaultInventorySort = () => {
 const resetQuery = () => {
   clearInventorySelectionWhenNotBatching()
   filterable.value = true
+  filterNonZero.value = false
   proxy.resetForm('queryRef')
   applyDefaultInventorySort()
   queryParams.value.pageNum = 1
@@ -1748,10 +2269,20 @@ const handleSortTypeChange = (e) => {
   getList()
 }
 
-const handleChangeFilterZero = () => {
+const refreshInventoryFilter = () => {
   clearInventorySelectionWhenNotBatching()
   queryParams.value.pageNum = 1
   getList()
+}
+
+const handleChangeFilterNonZero = (checked) => {
+  if (checked) filterable.value = false
+  refreshInventoryFilter()
+}
+
+const handleChangeFilterZero = (checked) => {
+  if (checked) filterNonZero.value = false
+  refreshInventoryFilter()
 }
 
 const toggleBatchMode = () => {
@@ -1789,10 +2320,15 @@ onMounted(() => {
   useWmsStore().getItemBrandList()
   useWmsStore().getItemCategoryList()
   useWmsStore().getItemCategoryTreeList()
+  applyRouteSkuFilter()
   getList()
 })
-</script>
 
+onActivated(() => {
+  if (applyRouteSkuFilter()) getList()
+})
+
+</script>
 <style scoped lang="scss">
 .page-title {
   font-size: large;
@@ -1847,6 +2383,7 @@ onMounted(() => {
   display: flex;
   justify-content: flex-end;
   align-items: center;
+  flex-wrap: wrap;
   gap: 12px;
 }
 
@@ -1868,6 +2405,7 @@ onMounted(() => {
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
+  flex-wrap: wrap;
 }
 
 .batch-action-icon {
@@ -1880,6 +2418,10 @@ onMounted(() => {
   font-size: 14px;
   font-weight: 500;
   white-space: nowrap;
+}
+
+.batch-select-action-btn {
+  font-weight: 600;
 }
 
 .batch-action-right {
@@ -2044,6 +2586,16 @@ onMounted(() => {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
   gap: 14px;
+}
+
+.turnover-days-alert {
+  color: #f56c6c;
+  font-weight: 700;
+}
+
+.profit-margin-alert {
+  color: #e6a23c;
+  font-weight: 700;
 }
 
 :global(.el-image-viewer__actions) {

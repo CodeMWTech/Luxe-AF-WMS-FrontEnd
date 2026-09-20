@@ -27,12 +27,28 @@
             @keyup.enter.prevent="handleQuery"
           />
         </el-form-item>
+        <el-form-item class="filter-item" label="SKU" prop="skuCode" :label-width="isEn ? '170px' : undefined">
+          <el-input
+            v-model="queryParams.skuCode"
+            :placeholder="isEn ? 'Please enter SKU' : '请输入SKU编号'"
+            clearable
+            @keyup.enter.prevent="handleQuery"
+          />
+        </el-form-item>
         <el-form-item class="filter-item filter-item-actions">
           <el-button type="primary" icon="Search" class="action-btn" @click="handleQuery">{{ isEn ? 'Search' : '搜索' }}</el-button>
           <el-button icon="Refresh" class="action-btn" @click="resetQuery">{{ isEn ? 'Reset' : '重置' }}</el-button>
         </el-form-item>
       </el-form>
     </el-card>
+
+    <div v-if="activeSkuCode" class="sku-find-floating" :style="skuFindDragStyle" @pointerdown="startSkuFindDrag">
+      <span class="sku-find-count">{{ skuFindCountText }}</span>
+      <el-button-group>
+        <el-button size="small" icon="ArrowUp" :disabled="matchedSkuRowCount <= 1" @click="scrollToPrevMatchedSku" />
+        <el-button size="small" icon="ArrowDown" :disabled="matchedSkuRowCount <= 1" @click="scrollToNextMatchedSku" />
+      </el-button-group>
+    </div>
 
     <el-card class="mt20">
 
@@ -73,8 +89,10 @@
                 ref="checkOrderTableRef"
                 :row-key="getRowKey"
                 :row-class-name="getRowClassName"
+                :expand-row-keys="expandedRowKeys"
                 :empty-text="isEn ? 'No stocktake orders' : '暂无盘库单'"
                 cell-class-name="vertical-top-cell"
+                @expand-change="handleExpandExchange"
                 @selection-change="handleSmartSelectionChange"
       >
         <el-table-column
@@ -84,6 +102,40 @@
           :reserve-selection="true"
           :selectable="isSmartCheckSelectable"
         />
+        <el-table-column type="expand">
+          <template #default="props">
+            <div style="padding: 0 50px 20px 50px">
+              <h3>{{ isEn ? 'Item Details' : '商品明细' }}</h3>
+              <el-table :data="props.row.details" v-loading="detailLoading[props.$index]" :empty-text="isEn ? 'No item details' : '暂无商品明细'" :row-class-name="getDetailRowClassName">
+                <el-table-column :label="isEn ? 'Item Name' : '商品名称'">
+                  <template #default="{ row }">
+                    <div>{{ getDetailItemName(row) }}</div>
+                  </template>
+                </el-table-column>
+                <el-table-column :label="isEn ? 'SKU Code' : 'SKU编号'">
+                  <template #default="{ row }">
+                    <div :class="{ 'sku-highlight-text': isMatchedSku(row) }">{{ getDetailSkuCode(row) || '-' }}</div>
+                  </template>
+                </el-table-column>
+                <el-table-column :label="isEn ? 'Counted Qty' : '盘点到的库存/实盘'" align="right">
+                  <template #default="{ row }">
+                    <el-statistic :value="Number(getCountedQuantity(row))" :precision="0"/>
+                  </template>
+                </el-table-column>
+                <el-table-column :label="isEn ? 'System Qty' : '实际库存/系统库存'" align="right">
+                  <template #default="{ row }">
+                    <el-statistic :value="Number(getActualQuantity(row))" :precision="0"/>
+                  </template>
+                </el-table-column>
+                <el-table-column :label="isEn ? 'Difference' : '差额'" align="right">
+                  <template #default="{ row }">
+                    <div>{{ getDifferenceDisplay(row) }}</div>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </div>
+          </template>
+        </el-table-column>
         <el-table-column :label="isEn ? 'Order No.' : '单号'" align="left" prop="orderNo" min-width="180" show-overflow-tooltip />
         <el-table-column :label="isEn ? 'Warehouse' : '仓库'" align="left" min-width="180" show-overflow-tooltip>
           <template #default="{ row }">
@@ -131,7 +183,11 @@
                   <el-button link type="primary" @click="handleUpdate(scope.row)" v-hasPermi="['wms:check:edit']" :disabled="[-1, 1].includes(scope.row.orderStatus)">{{ isEn ? 'Edit' : '修改' }}</el-button>
                 </template>
               </el-popover>
-              <el-button link type="primary" @click="handleViewRow(scope.row)" v-hasPermi="['wms:check:all']">{{ isSmartCheckOrder(scope.row) ? (isEn ? 'Report' : '查看报告') : (isEn ? 'View' : '查看') }}</el-button>
+              <el-button link type="primary" @click="handleViewRow(scope.row)" v-hasPermi="['wms:check:all']">
+                {{ isSmartCheckOrder(scope.row)
+                  ? (isEn ? 'Report' : '查看报告')
+                  : (expandedRowKeys.includes(scope.row.id) ? (isEn ? 'Collapse' : '收起') : (isEn ? 'View' : '查看')) }}
+              </el-button>
             </div>
             <div class="mt10">
               <el-popover
@@ -171,6 +227,39 @@
       :order-no="watchDetailObj.orderNo"
       @handle-cancel-click="watchDetailObj.show = false"
     />
+    <el-dialog
+      v-model="smartSnapshotDateVisible"
+      :title="isEn ? 'Select Inventory Baseline Date' : '选择库存对比日期'"
+      width="420px"
+      destroy-on-close
+      :close-on-click-modal="false"
+    >
+      <el-form label-position="top" @submit.prevent>
+        <el-form-item :label="isEn ? 'Compare counted quantities with end-of-day inventory on' : '将实盘数量与以下日期的日终库存进行对比'" required>
+          <el-date-picker
+            v-model="smartSnapshotDate"
+            type="date"
+            value-format="YYYY-MM-DD"
+            :format="isEn ? 'MM/DD/YYYY' : 'YYYY-MM-DD'"
+            :placeholder="isEn ? 'Select date' : '请选择日期'"
+            :disabled-date="disableFutureSnapshotDate"
+            style="width: 100%"
+          />
+        </el-form-item>
+        <el-alert
+          :title="isEn ? 'The selected date is fixed in the preview and generated AUDIT order.' : '所选日期会固定在预览和生成的核查单中。'"
+          type="info"
+          :closable="false"
+          show-icon
+        />
+      </el-form>
+      <template #footer>
+        <el-button @click="smartSnapshotDateVisible = false">{{ isEn ? 'Cancel' : '取消' }}</el-button>
+        <el-button type="primary" :loading="smartCheckLoading" @click="confirmSmartSnapshotDate">
+          {{ isEn ? 'Start Check' : '开始核查' }}
+        </el-button>
+      </template>
+    </el-dialog>
     <el-dialog
       v-model="smartReportVisible"
       custom-class="smart-check-dialog"
@@ -262,6 +351,7 @@ import { translateByMap } from '@/locales/runtime-map'
 import { createProgressLoading } from '@/utils/progressLoading'
 import { blobValidate } from '@/utils/ruoyi'
 import { downloadXlsx, getExportLanguageHeaders, prepareLanguageXlsx } from '@/utils/xlsxTranslate'
+import { useFixedDrag } from '@/utils/useFixedDrag'
 const { proxy } = getCurrentInstance();
 const {wms_check_status} = proxy.useDict("wms_check_status");
 const settingsStore = useSettingsStore()
@@ -272,11 +362,22 @@ const loading = ref(true);
 const ids = ref([]);
 const total = ref(0);
 const title = ref("");
+// 当前展开集合
+const expandedRowKeys = ref([])
+// 商品明细table的loading状态集合
+const detailLoading = ref([])
+const matchedSkuRowCount = ref(0)
+const matchedSkuRowIndex = ref(0)
+const activeSkuCode = ref('')
+const skuFindLoading = ref(false)
+const skuSearchToken = ref(0)
+const { dragStyle: skuFindDragStyle, startDrag: startSkuFindDrag } = useFixedDrag()
 const data = reactive({
   queryParams: {
     pageNum: 1,
     pageSize: 10,
     orderNo: undefined,
+    skuCode: undefined,
     orderStatus: -2,
   },
 });
@@ -290,6 +391,8 @@ const smartCheckMode = ref(false)
 const selectedSmartRows = ref([])
 const smartCheckLoading = ref(false)
 const smartConfirmLoading = ref(false)
+const smartSnapshotDateVisible = ref(false)
+const smartSnapshotDate = ref(getLocalDateString(new Date()))
 const smartReportVisible = ref(false)
 const smartCheckReport = ref(null)
 const smartReportSource = ref(null)
@@ -304,6 +407,10 @@ const tr = (text) => translateByMap(text, settingsStore.language || 'zh-cn')
 const isEn = computed(() => (settingsStore.language || 'zh-cn') === 'en')
 const formLabelWidth = computed(() => '80px')
 const translatedCheckStatusOptions = computed(() => (wms_check_status.value || []).map(it => ({ ...it, label: tr(it.label) })))
+const skuFindCountText = computed(() => {
+  if (skuFindLoading.value) return isEn.value ? 'Searching...' : '查找中...'
+  return matchedSkuRowCount.value ? `${matchedSkuRowIndex.value + 1}/${matchedSkuRowCount.value}` : (isEn.value ? 'No match' : '无匹配')
+})
 const wmsStore = useWmsStore()
 
 function getCheckOrderStateLabel(row) {
@@ -331,24 +438,81 @@ const smartReportSubtitle = computed(() => {
   const report = smartCheckReport.value || {}
   const orderCount = report.sourceOrderCount ?? '-'
   const skuCount = report.systemSkuCount ?? (report.details?.length || 0)
+  const snapshotDate = report.snapshotDate || smartSnapshotDate.value || '-'
   return isEn.value
-    ? `Checked ${orderCount} stocktake orders - System inventory baseline ${skuCount} SKUs`
-    : `已核查 ${orderCount} 个盘库单 · 系统库存基准 ${skuCount} 个 SKU`
+    ? `Inventory baseline ${snapshotDate} EOD - Checked ${orderCount} stocktake orders - ${skuCount} SKUs`
+    : `库存基准日 ${snapshotDate} 日终 · 已核查 ${orderCount} 个盘库单 · ${skuCount} 个 SKU`
 })
 const canConfirmSmartReport = computed(() => smartReportSource.value === 'preview' && smartCheckReport.value && !smartCheckReport.value.orderId)
 
-/** 鏌ヨ鐩樺簱鍗曞垪琛?*/
+function getOrderOpTime(row) {
+  const updateTime = row?.updateTime ? new Date(row.updateTime).getTime() : 0
+  const createTime = row?.createTime ? new Date(row.createTime).getTime() : 0
+  return Math.max(updateTime || 0, createTime || 0)
+}
+
+function sortOrdersByRecentOp(rows) {
+  return [...(rows || [])].sort((a, b) => getOrderOpTime(b) - getOrderOpTime(a))
+}
+
+/** 查询盘库单列表（SKU 搜索逻辑对齐入库/出库/移库） */
 function getList() {
   loading.value = true;
   const query = {...queryParams.value}
   query.orderNo = query.orderNo?.trim() || undefined
+  query.skuCode = query.skuCode?.trim() || undefined
+  activeSkuCode.value = query.skuCode || ''
+  skuFindLoading.value = !!query.skuCode
+  matchedSkuRowCount.value = 0
+  matchedSkuRowIndex.value = 0
+  const searchToken = ++skuSearchToken.value
   if (query.orderStatus === -2) {
     query.orderStatus = null
   }
   listCheckOrder(query).then(response => {
-    checkOrderList.value = response.rows;
+    if (searchToken !== skuSearchToken.value) return
+    // 有 SKU 时后端已过滤无关盘库单；前端再按操作时间最近优先排序
+    const rows = query.skuCode
+      ? sortOrdersByRecentOp(response.rows)
+      : (response.rows || [])
+    checkOrderList.value = rows;
     total.value = response.total;
-    loading.value = false;
+    detailLoading.value = checkOrderList.value.map(() => false)
+    if (query.skuCode) {
+      // 与入库一致：匹配单全部展开；明细按 SKU 拉取后，再隐藏没有任何匹配明细的盘库单
+      expandedRowKeys.value = checkOrderList.value.map(row => row.id)
+      Promise.all(checkOrderList.value.map(row => loadCheckOrderDetail(row, {
+        skuCode: query.skuCode,
+        force: true
+      }))).then(() => {
+        if (searchToken !== skuSearchToken.value) return
+        const sku = String(query.skuCode).toLowerCase()
+        const matchedRows = checkOrderList.value.filter(row =>
+          (row.details || []).some(detail => String(getDetailSkuCode(detail) || '').toLowerCase() === sku)
+        )
+        checkOrderList.value = matchedRows
+        detailLoading.value = matchedRows.map(() => false)
+        expandedRowKeys.value = matchedRows.map(row => row.id)
+        // 后端若未过滤，以当前页实际匹配数为准，避免未匹配单继续显示
+        if (matchedRows.length !== rows.length) {
+          total.value = matchedRows.length
+        }
+        loading.value = false
+        scrollToMatchedSku(true)
+      }).catch(() => {
+        if (searchToken !== skuSearchToken.value) return
+        loading.value = false
+        skuFindLoading.value = false
+      })
+    } else {
+      expandedRowKeys.value = []
+      skuFindLoading.value = false
+      loading.value = false
+    }
+  }).catch(() => {
+    if (searchToken !== skuSearchToken.value) return
+    loading.value = false
+    skuFindLoading.value = false
   });
 }
 
@@ -388,10 +552,15 @@ function handleUpdate(row) {
 }
 
 function handleGoDetail(row) {
-  watchDetailObj.value.orderNo = row.orderNo
-  checkOrderDetailRef.value.setCheckOrderId(row.id)
-  watchDetailObj.value.show = true
-  checkOrderDetailRef.value.handleQuery()
+  const index = expandedRowKeys.value.indexOf(row.id)
+  if (index !== -1) {
+    // 收起
+    expandedRowKeys.value.splice(index, 1)
+  } else {
+    // 展开
+    expandedRowKeys.value.push(row.id)
+    loadCheckOrderDetail(row).then(() => scrollToMatchedSku(true))
+  }
 }
 
 function handleViewRow(row) {
@@ -474,18 +643,31 @@ function getRowClassName({ row }) {
   return isSmartCheckOrder(row) ? 'smart-audit-row' : ''
 }
 
-async function handleStartSmartCheck() {
+function handleStartSmartCheck() {
   if (!selectedSmartRows.value.length) {
     proxy.$modal.msgWarning(isEn.value ? 'Please select stocktake orders' : '请选择需要核查的盘库单')
     return
   }
+  smartSnapshotDate.value = smartSnapshotDate.value || getLocalDateString(new Date())
+  smartSnapshotDateVisible.value = true
+}
+
+async function confirmSmartSnapshotDate() {
+  if (!smartSnapshotDate.value) {
+    proxy.$modal.msgWarning(isEn.value ? 'Please select an inventory baseline date' : '请选择库存对比日期')
+    return
+  }
   smartCheckLoading.value = true
   try {
-    const res = await smartCheckPreview({ sourceOrderIds: selectedSmartRows.value.map(row => row.id) })
+    const res = await smartCheckPreview({
+      sourceOrderIds: selectedSmartRows.value.map(row => row.id),
+      snapshotDate: smartSnapshotDate.value
+    })
     smartCheckReport.value = res.data
     smartReportSource.value = 'preview'
     resetSmartReportPagination()
     await loadSmartReportDetails()
+    smartSnapshotDateVisible.value = false
     smartReportVisible.value = true
   } finally {
     smartCheckLoading.value = false
@@ -501,7 +683,8 @@ async function handleConfirmSmartCheck() {
   try {
     const res = await smartCheckConfirm({
       sourceOrderIds: selectedSmartRows.value.map(row => row.id),
-      previewToken: smartCheckReport.value?.previewToken
+      previewToken: smartCheckReport.value?.previewToken,
+      snapshotDate: smartCheckReport.value?.snapshotDate || smartSnapshotDate.value
     })
     smartCheckReport.value = res.data
     smartReportSource.value = 'audit'
@@ -586,6 +769,7 @@ function buildSmartReportFromOrder(order) {
   return {
     orderId: order?.id,
     orderNo: order?.orderNo,
+    snapshotDate: parseSnapshotDate(order?.remark),
     sourceOrderCount,
     systemSkuCount: summary ? summary.shortageCount + summary.surplusCount + summary.matchedCount : 0,
     shortageCount: summary?.shortageCount || 0,
@@ -595,6 +779,24 @@ function buildSmartReportFromOrder(order) {
     remark: order?.remark,
     details: []
   }
+}
+
+function parseSnapshotDate(remark) {
+  const match = String(remark || '').match(/库存基准日\s*(\d{4}-\d{2}-\d{2})/)
+  return match?.[1]
+}
+
+function getLocalDateString(date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function disableFutureSnapshotDate(date) {
+  const today = new Date()
+  today.setHours(23, 59, 59, 999)
+  return date.getTime() > today.getTime()
 }
 
 function isZeroQuantityMatched(row) {
@@ -635,7 +837,7 @@ async function handlePrint(row) {
     table = detailRows.map(detail => {
       return {
         itemName: getDetailItemName(detail),
-        skuCode: getDetailSkuCode(detail),
+        skuCode: getDetailSkuCode(detail) || '-',
         quantity: Number(getActualQuantity(detail)).toFixed(0),
         profitAndLoss: getDifferenceDisplay(detail),
         checkQuantity: Number(getCountedQuantity(detail)).toFixed(0)
@@ -738,6 +940,112 @@ function getRowKey(row) {
   return row.id
 }
 
+function handleExpandExchange(value, expandedRows) {
+  if (!ifExpand(expandedRows)) {
+    return
+  }
+  expandedRowKeys.value = expandedRows.map(it => it.id)
+  loadCheckOrderDetail(value)
+}
+
+function loadCheckOrderDetail(row, options = {}) {
+  const index = checkOrderList.value.findIndex(it => it.id === row.id)
+  if (index === -1) return Promise.resolve()
+  const skuCode = options.skuCode !== undefined
+    ? (options.skuCode || undefined)
+    : (activeSkuCode.value || undefined)
+  const detailsKey = skuCode || '__all__'
+  if (!options.force && row.details && row._detailsSkuKey === detailsKey) {
+    return Promise.resolve()
+  }
+  detailLoading.value[index] = true
+  const query = {
+    pageNum: 1,
+    // SKU 搜索时只拉匹配明细（性能）；普通展开拉完整明细
+    pageSize: skuCode ? 100 : 10000,
+    haveProfitAndLoss: false
+  }
+  if (skuCode) {
+    query.skuCode = skuCode
+  }
+  return listByCheckOrderId(row.id, query).then(res => {
+    const details = getResponseRows(res)
+    checkOrderList.value[index].details = details
+    checkOrderList.value[index]._detailsSkuKey = detailsKey
+  }).finally(() => {
+    detailLoading.value[index] = false
+  })
+}
+
+function ifExpand(expandedRows) {
+  if (expandedRows.length < expandedRowKeys.value.length) {
+    expandedRowKeys.value = expandedRows.map(it => it.id)
+    return false;
+  }
+  return true
+}
+
+function getActiveSkuCode() {
+  return activeSkuCode.value
+}
+
+function isMatchedSku(row) {
+  const sku = getActiveSkuCode()
+  if (!sku) return false
+  return String(getDetailSkuCode(row) || '').toLowerCase() === String(sku).toLowerCase()
+}
+
+function getDetailRowClassName({ row }) {
+  return isMatchedSku(row) ? 'sku-highlight-row' : ''
+}
+
+function getMatchedSkuRows() {
+  const page = document.querySelector('.check-order-page')
+  return Array.from(page?.querySelectorAll('.sku-highlight-row') || [])
+}
+
+function scrollToMatchedSku(resetIndex = false) {
+  if (!getActiveSkuCode()) return
+  nextTick(() => {
+    window.setTimeout(() => {
+      const rows = getMatchedSkuRows()
+      matchedSkuRowCount.value = rows.length
+      skuFindLoading.value = false
+      if (!rows.length) return
+      if (resetIndex || matchedSkuRowIndex.value >= rows.length) {
+        matchedSkuRowIndex.value = 0
+      }
+      rows[matchedSkuRowIndex.value]?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, 50)
+  })
+}
+
+function scrollToPrevMatchedSku() {
+  if (!getActiveSkuCode()) return
+  nextTick(() => {
+    window.setTimeout(() => {
+      const rows = getMatchedSkuRows()
+      matchedSkuRowCount.value = rows.length
+      if (!rows.length) return
+      matchedSkuRowIndex.value = (matchedSkuRowIndex.value - 1 + rows.length) % rows.length
+      rows[matchedSkuRowIndex.value]?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, 50)
+  })
+}
+
+function scrollToNextMatchedSku() {
+  if (!getActiveSkuCode()) return
+  nextTick(() => {
+    window.setTimeout(() => {
+      const rows = getMatchedSkuRows()
+      matchedSkuRowCount.value = rows.length
+      if (!rows.length) return
+      matchedSkuRowIndex.value = (matchedSkuRowIndex.value + 1) % rows.length
+      rows[matchedSkuRowIndex.value]?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, 50)
+  })
+}
+
 function getResponseRows(response) {
   if (Array.isArray(response?.rows)) return response.rows
   if (Array.isArray(response?.data?.rows)) return response.data.rows
@@ -750,7 +1058,7 @@ function getDetailItemName(row) {
 }
 
 function getDetailSkuCode(row) {
-  return row?.skuCode || row?.itemSku?.skuCode || '-'
+  return row?.skuCode || row?.itemSku?.skuCode || ''
 }
 
 function getCountedQuantity(row) {
@@ -887,6 +1195,54 @@ onMounted(() => {
 
 .check-order-page .el-table .vertical-top-cell {
   vertical-align: top
+}
+
+.check-order-page .el-table .sku-highlight-row > td {
+  background: #fff4b8 !important;
+}
+
+.check-order-page .sku-find-floating {
+  position: fixed;
+  top: 84px;
+  right: 32px;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: #fff;
+  border: 1px solid #dcdfe6;
+  border-radius: 6px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+  cursor: move;
+  touch-action: none;
+  user-select: none;
+}
+
+.check-order-page .sku-find-floating .el-button {
+  width: 34px;
+}
+
+@media (max-width: 768px) {
+  .check-order-page .sku-find-floating {
+    top: auto;
+    right: 16px;
+    bottom: 18px;
+  }
+}
+
+.check-order-page .sku-find-count {
+  width: 56px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #606266;
+  font-size: 13px;
+}
+
+.check-order-page .sku-highlight-text {
+  color: #8a5a00;
+  font-weight: 600;
 }
 
 .check-order-page .el-table .smart-audit-row {

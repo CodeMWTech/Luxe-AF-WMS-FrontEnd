@@ -66,12 +66,15 @@ export default {
     ElNotification.warning(content)
   },
   // 确认窗体
-  confirm(content, options = {}) {
-    return ElMessageBox.confirm(tr(content), tr("系统提示"), {
+  confirm(content, titleOrOptions = {}, options = {}) {
+    const hasCustomTitle = typeof titleOrOptions === 'string'
+    const title = hasCustomTitle ? titleOrOptions : "系统提示"
+    const mergedOptions = hasCustomTitle ? options : titleOrOptions
+    return ElMessageBox.confirm(tr(content), tr(title), {
       confirmButtonText: tr('确定'),
       cancelButtonText: tr('取消'),
       type: "warning",
-      ...options,
+      ...mergedOptions,
     })
   },
   // 提交内容

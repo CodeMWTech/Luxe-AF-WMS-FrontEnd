@@ -102,4 +102,25 @@ function handleCurrentChange(val) {
 .pagination-container.hidden {
   display: none;
 }
+/* Catalog pages: keep pager inside the card (override global absolute layout) */
+.pagination-container.catalog-pagination {
+  position: relative !important;
+  height: auto !important;
+  min-height: 48px;
+  margin: 16px 0 0;
+  padding: 12px 8px 4px !important;
+  display: flex;
+  justify-content: flex-end;
+  box-sizing: border-box;
+  width: 100%;
+  overflow: visible;
+}
+.pagination-container.catalog-pagination :deep(.el-pagination) {
+  position: static !important;
+  right: auto !important;
+  max-width: 100%;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  row-gap: 8px;
+}
 </style>

@@ -1,0 +1,2797 @@
+<template>
+  <div class="app-container employee-page" :class="{ 'is-en': isEn }">
+    <el-card class="hero-card">
+      <div class="hero-header">
+        <div>
+          <h2 class="hero-title">{{ tr('HR 人力资源') }}</h2>
+          <p class="hero-desc">{{ tr('管理公司员工档案与必备文件。系统用户会自动同步到此列表；也可直接新增无登录账号的员工。非公司员工的系统账号可从 HR 移除。') }}</p>
+        </div>
+        <div class="hero-actions">
+          <el-button type="primary" icon="Plus" @click="handleAdd" v-hasPermi="['wms:employee:add']">{{ tr('新增员工') }}</el-button>
+          <el-button type="primary" plain icon="User" @click="goUserManagement">{{ tr('用户管理（创建登录账号）') }}</el-button>
+          <el-dropdown v-hasPermi="['wms:employee:file:batchDownload']" @command="handleBatchDownloadCommand">
+            <el-button type="default">
+              {{ tr('按文件类型导出') }}<el-icon class="el-icon--right"><arrow-down /></el-icon>
+            </el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item v-if="hasSingleTargetEmployee" command="REQUIRED">{{ tr('导出必备文件包') }}</el-dropdown-item>
+                <el-dropdown-item v-if="hasSingleTargetEmployee" command="OTHER">{{ tr('导出其他文件包') }}</el-dropdown-item>
+                <el-dropdown-item v-if="hasSingleTargetEmployee" command="ALL">{{ tr('导出全部文件包') }}</el-dropdown-item>
+                <el-dropdown-item divided disabled>{{ tr('按文件类型') }}</el-dropdown-item>
+                <el-dropdown-item v-for="item in batchDownloadTypes" :key="item.code" :command="'TYPE:' + item.code">
+                  {{ tr(item.label) }}
+                </el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+          <el-button icon="Download" @click="handleExport" v-hasPermi="['wms:employee:export']">{{ tr('导出 Excel 花名册') }}</el-button>
+        </div>
+      </div>
+
+      <el-row :gutter="16" class="stats-row">
+        <el-col :xs="24" :sm="12" :md="6">
+          <div class="stat-card">
+            <div class="stat-label">{{ tr('员工总数') }}</div>
+            <div class="stat-value">{{ stats.activeEmployeeCount || 0 }}</div>
+            <div class="stat-sub">{{ tr('在职与试用期，左侧列表分页展示') }}</div>
+          </div>
+        </el-col>
+        <el-col :xs="24" :sm="12" :md="6">
+          <div class="stat-card">
+            <div class="stat-label">{{ tr('已上传文件') }}</div>
+            <div class="stat-value">{{ stats.uploadedAttachmentCount || 0 }} / {{ stats.requiredAttachmentCount || 0 }}</div>
+            <div class="stat-sub">{{ tr('全员必备文件上传进度') }}</div>
+          </div>
+        </el-col>
+        <el-col :xs="24" :sm="12" :md="6">
+          <div class="stat-card">
+            <div class="stat-label">{{ tr('缺文件员工') }}</div>
+            <div class="stat-value warning">{{ stats.missingEmployeeCount || 0 }}</div>
+            <div class="stat-sub">{{ tr('仍有必备文件未齐') }} · {{ tr('已齐全') }} {{ stats.completeFileEmployeeCount || 0 }}</div>
+          </div>
+        </el-col>
+        <el-col :xs="24" :sm="12" :md="6">
+          <div class="stat-card">
+            <div class="stat-label">{{ tr('已归档员工') }}</div>
+            <div class="stat-value">{{ stats.archivedEmployeeCount || 0 }}</div>
+            <div class="stat-sub">{{ tr('已完成离职归档') }}</div>
+          </div>
+        </el-col>
+      </el-row>
+
+      <div
+        v-if="permissionNotice.visible"
+        class="mt16 permission-notice"
+        :class="{ 'is-expanded': permissionNoticeExpanded }"
+      >
+        <div class="permission-notice-header" @click="permissionNoticeExpanded = !permissionNoticeExpanded">
+          <el-icon class="permission-notice-icon"><InfoFilled /></el-icon>
+          <span class="permission-notice-title">{{ permissionNotice.title }}</span>
+          <span v-if="!permissionNoticeExpanded" class="permission-notice-summary">{{ permissionNotice.summary }}</span>
+          <el-button link type="primary" class="permission-notice-toggle" @click.stop="permissionNoticeExpanded = !permissionNoticeExpanded">
+            {{ permissionNoticeExpanded ? hrText('收起', 'Collapse') : hrText('展开', 'Expand') }}
+            <el-icon><component :is="permissionNoticeExpanded ? 'ArrowUp' : 'ArrowDown'" /></el-icon>
+          </el-button>
+        </div>
+        <div v-show="permissionNoticeExpanded" class="permission-notice-body">
+          <p class="permission-notice-intro">{{ permissionNotice.intro }}</p>
+          <div v-if="permissionNotice.allowed.length" class="permission-section">
+            <strong>{{ hrText('当前可以：', 'You can:') }}</strong>
+            <ul>
+              <li v-for="(item, idx) in permissionNotice.allowed" :key="'a-' + idx">{{ item }}</li>
+            </ul>
+          </div>
+          <div v-if="permissionNotice.restricted.length" class="permission-section">
+            <strong>{{ hrText('当前不可用：', 'Not available:') }}</strong>
+            <ul>
+              <li v-for="(item, idx) in permissionNotice.restricted" :key="'r-' + idx">{{ item }}</li>
+            </ul>
+          </div>
+          <p v-if="permissionNotice.grantHint" class="permission-grant-hint">{{ permissionNotice.grantHint }}</p>
+        </div>
+      </div>
+
+      <el-alert
+        v-if="stats.missingEmployeeCount > 0"
+        type="warning"
+        show-icon
+        :closable="false"
+        class="mt16"
+      >
+        <template #title>
+          {{ missingAlertTitle }}
+        </template>
+      </el-alert>
+    </el-card>
+
+    <el-row :gutter="16" class="mt16 workspace-row" :class="{ 'is-detail-open': !!selectedEmployee }">
+      <el-col :xs="24" :md="8" class="workspace-col">
+        <el-card class="list-card workspace-panel" :class="{ 'is-detail-open': !!selectedEmployee }">
+          <div class="list-toolbar">
+            <el-input
+              v-model="queryParams.keyword"
+              class="search-input"
+              :placeholder="tr('搜索用户信息、用户名、手机、邮箱、部门、岗位等')"
+              clearable
+              @keyup.enter="handleQuery"
+            />
+            <el-button type="primary" icon="Search" @click="handleQuery">{{ tr('搜索') }}</el-button>
+          </div>
+          <div class="search-hint">{{ tr('支持搜索员工档案中已填写的各类信息，含用户信息、用户名、手机、邮箱、部门、岗位、备注等') }}</div>
+          <div class="filter-bar">
+            <el-select v-model="queryParams.viewMode" class="filter-item" @change="handleViewModeChange">
+              <el-option :label="tr('在职员工')" value="active" />
+              <el-option :label="tr('归档员工')" value="archived" />
+            </el-select>
+            <el-select
+              v-if="queryParams.viewMode !== 'archived'"
+              v-model="queryParams.filterEmployeeStatus"
+              class="filter-item"
+              @change="handleQuery"
+            >
+              <el-option :label="tr('全部状态')" value="" />
+              <el-option v-for="item in employeeStatusFilterOptions" :key="item.value" :label="item.label" :value="item.value" />
+            </el-select>
+            <el-tree-select
+              v-model="deptFilterValue"
+              class="filter-item filter-dept-tree"
+              :data="deptFilterTreeData"
+              :props="{ value: 'id', label: 'label', children: 'children' }"
+              value-key="id"
+              :placeholder="tr('筛选部门')"
+              check-strictly
+              @change="handleDeptFilterChange"
+            />
+            <el-select v-model="queryParams.filterTaxFormType" class="filter-item" clearable :placeholder="tr('筛选税务身份')" @change="handleQuery">
+              <el-option :label="tr('全部税务身份')" value="" />
+              <el-option v-for="item in availableTaxFormOptions" :key="item.value" :label="item.label" :value="item.value" />
+            </el-select>
+            <el-select v-model="queryParams.filterPostId" class="filter-item" clearable :placeholder="tr('筛选岗位')" @change="handleQuery">
+              <el-option :label="tr('全部岗位')" value="" />
+              <el-option v-for="item in postOptions" :key="item.postId" :label="item.postName" :value="item.postId" />
+            </el-select>
+            <el-select v-model="queryParams.filterHasAccount" class="filter-item" clearable :placeholder="tr('筛选账号')" @change="handleQuery">
+              <el-option :label="tr('全部账号')" value="" />
+              <el-option :label="tr('有账号')" :value="'1'" />
+              <el-option :label="tr('无账号')" :value="'0'" />
+            </el-select>
+            <el-button icon="Refresh" @click="resetFilters">{{ tr('重置') }}</el-button>
+          </div>
+
+          <div v-if="canBatchDownload" class="selection-hint-block">
+            <div class="selection-hint-text">
+              <el-icon class="selection-hint-icon"><InfoFilled /></el-icon>
+              {{ tr('左侧勾选用于「按文件类型导出」批量下载附件；不勾选时默认当前页全部，点击行仅查看详情。') }}
+            </div>
+            <div class="selection-hint-status">{{ batchDownloadScopeHint }}</div>
+          </div>
+
+          <div class="list-table-wrap" :class="{ 'is-scroll-mode': !!selectedEmployee }">
+            <el-table
+              ref="employeeTableRef"
+              v-loading="loading"
+              :data="employeeList"
+              highlight-current-row
+              stripe
+              v-bind="employeeTableSizeBind"
+              @current-change="handleSelectEmployee"
+              @selection-change="handleSelectionChange"
+              class="employee-table"
+              :class="{ 'is-scrollable': !!selectedEmployee }"
+              size="small"
+            >
+              <el-table-column type="selection" width="42" v-if="canBatchDownload" />
+              <el-table-column min-width="120">
+                <template #header>
+                  <span>{{ tr('姓名') }}</span>
+                  <el-tooltip :content="tr('有登录账号的员工会同步用户信息；无账号员工仅在此维护档案')" placement="top">
+                    <el-icon class="header-tip"><QuestionFilled /></el-icon>
+                  </el-tooltip>
+                </template>
+                <template #default="{ row }">
+                  <div class="name-cell">
+                    <div class="name-primary">
+                      {{ row.nameCn }}
+                      <el-tag v-if="row.userId" size="small" type="primary" effect="plain" class="account-tag account-tag--linked">{{ tr('有账号') }}</el-tag>
+                      <el-tag v-else size="small" type="info" effect="plain" class="account-tag account-tag--none">{{ tr('无账号') }}</el-tag>
+                    </div>
+                    <div v-if="row.nickName" class="name-secondary">{{ tr('昵称') }}: {{ row.nickName }}</div>
+                    <div v-else-if="row.nameEn" class="name-secondary">{{ row.nameEn }}</div>
+                  </div>
+                </template>
+              </el-table-column>
+              <el-table-column :label="tr('部门')" prop="deptName" min-width="88" show-overflow-tooltip />
+              <el-table-column :label="tr('状态')" width="72" align="center">
+                <template #default="{ row }">
+                  <el-tag size="small" effect="plain" :type="statusTagType(row.employeeStatus)">{{ statusLabel(row.employeeStatus) }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column :label="tr('缺文件')" width="64" align="center">
+                <template #default="{ row }">
+                  <el-tag v-if="row.missingRequiredCount > 0" type="warning" size="small" effect="plain">{{ tr('缺') }}{{ row.missingRequiredCount }}</el-tag>
+                  <span v-else class="ok-text">✓</span>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+
+          <div v-show="total > 0 && !selectedEmployee" class="list-pagination">
+            <pagination
+              :total="total"
+              v-model:page="queryParams.pageNum"
+              v-model:limit="queryParams.pageSize"
+              layout="total, prev, pager, next, jumper"
+              :auto-scroll="false"
+              @pagination="getList"
+            />
+          </div>
+          <div v-show="selectedEmployee && employeeList.length > 0" class="list-scroll-hint">
+            {{ tr('已选中员工，请在名单上滚动鼠标浏览') }}
+            （{{ employeeList.length }} / {{ total }}）
+          </div>
+        </el-card>
+      </el-col>
+
+      <el-col :xs="24" :md="16" class="workspace-col">
+        <el-card v-if="selectedEmployee" class="detail-card workspace-panel">
+          <div class="detail-body">
+          <div class="detail-header">
+            <div>
+              <h3 class="detail-name">{{ selectedEmployee.nameCn }}<span v-if="selectedEmployee.nickName" class="detail-name-en">{{ selectedEmployee.nickName }}</span><span v-else-if="selectedEmployee.nameEn" class="detail-name-en">{{ selectedEmployee.nameEn }}</span></h3>
+              <div v-if="selectedEmployee.email || selectedEmployee.phone || selectedEmployee.userName" class="detail-meta">
+                {{ [selectedEmployee.userName ? tr('登录账号') + ': ' + selectedEmployee.userName : '', selectedEmployee.email, selectedEmployee.phone].filter(Boolean).join(' · ') }}
+              </div>
+            </div>
+            <div class="detail-actions">
+              <el-dropdown v-hasPermi="['wms:employee:export', 'wms:employee:file:batchDownload']" @command="handleDetailExportCommand">
+                <el-button>{{ tr('导出此员工') }}<el-icon class="el-icon--right"><arrow-down /></el-icon></el-button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item command="EXCEL" v-hasPermi="['wms:employee:export']">{{ tr('导出员工 Excel') }}</el-dropdown-item>
+                    <el-dropdown-item command="REQUIRED" v-hasPermi="['wms:employee:file:batchDownload']">{{ tr('导出必备文件包') }}</el-dropdown-item>
+                    <el-dropdown-item command="OTHER" v-hasPermi="['wms:employee:file:batchDownload']">{{ tr('导出其他文件包') }}</el-dropdown-item>
+                    <el-dropdown-item command="ALL" v-hasPermi="['wms:employee:file:batchDownload']">{{ tr('导出全部文件包') }}</el-dropdown-item>
+                    <el-dropdown-item divided disabled>{{ tr('按文件类型') }}</el-dropdown-item>
+                    <el-dropdown-item
+                      v-for="item in detailDownloadTypes"
+                      :key="item.code"
+                      :command="'TYPE:' + item.code"
+                      v-hasPermi="['wms:employee:file:batchDownload']"
+                    >
+                      {{ tr(item.label) }}
+                    </el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+              <el-button
+                type="primary"
+                @click="handleUpdate(selectedEmployee)"
+                v-hasPermi="['wms:employee:edit']"
+              >{{ tr('编辑资料') }}</el-button>
+              <el-button type="warning" @click="handleArchive(selectedEmployee)" v-if="selectedEmployee.employeeStatus < 2" v-hasPermi="['wms:employee:archive']">{{ tr('离职归档') }}</el-button>
+              <el-button
+                type="danger"
+                plain
+                @click="handleRemoveEmployee(selectedEmployee)"
+                v-if="selectedEmployee.employeeStatus < 2"
+                v-hasPermi="['wms:employee:remove']"
+              >{{ selectedEmployee.userId ? tr('从 HR 移除') : tr('删除档案') }}</el-button>
+            </div>
+          </div>
+
+          <el-descriptions :column="3" border class="mt16">
+            <el-descriptions-item :label="tr('员工编号')">{{ selectedEmployee.employeeNo }}</el-descriptions-item>
+            <el-descriptions-item :label="tr('登录账号')">{{ selectedEmployee.userName || tr('无（仅档案）') }}</el-descriptions-item>
+            <el-descriptions-item :label="tr('税务身份')">{{ selectedEmployee.taxFormType || '-' }}</el-descriptions-item>
+            <el-descriptions-item :label="tr('部门')">{{ selectedEmployee.deptName || '-' }}</el-descriptions-item>
+            <el-descriptions-item :label="tr('岗位')">{{ selectedEmployee.position || '-' }}</el-descriptions-item>
+            <el-descriptions-item :label="tr('联系电话')">{{ selectedEmployee.phone || '-' }}</el-descriptions-item>
+            <el-descriptions-item :label="tr('状态')">
+              <el-tag size="small" :type="statusTagType(selectedEmployee.employeeStatus)">{{ statusLabel(selectedEmployee.employeeStatus) }}</el-tag><span v-if="selectedEmployee.departureDate"> · {{ tr('离职日期') }} {{ selectedEmployee.departureDate }}</span>
+            </el-descriptions-item>
+            <el-descriptions-item :label="tr('备注')" :span="3">{{ selectedEmployee.remark || '-' }}</el-descriptions-item>
+            <template v-if="canViewSensitiveForSelected">
+              <el-descriptions-item :label="tr('薪资类型')">{{ selectedEmployee.salaryType || '-' }}</el-descriptions-item>
+              <el-descriptions-item :label="tr('基本工资')">{{ selectedEmployee.baseSalary ?? '-' }}</el-descriptions-item>
+              <el-descriptions-item :label="tr('工资账户')">{{ selectedEmployee.bankAccountInfo || '-' }}</el-descriptions-item>
+            </template>
+          </el-descriptions>
+
+          <div class="section-title mt20">
+            {{ taxFormTitle(selectedEmployee.taxFormType) }}
+            <span class="sub-text">（{{ tr('已上传') }} {{ selectedEmployee.uploadedRequiredCount || 0 }}/{{ selectedEmployee.requiredCount || 0 }}）</span>
+          </div>
+          <div class="upload-hint">{{ tr('必备文件仅支持单个 PDF；多个文件请合并为压缩包后上传到「其他文件」。') }}</div>
+
+          <el-row :gutter="12" class="attachment-grid">
+            <el-col v-for="card in requiredAttachmentCards" :key="card.code" :xs="24" :sm="12" :lg="8">
+              <div class="attachment-card">
+                <div class="attachment-card-head">
+                  <div>
+                    <div class="attachment-title">{{ tr(card.label) }}</div>
+                    <div class="attachment-desc">{{ tr(card.desc) }}</div>
+                  </div>
+                  <el-tag :type="attachmentMap[card.code] ? 'success' : 'warning'" size="small">
+                    {{ attachmentMap[card.code] ? tr('已上传') : tr('缺失') }}
+                  </el-tag>
+                </div>
+                <div class="attachment-actions">
+                  <div v-if="attachmentMap[card.code]" class="attachment-action-links">
+                    <el-link type="primary" @click.stop.prevent="previewAttachment(attachmentMap[card.code])">{{ tr('查看') }}</el-link>
+                    <el-button
+                      v-if="selectedEmployee.employeeStatus < 2"
+                      link
+                      type="danger"
+                      @click.stop.prevent="removeRequiredAttachment(card)"
+                      v-hasPermi="['wms:employee:edit']"
+                    >{{ tr('删除') }}</el-button>
+                  </div>
+                  <!-- 已上传：紧凑重新上传条，不再展示大拖拽区 -->
+                  <div
+                    v-if="attachmentMap[card.code] && selectedEmployee.employeeStatus < 2 && canUploadAttachment(card)"
+                    class="required-reupload"
+                    :class="{
+                      'is-upload-error': requiredUploadErrors[card.code],
+                      'is-uploading': isUploadingType(card.code)
+                    }"
+                    v-hasPermi="['wms:employee:edit']"
+                    @click="openRequiredUploadDialog(card)"
+                    @dragover.prevent
+                    @drop.prevent="(e) => handleRequiredCardDrop(e, card)"
+                  >
+                    <template v-if="isUploadingType(card.code)">
+                      <div class="upload-progress-label">{{ tr('上传中') }}... {{ uploadProgress }}%</div>
+                      <el-progress :percentage="uploadProgress" :stroke-width="8" />
+                    </template>
+                    <template v-else>
+                      <el-icon class="required-reupload-icon"><UploadFilled /></el-icon>
+                      <span>{{ tr('已上传，点击或拖拽 PDF 可重新上传') }}</span>
+                    </template>
+                  </div>
+                  <!-- 未上传：保留大拖拽上传区 -->
+                  <div
+                    v-else-if="!attachmentMap[card.code] && selectedEmployee.employeeStatus < 2 && canUploadAttachment(card)"
+                    class="required-upload"
+                    :class="{
+                      'is-upload-error': requiredUploadErrors[card.code],
+                      'is-uploading': isUploadingType(card.code)
+                    }"
+                    v-hasPermi="['wms:employee:edit']"
+                    @click="openRequiredUploadDialog(card)"
+                    @dragover.prevent
+                    @drop.prevent="(e) => handleRequiredCardDrop(e, card)"
+                  >
+                    <div class="el-upload-dragger">
+                      <template v-if="isUploadingType(card.code)">
+                        <div class="upload-progress-label">{{ tr('上传中') }}... {{ uploadProgress }}%</div>
+                        <el-progress :percentage="uploadProgress" :stroke-width="10" />
+                      </template>
+                      <template v-else>
+                        <div class="required-upload-text">{{ tr('拖拽 PDF 到此处，或点击上传') }}</div>
+                        <div class="el-upload__tip">{{ tr('仅支持 PDF，每个类型限一个文件') }}</div>
+                      </template>
+                    </div>
+                  </div>
+                  <div v-if="requiredUploadErrors[card.code]" class="upload-error-text">
+                    {{ requiredUploadErrors[card.code] }}
+                  </div>
+                </div>
+              </div>
+            </el-col>
+          </el-row>
+
+          <div class="section-title mt20">{{ tr('其他文件') }} <span class="sub-text">（{{ tr('共') }} {{ otherAttachments.length }}）</span></div>
+          <div class="upload-hint">{{ tr('其他文件支持多种格式，可批量上传；如需打包多个文件，可先压缩再上传。') }}</div>
+          <div class="other-files">
+            <el-row :gutter="12" class="other-batch-grid">
+              <el-col v-for="batch in otherAttachmentBatches" :key="batch.key" :xs="24" :sm="12" :lg="8">
+                <div class="attachment-card other-batch-card">
+                  <div class="attachment-card-head">
+                    <div>
+                      <div
+                        class="attachment-title other-batch-title hr-user-content"
+                        data-runtime-i18n-ignore="true"
+                      >{{ batch.displayName }}</div>
+                      <div class="attachment-desc">
+                        {{ batchSubtitleText(batch) }}
+                      </div>
+                    </div>
+                    <el-tag size="small" type="success">{{ tr('已上传') }}</el-tag>
+                  </div>
+                  <div class="other-batch-files hr-user-content" data-runtime-i18n-ignore="true">
+                    <div v-for="item in batch.files" :key="item.id" class="other-batch-file-row">
+                      <el-link type="primary" class="other-batch-file-name" @click="previewAttachment(item)">
+                        {{ item.fileName || item.attachmentTypeLabel || '-' }}
+                      </el-link>
+                      <div class="other-batch-file-actions">
+                        <el-button link type="primary" @click.stop.prevent="previewAttachment(item)">{{ tr('查看') }}</el-button>
+                        <el-button
+                          v-if="selectedEmployee.employeeStatus < 2"
+                          link
+                          type="danger"
+                          @click.stop.prevent="removeAttachment(item)"
+                          v-hasPermi="['wms:employee:edit']"
+                        >{{ tr('删除') }}</el-button>
+                      </div>
+                    </div>
+                  </div>
+                  <div
+                    v-if="selectedEmployee.employeeStatus < 2"
+                    class="other-batch-actions"
+                    v-hasPermi="['wms:employee:edit']"
+                  >
+                    <el-button link type="primary" @click="renameOtherBatch(batch)">{{ tr('重命名批次') }}</el-button>
+                    <el-button link type="primary" @click="openOtherUploadDialog(batch)">{{ tr('向此批次添加文件') }}</el-button>
+                    <el-button link type="danger" @click="removeOtherBatch(batch)">{{ tr('删除批次') }}</el-button>
+                  </div>
+                </div>
+              </el-col>
+            </el-row>
+            <div
+              v-if="selectedEmployee.employeeStatus < 2"
+              class="other-upload"
+              :class="{ 'is-uploading': isUploadingType('OTHER') && !uploadDialogBatchId }"
+              v-hasPermi="['wms:employee:edit']"
+              @click="openOtherUploadDialog()"
+              @dragover.prevent
+              @drop.prevent="handleOtherCardDrop"
+            >
+              <div class="el-upload-dragger">
+                <template v-if="isUploadingType('OTHER') && !uploadDialogBatchId && !uploadDialogOpen">
+                  <div class="upload-progress-label">{{ tr('上传中') }}... {{ uploadProgress }}%</div>
+                  <el-progress :percentage="uploadProgress" :stroke-width="10" />
+                </template>
+                <div v-else class="required-upload-text">{{ tr('拖拽或点击上传新的其他文件批次') }}</div>
+              </div>
+            </div>
+          </div>
+          </div>
+        </el-card>
+
+        <el-card v-else class="detail-card workspace-panel empty-detail">
+          <el-empty :description="tr('请选择左侧员工查看详情')" />
+        </el-card>
+      </el-col>
+    </el-row>
+
+    <el-dialog
+      v-model="uploadDialogOpen"
+      :title="uploadDialogTitle"
+      width="min(600px, 92vw)"
+      :close-on-click-modal="!uploadDialogLoading"
+      :close-on-press-escape="!uploadDialogLoading"
+      :show-close="!uploadDialogLoading"
+      destroy-on-close
+      @close="cancelUploadDialog"
+    >
+      <el-alert
+        :title="uploadDialogHelp"
+        :type="uploadDialogType !== 'OTHER' && attachmentMap[uploadDialogType] ? 'warning' : 'info'"
+        show-icon
+        :closable="false"
+        class="mb16"
+      />
+      <el-form v-if="uploadDialogType === 'OTHER'" label-position="top" class="mb16">
+        <el-form-item :label="tr('批次名称')" required>
+          <el-input
+            v-model="uploadDialogBatchName"
+            maxlength="128"
+            show-word-limit
+            :disabled="uploadDialogLoading"
+            :placeholder="tr('请输入本批次名称')"
+          />
+        </el-form-item>
+        <el-form-item :label="tr('批次副标题')">
+          <el-input
+            v-model="uploadDialogBatchSubtitle"
+            maxlength="128"
+            show-word-limit
+            :disabled="uploadDialogLoading"
+            :placeholder="tr('可自定义，例如用途说明；留空则显示文件数量')"
+          />
+        </el-form-item>
+      </el-form>
+      <el-upload
+        class="hr-upload-dialog-zone"
+        drag
+        :auto-upload="false"
+        :multiple="uploadDialogMultiple"
+        :limit="uploadDialogMultiple ? 20 : 1"
+        :accept="uploadDialogAccept"
+        :disabled="uploadDialogLoading"
+        :file-list="uploadDialogFileList"
+        :on-change="handleUploadDialogFileChange"
+        :on-remove="handleUploadDialogFileRemove"
+        :on-exceed="handleUploadDialogExceed"
+      >
+        <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
+        <div class="el-upload__text">
+          {{ uploadDialogDropText }}<em>{{ tr('点击选择') }}</em>
+        </div>
+        <template #tip>
+          <div class="el-upload__tip">{{ uploadDialogTip }}</div>
+        </template>
+      </el-upload>
+      <div v-if="uploadDialogLoading" class="hr-upload-progress">
+        <div class="upload-progress-label">{{ tr('上传中') }}... {{ uploadProgress }}%</div>
+        <el-progress :percentage="uploadProgress" :stroke-width="12" />
+      </div>
+      <template #footer>
+        <el-button :disabled="uploadDialogLoading" @click="cancelUploadDialog">{{ tr('取消') }}</el-button>
+        <el-button
+          type="primary"
+          :loading="uploadDialogLoading"
+          :disabled="!uploadDialogFileList.length"
+          @click="submitUploadDialog"
+        >{{ tr('开始上传') }}</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog
+      v-model="renameBatchOpen"
+      :title="tr('重命名批次')"
+      width="min(480px, 92vw)"
+      destroy-on-close
+    >
+      <el-form label-position="top">
+        <el-form-item :label="tr('批次名称')" required>
+          <el-input v-model="renameBatchName" maxlength="128" show-word-limit :placeholder="tr('请输入本批次名称')" />
+        </el-form-item>
+        <el-form-item :label="tr('批次副标题')">
+          <el-input v-model="renameBatchSubtitle" maxlength="128" show-word-limit :placeholder="tr('可自定义副标题，留空则显示文件数量')" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button :disabled="renameBatchLoading" @click="renameBatchOpen = false">{{ tr('取消') }}</el-button>
+        <el-button type="primary" :loading="renameBatchLoading" @click="submitRenameBatch">{{ tr('确定') }}</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog
+      v-model="previewOpen"
+      :title="previewTitle"
+      width="min(960px, 94vw)"
+      top="4vh"
+      destroy-on-close
+      class="hr-preview-dialog"
+      @closed="revokePreviewUrl"
+    >
+      <div v-loading="previewLoading" class="hr-preview-body">
+        <iframe
+          v-if="previewKind === 'pdf' && previewUrl"
+          :src="previewUrl"
+          class="hr-preview-frame"
+          title="preview"
+        />
+        <img
+          v-else-if="previewKind === 'image' && previewUrl"
+          :src="previewUrl"
+          class="hr-preview-image"
+          alt="preview"
+        />
+        <div v-else-if="!previewLoading" class="hr-preview-fallback">
+          <p>{{ tr('当前文件类型暂不支持在线预览，请下载后查看。') }}</p>
+          <el-button type="primary" @click="downloadAttachment(previewItem)">{{ tr('下载文件') }}</el-button>
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="previewOpen = false">{{ tr('关闭') }}</el-button>
+        <el-button type="primary" :disabled="!previewItem?.ossId" @click="downloadAttachment(previewItem)">{{ tr('下载') }}</el-button>
+      </template>
+    </el-dialog>
+
+    <el-drawer v-model="open" :title="title" size="55%" append-to-body>
+      <el-alert
+        v-if="isLinkedUserReadonly"
+        type="warning"
+        show-icon
+        :closable="false"
+        class="drawer-permission-alert"
+      >
+        <template #title>{{ hrText('该员工已关联登录账号，当前无法修改资料', 'This employee has a linked login account; profile editing is read-only') }}</template>
+        {{ linkedUserReadonlyHint }}
+      </el-alert>
+      <el-form ref="employeeRef" :model="form" :rules="rules" :label-width="drawerLabelWidth">
+        <el-tabs v-model="activeTab" :before-leave="beforeTabLeave">
+          <el-tab-pane :label="tr('基本信息')" name="basic">
+            <el-row :gutter="20" class="employee-basic-grid">
+              <el-col :span="12">
+                <el-form-item prop="nameCn">
+                  <template #label>
+                    <span class="form-label-with-tip">
+                      {{ tr('姓名') }}
+                      <el-tooltip v-if="!isCreateMode" :content="tr('对应登录账号的用户信息，需保持唯一')" placement="top">
+                        <el-icon class="form-label-tip"><QuestionFilled /></el-icon>
+                      </el-tooltip>
+                    </span>
+                  </template>
+                  <el-input v-model="form.nameCn" :placeholder="isCreateMode ? tr('请输入员工姓名') : tr('请输入姓名或用户信息')" :disabled="isLinkedUserReadonly" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item prop="nickName">
+                  <template #label>
+                    <span class="form-label-with-tip">
+                      {{ tr('昵称') }}
+                      <el-tooltip :content="tr('姓名不可重复；不同员工可以使用相同昵称')" placement="top">
+                        <el-icon class="form-label-tip"><QuestionFilled /></el-icon>
+                      </el-tooltip>
+                    </span>
+                  </template>
+                  <el-input v-model="form.nickName" maxlength="64" show-word-limit :placeholder="tr('请输入员工昵称')" :disabled="isLinkedUserReadonly" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item :label="tr('归属部门')">
+                  <el-input v-if="isLinkedUserReadonly" :model-value="form.deptName || '-'" disabled />
+                  <el-tree-select
+                    v-else
+                    v-model="form.deptId"
+                    :data="deptOptions"
+                    :props="{ value: 'id', label: 'label', children: 'children' }"
+                    value-key="id"
+                    :placeholder="tr('请选择归属部门')"
+                    check-strictly
+                    clearable
+                    style="width: 100%"
+                    @change="handleDeptChange"
+                  />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item>
+                  <template #label>
+                    <span class="form-label-with-tip">
+                      {{ tr('岗位') }}
+                      <el-tooltip :content="form.userId ? tr('关联登录账号时，岗位会同步到用户管理') : tr('无登录账号时，岗位仅保存在员工档案中')" placement="top">
+                        <el-icon class="form-label-tip"><QuestionFilled /></el-icon>
+                      </el-tooltip>
+                    </span>
+                  </template>
+                  <el-select v-model="form.postIds" multiple :placeholder="tr('请选择岗位')" style="width: 100%" clearable :disabled="isLinkedUserReadonly">
+                    <el-option v-for="item in postOptions" :key="item.postId" :label="item.postName" :value="item.postId" :disabled="item.status == 0" />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item :label="tr('联系电话')" prop="phone">
+                  <el-input v-model="form.phone" :placeholder="tr('请输入手机号码')" :disabled="isLinkedUserReadonly" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item :label="tr('邮箱')" prop="email">
+                  <el-input v-model="form.email" :placeholder="tr('请输入邮箱')" :disabled="isLinkedUserReadonly" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item :label="tr('员工编号')" prop="employeeNo">
+                  <el-input v-model="form.employeeNo" :placeholder="tr('留空自动生成')" :disabled="!!form.id" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item :label="tr('性别')">
+                  <el-select v-model="form.gender" :placeholder="tr('请选择')" style="width: 100%" :disabled="isLinkedUserReadonly">
+                    <el-option :label="tr('男')" :value="0" />
+                    <el-option :label="tr('女')" :value="1" />
+                    <el-option :label="tr('未知')" :value="2" />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item :label="tr('员工状态')" prop="employeeStatus">
+                  <el-select v-model="form.employeeStatus" :placeholder="tr('请选择员工状态')" style="width: 100%" :disabled="isLinkedUserReadonly">
+                    <el-option :label="tr('在职')" :value="0" />
+                    <el-option :label="tr('试用期')" :value="1" />
+                    <el-option v-if="proxy.$auth.hasPermi('wms:employee:archive')" :label="tr('已归档')" :value="3" />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+              <el-col :span="12" v-if="form.employeeStatus === 3">
+                <el-form-item :label="tr('离职日期')" prop="departureDate" :rules="[{ required: true, message: '请选择离职日期', trigger: 'change' }]">
+                  <el-date-picker v-model="form.departureDate" type="date" value-format="YYYY-MM-DD" format="MM/DD/YYYY" :disabled="isLinkedUserReadonly" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item :label="tr('税务身份')" prop="taxFormType">
+                  <el-select v-model="form.taxFormType" :placeholder="tr('请选择税务身份')" style="width: 100%" :disabled="isLinkedUserReadonly">
+                    <el-option v-for="item in availableTaxFormOptions" :key="item.value" :label="item.label" :value="item.value" />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+              <el-col :span="24">
+                <el-form-item :label="tr('备注')">
+                  <el-input v-model="form.remark" type="textarea" :rows="3" :placeholder="tr('请输入内容')" :disabled="isLinkedUserReadonly" />
+                </el-form-item>
+              </el-col>
+            </el-row>
+          </el-tab-pane>
+
+          <el-tab-pane v-if="canViewSensitive && !isLinkedUserReadonly" :label="tr('薪酬与合同')" name="salary">
+            <el-row :gutter="16">
+              <el-col :span="12"><el-form-item :label="tr('薪资类型')"><el-input v-model="form.salaryType" /></el-form-item></el-col>
+              <el-col :span="12"><el-form-item :label="tr('基本工资')"><el-input-number v-model="form.baseSalary" :min="0" :precision="2" style="width: 100%" /></el-form-item></el-col>
+              <el-col :span="24"><el-form-item :label="tr('工资账户信息')"><el-input v-model="form.bankAccountInfo" type="textarea" :rows="2" /></el-form-item></el-col>
+              <el-col :span="12"><el-form-item :label="tr('合同开始')"><el-date-picker v-model="form.contractStartDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" /></el-form-item></el-col>
+              <el-col :span="12"><el-form-item :label="tr('合同结束')"><el-date-picker v-model="form.contractEndDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" /></el-form-item></el-col>
+              <el-col :span="12"><el-form-item :label="tr('合同类型')"><el-input v-model="form.contractType" /></el-form-item></el-col>
+            </el-row>
+          </el-tab-pane>
+        </el-tabs>
+      </el-form>
+      <template #footer>
+        <el-button @click="cancel">{{ tr('取消') }}</el-button>
+        <template v-if="isCreateMode">
+          <el-button v-if="activeTab !== 'basic'" @click="goPrev">{{ tr('上一页') }}</el-button>
+          <el-button v-if="!isLastStep" type="primary" @click="goNext">{{ tr('下一页') }}</el-button>
+          <el-button v-else type="primary" :loading="buttonLoading" @click="submitForm">{{ tr('确认') }}</el-button>
+        </template>
+        <el-button v-else-if="!isLinkedUserReadonly" type="primary" :loading="buttonLoading" @click="submitForm">{{ tr('确认') }}</el-button>
+      </template>
+    </el-drawer>
+  </div>
+</template>
+
+<script setup name="EmployeeArchive">
+import { ArrowDown, ArrowUp, InfoFilled, QuestionFilled, UploadFilled } from '@element-plus/icons-vue'
+import { getToken } from '@/utils/auth'
+import axios from 'axios'
+import { blobValidate } from '@/utils/ruoyi'
+import { saveAs } from 'file-saver'
+import useSettingsStore from '@/store/modules/settings'
+import usePermissionStore from '@/store/modules/permission'
+import { hasAccessibleRoutePath } from '@/store/modules/permission'
+import { translateByMap } from '@/locales/runtime-map'
+import { deptTreeSelect, getUser } from '@/api/system/user'
+import { ElMessageBox } from 'element-plus'
+import {
+  addEmployee,
+  archiveEmployee,
+  batchDownloadAttachments,
+  delEmployee,
+  delOtherAttachmentBatch,
+  getAttachmentTypes,
+  getEmployee,
+  getEmployeeCapabilities,
+  getEmployeeDeptTree,
+  getEmployeePostOptions,
+  getEmployeeStats,
+  groupOtherAttachmentBatch,
+  listEmployee,
+  renameOtherAttachmentBatch,
+  saveEmployeeAttachment,
+  saveOtherAttachmentBatch,
+  delEmployeeAttachment,
+  syncEmployeeUsers,
+  updateEmployee
+} from '@/api/wms/employee'
+
+const LIST_PAGE_SIZE = 10
+/** 选中员工后拉取足够多的名单，才能在固定高度区域内滚轮浏览 */
+const LIST_SCROLL_SIZE = 500
+
+const router = useRouter()
+const { proxy } = getCurrentInstance()
+const permissionStore = usePermissionStore()
+const listViewportMax = ref(420)
+const employeeTableRef = ref(null)
+
+function updateListViewportMax() {
+  // 固定可视高度，保证多数情况下名单会溢出 → 滚轮有响应；又不撑开整页
+  listViewportMax.value = Math.min(480, Math.max(320, window.innerHeight - 420))
+}
+
+onMounted(() => {
+  updateListViewportMax()
+  window.addEventListener('resize', updateListViewportMax)
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', updateListViewportMax)
+})
+
+/** 未选中：撑满卡片；已选中：固定 height，表格内部出现滚动条，滚轮可滑动 */
+const employeeTableSizeBind = computed(() => {
+  if (!selectedEmployee.value) {
+    return { height: '100%' }
+  }
+  return { height: listViewportMax.value }
+})
+
+const TAX_FORM_PERM = {
+  W2: 'wms:employee:tax:w2',
+  W8: 'wms:employee:tax:w8',
+  W9: 'wms:employee:tax:w9'
+}
+
+function goUserManagement() {
+  if (!hasAccessibleRoutePath(permissionStore.routes, '/system/user')) {
+    proxy.$modal.msgWarning(hrText(
+      '您没有「用户管理」菜单权限，无法跳转创建登录账号。请联系管理员在「系统管理 → 角色管理（权限分配）」中为您的角色勾选「用户管理」及子权限（用户查询、用户新增等）。',
+      'You do not have User Management menu access and cannot open the login-account page. Ask an administrator to grant System Management → User Management and its sub-permissions (user query, user add, etc.) in Role Management.'
+    ))
+    return
+  }
+  router.push('/system/user').catch(() => {})
+}
+const settingsStore = useSettingsStore()
+
+const loading = ref(false)
+const buttonLoading = ref(false)
+const open = ref(false)
+const title = ref('')
+const total = ref(0)
+const activeTab = ref('basic')
+const employeeList = ref([])
+const selectedEmployee = ref(null)
+const selectedRows = ref([])
+const stats = ref({})
+const attachmentTypes = ref([])
+const currentAttachments = ref([])
+const deptOptions = ref([])
+const postOptions = ref([])
+const deptFilterValue = ref('__all__')
+const allowTabSwitch = ref(false)
+const requiredUploadErrors = ref({})
+const requiredUploadKeys = ref({})
+const hrCapabilities = ref({})
+const permissionNoticeExpanded = ref(false)
+
+const uploadUrl = import.meta.env.VITE_APP_BASE_API + '/system/oss/upload'
+const previewUrlApi = import.meta.env.VITE_APP_BASE_API + '/system/oss/preview/'
+
+const uploadDialogOpen = ref(false)
+const uploadDialogLoading = ref(false)
+const uploadDialogMultiple = ref(false)
+const uploadDialogAccept = ref('.pdf,application/pdf')
+const uploadDialogType = ref('')
+const uploadDialogTitle = ref('')
+const uploadDialogHelp = ref('')
+const uploadDialogDropText = ref('')
+const uploadDialogTip = ref('')
+const uploadDialogFileList = ref([])
+const uploadDialogBatchId = ref('')
+const uploadDialogBatchName = ref('')
+const uploadDialogBatchSubtitle = ref('')
+const uploadDialogLegacyAttachmentIds = ref([])
+const renameBatchOpen = ref(false)
+const renameBatchLoading = ref(false)
+const renameBatchName = ref('')
+const renameBatchSubtitle = ref('')
+const renameBatchTarget = ref(null)
+const uploadingType = ref('')
+const uploadProgress = ref(0)
+
+const previewOpen = ref(false)
+const previewLoading = ref(false)
+const previewUrl = ref('')
+const previewKind = ref('')
+const previewTitle = ref('')
+const previewItem = ref(null)
+
+const data = reactive({
+  form: {},
+  queryParams: {
+    pageNum: 1,
+    pageSize: 10,
+    keyword: undefined,
+    viewMode: 'active',
+    filterTaxFormType: '',
+    filterEmployeeStatus: '',
+    filterHasAccount: '',
+    filterPostId: ''
+  },
+  rules: {
+    nameCn: [{ required: true, message: () => tr('姓名不能为空'), trigger: 'blur' }],
+    employeeStatus: [{ required: true, message: () => tr('请选择员工状态'), trigger: 'change' }],
+    taxFormType: [{ required: true, message: () => tr('请选择税务身份'), trigger: 'change' }]
+  }
+})
+const { form, queryParams, rules } = toRefs(data)
+
+const tr = (text) => translateByMap(text, settingsStore.language || 'zh-cn')
+const hrText = (zh, en) => ((settingsStore.language || 'zh-cn') === 'en' ? en : zh)
+const isEn = computed(() => (settingsStore.language || 'zh-cn') === 'en')
+const drawerLabelWidth = computed(() => isEn.value ? '136px' : '96px')
+const canViewSensitive = computed(() => proxy?.$auth?.hasPermi('wms:employee:sensitive'))
+const canEditLinkedUser = computed(() => hrCapabilities.value?.canEditLinkedUser ?? proxy?.$auth?.hasPermi('system:user:edit'))
+const canLoadDeptTree = computed(() => hrCapabilities.value?.canLoadDeptTree ?? proxy?.$auth?.hasPermi('system:user:list'))
+const canLoadPostOptions = computed(() => hrCapabilities.value?.canLoadPostOptions ?? proxy?.$auth?.hasPermi('system:user:query'))
+const isLinkedUserReadonly = computed(() => !isCreateMode.value && !!form.value?.userId && !canEditLinkedUser.value)
+const linkedUserReadonlyHint = computed(() => hrText(
+  '该员工资料与用户管理模块同步。请在角色管理中勾选「系统管理 → 用户管理 → 用户修改」（system:user:edit）后再编辑；您仍可在详情页上传/管理附件，或编辑无登录账号的员工。',
+  'This profile syncs with User Management. Grant System Management → User Management → User Edit (system:user:edit) to edit linked accounts. You can still manage attachments here or edit employees without login accounts.'
+))
+const availableTaxFormOptions = computed(() => {
+  const all = [
+    { label: 'W2', value: 'W2' },
+    { label: 'W8', value: 'W8' },
+    { label: 'W9', value: 'W9' }
+  ]
+  const viewable = hrCapabilities.value?.viewableTaxFormTypes
+  if (Array.isArray(viewable)) {
+    return all.filter(item => viewable.includes(item.value))
+  }
+  return all.filter(item => proxy?.$auth?.hasPermi(TAX_FORM_PERM[item.value]))
+})
+const canViewSensitiveForSelected = computed(() => {
+  if (!canViewSensitive.value || !selectedEmployee.value) return false
+  return canViewTaxFormType(selectedEmployee.value.taxFormType)
+})
+const permissionNotice = computed(() => buildPermissionNotice())
+const canBatchDownload = computed(() => proxy?.$auth?.hasPermi('wms:employee:file:batchDownload'))
+const tabOrder = computed(() => {
+  const tabs = ['basic']
+  if (canViewSensitive.value && !isLinkedUserReadonly.value) {
+    tabs.push('salary')
+  }
+  return tabs
+})
+const isCreateMode = computed(() => !form.value?.id)
+const isLastStep = computed(() => activeTab.value === tabOrder.value[tabOrder.value.length - 1])
+const employeeStatusFilterOptions = computed(() => [
+  { label: tr('在职'), value: '0' },
+  { label: tr('试用期'), value: '1' }
+])
+const missingAlertTitle = computed(() => {
+  const count = stats.value.missingEmployeeCount || 0
+  const names = (stats.value.missingEmployeeNames || []).join('、')
+  if (count > 10) {
+    return `${tr('以下员工仍有必备文件缺失')}（${tr('共')} ${count} ${tr('人')}，${tr('仅展示前10名')}）：${names}`
+  }
+  return `${tr('以下员工仍有必备文件缺失')}（${tr('共')} ${count} ${tr('人')}）：${names}`
+})
+
+const deptFilterTreeData = computed(() => [
+  { id: '__all__', label: tr('全部部门') },
+  { id: '__none__', label: tr('未分配部门') },
+  ...(deptOptions.value || [])
+])
+
+const ATTACHMENT_META = {
+  W4: { label: 'W-4 联邦预扣税表', desc: 'Employee Federal Withholding' },
+  I9: { label: 'I-9 雇佣资格表', desc: 'Employment Eligibility Verification' },
+  STATE_TAX: { label: '州预扣税表', desc: 'State Tax Withholding' },
+  DIRECT_DEPOSIT: { label: '工资直存授权', desc: 'Direct Deposit Authorization' },
+  W2: { label: 'W-2 年度工资单', desc: 'Issued annually' },
+  W8: { label: 'W-8 外籍税务表', desc: 'Non-resident tax form' },
+  W9: { label: 'W-9 独立承包商', desc: 'Contractor tax form' },
+  CONTRACT: { label: '合同 / Offer Letter', desc: 'Signed PDF' },
+  ID_FRONT: { label: '护照 / 驾照(正面)', desc: 'Passport or Driver License' },
+  ID_BACK: { label: '护照 / 驾照(反面)', desc: 'Passport or Driver License' },
+  EAD_FRONT: { label: 'EAD / 工卡 / 绿卡(正面)', desc: 'Work authorization front' },
+  EAD_BACK: { label: 'EAD / 工卡 / 绿卡(反面)', desc: 'Work authorization back' }
+}
+
+const REQUIRED_BY_TAX = {
+  W2: ['W4', 'I9', 'STATE_TAX', 'DIRECT_DEPOSIT', 'W2', 'CONTRACT', 'ID_FRONT', 'ID_BACK'],
+  W9: ['W9', 'CONTRACT', 'ID_FRONT', 'ID_BACK'],
+  W8: ['W8', 'CONTRACT', 'ID_FRONT', 'ID_BACK']
+}
+
+function getContextEmployees() {
+  if (selectedRows.value.length) return selectedRows.value
+  if (selectedEmployee.value) return [selectedEmployee.value]
+  return employeeList.value
+}
+
+function buildDownloadTypes(employees) {
+  const codes = new Set()
+  employees.forEach(emp => {
+    const tax = emp.taxFormType || 'W2'
+    ;(REQUIRED_BY_TAX[tax] || REQUIRED_BY_TAX.W2).forEach(code => codes.add(code))
+  })
+  return [...codes].map(code => ({
+    code,
+    label: ATTACHMENT_META[code]?.label || code,
+    sensitive: attachmentTypes.value.find(item => item.code === code)?.sensitive
+  })).filter(item => !item.sensitive || canViewSensitive.value)
+}
+
+const batchDownloadTypes = computed(() => buildDownloadTypes(getContextEmployees()))
+const detailDownloadTypes = computed(() => {
+  if (!selectedEmployee.value) return []
+  return buildDownloadTypes([selectedEmployee.value])
+})
+const hasSingleTargetEmployee = computed(() => getTargetEmployeeIds().length === 1)
+
+const batchDownloadScopeHint = computed(() => {
+  if (selectedRows.value.length) {
+    return tr('当前导出范围：已勾选 {count} 人').replace('{count}', String(selectedRows.value.length))
+  }
+  if (selectedEmployee.value) {
+    return tr('当前导出范围：详情员工「{name}」').replace('{name}', selectedEmployee.value.nameCn || '-')
+  }
+  const pageCount = employeeList.value.length
+  return tr('当前导出范围：未勾选，当前页 {count} 人').replace('{count}', String(pageCount))
+})
+
+const requiredAttachmentCards = computed(() => {
+  if (!selectedEmployee.value || !canViewTaxFormType(selectedEmployee.value.taxFormType)) {
+    return []
+  }
+  const tax = selectedEmployee.value?.taxFormType || 'W2'
+  return (REQUIRED_BY_TAX[tax] || REQUIRED_BY_TAX.W2).map(code => ({
+    code,
+    label: ATTACHMENT_META[code]?.label || code,
+    desc: ATTACHMENT_META[code]?.desc || '',
+    sensitive: attachmentTypes.value.find(item => item.code === code)?.sensitive
+  }))
+})
+
+const otherAttachments = computed(() => currentAttachments.value.filter(item => item.attachmentType === 'OTHER'))
+
+/** 其他文件按上传批次分组；无 batchId 的历史数据归入「未分组」 */
+const otherAttachmentBatches = computed(() => {
+  const byId = new Map()
+  const legacy = []
+  otherAttachments.value.forEach(item => {
+    if (!item?.batchId) {
+      legacy.push(item)
+      return
+    }
+    if (!byId.has(item.batchId)) {
+      byId.set(item.batchId, {
+        key: item.batchId,
+        batchId: item.batchId,
+        batchName: item.batchName || '',
+        batchSubtitle: item.batchSubtitle || '',
+        displayName: item.batchName || tr('未命名批次'),
+        files: []
+      })
+    }
+    const current = byId.get(item.batchId)
+    if (!current.batchSubtitle && item.batchSubtitle) {
+      current.batchSubtitle = item.batchSubtitle
+    }
+    current.files.push(item)
+  })
+  const batches = [...byId.values()]
+  if (legacy.length) {
+    batches.push({
+      key: '__legacy_ungrouped',
+      batchId: null,
+      batchName: '',
+      batchSubtitle: '',
+      displayName: tr('未分组'),
+      files: legacy,
+      legacy: true
+    })
+  }
+  return batches
+})
+
+const attachmentMap = computed(() => {
+  const map = {}
+  currentAttachments.value.forEach(item => {
+    if (item?.attachmentType) {
+      map[item.attachmentType] = item
+    }
+  })
+  return map
+})
+
+function statusLabel(status) {
+  const map = { 0: tr('在职'), 1: tr('试用期'), 2: tr('已归档'), 3: tr('已归档') }
+  return map[status] || '-'
+}
+
+function statusTagType(status) {
+  if (status === 0) return 'success'
+  if (status === 1) return 'warning'
+  return 'danger'
+}
+
+function canViewTaxFormType(taxFormType) {
+  const type = (taxFormType || 'W2').toUpperCase()
+  const viewable = hrCapabilities.value?.viewableTaxFormTypes
+  if (Array.isArray(viewable)) {
+    return viewable.includes(type)
+  }
+  const perm = TAX_FORM_PERM[type]
+  return perm ? proxy?.$auth?.hasPermi(perm) : true
+}
+
+function buildPermissionNotice() {
+  const allowed = []
+  const restricted = []
+  if (proxy?.$auth?.hasPermi('wms:employee:list')) {
+    allowed.push(hrText('查看员工列表与详情', 'View employee list and details'))
+  }
+  if (proxy?.$auth?.hasPermi('wms:employee:add')) {
+    allowed.push(hrText('新增无登录账号的员工档案', 'Add employees without login accounts'))
+  }
+  if (proxy?.$auth?.hasPermi('wms:employee:edit')) {
+    allowed.push(hrText('编辑无登录账号的员工、上传/管理附件', 'Edit profile-only employees and manage attachments'))
+  }
+  if (canEditLinkedUser.value) {
+    allowed.push(hrText('编辑已关联登录账号员工的基本信息与薪酬', 'Edit basic info and compensation for linked accounts'))
+    allowed.push(hrText('跳转「用户管理」创建或维护登录账号', 'Open User Management to create or maintain login accounts'))
+  } else {
+    restricted.push(hrText(
+      '跳转「用户管理」创建登录账号（需勾选「系统管理 → 用户管理」菜单及用户查询/新增权限）',
+      'Open User Management to create login accounts (requires User Management menu plus user query/add permissions)'
+    ))
+    restricted.push(hrText(
+      '修改已关联登录账号员工的基本信息与薪酬（需勾选「用户管理 → 用户修改」system:user:edit）',
+      'Edit basic info/compensation for linked accounts (requires User Edit: system:user:edit)'
+    ))
+  }
+  if (!canLoadDeptTree.value) {
+    restricted.push(hrText(
+      '通过用户管理加载部门树（需 system:user:list）；无该权限时仍可为无登录账号员工选择部门并筛选',
+      'User Management department tree requires system:user:list; without it you can still assign departments for profile-only employees'
+    ))
+  }
+  if (!canLoadPostOptions.value) {
+    restricted.push(hrText(
+      '通过用户管理加载岗位列表（需 system:user:query）；无该权限时仍可为无登录账号员工选择岗位',
+      'User Management post list requires system:user:query; without it you can still assign posts for profile-only employees'
+    ))
+  }
+  const viewable = availableTaxFormOptions.value.map(item => item.label)
+  if (viewable.length) {
+    allowed.push(hrText('可见税务身份：', 'Visible tax types: ') + viewable.join(isEn.value ? ', ' : '、'))
+  } else if (proxy?.$auth?.hasPermi('wms:employee:list')) {
+    restricted.push(hrText(
+      '查看任何税务身份员工（需在 HR员工档案 中至少勾选一种：查看 W2 / W8 / W9 员工）',
+      'View employees of any tax type (grant at least one of View W2 / W8 / W9 Employees under HR Employee Archive)'
+    ))
+  }
+  const hiddenTax = ['W2', 'W8', 'W9'].filter(type => !canViewTaxFormType(type))
+  if (hiddenTax.length && hiddenTax.length < 3) {
+    hiddenTax.forEach(type => {
+      restricted.push(hrText(
+        `查看 ${type} 税务身份员工（需 HR员工档案 → 查看 ${type} 员工，${TAX_FORM_PERM[type]}）`,
+        `View ${type} employees (grant HR Employee Archive → View ${type} Employees, ${TAX_FORM_PERM[type]})`
+      ))
+    })
+  }
+  if (!canViewSensitive.value) {
+    restricted.push(hrText(
+      '查看薪酬与税务敏感文件（需「敏感信息与税务文件」wms:employee:sensitive）',
+      'View salary and tax-sensitive files (requires Sensitive Info & Tax Documents: wms:employee:sensitive)'
+    ))
+  }
+  if (!restricted.length) {
+    return { visible: false, title: '', summary: '', intro: '', allowed: [], restricted: [], grantHint: '' }
+  }
+  return {
+    visible: true,
+    title: hrText('HR 员工档案 · 权限说明', 'HR Employee Archive · Permissions'),
+    summary: hrText('部分功能受限，点击展开查看详情', 'Some actions are restricted. Expand for details.'),
+    intro: hrText(
+      '根据您当前角色的权限，部分功能受限。以下为可用与不可用操作说明：',
+      'Some features are limited by your current role. Available and unavailable actions are listed below:'
+    ),
+    allowed,
+    restricted,
+    grantHint: hrText(
+      '如需完整使用 HR 与登录账号联动功能，请联系管理员在「系统管理 → 角色管理（权限分配）」中补充上述权限。',
+      'For full HR and login-account integration, ask an administrator to grant the permissions above in System Management → Role Management.'
+    )
+  }
+}
+
+function taxFormTitle(taxFormType) {
+  const tax = taxFormType || '-'
+  return isEn.value
+    ? `${tax} Required Employee Files (IRS / DHS)`
+    : `${tax} ${tr('雇员必备文件')} (IRS / DHS)`
+}
+
+function canUploadAttachment(card) {
+  if (!proxy?.$auth?.hasPermi('wms:employee:edit')) return false
+  if (!canViewTaxFormType(selectedEmployee.value?.taxFormType)) return false
+  if (card.sensitive && !canViewSensitive.value) return false
+  return true
+}
+
+function getAttachmentByType(type) {
+  return currentAttachments.value.find(item => item.attachmentType === type)
+}
+
+function findDeptIdByLabel(nodes, label) {
+  for (const node of nodes) {
+    if (node.label === label) return node.id
+    if (node.children?.length) {
+      const childId = findDeptIdByLabel(node.children, label)
+      if (childId) return childId
+    }
+  }
+  return undefined
+}
+
+function loadFormOptions() {
+  const deptReq = canLoadDeptTree.value ? deptTreeSelect() : getEmployeeDeptTree()
+  deptReq.then(res => {
+    deptOptions.value = res.data || []
+    syncFormSelectors()
+  }).catch(() => {})
+
+  if (canLoadPostOptions.value) {
+    getUser().then(res => {
+      postOptions.value = res.data?.posts || []
+    }).catch(() => {})
+  } else {
+    getEmployeePostOptions().then(res => {
+      postOptions.value = res.data || []
+    }).catch(() => {})
+  }
+}
+
+function loadCapabilities() {
+  return getEmployeeCapabilities().then(res => {
+    hrCapabilities.value = res.data || {}
+  }).catch(() => {
+    hrCapabilities.value = {}
+  })
+}
+
+function syncPostIdsFromUser(userId) {
+  if (!userId || !canLoadPostOptions.value) {
+    return
+  }
+  getUser(userId).then(res => {
+    const ids = res.data?.postIds
+    if (Array.isArray(ids) && ids.length) {
+      form.value.postIds = ids
+    }
+  }).catch(() => {})
+}
+
+function applyEmployeePostIds(data) {
+  const ids = data?.postIds
+  return Array.isArray(ids) ? ids : []
+}
+
+function syncFormSelectors() {
+  if (form.value.deptName && deptOptions.value.length) {
+    form.value.deptId = findDeptIdByLabel(deptOptions.value, form.value.deptName)
+  }
+}
+
+function beforeTabLeave(newName, oldName) {
+  if (!isCreateMode.value || allowTabSwitch.value) {
+    return true
+  }
+  const oldIdx = tabOrder.value.indexOf(oldName)
+  const newIdx = tabOrder.value.indexOf(newName)
+  return newIdx <= oldIdx
+}
+
+function switchToTab(tabName) {
+  allowTabSwitch.value = true
+  activeTab.value = tabName
+  nextTick(() => {
+    allowTabSwitch.value = false
+  })
+}
+
+async function validateStepFields(fields) {
+  const formRef = proxy.$refs.employeeRef
+  if (!formRef || !fields.length) {
+    return true
+  }
+  return new Promise(resolve => {
+    formRef.validateField(fields, valid => {
+      resolve(valid === true)
+    })
+  })
+}
+
+async function goNext() {
+  if (activeTab.value === 'basic') {
+    const ok = await validateStepFields(['nameCn', 'employeeStatus', 'taxFormType'])
+    if (!ok) {
+      return
+    }
+    if (canViewSensitive.value) {
+      switchToTab('salary')
+    }
+  }
+}
+
+function goPrev() {
+  const idx = tabOrder.value.indexOf(activeTab.value)
+  if (idx > 0) {
+    switchToTab(tabOrder.value[idx - 1])
+  }
+}
+
+function handleDeptChange(deptId) {
+  const node = findDeptNode(deptOptions.value, deptId)
+  form.value.deptName = node?.label || ''
+}
+
+function findDeptNode(nodes, deptId) {
+  for (const node of nodes) {
+    if (node.id === deptId) return node
+    if (node.children?.length) {
+      const found = findDeptNode(node.children, deptId)
+      if (found) return found
+    }
+  }
+  return null
+}
+
+function loadStats() {
+  getEmployeeStats().then(res => {
+    stats.value = res.data || {}
+  })
+}
+
+function loadAttachmentTypes() {
+  getAttachmentTypes().then(res => {
+    attachmentTypes.value = res.data || []
+  })
+}
+
+function buildListParams() {
+  const params = { ...queryParams.value }
+  const status = params.filterEmployeeStatus
+  if (status === '' || status === null || status === undefined) {
+    delete params.filterEmployeeStatus
+  } else {
+    params.filterEmployeeStatus = Number(status)
+  }
+  const accountFilter = params.filterHasAccount
+  if (accountFilter === '1' || accountFilter === 1) {
+    params.filterHasAccount = '1'
+  } else if (accountFilter === '0' || accountFilter === 0) {
+    params.filterHasAccount = '0'
+  } else {
+    delete params.filterHasAccount
+  }
+  if (params.filterPostId === '' || params.filterPostId === null || params.filterPostId === undefined) {
+    delete params.filterPostId
+  }
+  const deptVal = deptFilterValue.value
+  if (deptVal === '__none__') {
+    params.filterDeptUnassigned = true
+  } else if (deptVal && deptVal !== '__all__') {
+    params.filterDeptId = deptVal
+  }
+  return params
+}
+
+function handleDeptFilterChange(val) {
+  if (!val) {
+    deptFilterValue.value = '__all__'
+  }
+  handleQuery()
+}
+
+function clearSelectedEmployee() {
+  selectedEmployee.value = null
+  currentAttachments.value = []
+  if (queryParams.value.pageSize !== LIST_PAGE_SIZE) {
+    queryParams.value.pageSize = LIST_PAGE_SIZE
+    queryParams.value.pageNum = 1
+  }
+}
+
+function ensureListScrollMode() {
+  if (queryParams.value.pageSize === LIST_SCROLL_SIZE && queryParams.value.pageNum === 1) {
+    nextTick(() => syncTableCurrentRow())
+    return Promise.resolve()
+  }
+  queryParams.value.pageNum = 1
+  queryParams.value.pageSize = LIST_SCROLL_SIZE
+  return getList({ preserveDetail: true }).then(() => {
+    nextTick(() => syncTableCurrentRow())
+  })
+}
+
+function syncTableCurrentRow() {
+  if (!selectedEmployee.value || !employeeTableRef.value) return
+  const matched = employeeList.value.find(item => item.id === selectedEmployee.value.id)
+  if (matched) {
+    employeeTableRef.value.setCurrentRow?.(matched)
+  }
+}
+
+function getList(options = {}) {
+  loading.value = true
+  return listEmployee(buildListParams()).then(res => {
+    employeeList.value = res.rows || []
+    total.value = res.total || 0
+    if (selectedEmployee.value) {
+      const matched = employeeList.value.find(item => item.id === selectedEmployee.value.id)
+      if (matched) {
+        if (!options.preserveDetail) {
+          return loadEmployeeDetail(matched.id)
+        }
+      } else {
+        clearSelectedEmployee()
+        queryParams.value.pageSize = LIST_PAGE_SIZE
+        queryParams.value.pageNum = 1
+        return listEmployee(buildListParams()).then(paged => {
+          employeeList.value = paged.rows || []
+          total.value = paged.total || 0
+        })
+      }
+    }
+  }).finally(() => {
+    loading.value = false
+  })
+}
+
+function loadEmployeeDetail(id) {
+  requiredUploadErrors.value = {}
+  requiredUploadKeys.value = {}
+  return getEmployee(id).then(res => {
+    selectedEmployee.value = res.data
+    currentAttachments.value = res.data?.attachments || []
+  })
+}
+
+function handleViewModeChange() {
+  queryParams.value.filterEmployeeStatus = ''
+  if (queryParams.value.viewMode === 'archived') {
+    clearSelectedEmployee()
+  }
+  handleQuery()
+}
+
+function handleQuery() {
+  queryParams.value.pageNum = 1
+  // 已打开详情时保持滚动模式的大批量加载，否则分页 10 条
+  queryParams.value.pageSize = selectedEmployee.value ? LIST_SCROLL_SIZE : LIST_PAGE_SIZE
+  getList()
+}
+
+function resetFilters() {
+  queryParams.value.keyword = undefined
+  queryParams.value.viewMode = 'active'
+  deptFilterValue.value = '__all__'
+  queryParams.value.filterTaxFormType = ''
+  queryParams.value.filterEmployeeStatus = ''
+  queryParams.value.filterHasAccount = ''
+  queryParams.value.filterPostId = ''
+  handleQuery()
+}
+
+function handleSelectEmployee(row) {
+  if (!row) return
+  // 滚动模式刷新列表后 setCurrentRow 会再次触发，避免重复拉详情
+  if (selectedEmployee.value?.id === row.id && queryParams.value.pageSize === LIST_SCROLL_SIZE) {
+    return
+  }
+  loadEmployeeDetail(row.id).then(() => ensureListScrollMode())
+}
+
+function handleSelectionChange(rows) {
+  selectedRows.value = rows || []
+}
+
+function reset() {
+  form.value = {
+    gender: 2,
+    employeeStatus: 0,
+    taxFormType: 'W2',
+    deptId: undefined,
+    postIds: []
+  }
+  activeTab.value = 'basic'
+  proxy.resetForm('employeeRef')
+}
+
+function cancel() {
+  open.value = false
+  reset()
+}
+
+function handleAdd() {
+  reset()
+  loadFormOptions()
+  form.value.taxFormType = availableTaxFormOptions.value[0]?.value || 'W2'
+  open.value = true
+  title.value = tr('新建员工')
+}
+
+function handleUpdate(row) {
+  if (row?.userId && !canEditLinkedUser.value) {
+    reset()
+    loadFormOptions()
+    getEmployee(row.id).then(res => {
+      form.value = { ...res.data, postIds: applyEmployeePostIds(res.data) }
+      syncFormSelectors()
+      syncPostIdsFromUser(res.data?.userId)
+      open.value = true
+      title.value = hrText('编辑员工（只读）', 'Edit Employee (Read-only)')
+      activeTab.value = 'basic'
+    })
+    return
+  }
+  reset()
+  loadFormOptions()
+  getEmployee(row.id).then(res => {
+    form.value = { ...res.data, postIds: applyEmployeePostIds(res.data) }
+    syncFormSelectors()
+    syncPostIdsFromUser(res.data?.userId)
+    open.value = true
+    title.value = tr('编辑员工')
+  })
+}
+
+function submitForm() {
+  if (isLinkedUserReadonly.value) {
+    proxy.$modal.msgWarning(linkedUserReadonlyHint.value)
+    return
+  }
+  proxy.$refs.employeeRef.validate(valid => {
+    if (!valid) return
+    buttonLoading.value = true
+    const payload = { ...form.value }
+    payload.postIds = Array.isArray(payload.postIds) ? payload.postIds.filter(id => id != null && id !== '') : []
+    if (!payload.postIds.length) {
+      payload.position = ''
+    }
+    if (payload.deptId) {
+      const node = findDeptNode(deptOptions.value, payload.deptId)
+      payload.deptName = node?.label || payload.deptName
+    }
+    const req = payload.id ? updateEmployee(payload) : addEmployee(payload)
+    req.then(() => {
+      proxy.$modal.msgSuccess(tr('保存成功'))
+      open.value = false
+      loadStats()
+      loadFormOptions()
+      getList()
+      if (payload.id) {
+        loadEmployeeDetail(payload.id)
+      }
+    }).finally(() => {
+      buttonLoading.value = false
+    })
+  })
+}
+
+function handleArchive(row) {
+  proxy.$modal.confirm(tr('确认将该员工归档？归档后将不再计入在职统计。')).then(() => archiveEmployee(row.id)).then(() => {
+    proxy.$modal.msgSuccess(tr('归档成功'))
+    clearSelectedEmployee()
+    loadStats()
+    getList()
+  })
+}
+
+function handleRemoveEmployee(row) {
+  const message = row.userId
+    ? tr('确认从 HR 移除该员工？系统登录账号将保留，且不会再次自动同步到此列表。')
+    : tr('确认删除该员工档案？此操作不可恢复。')
+  proxy.$modal.confirm(message).then(() => delEmployee(row.id)).then(() => {
+    proxy.$modal.msgSuccess(row.userId ? tr('已从 HR 移除') : tr('删除成功'))
+    clearSelectedEmployee()
+    loadStats()
+    getList()
+  })
+}
+
+function syncUsersOnLoad() {
+  if (!proxy?.$auth?.hasPermi('wms:employee:edit')) {
+    return
+  }
+  syncEmployeeUsers().catch(() => {})
+}
+
+function handleExport() {
+  proxy.download(
+    'wms/employee/export',
+    { ...buildListParams() },
+    isEn.value ? `employee_roster_${Date.now()}.xlsx` : `员工花名册_${Date.now()}.xlsx`
+  )
+}
+
+function getTargetEmployeeIds() {
+  if (selectedRows.value.length) return selectedRows.value.map(item => item.id)
+  if (selectedEmployee.value) return [selectedEmployee.value.id]
+  return employeeList.value.map(item => item.id)
+}
+
+async function downloadAttachments(payload, fileName) {
+  try {
+    const res = await batchDownloadAttachments(payload)
+    const isBlob = blobValidate(res)
+    if (!isBlob) {
+      const resText = await res.text()
+      const rspObj = JSON.parse(resText)
+      proxy.$modal.msgError(rspObj?.msg || tr('下载失败'))
+      return
+    }
+    let saveName = fileName
+    const isSingleType = payload.downloadScope === 'TYPE' && (payload.employeeIds?.length || 0) === 1
+    if (!isSingleType && !saveName.toLowerCase().endsWith('.zip')) {
+      saveName = saveName.replace(/\.[^.]+$/, '') + '.zip'
+    }
+    saveAs(new Blob([res]), saveName)
+  } catch (err) {
+    proxy.$modal.msgError(err?.msg || err?.message || tr('下载失败'))
+  }
+}
+
+function handleBatchDownloadCommand(command) {
+  const employeeIds = getTargetEmployeeIds()
+  if (!employeeIds.length) {
+    proxy.$modal.msgWarning(tr('请先选择员工'))
+    return
+  }
+  if (command.startsWith('TYPE:')) {
+    const type = command.slice(5)
+    const fileName = employeeIds.length === 1 ? `${type}_file.pdf` : `${type}_attachments.zip`
+    downloadAttachments({
+      employeeIds,
+      attachmentType: type,
+      downloadScope: 'TYPE'
+    }, fileName)
+  } else {
+    downloadAttachments({ employeeIds, downloadScope: command }, `${command.toLowerCase()}_attachments.zip`)
+  }
+}
+
+function handleDetailExportCommand(command) {
+  if (!selectedEmployee.value) return
+  const employeeIds = [selectedEmployee.value.id]
+  if (command === 'EXCEL') {
+    proxy.download(
+      'wms/employee/export',
+      { id: selectedEmployee.value.id },
+      isEn.value
+        ? `employee_${selectedEmployee.value.employeeNo}.xlsx`
+        : `员工档案_${selectedEmployee.value.employeeNo}.xlsx`
+    )
+    return
+  }
+  if (command.startsWith('TYPE:')) {
+    const type = command.slice(5)
+    downloadAttachments({
+      employeeIds,
+      attachmentType: type,
+      downloadScope: 'TYPE'
+    }, `${selectedEmployee.value.employeeNo}_${type}.pdf`)
+  } else {
+    downloadAttachments({ employeeIds, downloadScope: command }, `${selectedEmployee.value.employeeNo}_${command.toLowerCase()}.zip`)
+  }
+}
+
+function isPdfFile(file) {
+  const name = (file?.name || '').toLowerCase()
+  const type = (file?.type || '').toLowerCase()
+  return name.endsWith('.pdf') || type === 'application/pdf'
+}
+
+function isUploadingType(type) {
+  return uploadingType.value === type && uploadProgress.value >= 0
+}
+
+function setRequiredUploadError(code, message) {
+  requiredUploadErrors.value = { ...requiredUploadErrors.value, [code]: message }
+}
+
+function clearRequiredUploadError(code) {
+  if (!requiredUploadErrors.value[code]) return
+  const next = { ...requiredUploadErrors.value }
+  delete next[code]
+  requiredUploadErrors.value = next
+}
+
+function resetRequiredUpload(code) {
+  requiredUploadKeys.value = {
+    ...requiredUploadKeys.value,
+    [code]: (requiredUploadKeys.value[code] || 0) + 1
+  }
+}
+
+function openRequiredUploadDialog(card) {
+  if (uploadDialogLoading.value || isUploadingType(card.code)) return
+  uploadDialogType.value = card.code
+  uploadDialogMultiple.value = false
+  uploadDialogAccept.value = '.pdf,application/pdf'
+  uploadDialogBatchId.value = ''
+  uploadDialogBatchName.value = ''
+  uploadDialogBatchSubtitle.value = ''
+  uploadDialogTitle.value = `${tr('上传')} - ${tr(card.label)}`
+  const baseHelp = `${tr(card.desc || card.label)} · ${tr('仅支持 PDF，每个类型限一个文件')}`
+  uploadDialogHelp.value = attachmentMap.value[card.code]
+    ? `${baseHelp}。${tr('该类型已有 PDF 文件，重新上传将覆盖原文件')}`
+    : baseHelp
+  uploadDialogDropText.value = tr('将文件拖到此处，或')
+  uploadDialogTip.value = attachmentMap.value[card.code]
+    ? tr('该类型已有 PDF 文件，重新上传将覆盖原文件')
+    : tr('仅支持 PDF，每个类型限一个文件')
+  uploadDialogFileList.value = []
+  uploadDialogOpen.value = true
+}
+
+function defaultOtherBatchName() {
+  const now = new Date()
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${tr('其他文件')} ${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`
+}
+
+function defaultBatchSubtitle(count) {
+  return tr('共 {count} 个文件').replace('{count}', String(count ?? 0))
+}
+
+function batchSubtitleText(batch) {
+  const custom = String(batch?.batchSubtitle || '').trim()
+  if (custom) return custom
+  return defaultBatchSubtitle(batch?.files?.length || 0)
+}
+
+function openOtherUploadDialog(batch) {
+  if (uploadDialogLoading.value || isUploadingType('OTHER')) return
+  uploadDialogType.value = 'OTHER'
+  uploadDialogMultiple.value = true
+  uploadDialogAccept.value = ''
+  uploadDialogBatchId.value = batch?.batchId || ''
+  uploadDialogLegacyAttachmentIds.value = (!batch?.batchId && batch?.files?.length)
+    ? batch.files.map(item => item.id).filter(Boolean)
+    : []
+  if (batch?.batchId) {
+    uploadDialogBatchName.value = batch.batchName || batch.displayName || defaultOtherBatchName()
+    uploadDialogBatchSubtitle.value = batch.batchSubtitle || ''
+  } else {
+    uploadDialogBatchName.value = defaultOtherBatchName()
+    uploadDialogBatchSubtitle.value = ''
+  }
+  uploadDialogTitle.value = batch
+    ? tr('向此批次添加文件')
+    : tr('上传其他文件')
+  uploadDialogHelp.value = tr('其他文件支持多种格式，可批量上传；如需打包多个文件，可先压缩再上传。')
+  uploadDialogDropText.value = tr('将文件拖到此处，或')
+  uploadDialogTip.value = tr('其他文件支持多种格式，可批量上传；如需打包多个文件，可先压缩再上传。')
+  uploadDialogFileList.value = []
+  uploadDialogOpen.value = true
+}
+
+function cancelUploadDialog() {
+  if (uploadDialogLoading.value) return
+  uploadDialogOpen.value = false
+  uploadDialogFileList.value = []
+  uploadDialogType.value = ''
+  uploadDialogBatchId.value = ''
+  uploadDialogBatchName.value = ''
+  uploadDialogBatchSubtitle.value = ''
+  uploadDialogLegacyAttachmentIds.value = []
+}
+
+async function promptBatchName(defaultName = '') {
+  const { value } = await ElMessageBox.prompt(tr('请输入本批次名称'), tr('其他文件批次'), {
+    confirmButtonText: tr('确定'),
+    cancelButtonText: tr('取消'),
+    inputValue: defaultName || defaultOtherBatchName(),
+    inputPattern: /\S+/,
+    inputErrorMessage: tr('批次名称不能为空'),
+    inputValidator: (val) => {
+      const name = String(val || '').trim()
+      if (!name) return tr('批次名称不能为空')
+      if (name.length > 128) return tr('批次名称不能超过128个字符')
+      return true
+    }
+  })
+  return String(value || '').trim()
+}
+
+function handleUploadDialogFileChange(uploadFile, uploadFiles) {
+  if (uploadDialogType.value !== 'OTHER') {
+    const invalid = uploadFiles.filter(file => file.raw && !isPdfFile(file.raw))
+    if (invalid.length) {
+      proxy.$modal.msgWarning(tr('必备文件仅支持 PDF 格式，其他格式请上传到「其他文件」'))
+    }
+    uploadDialogFileList.value = uploadFiles.filter(file => !file.raw || isPdfFile(file.raw)).slice(-1)
+    return
+  }
+  uploadDialogFileList.value = uploadFiles
+}
+
+function handleUploadDialogFileRemove(uploadFile, uploadFiles) {
+  uploadDialogFileList.value = uploadFiles
+}
+
+function handleUploadDialogExceed() {
+  proxy.$modal.msgWarning(
+    uploadDialogMultiple.value
+      ? tr('一次最多选择 20 个文件')
+      : tr('每个类型仅限上传一个文件')
+  )
+}
+
+function handleRequiredCardDrop(event, card) {
+  if (uploadDialogLoading.value || isUploadingType(card.code)) return
+  const files = Array.from(event.dataTransfer?.files || [])
+  if (!files.length) return
+  const file = files[0]
+  if (!isPdfFile(file)) {
+    const msg = tr('必备文件仅支持 PDF 格式，其他格式请上传到「其他文件」')
+    proxy.$modal.msgError(msg)
+    setRequiredUploadError(card.code, msg)
+    return
+  }
+  clearRequiredUploadError(card.code)
+  submitFiles([file], card.code, { fromCard: true })
+}
+
+async function handleOtherCardDrop(event) {
+  if (uploadDialogLoading.value || isUploadingType('OTHER')) return
+  const files = Array.from(event.dataTransfer?.files || [])
+  if (!files.length) return
+  try {
+    const batchName = await promptBatchName(defaultOtherBatchName())
+    await submitFiles(files, 'OTHER', { fromCard: true, batchName })
+  } catch (err) {
+    if (err === 'cancel' || err === 'close') return
+  }
+}
+
+async function submitUploadDialog() {
+  const files = uploadDialogFileList.value.map(item => item.raw).filter(Boolean)
+  if (!files.length) {
+    proxy.$modal.msgWarning(tr('请先选择要上传的文件'))
+    return
+  }
+  if (uploadDialogType.value !== 'OTHER') {
+    const invalid = files.filter(file => !isPdfFile(file))
+    if (invalid.length) {
+      proxy.$modal.msgError(tr('必备文件仅支持 PDF 格式，其他格式请上传到「其他文件」'))
+      return
+    }
+  } else {
+    const batchName = String(uploadDialogBatchName.value || '').trim()
+    if (!batchName) {
+      proxy.$modal.msgWarning(tr('请填写批次名称'))
+      return
+    }
+    if (batchName.length > 128) {
+      proxy.$modal.msgWarning(tr('批次名称不能超过128个字符'))
+      return
+    }
+  }
+  await submitFiles(files, uploadDialogType.value, {
+    fromDialog: true,
+    batchId: uploadDialogBatchId.value || undefined,
+    batchName: String(uploadDialogBatchName.value || '').trim(),
+    batchSubtitle: String(uploadDialogBatchSubtitle.value || '').trim(),
+    legacyAttachmentIds: [...uploadDialogLegacyAttachmentIds.value]
+  })
+}
+
+async function submitFiles(files, attachmentType, options = {}) {
+  if (!selectedEmployee.value?.id || !files?.length) return
+  const list = attachmentType === 'OTHER' ? files : files.slice(0, 1)
+  uploadingType.value = attachmentType
+  uploadProgress.value = 0
+  if (options.fromDialog) {
+    uploadDialogLoading.value = true
+  }
+  let successCount = 0
+  try {
+    if (attachmentType === 'OTHER') {
+      const batchName = String(options.batchName || '').trim()
+      if (!batchName) {
+        throw new Error(tr('批次名称不能为空'))
+      }
+      let batchId = options.batchId || undefined
+      const legacyIds = options.legacyAttachmentIds || uploadDialogLegacyAttachmentIds.value || []
+      const batchSubtitle = String(options.batchSubtitle || '').trim()
+      if (!batchId && legacyIds.length) {
+        const groupRes = await groupOtherAttachmentBatch({
+          employeeId: selectedEmployee.value.id,
+          batchName,
+          batchSubtitle,
+          attachmentIds: legacyIds
+        })
+        batchId = groupRes?.data || groupRes
+      }
+      const uploadedFiles = []
+      for (let i = 0; i < list.length; i++) {
+        const file = list[i]
+        const base = Math.round((i / list.length) * 100)
+        const span = Math.round(100 / list.length)
+        const oss = await uploadFileToOss(file, (pct) => {
+          uploadProgress.value = Math.min(99, base + Math.round((pct / 100) * span))
+        })
+        uploadedFiles.push({ ossId: oss.ossId, fileName: file.name })
+        successCount += 1
+      }
+      await saveOtherAttachmentBatch({
+        employeeId: selectedEmployee.value.id,
+        batchId,
+        batchName,
+        batchSubtitle,
+        files: uploadedFiles
+      })
+    } else {
+      for (let i = 0; i < list.length; i++) {
+        const file = list[i]
+        const base = Math.round((i / list.length) * 100)
+        const span = Math.round(100 / list.length)
+        await uploadSingleFile(file, attachmentType, (pct) => {
+          uploadProgress.value = Math.min(99, base + Math.round((pct / 100) * span))
+        })
+        successCount += 1
+      }
+    }
+    uploadProgress.value = 100
+    if (options.fromDialog) {
+      uploadDialogOpen.value = false
+      uploadDialogFileList.value = []
+      uploadDialogBatchId.value = ''
+      uploadDialogBatchName.value = ''
+      uploadDialogBatchSubtitle.value = ''
+      uploadDialogLegacyAttachmentIds.value = []
+    }
+    if (attachmentType !== 'OTHER') {
+      clearRequiredUploadError(attachmentType)
+      resetRequiredUpload(attachmentType)
+    }
+    proxy.$modal.msgSuccess(
+      successCount > 1
+        ? tr('上传成功') + ` (${successCount})`
+        : tr('上传成功')
+    )
+    await loadEmployeeDetail(selectedEmployee.value.id)
+    loadStats()
+    getList({ preserveDetail: true })
+  } catch (err) {
+    const msg = err?.response?.data?.msg || err?.msg || err?.message || tr('上传失败')
+    proxy.$modal.msgError(msg)
+    if (attachmentType !== 'OTHER') {
+      setRequiredUploadError(attachmentType, msg)
+    }
+  } finally {
+    uploadDialogLoading.value = false
+    uploadingType.value = ''
+    uploadProgress.value = 0
+  }
+}
+
+async function uploadFileToOss(file, onProgress) {
+  const formData = new FormData()
+  formData.append('file', file)
+  const { data } = await axios.post(uploadUrl, formData, {
+    headers: { Authorization: 'Bearer ' + getToken() },
+    onUploadProgress: (event) => {
+      if (!event.total) return
+      onProgress?.(Math.round((event.loaded / event.total) * 100))
+    }
+  })
+  if (data?.code !== 200) {
+    throw new Error(data?.msg || tr('上传失败'))
+  }
+  return data.data
+}
+
+async function uploadSingleFile(file, attachmentType, onProgress) {
+  const oss = await uploadFileToOss(file, onProgress)
+  await saveEmployeeAttachment({
+    employeeId: selectedEmployee.value.id,
+    attachmentType,
+    ossId: oss.ossId,
+    fileName: file.name
+  })
+}
+
+function renameOtherBatch(batch) {
+  if (!batch) return
+  renameBatchTarget.value = batch
+  renameBatchName.value = batch.batchName || (batch.legacy ? '' : batch.displayName) || ''
+  renameBatchSubtitle.value = batch.batchSubtitle || defaultBatchSubtitle(batch.files?.length || 0)
+  renameBatchOpen.value = true
+}
+
+async function submitRenameBatch() {
+  const batch = renameBatchTarget.value
+  if (!batch) return
+  const batchName = String(renameBatchName.value || '').trim()
+  if (!batchName) {
+    proxy.$modal.msgWarning(tr('批次名称不能为空'))
+    return
+  }
+  if (batchName.length > 128) {
+    proxy.$modal.msgWarning(tr('批次名称不能超过128个字符'))
+    return
+  }
+  const batchSubtitle = String(renameBatchSubtitle.value || '').trim()
+  if (batchSubtitle.length > 128) {
+    proxy.$modal.msgWarning(tr('批次副标题不能超过128个字符'))
+    return
+  }
+  renameBatchLoading.value = true
+  try {
+    if (batch.batchId) {
+      await renameOtherAttachmentBatch(batch.batchId, { batchName, batchSubtitle })
+    } else {
+      const ids = (batch.files || []).map(item => item.id).filter(Boolean)
+      if (!ids.length) {
+        proxy.$modal.msgWarning(tr('请先为该分组命名'))
+        return
+      }
+      await groupOtherAttachmentBatch({
+        employeeId: selectedEmployee.value.id,
+        batchName,
+        batchSubtitle,
+        attachmentIds: ids
+      })
+    }
+    renameBatchOpen.value = false
+    proxy.$modal.msgSuccess(tr('修改成功'))
+    await loadEmployeeDetail(selectedEmployee.value.id)
+  } catch (err) {
+    proxy.$modal.msgError(err?.response?.data?.msg || err?.msg || err?.message || tr('修改失败'))
+  } finally {
+    renameBatchLoading.value = false
+  }
+}
+
+function removeOtherBatch(batch) {
+  if (!batch) return
+  proxy.$modal.confirm(tr('确认删除该批次及其中全部文件？')).then(async () => {
+    if (batch.batchId) {
+      await delOtherAttachmentBatch(batch.batchId)
+      return
+    }
+    const ids = (batch.files || []).map(item => item.id).filter(Boolean)
+    for (const id of ids) {
+      await delEmployeeAttachment(id)
+    }
+  }).then(() => {
+    proxy.$modal.msgSuccess(tr('删除成功'))
+    loadEmployeeDetail(selectedEmployee.value.id)
+    loadStats()
+    getList({ preserveDetail: true })
+  }).catch((err) => {
+    if (err === 'cancel' || err === 'close') return
+  })
+}
+
+function guessPreviewKind(fileName = '', contentType = '') {
+  const name = String(fileName || '').toLowerCase()
+  const type = String(contentType || '').toLowerCase()
+  if (type.includes('pdf') || name.endsWith('.pdf')) return 'pdf'
+  if (type.startsWith('image/') || /\.(png|jpe?g|gif|webp|bmp)$/.test(name)) return 'image'
+  return 'other'
+}
+
+function revokePreviewUrl() {
+  if (previewUrl.value) {
+    URL.revokeObjectURL(previewUrl.value)
+  }
+  previewUrl.value = ''
+  previewKind.value = ''
+  previewItem.value = null
+  previewLoading.value = false
+}
+
+async function previewAttachment(item) {
+  if (!item?.ossId) {
+    proxy.$modal.msgError(tr('附件信息异常，请刷新页面后重试'))
+    return
+  }
+  revokePreviewUrl()
+  previewItem.value = item
+  // 文件名保持原样，不走 tr / 运行时中英替换
+  previewTitle.value = item.fileName || (item.attachmentTypeLabel ? tr(item.attachmentTypeLabel) : '') || tr('文件预览')
+  previewOpen.value = true
+  previewLoading.value = true
+  try {
+    const res = await axios.get(previewUrlApi + item.ossId, {
+      responseType: 'blob',
+      headers: { Authorization: 'Bearer ' + getToken() }
+    })
+    const isBlob = blobValidate(res.data)
+    if (!isBlob) {
+      const resText = await res.data.text()
+      const rspObj = JSON.parse(resText)
+      throw new Error(rspObj?.msg || tr('预览失败'))
+    }
+    const contentType = res.headers?.['content-type'] || ''
+    const kind = guessPreviewKind(item.fileName, contentType)
+    previewKind.value = kind
+    if (kind === 'other') {
+      previewLoading.value = false
+      return
+    }
+    const blobType = contentType.includes('octet-stream')
+      ? (kind === 'pdf' ? 'application/pdf' : contentType)
+      : contentType
+    const blob = new Blob([res.data], { type: blobType || res.data.type })
+    previewUrl.value = URL.createObjectURL(blob)
+  } catch (err) {
+    proxy.$modal.msgError(err?.message || tr('预览失败'))
+    previewKind.value = 'other'
+  } finally {
+    previewLoading.value = false
+  }
+}
+
+function removeRequiredAttachment(card) {
+  const item = attachmentMap.value[card.code]
+  if (!item?.id) {
+    proxy.$modal.msgError(tr('附件信息异常，请刷新页面后重试'))
+    return
+  }
+  if (card.sensitive && !canViewSensitive.value) {
+    proxy.$modal.msgError(tr('无权限删除税务/证件类文件'))
+    return
+  }
+  removeAttachment(item)
+}
+
+function removeAttachment(item) {
+  if (!item?.id) {
+    proxy.$modal.msgError(tr('附件信息异常，请刷新页面后重试'))
+    return
+  }
+  proxy.$modal.confirm(tr('确认删除该附件？')).then(() => {
+    return delEmployeeAttachment(item.id)
+  }).then(() => {
+    proxy.$modal.msgSuccess(tr('删除成功'))
+    loadEmployeeDetail(selectedEmployee.value.id)
+    loadStats()
+    getList({ preserveDetail: true })
+  }).catch((err) => {
+    if (err === 'cancel' || err === 'close') {
+      return
+    }
+  })
+}
+
+function downloadAttachment(item) {
+  if (item?.ossId) {
+    proxy.$download.oss(item.ossId)
+  }
+}
+
+loadCapabilities().then(() => {
+  loadFormOptions()
+  syncUsersOnLoad()
+  loadStats()
+  loadAttachmentTypes()
+  getList()
+})
+</script>
+
+<style scoped lang="scss">
+.employee-page {
+  .hero-title {
+    margin: 0 0 8px;
+    font-size: 24px;
+  }
+  .hero-desc {
+    margin: 0;
+    color: #909399;
+  }
+  .hero-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .hero-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .stats-row {
+    margin-top: 20px;
+  }
+  .stat-card {
+    background: #fafafa;
+    border: 1px solid #ebeef5;
+    border-radius: 8px;
+    padding: 16px;
+    min-height: 96px;
+  }
+  .stat-label {
+    color: #909399;
+    font-size: 13px;
+  }
+  .stat-value {
+    font-size: 28px;
+    font-weight: 600;
+    margin-top: 8px;
+    &.warning {
+      color: #e6a23c;
+    }
+  }
+  .stat-sub {
+    margin-top: 6px;
+    color: #a8abb2;
+    font-size: 12px;
+    line-height: 1.4;
+  }
+  .workspace-row {
+    align-items: stretch;
+    &.is-detail-open {
+      align-items: flex-start;
+      min-height: 0;
+    }
+  }
+  .workspace-col {
+    display: flex;
+    min-height: 640px;
+  }
+  .workspace-row.is-detail-open .workspace-col {
+    min-height: 0;
+  }
+  /* 选中详情后：左侧名单高度随内容，不跟右侧强行拉齐 */
+  .workspace-row.is-detail-open .workspace-col:first-child {
+    align-self: flex-start;
+    height: auto;
+    max-height: calc(100vh - 140px);
+  }
+  .workspace-row.is-detail-open .workspace-col:last-child {
+    align-self: stretch;
+    min-height: 640px;
+    max-height: calc(100vh - 140px);
+    height: calc(100vh - 140px);
+  }
+  .workspace-panel {
+    flex: 1;
+    width: 100%;
+    height: 100%;
+    :deep(.el-card__body) {
+      display: flex;
+      flex-direction: column;
+      box-sizing: border-box;
+      height: 100%;
+      min-height: 0;
+      overflow: hidden;
+    }
+  }
+  .list-card {
+    :deep(.el-card__body) {
+      padding: 12px 14px 12px;
+      min-height: 640px;
+    }
+    &.is-detail-open {
+      height: auto !important;
+      max-height: calc(100vh - 140px);
+      :deep(.el-card__body) {
+        min-height: 0;
+        height: auto !important;
+        max-height: calc(100vh - 140px);
+        overflow: hidden;
+      }
+    }
+  }
+  .detail-card {
+    min-height: 640px;
+    :deep(.el-card__body) {
+      min-height: 640px;
+    }
+  }
+  .workspace-row.is-detail-open .detail-card {
+    min-height: 0;
+    height: 100%;
+    :deep(.el-card__body) {
+      min-height: 0;
+      height: 100%;
+    }
+  }
+  .list-toolbar {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-shrink: 0;
+    .search-input {
+      flex: 1;
+      min-width: 160px;
+    }
+  }
+  .search-hint {
+    margin-top: 4px;
+    font-size: 12px;
+    color: #a8abb2;
+    line-height: 1.35;
+    flex-shrink: 0;
+  }
+  .selection-hint-block {
+    margin-top: 8px;
+    flex-shrink: 0;
+  }
+  .selection-hint-text {
+    display: flex;
+    align-items: flex-start;
+    gap: 4px;
+    font-size: 12px;
+    color: #909399;
+    line-height: 1.4;
+  }
+  .selection-hint-icon {
+    margin-top: 2px;
+    flex-shrink: 0;
+    font-size: 14px;
+  }
+  .selection-hint-status {
+    margin-top: 3px;
+    font-size: 12px;
+    color: #409eff;
+    line-height: 1.35;
+  }
+  .filter-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 8px;
+    flex-shrink: 0;
+    .filter-item {
+      width: 140px;
+    }
+    .filter-dept-tree {
+      width: 180px;
+    }
+  }
+  .list-table-wrap {
+    flex: 1;
+    min-height: 0;
+    margin-top: 8px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    &.is-scroll-mode {
+      flex: 0 0 auto;
+      overflow: hidden;
+    }
+  }
+  .employee-table {
+    flex: 1;
+    width: 100%;
+    min-height: 0;
+    :deep(.el-table) {
+      height: 100% !important;
+    }
+    &.is-scrollable {
+      flex: 0 0 auto;
+      /* 固定高度由 el-table height 控制，保证 body 可滚轮 */
+      :deep(.el-table__body-wrapper) {
+        overflow-y: auto !important;
+        overscroll-behavior: contain;
+      }
+      :deep(.el-scrollbar__wrap) {
+        overscroll-behavior: contain;
+      }
+    }
+    :deep(.el-table__header th) {
+      background: #f5f7fa;
+      color: #606266;
+      font-weight: 500;
+    }
+    :deep(.el-table__body td) {
+      padding: 7px 0;
+    }
+    :deep(.el-table__row.current-row > td.el-table__cell) {
+      background: #ecf5ff !important;
+    }
+    :deep(.el-table__body-wrapper) {
+      flex: 1;
+    }
+  }
+  .list-pagination {
+    flex-shrink: 0;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid #ebeef5;
+    width: 100%;
+    display: flex;
+    justify-content: flex-end;
+    :deep(.pagination-container) {
+      position: relative !important;
+      height: auto !important;
+      min-height: 32px;
+      padding: 10px 0 0 !important;
+      margin: 0 !important;
+      width: auto;
+    }
+    :deep(.pagination-container .el-pagination) {
+      position: static !important;
+      right: auto !important;
+      width: auto;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+      row-gap: 8px;
+    }
+  }
+  .header-tip {
+    margin-left: 4px;
+    font-size: 14px;
+    color: #909399;
+    vertical-align: middle;
+    cursor: help;
+  }
+  .ok-text {
+    color: #67c23a;
+    font-weight: 600;
+  }
+  .name-cell .sub-text,
+  .sub-text {
+    color: #909399;
+    font-size: 12px;
+  }
+  .name-cell .name-primary {
+    font-size: 14px;
+    font-weight: 400;
+    color: #303133;
+    line-height: 1.35;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .account-tag {
+    transform: scale(0.9);
+  }
+  .account-tag--linked {
+    --el-tag-text-color: #409eff;
+    --el-tag-border-color: #b3d8ff;
+    --el-tag-bg-color: #ecf5ff;
+  }
+  .form-hint {
+    margin-top: 4px;
+    font-size: 12px;
+    color: #909399;
+    line-height: 1.4;
+  }
+  .employee-basic-grid {
+    width: 100%;
+  }
+  .employee-basic-grid :deep(.el-form-item) {
+    margin-bottom: 18px;
+  }
+  .employee-basic-grid :deep(.el-form-item__content) {
+    min-height: 32px;
+  }
+  .form-label-with-tip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .form-label-tip {
+    color: #909399;
+    cursor: help;
+    font-size: 13px;
+  }
+  .name-cell .name-secondary {
+    margin-top: 2px;
+    font-size: 12px;
+    color: #909399;
+    line-height: 1.3;
+  }
+  .detail-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+  .detail-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .detail-name {
+    margin: 0 0 6px;
+    font-size: 24px;
+    font-weight: 700;
+    line-height: 1.35;
+    color: #303133;
+  }
+  .detail-name-en {
+    margin-left: 8px;
+    font-size: 16px;
+    font-weight: 500;
+    color: #606266;
+  }
+  .detail-meta {
+    font-size: 14px;
+    color: #909399;
+    line-height: 1.4;
+  }
+  .detail-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .section-title {
+    font-size: 16px;
+    font-weight: 600;
+  }
+  .upload-hint {
+    margin-top: 6px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: #909399;
+  }
+  .attachment-grid {
+    margin-top: 12px;
+  }
+  .attachment-card {
+    border: 1px solid #ebeef5;
+    border-radius: 8px;
+    padding: 14px;
+    min-height: 96px;
+    margin-bottom: 12px;
+    background: #fff;
+  }
+  .list-scroll-hint {
+    flex-shrink: 0;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid #ebeef5;
+    font-size: 12px;
+    color: #909399;
+    line-height: 1.4;
+  }
+  .required-reupload {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px dashed #c0c4cc;
+    border-radius: 6px;
+    background: #f5f7fa;
+    color: #606266;
+    font-size: 12px;
+    line-height: 1.4;
+    cursor: pointer;
+    &.is-uploading {
+      cursor: default;
+      border-color: var(--el-color-primary-light-5, #a0cfff);
+      background: var(--el-color-primary-light-9, #ecf5ff);
+      flex-direction: column;
+      align-items: stretch;
+    }
+    &.is-upload-error {
+      border-color: #f56c6c;
+      background: #fef0f0;
+    }
+  }
+  .required-reupload-icon {
+    flex-shrink: 0;
+    color: #409eff;
+  }
+  .attachment-card-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .attachment-title {
+    font-weight: 600;
+  }
+  .attachment-desc {
+    margin-top: 4px;
+    color: #909399;
+    font-size: 12px;
+  }
+  .attachment-actions {
+    margin-top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: stretch;
+  }
+  .attachment-action-links {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    position: relative;
+    z-index: 2;
+  }
+  .required-upload,
+  .other-upload {
+    width: 100%;
+    cursor: pointer;
+    .el-upload-dragger {
+      padding: 10px 12px;
+      height: auto;
+      width: 100%;
+    }
+    &.is-uploading {
+      cursor: default;
+      .el-upload-dragger {
+        border-color: var(--el-color-primary-light-5, #a0cfff);
+        background: var(--el-color-primary-light-9, #ecf5ff);
+      }
+    }
+  }
+  .required-upload.is-upload-error {
+    .el-upload-dragger {
+      border-color: #f56c6c;
+      background: #fef0f0;
+    }
+  }
+  .upload-progress-label {
+    margin-bottom: 6px;
+    font-size: 12px;
+    color: #409eff;
+  }
+  .upload-error-text {
+    margin-top: 4px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: #f56c6c;
+  }
+  .required-upload-text {
+    font-size: 12px;
+    color: #606266;
+    line-height: 1.5;
+  }
+  .mb16 {
+    margin-bottom: 16px;
+  }
+  .hr-upload-dialog-zone {
+    width: 100%;
+    :deep(.el-upload) {
+      width: 100%;
+    }
+    :deep(.el-upload-dragger) {
+      width: 100%;
+    }
+  }
+  .hr-upload-progress {
+    margin-top: 12px;
+  }
+  .hr-preview-body {
+    min-height: 420px;
+  }
+  .hr-preview-frame {
+    width: 100%;
+    height: 70vh;
+    border: 0;
+    background: #f5f7fa;
+  }
+  .hr-preview-image {
+    display: block;
+    max-width: 100%;
+    max-height: 70vh;
+    margin: 0 auto;
+  }
+  .hr-preview-fallback {
+    min-height: 240px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    color: #606266;
+  }
+  &.is-en {
+    .filter-bar {
+      .filter-item {
+        width: 190px;
+      }
+      .filter-dept-tree {
+        width: 210px;
+      }
+    }
+    .hero-actions {
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .detail-actions {
+      max-width: 100%;
+    }
+    .attachment-title {
+      line-height: 1.35;
+      word-break: break-word;
+    }
+    .required-upload-text {
+      word-break: break-word;
+    }
+  }
+  .other-files {
+    margin-top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding-bottom: 8px;
+  }
+  .other-batch-grid {
+    width: 100%;
+  }
+  .other-batch-card {
+    min-height: 140px;
+  }
+  .other-batch-files {
+    margin-top: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .other-batch-file-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    background: #fafafa;
+    border-radius: 6px;
+  }
+  .other-batch-file-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .other-batch-file-actions {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
+  .other-batch-actions {
+    margin-top: 10px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 8px;
+  }
+  .empty-detail {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    :deep(.el-card__body) {
+      justify-content: center;
+      align-items: center;
+    }
+  }
+  .permission-notice {
+    border: 1px solid #dcdfe6;
+    border-radius: 8px;
+    background: #f4f4f5;
+    overflow: hidden;
+    ul {
+      margin: 6px 0 0;
+      padding-left: 20px;
+    }
+    .permission-notice-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .permission-notice-icon {
+      color: #909399;
+      flex-shrink: 0;
+    }
+    .permission-notice-title {
+      font-weight: 600;
+      color: #303133;
+      flex-shrink: 0;
+    }
+    .permission-notice-summary {
+      flex: 1;
+      color: #909399;
+      font-size: 13px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .permission-notice-toggle {
+      margin-left: auto;
+      flex-shrink: 0;
+    }
+    .permission-notice-body {
+      padding: 0 14px 12px 36px;
+      border-top: 1px solid #e4e7ed;
+    }
+    .permission-notice-intro,
+    .permission-grant-hint {
+      margin: 10px 0 0;
+      line-height: 1.6;
+      color: #606266;
+    }
+    .permission-section {
+      margin-top: 8px;
+      line-height: 1.6;
+      color: #606266;
+    }
+  }
+  .drawer-permission-alert {
+    margin-bottom: 16px;
+  }
+}
+</style>

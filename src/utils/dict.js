@@ -11,11 +11,13 @@ export function useDict(...args) {
   const settingsStore = useSettingsStore()
   const dictStore = useDictStore()
 
-  const translateDictList = (list = []) => {
+  const translateDictList = (list = [], dictType) => {
     const language = settingsStore.language || 'zh-cn'
     return list.map(item => ({
       ...item,
-      label: translateByMap(item.label, language)
+      // Keep stored type 3 and historical data intact; rename only shipment UI labels.
+      label: translateByMap(dictType === 'wms_shipment_type' && String(item.value) === '3'
+        ? '调整价格出库' : item.label, language)
     }))
   }
 
@@ -33,12 +35,12 @@ export function useDict(...args) {
       res.value[dictType] = [];
       const dicts = dictStore.getDict(dictType);
       if (dicts) {
-        res.value[dictType] = translateDictList(dicts);
+        res.value[dictType] = translateDictList(dicts, dictType);
       } else {
         getDicts(dictType).then(resp => {
           const rawDicts = mapRawDict(resp.data || [])
           dictStore.setDict(dictType, rawDicts);
-          res.value[dictType] = translateDictList(rawDicts)
+          res.value[dictType] = translateDictList(rawDicts, dictType)
         })
       }
     })
@@ -48,7 +50,7 @@ export function useDict(...args) {
       () => {
         args.forEach((dictType) => {
           const cached = dictStore.getDict(dictType) || []
-          res.value[dictType] = translateDictList(cached)
+          res.value[dictType] = translateDictList(cached, dictType)
         })
       }
     )

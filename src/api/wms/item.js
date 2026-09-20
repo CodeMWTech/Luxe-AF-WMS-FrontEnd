@@ -55,7 +55,8 @@ export function addItem(data) {
   return request({
     url: '/wms/item',
     method: 'post',
-    data: data
+    data: data,
+    timeout: 120000
   });
 };
 
@@ -67,7 +68,8 @@ export function updateItem(data) {
   return request({
     url: '/wms/item',
     method: 'put',
-    data: data
+    data: data,
+    timeout: 120000
   });
 };
 
@@ -81,42 +83,6 @@ export function delItem(id) {
     method: 'delete'
   });
 };
-
-// 批量提交商品选购审核
-export function selectItemsForPurchase(ids, purchaseQuantityMap) {
-  return request({
-    url: '/wms/item/purchase/select',
-    method: 'post',
-    data: { ids, purchaseQuantityMap }
-  });
-}
-
-// 供应商批量直发，跳过选购审批
-export function supplierShipItems(ids, purchaseQuantityMap) {
-  return request({
-    url: '/wms/item/purchase/supplier-ship',
-    method: 'post',
-    data: { ids, purchaseQuantityMap }
-  });
-}
-
-// 查询商品选购待审核列表
-export function listItemPurchaseReview(query) {
-  return request({
-    url: '/wms/item/purchase/review/list',
-    method: 'get',
-    params: query
-  });
-}
-
-// 审核商品选购
-export function reviewItemPurchase(data) {
-  return request({
-    url: '/wms/item/purchase/review',
-    method: 'put',
-    data
-  });
-}
 
 /**
  * 上传商品图片（方案B：按商品维度上传）
@@ -145,10 +111,11 @@ export function uploadItemImage(itemId, file, isMain, sort) {
  * 查询商品图片列表（异步上传完成后会带 url）
  * @param itemId 商品ID
  */
-export function getItemImages(itemId) {
+export function getItemImages(itemId, config = {}) {
   return request({
     url: `/wms/item/${itemId}/images`,
-    method: 'get'
+    method: 'get',
+    ...config
   });
 }
 
@@ -176,26 +143,33 @@ export function deleteItemImage(imageId) {
 }
 
 // 下载商品导入模板
-export function downloadItemImportTemplate() {
+export function downloadItemImportTemplate(config = {}) {
   return request({
     url: '/wms/item/import/template',
     method: 'get',
     responseType: 'blob',
-    timeout: 0
+    timeout: 0,
+    ...config,
+    headers: {
+      ...(config.headers || {})
+    }
   })
 }
 
 // 提交商品 Excel 异步导入
-export function importItemsByExcel(excel, images) {
+export function importItemsByExcel(excel, images, config = {}) {
   const formData = new FormData()
   formData.append('excel', excel)
   formData.append('images', images)
+  const { onUploadProgress, ...restConfig } = config
   return request({
     url: '/wms/item/import',
     method: 'post',
     data: formData,
     headers: { 'Content-Type': 'multipart/form-data', repeatSubmit: false },
-    timeout: 0
+    timeout: 0,
+    onUploadProgress,
+    ...restConfig
   })
 }
 

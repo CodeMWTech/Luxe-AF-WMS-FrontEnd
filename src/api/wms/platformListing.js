@@ -92,6 +92,24 @@ export function syncCategories(platform, shopId) {
 }
 
 /** 获取 eBay Business Policies（物流/支付/退货政策列表）。refresh=true 强制从 eBay 重新拉取 */
+
+/** 实时获取 TikTok 类目商品属性定义 */
+export function getTiktokCategoryAttributes(shopId, categoryId, categoryVersion = 'v2', locale = 'en-US') {
+  return request({
+    url: '/wms/platform/listings/tiktok/category-attributes',
+    method: 'get',
+    params: { shopId, categoryId, categoryVersion, locale }
+  })
+}
+
+/** 按品牌名前缀实时查询 TikTok T1 品牌 */
+export function searchTiktokT1Brands(shopId, keyword, limit = 100) {
+  return request({
+    url: '/wms/platform/listings/tiktok/brands',
+    method: 'get',
+    params: { shopId, keyword, limit }
+  })
+}
 export function getEbayPolicies(shopId, refresh) {
   return request({ url: '/wms/platform/ebay/policies', method: 'get', params: { shopId, refresh: refresh || false } })
 }

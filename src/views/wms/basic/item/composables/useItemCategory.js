@@ -80,11 +80,17 @@ export function useItemCategory({
   }
 
   const edit = (node, data) => {
-    if (node.level > 1) {
-      categoryForm.value.parentId = node.parent.data.id
-    }
+    // 先重置，避免沿用上一次编辑残留的 parentId / orderNum
+    categoryForm.value = { ...initCategoryFormData }
+    const category = wmsStore.itemCategoryMap.get(data.id)
+    const rawParentId = category?.parentId ?? (node.level > 1 ? node.parent?.data?.id : undefined)
+    // parentId 为 0 / null 表示顶级：树选择展示为空，用户可再选上级或保持清空
     categoryForm.value.id = data.id
-    categoryForm.value.categoryName = data.label
+    categoryForm.value.categoryName = data.label || category?.categoryName
+    categoryForm.value.parentId =
+      rawParentId != null && Number(rawParentId) !== 0 ? rawParentId : undefined
+    // 保留原排序；提交时若未更换上级，后端会忽略 orderNum，避免被默认 0 打乱
+    categoryForm.value.orderNum = category?.orderNum
     categoryDialog.title = isEn.value ? 'Edit Item Category' : '修改商品分类'
     categoryDialog.visible = true
   }
@@ -122,18 +128,36 @@ export function useItemCategory({
     getList()
   }
 
+  const buildCategoryPayload = () => {
+    const payload = { ...categoryForm.value }
+    // 清空上级时前端为 null/undefined；后端 parent_id 以 0 表示顶级（MyBatis NOT_NULL 会忽略 null）
+    if (payload.parentId == null || payload.parentId === '' || Number(payload.parentId) === 0) {
+      payload.parentId = 0
+    }
+    // 不主动用默认 0 覆盖排序；无有效值则不传，交给后端保留原 orderNum
+    if (payload.orderNum == null || payload.orderNum === '') {
+      delete payload.orderNum
+    }
+    return payload
+  }
+
   const submitCategoryForm = () => {
     itemCategoryFormRef.value.validate(async (valid) => {
       if (!valid) return
       buttonLoading.value = true
-      if (categoryForm.value.id) {
-        await updateItemCategory(categoryForm.value).finally(() => { buttonLoading.value = false })
-      } else {
-        await addItemCategory(categoryForm.value).finally(() => { buttonLoading.value = false })
+      const payload = buildCategoryPayload()
+      try {
+        if (payload.id) {
+          await updateItemCategory(payload)
+        } else {
+          await addItemCategory(payload)
+        }
+        proxy?.$modal.msgSuccess(payload.id ? tr('修改成功') : tr('新增成功'))
+        categoryDialog.visible = false
+        refreshCategoryData()
+      } finally {
+        buttonLoading.value = false
       }
-      proxy?.$modal.msgSuccess(categoryForm.value.id ? tr('修改成功') : tr('新增成功'))
-      categoryDialog.visible = false
-      refreshCategoryData()
     })
   }
 

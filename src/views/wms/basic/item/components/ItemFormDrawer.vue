@@ -26,6 +26,7 @@
                     placeholder="请选择分类"
                     check-strictly
                     style="width: 100%!important;"
+                    @change="emit('category-change', $event)"
                   />
                 </el-form-item>
               </el-col>
@@ -45,12 +46,19 @@
               </el-col>
               <el-col :span="12">
                 <el-form-item label="商品品牌" prop="itemBrand">
-                  <el-select v-model="form.itemBrand" clearable filterable style="width: 100%!important;">
+                  <el-select
+                    v-model="form.itemBrand"
+                    clearable
+                    filterable
+                    :placeholder="form.itemCategory ? tr('请选择品牌') : tr('请先选择分类')"
+                    :disabled="!form.itemCategory"
+                    style="width: 100%!important;"
+                  >
                     <el-option
-                      v-for="item in useWmsStore().itemBrandList"
-                      :key="item.id"
+                      v-for="item in formBrandOptions"
+                      :key="String(item.id)"
                       :label="item.brandName"
-                      :value="item.id"
+                      :value="String(item.id)"
                     ></el-option>
                   </el-select>
                 </el-form-item>
@@ -88,7 +96,13 @@
             <el-row :gutter="24">
               <el-col :span="12">
                 <el-form-item label="鉴定机构" prop="authAgency">
-                  <el-select v-model="form.authAgency" placeholder="请选择鉴定机构" clearable style="width: 100%">
+                  <el-select
+                    v-model="form.authAgency"
+                    multiple
+                    placeholder="请选择鉴定机构（可多选）"
+                    clearable
+                    style="width: 100%"
+                  >
                     <el-option v-for="item in AUTH_AGENCY_OPTIONS" :key="item" :label="item" :value="item"/>
                   </el-select>
                 </el-form-item>
@@ -365,7 +379,6 @@
 <script setup>
 import { ref } from 'vue'
 import { Check, Plus, Ticket } from '@element-plus/icons-vue'
-import { useWmsStore } from '@/store/modules/wms'
 
 defineProps({
   dialog: { type: Object, required: true },
@@ -373,6 +386,7 @@ defineProps({
   form: { type: Object, required: true },
   rules: { type: Object, required: true },
   itemCategoryTreeSelectList: { type: Array, default: () => [] },
+  formBrandOptions: { type: Array, default: () => [] },
   ITEM_CONDITION_OPTIONS: { type: Array, default: () => [] },
   AUTH_AGENCY_OPTIONS: { type: Array, default: () => [] },
   ACCESSORY_TAG_OPTIONS: { type: Array, default: () => [] },
@@ -401,6 +415,7 @@ defineProps({
 const emit = defineEmits([
   'open-name-tag-drawer',
   'add-category',
+  'category-change',
   'cost-price-change',
   'material-change',
   'append-accessory-tag',

@@ -14,7 +14,7 @@
                   </div>
                   <ul class="list-group list-group-striped">
                      <li class="list-group-item">
-                        <svg-icon icon-class="user" />{{ tr('用户名称') }}
+                        <svg-icon icon-class="user" />{{ tr('用户名') }}
                         <div class="pull-right" data-runtime-i18n-ignore="true">{{ state.user.userName }}</div>
                      </li>
                      <li class="list-group-item">

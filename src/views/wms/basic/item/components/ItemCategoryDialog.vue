@@ -13,11 +13,12 @@
           :data="treeOptions"
           :props="{ value: 'id', label: 'label', children: 'children' }"
           value-key="id"
-          :placeholder="tr('上级分类')"
+          :placeholder="tr('可不选；清空后为顶级分类')"
           check-strictly
-          style="width: 100%!important;"
           clearable
+          style="width: 100%!important;"
         />
+        <div class="form-tip">{{ tr('清空「上级分类」后，该分类将恢复为顶级分类') }}</div>
       </el-form-item>
       <el-form-item :label="tr('商品分类名称')" prop="categoryName">
         <el-input
@@ -59,3 +60,12 @@ defineExpose({
   resetFields: () => formRef.value?.resetFields?.()
 })
 </script>
+
+<style scoped>
+.form-tip {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #909399;
+}
+</style>
