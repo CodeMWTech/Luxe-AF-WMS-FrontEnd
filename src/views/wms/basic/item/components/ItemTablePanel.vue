@@ -38,12 +38,6 @@
                 <div v-if="row.item.modelName">
                   {{ fieldLabel('包型') }}{{ row.item.modelName }}
                 </div>
-                <div v-if="row.item.size">
-                  {{ fieldLabel('Size') }}{{ row.item.size }}
-                </div>
-                <div v-if="formatBagDimensions(row.item)">
-                  {{ fieldLabel('Dimensions') }}{{ formatBagDimensions(row.item) }}
-                </div>
                 <div v-if="row.item.cared !== null && row.item.cared !== undefined">
                   {{ fieldLabel('护理') }}{{ row.item.cared ? tr('已护理') : tr('未护理') }}
                 </div>
@@ -133,13 +127,6 @@ const itemTableRef = ref(null)
 function formatItemBrandNames(item) {
   const store = useWmsStore()
   return formatBrandNames(item, store.itemBrandMap, store.itemBrandList)
-}
-
-function formatBagDimensions(item) {
-  if (!item || (item.bagWidth == null && item.bagHeight == null && item.bagDepth == null)) {
-    return ''
-  }
-  return `${item.bagWidth ?? '-'} x ${item.bagHeight ?? '-'} x ${item.bagDepth ?? '-'} in`
 }
 
 defineExpose({

@@ -830,12 +830,6 @@ const templateParams = [
   { label: t('platformListings.paramSellingPrice'), placeholder: '{sellingPrice}' },
   { label: t('platformListings.paramDefect'), placeholder: '{defect}' },
   { label: t('platformListings.paramAccessories'), placeholder: '{accessories}' },
-  { label: t('platformListings.paramConditionEn'), placeholder: '{conditionEn}' },
-  { label: t('platformListings.paramSize'), placeholder: '{size}' },
-  { label: t('platformListings.paramBagWidth'), placeholder: '{bagWidth}' },
-  { label: t('platformListings.paramBagHeight'), placeholder: '{bagHeight}' },
-  { label: t('platformListings.paramBagDepth'), placeholder: '{bagDepth}' },
-  { label: t('platformListings.paramBagDimensions'), placeholder: '{bagDimensions}' },
 ]
 
 function getInputElement(field) {

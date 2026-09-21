@@ -721,12 +721,6 @@
     paramSellingPrice: 'Selling Price',
     paramDefect: 'Defect',
     paramAccessories: 'Accessories',
-    paramConditionEn: 'Condition (EN)',
-    paramSize: 'Size',
-    paramBagWidth: 'Bag Width',
-    paramBagHeight: 'Bag Height',
-    paramBagDepth: 'Bag Depth',
-    paramBagDimensions: 'Bag Dimensions',
     // Sections
     sectionListingTitle: 'Listing Title & Category',
     sectionItemSpecifics: 'Item Specifics',
