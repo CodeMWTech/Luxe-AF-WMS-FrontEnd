@@ -9,6 +9,14 @@ export function list(query) {
   })
 }
 
+// 查询操作日志系统模块树
+export function listModules() {
+  return request({
+    url: '/monitor/operlog/modules',
+    method: 'get'
+  })
+}
+
 // 删除操作日志
 export function delOperlog(operId) {
   return request({
