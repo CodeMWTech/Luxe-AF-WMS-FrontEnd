@@ -47,19 +47,6 @@ export function withCategoryPathLabels(nodes, parentPath = []) {
   })
 }
 
-export function disableNonLeafCatalogNodes(nodes) {
-  if (!Array.isArray(nodes) || !nodes.length) return []
-  return nodes.map((node) => {
-    const children = disableNonLeafCatalogNodes(node.children || [])
-    const hasChildren = children.length > 0
-    return {
-      ...node,
-      children: hasChildren ? children : undefined,
-      disabled: hasChildren
-    }
-  })
-}
-
 export function findCatalogNode(nodes, id) {
   const target = toCatalogId(id)
   if (!target || !Array.isArray(nodes)) return null

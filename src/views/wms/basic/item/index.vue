@@ -63,7 +63,7 @@
       :sku-loading="skuLoading"
       :form="form"
       :rules="formRules"
-      :item-category-tree-select-list="itemCategoryFormTreeSelectList"
+      :item-category-tree-select-list="itemCategoryTreeSelectList"
       :form-brand-options="formBrandOptions"
       :form-brand-loading="formBrandLoading"
       :form-model-loading="formModelLoading"
@@ -342,7 +342,7 @@ import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
 import { CircleCheckFilled, UploadFilled } from '@element-plus/icons-vue'
 import { formatDateTimeForQuery } from '@/utils/laTime'
-import { toCatalogId, withCategoryPathLabels, disableNonLeafCatalogNodes, isCatalogLeafId } from '@/utils/wmsUtil'
+import { toCatalogId, withCategoryPathLabels, isCatalogLeafId } from '@/utils/wmsUtil'
 import { blobValidate } from '@/utils/ruoyi'
 import { downloadXlsx, getExportLanguageHeaders, getExportLanguagePayload, prepareLanguageXlsx } from '@/utils/xlsxTranslate'
 import { saveAs } from 'file-saver'
@@ -455,7 +455,6 @@ const toggleCategoryPanel = () => {
 }
 watch(isCategoryPanelCollapsed, () => nextTick(layoutItemTable));
 const itemCategoryTreeSelectList = computed(() => withCategoryPathLabels(useWmsStore().itemCategoryTreeList || []));
-const itemCategoryFormTreeSelectList = computed(() => disableNonLeafCatalogNodes(itemCategoryTreeSelectList.value));
 const itemCategoryTreeOptionsList = computed(() => {
   let data = [...itemCategoryTreeSelectList.value];
   data.unshift({
