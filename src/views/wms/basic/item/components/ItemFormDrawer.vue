@@ -2,7 +2,7 @@
     <el-drawer :title="dialog.title" v-model="dialog.visible" size="80%" append-to-body :close-on-click-modal="false">
       <div v-loading="skuLoading">
         <el-card>
-          <el-form ref="itemFormRef" :model="form" :rules="rules" label-width="120px">
+          <el-form ref="itemFormRef" :model="form" :rules="rules" label-width="120px" :validate-on-rule-change="false">
             <!-- 1.商品名称 2.商品分类 -->
             <el-row :gutter="24">
               <el-col :span="12">
@@ -92,6 +92,7 @@
               <el-col :span="12" v-if="canViewSellingPrice">
                 <el-form-item :label="tr('销售价')" prop="sellingPrice">
                   <el-input-number v-model="form.sellingPrice" :disabled="!canEditSellingPrice" :min="0" :precision="2" :controls="false" style="width: 100%"/>
+                  <div class="price-hint">{{ tr('填写成本价后，系统会按成本价 × 1.8 自动计算销售价（保留两位小数）；也可以自行改成更高价格。') }}</div>
                 </el-form-item>
               </el-col>
             </el-row>
@@ -197,8 +198,35 @@
             <!-- 13.瑕疵 -->
             <el-row :gutter="24">
               <el-col :span="24">
-                <el-form-item label="瑕疵" prop="defect">
-                  <el-input v-model="form.defect" placeholder="请输入瑕疵描述" />
+                <el-form-item :label="tr('瑕疵')" prop="defect">
+                  <el-input
+                    v-model="form.defect"
+                    type="textarea"
+                    :rows="2"
+                    placeholder="Click tags below or type English condition notes"
+                  />
+                  <div class="accessory-tags mt8" :class="{ 'is-expanded': defectTagsExpanded }">
+                    <el-tooltip
+                      v-for="tag in DEFECT_TAG_OPTIONS"
+                      :key="tag.value"
+                      :content="tag.value"
+                      placement="top"
+                      :show-after="200"
+                    >
+                      <el-tag
+                        class="accessory-tag defect-tag"
+                        type="info"
+                        effect="plain"
+                        @click="emit('append-defect-tag', tag.value)"
+                      >
+                        <span class="defect-tag-code">{{ tag.code }}</span>
+                        <span>{{ defectTagsExpanded ? tag.value : tag.short }}</span>
+                      </el-tag>
+                    </el-tooltip>
+                  </div>
+                  <el-button class="defect-toggle" type="primary" link @click="defectTagsExpanded = !defectTagsExpanded">
+                    {{ defectTagsExpanded ? tr('收起') : tr('展开全文') }}
+                  </el-button>
                 </el-form-item>
               </el-col>
             </el-row>
@@ -424,10 +452,10 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { Check, Plus, Ticket } from '@element-plus/icons-vue'
 
-defineProps({
+const props = defineProps({
   dialog: { type: Object, required: true },
   skuLoading: { type: Boolean, default: false },
   form: { type: Object, required: true },
@@ -440,6 +468,7 @@ defineProps({
   ITEM_CONDITION_OPTIONS: { type: Array, default: () => [] },
   AUTH_AGENCY_OPTIONS: { type: Array, default: () => [] },
   ACCESSORY_TAG_OPTIONS: { type: Array, default: () => [] },
+  DEFECT_TAG_OPTIONS: { type: Array, default: () => [] },
   ITEM_SIZE_OPTIONS: { type: Array, default: () => [] },
   formatItemSizeLabel: { type: Function, default: (size) => size },
   supplierOptions: { type: Array, default: () => [] },
@@ -471,6 +500,7 @@ const emit = defineEmits([
   'cost-price-change',
   'material-change',
   'append-accessory-tag',
+  'append-defect-tag',
   'image-drag-start',
   'image-drop',
   'retry-image',
@@ -485,11 +515,18 @@ const emit = defineEmits([
 const itemFormRef = ref(null)
 const itemImageUploadRef = ref(null)
 const treeRef = ref(null)
+const defectTagsExpanded = ref(false)
 
 function handleCategoryNodeClick(data, node) {
   if (!Array.isArray(data?.children) || !data.children.length) return
   node?.expand?.()
 }
+
+watch(() => props.dialog.visible, (visible) => {
+  if (visible) {
+    defectTagsExpanded.value = false
+  }
+})
 
 defineExpose({
   validate: () => itemFormRef.value?.validate?.(),
@@ -498,3 +535,71 @@ defineExpose({
   clearFiles: () => itemImageUploadRef.value?.clearFiles?.()
 })
 </script>
+
+<style scoped>
+.mt8 { margin-top: 8px; }
+.accessory-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.accessory-tag {
+  cursor: pointer;
+  white-space: normal;
+  height: auto;
+  line-height: 1.4;
+  padding: 4px 8px;
+}
+.accessory-tag:hover {
+  opacity: 0.85;
+}
+.accessory-tags:not(.is-expanded) {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+}
+.defect-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.defect-tag-code {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  margin-right: 2px;
+  border-radius: 4px;
+  border: 1px solid #dcdfe6;
+  background: #f5f7fa;
+  color: #606266;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.accessory-tags:not(.is-expanded) .defect-tag {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.defect-toggle {
+  margin-top: 4px;
+  padding: 0;
+}
+.inch-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.inch-unit {
+  color: #909399;
+  flex-shrink: 0;
+}
+.price-hint {
+  margin-top: 4px;
+  color: #909399;
+  font-size: 12px;
+  line-height: 1.5;
+}
+</style>

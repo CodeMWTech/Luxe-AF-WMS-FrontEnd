@@ -608,6 +608,8 @@ const zhToEnMap = {
   英寸: 'inch',
   长宽高: 'Dimensions',
   销售价: 'Selling Price',
+  '填写成本价后，系统会按成本价 × 1.8 自动计算销售价（保留两位小数）；也可以自行改成更高价格。': 'After you enter the cost price, selling price is auto-filled as cost × 1.8 (2 decimals). You can also enter a higher amount.',
+  展开全文: 'Show full text',
   最低: 'Min',
   最高: 'Max',
   生产入库: 'Production Inbound',

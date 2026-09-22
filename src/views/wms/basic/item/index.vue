@@ -71,6 +71,7 @@
       :ITEM_CONDITION_OPTIONS="ITEM_CONDITION_OPTIONS"
       :AUTH_AGENCY_OPTIONS="AUTH_AGENCY_OPTIONS"
       :ACCESSORY_TAG_OPTIONS="ACCESSORY_TAG_OPTIONS"
+      :DEFECT_TAG_OPTIONS="DEFECT_TAG_OPTIONS"
       :ITEM_SIZE_OPTIONS="ITEM_SIZE_OPTIONS"
       :format-item-size-label="formatItemSizeLabel"
       :supplier-options="supplierOptions"
@@ -99,6 +100,7 @@
       @cost-price-change="handleCostPriceChange"
       @material-change="handleMaterialChange"
       @append-accessory-tag="appendAccessoryTag"
+      @append-defect-tag="appendDefectTag"
       @image-drag-start="onImageDragStart"
       @image-drop="onImageDrop"
       @retry-image="retryItemImage"
@@ -536,6 +538,18 @@ const AUTH_AGENCY_OPTIONS = ['Entrupy', 'Real Authentication', 'Legitmark', 'Che
 const ITEM_CONDITION_OPTIONS = ['S', 'A', 'B', 'C', 'D']
 /** 配件常用选项（可点击快速填入，也可自行输入） */
 const ACCESSORY_TAG_OPTIONS = ['Dustbag', 'Box', 'ID card', 'Lock & Key', 'Strap', 'Receipt']
+/** 瑕疵气泡（字母角标 + 短标签，悬停看全文，写入仍用完整英文） */
+const DEFECT_TAG_OPTIONS = [
+  { code: 'A', short: 'New/Unused', value: 'Brand New / Unused with protective seals intact' },
+  { code: 'B', short: 'Like New', value: 'Pristine / Like New / No noticeable signs of wear' },
+  { code: 'C', short: 'Hairline', value: 'Like New / Faint hairline scratches on hardware only' },
+  { code: 'D', short: 'Scuffs', value: 'Slight exterior scuffs / light surface rubbing' },
+  { code: 'E', short: 'Corners', value: 'Minor rubbing at bottom corners / edges' },
+  { code: 'F', short: 'Handle', value: 'Light wear / indentations on handle & shoulder strap' },
+  { code: 'G', short: 'Hardware', value: 'Visible scratches / tarnish on metal parts' },
+  { code: 'H', short: 'Interior', value: 'Minor stains / indentations partially inside' },
+  { code: 'I', short: 'Overall', value: 'Light overall wear across leather, corners & hardware' }
+]
 const ITEM_SIZE_OPTIONS = [
   { value: 'Micro', label: '微型' },
   { value: 'Mini', label: '迷你' },
@@ -560,6 +574,12 @@ const appendAccessoryTag = (tag) => {
   const parts = val.split(/[,，、\n]+/).map(s => s.trim()).filter(Boolean)
   if (parts.includes(tag)) return
   form.value.accessories = parts.length ? parts.concat(tag).join(', ') : tag
+}
+const appendDefectTag = (tag) => {
+  const val = form.value.defect || ''
+  const parts = val.split(/[,，、\n]+/).map(s => s.trim()).filter(Boolean)
+  if (parts.includes(tag)) return
+  form.value.defect = parts.length ? parts.concat(tag).join(', ') : tag
 }
 /** 列表主图缓存与加载状态（兜底按 itemId 请求） */
 const listMainImageUrlMap = ref(new Map())
@@ -835,19 +855,10 @@ const hasItemMaterialContext = computed(() => hasItemModelContext.value && !!for
 const filteredItemModelList = computed(() => formModelList.value)
 
 const filteredItemMaterialList = computed(() => {
-  const brand = form.value.itemBrand
-  const category = form.value.itemCategory
-  const model = form.value.modelId
-  if (!brand || !category || !model) return []
+  if (!formMaterialList.value.length) return []
+  if (!modelMaterialIds.value.length) return formMaterialList.value
   const materialIdSet = new Set(modelMaterialIds.value.map(id => String(id)))
-  return formMaterialList.value.filter(item => {
-    const materialModelId = item.modelId
-    const brandMatched = String(item.itemBrand) === String(brand)
-    const categoryMatched = String(item.itemCategory) === String(category)
-    const modelMatched = String(materialModelId) === String(model)
-    const relationMatched = modelMaterialIds.value.length === 0 || materialIdSet.has(String(item.id))
-    return categoryMatched && brandMatched && modelMatched && relationMatched
-  })
+  return formMaterialList.value.filter(item => materialIdSet.has(String(item.id)))
 })
 
 async function loadFormModels({ keepCurrentModel = false } = {}) {
@@ -952,7 +963,11 @@ watch(
     const keepModelId = form.value.modelId
     await loadFormModels()
     if (!isCurrentFormCatalog(token)) return
-    if (keepModelId && !filteredItemModelList.value.some(item => String(item.id) === String(keepModelId))) {
+    if (
+      keepModelId
+      && filteredItemModelList.value.length
+      && !filteredItemModelList.value.some(item => String(item.id) === String(keepModelId))
+    ) {
       form.value.modelId = undefined
       form.value.materialId = undefined
       form.value.material = undefined
@@ -975,6 +990,7 @@ watch(
   () => {
     if (hydratingItemForm.value || formMaterialLoading.value) return
     if (!form.value.materialId) return
+    if (!filteredItemMaterialList.value.length) return
     const exists = filteredItemMaterialList.value.some(item => String(item.id) === String(form.value.materialId))
     if (!exists) {
       form.value.materialId = undefined
@@ -1390,10 +1406,10 @@ const handleAdd = () => {
   hydratingItemForm.value = true
   nextFormCatalogToken()
   resetItemSkuList()
+  reset()
   dialog.visible = true;
   dialog.title = isEn.value ? 'Add Item' : "新增商品";
-  nextTick(async () => {
-    reset();
+  nextTick(() => {
     hydratingItemForm.value = false
   });
 }
@@ -1403,11 +1419,11 @@ const handleUpdate = (row) => {
   nextFormCatalogToken()
   resetItemSkuList()
   skuLoading.value = true
+  reset()
   dialog.visible = true;
   dialog.title = isEn.value ? 'Edit Item' : "修改商品";
   nextTick(async () => {
     try {
-      reset();
       const _id = row?.itemId
       const [itemRes] = await Promise.all([
         getItem(_id),
@@ -1426,6 +1442,7 @@ const handleUpdate = (row) => {
       form.value.modelId = toCatalogId(form.value.modelId)
       form.value.materialId = toCatalogId(form.value.materialId)
       form.value.authAgency = parseAuthAgencyList(form.value.authAgency)
+      if (form.value.cared == null) form.value.cared = false
       if (form.value.itemBrand) {
         formBrandIds.value = [form.value.itemBrand]
       }
@@ -1448,6 +1465,7 @@ const handleUpdate = (row) => {
         loadFormModels({ keepCurrentModel: true }),
         loadModelMaterialOptions(form.value.modelId, { keepCurrentMaterial: true })
       ])
+      await nextTick()
     } catch (error) {
       dialog.visible = false
       proxy?.$modal.msgError(error?.msg || error?.message || '加载商品详情失败')
@@ -1457,17 +1475,29 @@ const handleUpdate = (row) => {
     }
   });
 }
+function scrollToFirstFormError() {
+  nextTick(() => {
+    const errorItem = document.querySelector('.el-drawer__body .el-form-item.is-error')
+    errorItem?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  })
+}
+
 const submitForm = async () => {
-  if (!hasRequiredItemImage()) {
-    proxy?.$modal.msgError('商品图片不能为空')
-    validateItemImagesOnNextTick()
-    return
-  }
-  // 先校验商品主表（含商品名称、分类、品牌、成色、年份、SKU编码等）
   try {
     await itemFormRef.value.validate();
   } catch {
+    scrollToFirstFormError()
+    if (!hasRequiredItemImage()) {
+      proxy?.$modal.msgError(tr('商品图片不能为空'))
+    }
     return;
+  }
+
+  if (!hasRequiredItemImage()) {
+    proxy?.$modal.msgError(tr('商品图片不能为空'))
+    validateItemImagesOnNextTick()
+    scrollToFirstFormError()
+    return
   }
 
   // 将主表填的 SKU 编码同步到规格行，再提交
