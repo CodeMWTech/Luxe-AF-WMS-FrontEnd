@@ -43,6 +43,7 @@
           :get-item-row-key="getItemRowKey"
           :field-label="fieldLabel"
           :get-main-image-url="getMainImageUrl"
+          :format-item-size-label="formatItemSizeLabel"
           :tr="tr"
           @toggle-category="toggleCategoryPanel"
           @export="handleExport"
@@ -70,6 +71,8 @@
       :ITEM_CONDITION_OPTIONS="ITEM_CONDITION_OPTIONS"
       :AUTH_AGENCY_OPTIONS="AUTH_AGENCY_OPTIONS"
       :ACCESSORY_TAG_OPTIONS="ACCESSORY_TAG_OPTIONS"
+      :ITEM_SIZE_OPTIONS="ITEM_SIZE_OPTIONS"
+      :format-item-size-label="formatItemSizeLabel"
       :supplier-options="supplierOptions"
       :is-supplier-user="isSupplierUser"
       :can-view-cost-price="canViewCostPrice"
@@ -533,6 +536,23 @@ const AUTH_AGENCY_OPTIONS = ['Entrupy', 'Real Authentication', 'Legitmark', 'Che
 const ITEM_CONDITION_OPTIONS = ['S', 'A', 'B', 'C', 'D']
 /** 配件常用选项（可点击快速填入，也可自行输入） */
 const ACCESSORY_TAG_OPTIONS = ['Dustbag', 'Box', 'ID card', 'Lock & Key', 'Strap', 'Receipt']
+const ITEM_SIZE_OPTIONS = [
+  { value: 'Micro', label: '微型' },
+  { value: 'Mini', label: '迷你' },
+  { value: 'Small', label: '小号' },
+  { value: 'Medium', label: '中号' },
+  { value: 'Large', label: '大号' },
+  { value: 'Extra Large', label: '加大号' },
+  { value: 'Nano', label: '超迷你' }
+]
+const ITEM_SIZE_LABEL_MAP = Object.fromEntries(ITEM_SIZE_OPTIONS.map(item => [item.value, item.label]))
+
+function formatItemSizeLabel(size) {
+  if (size == null || size === '') return ''
+  const zh = ITEM_SIZE_LABEL_MAP[size]
+  if (!zh) return String(size)
+  return isEn.value ? String(size) : `${zh} ${size}`
+}
 
 /** 点击配件 tag 时追加到输入框（已包含则不重复添加） */
 const appendAccessoryTag = (tag) => {
@@ -611,6 +631,10 @@ const initFormData = {
   modelId: undefined,
   defect: undefined,
   accessories: undefined,
+  size: undefined,
+  bagWidth: undefined,
+  bagHeight: undefined,
+  bagDepth: undefined,
   remark: undefined,
   imageList: [], // 商品图片列表（编辑时由接口返回，项为 { id, url, isMain, sort }）
   skuCode: undefined, // SKU编码（与规格表第一行同步，主表校验与提示）
@@ -683,6 +707,19 @@ const data = reactive({
   }
 });
 const {queryParams, form} = toRefs(data);
+function requiredNumber(message) {
+  return {
+    required: true,
+    validator: (_rule, value, callback) => {
+      if (value === null || value === undefined || value === '') {
+        callback(new Error(message))
+        return
+      }
+      callback()
+    },
+    trigger: []
+  }
+}
 const formRules = computed(() => ({
   ...data.rules,
   itemCategory: [{
@@ -699,7 +736,18 @@ const formRules = computed(() => ({
       callback()
     },
     trigger: 'change'
-  }]
+  }],
+  costPrice: canViewCostPrice.value ? [requiredNumber(tr('成本价不能为空'))] : [],
+  sellingPrice: canViewSellingPrice.value ? [requiredNumber(tr('销售价不能为空'))] : [],
+  authAgency: [{ type: 'array', required: true, min: 1, message: tr('鉴定机构不能为空'), trigger: [] }],
+  defaultQty: [requiredNumber(tr('数量不能为空'))],
+  defect: [{ required: true, message: tr('瑕疵不能为空'), trigger: [] }],
+  size: [{ required: true, message: tr('尺寸不能为空'), trigger: [] }],
+  bagWidth: [requiredNumber(tr('包宽不能为空'))],
+  bagHeight: [requiredNumber(tr('包高不能为空'))],
+  bagDepth: [requiredNumber(tr('包深不能为空'))],
+  accessories: [{ required: true, message: tr('配件不能为空'), trigger: [] }],
+  consignInfo: [{ required: true, message: tr('寄售信息不能为空'), trigger: [] }]
 }))
 const appliedRouteSkuCode = ref('')
 
@@ -2545,8 +2593,23 @@ onActivated(() => {
   gap: 8px;
 }
 
-.item-page .action-btn {
-  min-width: 96px;
+  .item-page .action-btn {
+    min-width: 96px;
+  }
+
+.inch-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+.inch-field .el-input-number {
+  flex: 1;
+}
+.inch-unit {
+  flex: 0 0 auto;
+  color: #606266;
+  white-space: nowrap;
 }
 
 .item-page.is-en .action-btn {

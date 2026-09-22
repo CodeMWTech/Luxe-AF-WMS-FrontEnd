@@ -38,6 +38,12 @@
                 <div v-if="row.item.modelName">
                   {{ fieldLabel('包型') }}{{ row.item.modelName }}
                 </div>
+                <div v-if="row.item.size">
+                  {{ fieldLabel('尺寸') }}{{ formatItemSizeLabel(row.item.size) }}
+                </div>
+                <div v-if="formatBagDimensions(row.item)">
+                  {{ fieldLabel('长宽高') }}{{ formatBagDimensions(row.item) }}
+                </div>
                 <div v-if="row.item.cared !== null && row.item.cared !== undefined">
                   {{ fieldLabel('护理') }}{{ row.item.cared ? tr('已护理') : tr('未护理') }}
                 </div>
@@ -96,7 +102,7 @@ import { Expand } from '@element-plus/icons-vue'
 import { useWmsStore } from '@/store/modules/wms'
 import { formatBrandNames } from '@/utils/itemBrand'
 
-defineProps({
+const props = defineProps({
   collapsed: { type: Boolean, default: false },
   itemList: { type: Array, default: () => [] },
   queryParams: { type: Object, required: true },
@@ -109,6 +115,7 @@ defineProps({
   getItemRowKey: { type: Function, required: true },
   fieldLabel: { type: Function, required: true },
   getMainImageUrl: { type: Function, required: true },
+  formatItemSizeLabel: { type: Function, default: (size) => size },
   tr: { type: Function, required: true }
 })
 
@@ -127,6 +134,13 @@ const itemTableRef = ref(null)
 function formatItemBrandNames(item) {
   const store = useWmsStore()
   return formatBrandNames(item, store.itemBrandMap, store.itemBrandList)
+}
+
+function formatBagDimensions(item) {
+  if (!item || (item.bagWidth == null && item.bagHeight == null && item.bagDepth == null)) {
+    return ''
+  }
+  return `${item.bagWidth ?? '-'} x ${item.bagHeight ?? '-'} x ${item.bagDepth ?? '-'} ${props.tr('英寸')}`
 }
 
 defineExpose({
