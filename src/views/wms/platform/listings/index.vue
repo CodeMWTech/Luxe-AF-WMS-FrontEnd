@@ -1,17 +1,18 @@
-﻿<template>
+<template>
   <div class="app-container platform-listings">
     <!-- 筛选栏 -->
     <el-card class="filter-card">
       <el-form :model="queryParams" ref="queryRef" :inline="true" @submit.prevent="handleQuery">
         <el-form-item :label="t('platformListings.filterPlatform')" prop="platform">
-          <el-select v-model="queryParams.platform" clearable :placeholder="t('platformListings.filterPlatform')" style="width:140px">
+          <el-select v-model="queryParams.platform" clearable :placeholder="t('platformListings.filterPlatform')" style="width:140px" @change="queryParams.shopId = null">
             <el-option label="TikTok Shop" value="TIKTOK" />
             <el-option label="eBay" value="EBAY" />
+            <el-option label="Whatnot" value="SHOPIFY" />
           </el-select>
         </el-form-item>
         <el-form-item :label="t('platformListings.filterShop')" prop="shopId">
           <el-select v-model="queryParams.shopId" clearable filterable :placeholder="t('platformListings.filterShop')" style="width:180px">
-            <el-option v-for="s in shopList" :key="s.id" :label="s.shopName" :value="s.id" />
+            <el-option v-for="s in filteredShopList" :key="s.id" :label="s.shopName" :value="s.id" />
           </el-select>
         </el-form-item>
         <el-form-item :label="t('platformListings.filterStatus')" prop="listingStatus">
@@ -22,6 +23,8 @@
             <el-option :label="t('platformListings.statusFailed')" value="FAILED" />
             <el-option :label="t('platformListings.statusDelisted')" value="DELISTED" />
             <el-option :label="t('platformListings.statusAuditing')" value="AUDITING" />
+            <el-option :label="t('platformListings.statusSubmitted')" value="SUBMITTED" />
+            <el-option :label="t('platformListings.statusWithdrawn')" value="WITHDRAWN" />
           </el-select>
         </el-form-item>
         <el-form-item :label="t('platformListings.filterSku')" prop="skuCode">
@@ -117,7 +120,7 @@
         <el-table-column v-if="batchMode" type="selection" width="50" align="center" reserve-selection :selectable="isRowSelectable" />
         <el-table-column :label="t('platformListings.listingPlatform')" prop="platform" width="100" align="center">
           <template #default="{ row }">
-            <el-tag :type="row.platform === 'EBAY' ? '' : 'danger'" size="small">{{ row.platform === 'EBAY' ? 'eBay' : 'TikTok' }}</el-tag>
+            <el-tag :type="listingPlatformTagType(row.platform)" size="small">{{ listingPlatformName(row.platform) }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column :label="t('platformListings.listingShop')" prop="shopName" min-width="120" show-overflow-tooltip />
@@ -125,11 +128,13 @@
         <el-table-column :label="t('platformListings.listingSkuCode')" prop="skuCode" min-width="120" show-overflow-tooltip />
         <el-table-column :label="t('platformListings.listingTitle')" prop="listingTitle" min-width="180" show-overflow-tooltip />
         <el-table-column :label="t('platformListings.listingPrice')" prop="channelPrice" width="120" align="right">
-          <template #default="{ row }">{{ formatChannelPrice(row.channelPrice) }}</template>
+          <template #default="{ row }">{{ formatChannelPrice(row.channelPrice, row.currency) }}</template>
         </el-table-column>
-        <el-table-column :label="t('platformListings.listingStatus')" prop="listingStatus" width="100" align="center">
+        <el-table-column :label="t('platformListings.listingStatus')" prop="listingStatus" min-width="165" align="center">
           <template #default="{ row }">
-            <el-tag :type="statusTagType(row.listingStatus)" size="small">{{ statusLabel(row.listingStatus) }}</el-tag>
+            <el-tooltip :disabled="row.platform !== 'SHOPIFY' || !['SUBMITTED', 'WITHDRAWN'].includes(row.listingStatus)" :content="t(row.listingStatus === 'WITHDRAWN' ? 'platformListings.whatnotWithdrawnHint' : 'platformListings.whatnotSubmittedHint')" placement="top">
+              <el-tag :type="statusTagType(row.listingStatus)" size="small">{{ statusLabel(row.listingStatus) }}</el-tag>
+            </el-tooltip>
           </template>
         </el-table-column>
         <el-table-column :label="t('platformListings.listingError')" prop="listingError" min-width="140" show-overflow-tooltip>
@@ -139,10 +144,10 @@
         <el-table-column :label="t('platformListings.listingTime')" prop="createTime" width="160" align="center" />
         <el-table-column :label="t('platformListings.operation')" width="260" align="center" fixed="right">
           <template #default="{ row }">
-            <el-button link type="primary" size="small" icon="Refresh" @click="handleSync(row)" v-if="row.listingStatus === 'LISTED' || row.listingStatus === 'AUDITING'">{{ t('platformListings.btnSyncStatus') }}</el-button>
-            <el-button link type="danger" size="small" icon="Close" @click="handleDelist(row)" v-if="row.listingStatus === 'LISTED' || row.listingStatus === 'AUDITING'">{{ t('platformListings.btnDelist') }}</el-button>
-            <el-button link type="warning" size="small" icon="Refresh" @click="handleRetry(row)" v-if="row.listingStatus === 'FAILED' || row.listingStatus === 'DELISTED'">{{ row.listingStatus === 'DELISTED' ? t('platformListings.btnRelist') : t('platformListings.btnRetry') }}</el-button>
-            <el-button link type="danger" size="small" icon="Delete" @click="handleDelete(row)" v-if="row.listingStatus === 'DELISTED'">{{ t('platformListings.btnDeleteRecord') }}</el-button>
+            <el-button link type="primary" size="small" icon="Refresh" @click="handleSync(row)" v-if="isListingOnline(row)">{{ t('platformListings.btnSyncStatus') }}</el-button>
+            <el-button link type="danger" size="small" icon="Close" @click="handleDelist(row)" v-if="isListingWithdrawable(row)">{{ t(row.platform === 'SHOPIFY' ? 'platformListings.whatnotWithdraw' : 'platformListings.btnDelist') }}</el-button>
+            <el-button link type="warning" size="small" icon="Refresh" @click="handleRetry(row)" v-if="isListingRetryable(row)">{{ ['DELISTED', 'WITHDRAWN'].includes(row.listingStatus) ? t('platformListings.btnRelist') : t('platformListings.btnRetry') }}</el-button>
+            <el-button link type="danger" size="small" icon="Delete" @click="handleDelete(row)" v-if="isListingDeletable(row)">{{ t('platformListings.btnDeleteRecord') }}</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -164,6 +169,7 @@ import { listListings, delistListing, syncListingStatus, retryListing, deleteLis
 import { listAllPlatformShops } from '@/api/wms/platformShop'
 import useSettingsStore from '@/store/modules/settings'
 import PublishDialog from './components/PublishDialog.vue'
+import { listingPlatformName, listingPlatformTagType, isListingChannelActive, isListingWithdrawable, isListingRetryable, isListingDeletable } from '@/utils/listingPlatform'
 
 const router = useRouter()
 const settingsStore = useSettingsStore()
@@ -223,8 +229,10 @@ const queryParams = reactive({
   createBy: ''
 })
 
+const filteredShopList = computed(() => shopList.value.filter(shop => !queryParams.platform || shop.platform === queryParams.platform))
+
 function statusTagType(status) {
-  const map = { PENDING: 'info', LISTING: 'warning', LISTED: 'success', FAILED: 'danger', DELISTED: '', AUDITING: 'warning' }
+  const map = { PENDING: 'info', LISTING: 'warning', LISTED: 'success', FAILED: 'danger', DELISTED: '', AUDITING: 'warning', SUBMITTED: 'warning', WITHDRAWN: 'info' }
   return map[status] || 'info'
 }
 
@@ -235,18 +243,20 @@ function statusLabel(status) {
     LISTED: t('platformListings.statusListed'),
     FAILED: t('platformListings.statusFailed'),
     DELISTED: t('platformListings.statusDelisted'),
-    AUDITING: t('platformListings.statusAuditing')
+    AUDITING: t('platformListings.statusAuditing'),
+    SUBMITTED: t('platformListings.statusSubmitted'),
+    WITHDRAWN: t('platformListings.statusWithdrawn')
   }
   return map[status] || status
 }
 
-function formatChannelPrice(price) {
+function formatChannelPrice(price, currency = 'USD') {
   if (price === null || price === undefined || price === '') return '-'
   const amount = Number(price)
   if (!Number.isFinite(amount)) return '-'
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
-    currency: 'USD',
+    currency: currency || 'USD',
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   }).format(amount)
@@ -260,7 +270,7 @@ function formatListingError(error) {
     if (detail?.type === 'PLATFORM_LISTING_ERROR') {
       const english = isEn.value
       return t('platformListings.listingErrorDetail', {
-        platform: detail.platform === 'EBAY' ? 'eBay' : 'TikTok',
+        platform: listingPlatformName(detail.platform),
         code: detail.code || 'N/A',
         reason: english ? detail.reasonEn : detail.reasonZh,
         action: english ? detail.actionEn : detail.actionZh
@@ -269,9 +279,10 @@ function formatListingError(error) {
   } catch {
     // Existing non-structured status messages remain readable as-is.
   }
-  const failedMatch = text.match(/^(eBay|EBAY|TikTok|TIKTOK)\s*上架失败$/i)
+  const failedMatch = text.match(/^(eBay|EBAY|TikTok|TIKTOK|Shopify|Whatnot)\s*上架失败$/i)
   if (failedMatch) {
-    const platform = failedMatch[1].toLowerCase() === 'ebay' ? 'eBay' : 'TikTok'
+    const rawPlatform = failedMatch[1].toUpperCase()
+    const platform = listingPlatformName(rawPlatform === 'WHATNOT' ? 'SHOPIFY' : rawPlatform)
     return t('platformListings.platformPublishFailed', { platform })
   }
   return text
@@ -332,12 +343,8 @@ function goTemplates() {
   router.push('/wms/platform/listings/template')
 }
 
-function isListingDeletable(row) {
-  return row.listingStatus === 'DELISTED'
-}
-
 function isListingOnline(row) {
-  return row.listingStatus === 'LISTED' || row.listingStatus === 'AUDITING'
+  return isListingChannelActive(row)
 }
 
 function handleSelectionChange(selection) {
@@ -368,8 +375,11 @@ function clearSelection() {
 }
 
 function isRowSelectable(row) {
-  if (batchAction.value === 'sync' || batchAction.value === 'delist') {
+  if (batchAction.value === 'sync') {
     return isListingOnline(row)
+  }
+  if (batchAction.value === 'delist') {
+    return isListingWithdrawable(row)
   }
   if (batchAction.value === 'delete') {
     return isListingDeletable(row)
@@ -399,9 +409,9 @@ function exitBatchMode() {
 }
 
 function handleDelist(row) {
-  proxy.$modal.confirm(t('platformListings.confirmDelist'), t('platformListings.promptTitle'), confirmOptions({ type: 'warning' })).then(() => {
+  proxy.$modal.confirm(t(row.platform === 'SHOPIFY' ? 'platformListings.whatnotConfirmWithdraw' : 'platformListings.confirmDelist'), t('platformListings.promptTitle'), confirmOptions({ type: 'warning' })).then(() => {
     delistListing(row.id).then(() => {
-      proxy.$modal.msgSuccess(t('platformListings.delistSuccess'))
+      proxy.$modal.msgSuccess(t(row.platform === 'SHOPIFY' ? 'platformListings.whatnotWithdrawSuccess' : 'platformListings.delistSuccess'))
       getList()
     }).catch((err) => {
       // 优先展示后端返回的具体错误原因（如"商品正在审核中"）
@@ -422,7 +432,7 @@ function handleSync(row) {
 }
 
 function handleRetry(row) {
-  proxy.$modal.confirm(t('platformListings.confirmRetry'), t('platformListings.promptTitle'), confirmOptions({ type: 'info' })).then(() => {
+  proxy.$modal.confirm(t(row.platform === 'SHOPIFY' ? 'platformListings.whatnotConfirmRetry' : 'platformListings.confirmRetry'), t('platformListings.promptTitle'), confirmOptions({ type: 'info' })).then(() => {
     retryListing(row.id).then(() => {
       proxy.$modal.msgSuccess(t('platformListings.retrySubmitted'))
       getList()
@@ -439,7 +449,7 @@ function runBatchOperation(options) {
     return
   }
   proxy.$modal.confirm(
-    t(options.confirmKey, { count: rows.length }),
+    t(options.confirmKey, { count: rows.length }) + (options.whatnotHint && rows.some(row => row.platform === 'SHOPIFY') ? '\n' + t('platformListings.whatnotWithdrawnHint') : ''),
     t('platformListings.promptTitle'),
     confirmOptions({ type: options.confirmType || 'warning' })
   ).then(() => {
@@ -448,9 +458,9 @@ function runBatchOperation(options) {
       const successCount = results.filter(item => item.status === 'fulfilled').length
       const failedCount = results.length - successCount
       if (failedCount) {
-        proxy.$modal.msgError(t(options.partialKey, { success: successCount, failed: failedCount }))
+        proxy.$modal.msgError(t(options.whatnotHint && rows.some(row => row.platform === 'SHOPIFY') ? 'platformListings.whatnotBatchWithdrawPartial' : options.partialKey, { success: successCount, failed: failedCount }))
       } else {
-        proxy.$modal.msgSuccess(t(options.successKey, { count: successCount }))
+        proxy.$modal.msgSuccess(t(options.whatnotHint && rows.some(row => row.platform === 'SHOPIFY') ? 'platformListings.whatnotBatchWithdrawSuccess' : options.successKey, { count: successCount }) + (options.whatnotHint && rows.some(row => row.platform === 'SHOPIFY') ? ' ' + t('platformListings.whatnotWithdrawnHint') : ''))
       }
       clearSelection()
       getList()
@@ -475,7 +485,8 @@ function handleBatchSync() {
 
 function handleBatchDelist() {
   runBatchOperation({
-    filter: isListingOnline,
+    filter: isListingWithdrawable,
+    whatnotHint: true,
     emptyKey: 'platformListings.selectDelistListings',
     confirmKey: 'platformListings.confirmBatchDelistListing',
     successKey: 'platformListings.batchDelistSuccess',

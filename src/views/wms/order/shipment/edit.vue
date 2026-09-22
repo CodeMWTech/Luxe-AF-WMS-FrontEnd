@@ -233,23 +233,28 @@ const showAutoDelistNotice = async (result = {}) => {
     return
   }
   const total = Number(result.autoDelistListingCount || 0)
+  const hasWhatnot = skuList.some(item => Number(item.whatnotListingCount || 0) > 0)
   const rows = skuList.map((item, index) => {
     const platformParts = []
     if (Number(item.tiktokListingCount || 0) > 0) platformParts.push(`TikTok ${item.tiktokListingCount}`)
     if (Number(item.ebayListingCount || 0) > 0) platformParts.push(`eBay ${item.ebayListingCount}`)
+    if (Number(item.whatnotListingCount || 0) > 0) platformParts.push(`Whatnot ${item.whatnotListingCount}`)
     const itemName = item.itemName ? `｜${item.itemName}` : ''
     return h('div', {
       style: 'padding:8px 10px;margin-top:6px;border:1px solid #f3d19e;border-radius:4px;background:#fdf6ec;line-height:1.5;word-break:break-all;'
-    }, `${index + 1}. SKU：${item.skuCode || item.skuId}${itemName}｜${platformParts.join(' / ')}｜${isEn.value ? 'Listings' : '已上架商品'} ${item.listingCount}`)
+    }, `${index + 1}. SKU：${item.skuCode || item.skuId}${itemName}｜${platformParts.join(' / ')}｜${isEn.value ? 'Listings' : (hasWhatnot ? '渠道记录' : '已上架商品')} ${item.listingCount}`)
   })
   const title = isEn.value ? 'Out-of-stock automatic delisting' : '无库存自动下架提示'
   const summary = isEn.value
-    ? `Outbound completed. The following ${skuList.length} SKU(s) are out of stock. ${total} active listing(s) are being delisted automatically:`
-    : `出库成功。以下 ${skuList.length} 个 SKU 库存已归零，系统正在自动下架共 ${total} 条已上架商品：`
+    ? `Outbound completed. The following ${skuList.length} SKU(s) are out of stock. ${total} ${hasWhatnot ? 'listing(s) are being delisted or withdrawn' : 'active listing(s) are being delisted'} automatically:`
+    : `出库成功。以下 ${skuList.length} 个 SKU 库存已归零，系统正在自动${hasWhatnot ? '下架或撤回' : '下架'}共 ${total} 条${hasWhatnot ? '渠道记录' : '已上架商品'}：`
   await ElMessageBox.alert(
     h('div', [
       h('div', { style: 'margin-bottom:10px;line-height:1.6;' }, summary),
-      h('div', { style: 'max-height:360px;overflow-y:auto;padding-right:4px;' }, rows)
+      h('div', { style: 'max-height:360px;overflow-y:auto;padding-right:4px;' }, rows),
+      ...(hasWhatnot ? [h('div', { style: 'margin-top:12px;line-height:1.6;' }, isEn.value
+        ? 'Whatnot records are withdrawn from the Shopify channel. The app sync is asynchronous; verify that items are unavailable in Whatnot Seller Hub.'
+        : 'Whatnot 记录将从 Shopify 渠道撤回。插件同步存在延迟，请在 Whatnot 卖家后台核实商品已不可购买。')] : [])
     ]),
     title,
     {
