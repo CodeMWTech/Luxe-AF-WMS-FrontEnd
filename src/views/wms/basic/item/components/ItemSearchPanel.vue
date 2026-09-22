@@ -31,9 +31,9 @@
               >
                 <el-option
                   v-for="item in brandGroups"
-                  :key="item.id"
+                  :key="String(item.id)"
                   :label="item.brandName"
-                  :value="item.id"
+                  :value="String(item.id)"
                 />
               </el-select>
             </el-form-item>

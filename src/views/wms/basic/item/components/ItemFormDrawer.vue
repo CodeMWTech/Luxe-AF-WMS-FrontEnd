@@ -21,11 +21,13 @@
                     ref="treeRef"
                     v-model="form.itemCategory"
                     :data="itemCategoryTreeSelectList"
-                    :props="{ value: 'id', label: 'label', children: 'children' }"
+                    :props="{ value: 'id', label: 'label', children: 'children', disabled: 'disabled' }"
                     value-key="id"
-                    placeholder="请选择分类"
+                    :placeholder="tr('请选择最末级分类')"
                     check-strictly
+                    expand-on-click-node
                     style="width: 100%!important;"
+                    @node-click="handleCategoryNodeClick"
                     @change="emit('category-change', $event)"
                   />
                 </el-form-item>
@@ -50,8 +52,9 @@
                     v-model="form.itemBrand"
                     clearable
                     filterable
-                    :placeholder="form.itemCategory ? tr('请选择品牌') : tr('请先选择分类')"
+                    :placeholder="form.itemCategory ? tr('请选择品牌') : tr('请先选择最末级分类')"
                     :disabled="!form.itemCategory"
+                    :loading="formBrandLoading"
                     style="width: 100%!important;"
                   >
                     <el-option
@@ -122,6 +125,7 @@
                     placeholder="请选择包型"
                     clearable
                     filterable
+                    :loading="formModelLoading"
                     class="image-select"
                     popper-class="image-select-popper"
                     :disabled="!hasItemModelContext"
@@ -135,9 +139,9 @@
                     </template>
                     <el-option
                       v-for="item in filteredItemModelList"
-                      :key="item.id"
+                      :key="String(item.id)"
                       :label="item.modelName"
-                      :value="item.id"
+                      :value="String(item.id)"
                     >
                       <div class="image-option" :class="{ 'is-selected': String(form.modelId) === String(item.id) }">
                         <span class="image-option-thumb">
@@ -158,6 +162,7 @@
                     placeholder="请选择材质"
                     clearable
                     filterable
+                    :loading="formMaterialLoading"
                     class="image-select"
                     popper-class="image-select-popper"
                     :disabled="!hasItemMaterialContext"
@@ -172,9 +177,9 @@
                     </template>
                     <el-option
                       v-for="item in filteredItemMaterialList"
-                      :key="item.id"
+                      :key="String(item.id)"
                       :label="item.materialName"
-                      :value="item.id"
+                      :value="String(item.id)"
                     >
                       <div class="image-option" :class="{ 'is-selected': String(form.materialId) === String(item.id) }">
                         <span class="image-option-thumb">
@@ -387,6 +392,9 @@ defineProps({
   rules: { type: Object, required: true },
   itemCategoryTreeSelectList: { type: Array, default: () => [] },
   formBrandOptions: { type: Array, default: () => [] },
+  formBrandLoading: { type: Boolean, default: false },
+  formModelLoading: { type: Boolean, default: false },
+  formMaterialLoading: { type: Boolean, default: false },
   ITEM_CONDITION_OPTIONS: { type: Array, default: () => [] },
   AUTH_AGENCY_OPTIONS: { type: Array, default: () => [] },
   ACCESSORY_TAG_OPTIONS: { type: Array, default: () => [] },
@@ -432,6 +440,12 @@ const emit = defineEmits([
 
 const itemFormRef = ref(null)
 const itemImageUploadRef = ref(null)
+const treeRef = ref(null)
+
+function handleCategoryNodeClick(data, node) {
+  if (!Array.isArray(data?.children) || !data.children.length) return
+  node?.expand?.()
+}
 
 defineExpose({
   validate: () => itemFormRef.value?.validate?.(),

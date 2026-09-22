@@ -410,6 +410,8 @@ const zhToEnMap = {
   查看包型: 'View Models',
   暂无图片: 'No Image',
   请先选择分类: 'Select category first',
+  请先选择最末级分类: 'Select a leaf category first',
+  请选择最末级分类: 'Please select a leaf category',
   请先选择品牌: 'Select brand first',
   请先选择包型: 'Select model first',
   请选择材质: 'Select material',

@@ -1,13 +1,6 @@
 <template>
   <div class="login-consent" :class="`is-${variant}`">
-    <el-checkbox
-      class="login-consent__check"
-      :model-value="modelValue"
-      @update:model-value="emit('update:modelValue', $event)"
-    >
-      {{ $t('login.consentCheckbox') }}
-    </el-checkbox>
-    <details class="login-consent__details" open>
+    <details class="login-consent__details">
       <summary class="login-consent__summary">
         <span class="login-consent__icon" aria-hidden="true">i</span>
         <span class="login-consent__text">
@@ -30,17 +23,11 @@
 
 <script setup>
 defineProps({
-  modelValue: {
-    type: Boolean,
-    default: false
-  },
   variant: {
     type: String,
     default: 'desktop'
   }
 })
-
-const emit = defineEmits(['update:modelValue'])
 </script>
 
 <style scoped lang="scss">
@@ -49,22 +36,8 @@ const emit = defineEmits(['update:modelValue'])
   line-height: 1.5;
 }
 
-.login-consent__check {
-  display: flex;
-  align-items: flex-start;
-  height: auto;
-  white-space: normal;
-}
-
-.login-consent__check :deep(.el-checkbox__label) {
-  white-space: normal;
-  line-height: 1.45;
-  color: #303133;
-  font-weight: 500;
-}
-
 .login-consent__details {
-  margin-top: 8px;
+  margin-top: 0;
 }
 
 .login-consent__summary {

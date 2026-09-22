@@ -6,7 +6,7 @@ import { listItemMaterial } from "@/api/wms/itemMaterial";
 import { listItemModel } from "@/api/wms/itemModel";
 import {defineStore} from "pinia";
 import {ref} from "vue";
-import { sortByCatalogName } from '@/utils/wmsUtil'
+import { sortByCatalogName, stringifyCatalogTree } from '@/utils/wmsUtil'
 
 const sortItemBrands = (brands = []) => sortByCatalogName(brands, 'brandName')
 const sortItemModels = (models = []) => sortByCatalogName(models, 'modelName')
@@ -56,6 +56,7 @@ export const useWmsStore = defineStore('wms', () => {
         const map = new Map()
         itemCategoryList.value.forEach(supplier => {
           map.set(supplier.id, supplier)
+          map.set(String(supplier.id), supplier)
         })
         itemCategoryMap.value = map
         resolve()
@@ -66,8 +67,8 @@ export const useWmsStore = defineStore('wms', () => {
   const getItemCategoryTreeList = async () => {
     return new Promise((resolve, reject) => {
       treeSelectItemCategory().then(res => {
-        itemCategoryTreeList.value = res.data
-        resolve(res.data)
+        itemCategoryTreeList.value = stringifyCatalogTree(res.data || [])
+        resolve(itemCategoryTreeList.value)
       }).catch(() => reject())
     })
   }
@@ -102,6 +103,7 @@ export const useWmsStore = defineStore('wms', () => {
         const map = new Map()
         itemMaterialList.value.forEach(item => {
           map.set(item.id, { ...item })
+          map.set(String(item.id), { ...item })
         })
         itemMaterialMap.value = map
         resolve()
@@ -119,6 +121,7 @@ export const useWmsStore = defineStore('wms', () => {
         const map = new Map()
         itemModelList.value.forEach(item => {
           map.set(item.id, { ...item })
+          map.set(String(item.id), { ...item })
         })
         itemModelMap.value = map
         resolve()

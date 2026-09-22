@@ -33,7 +33,7 @@
             :disabled="!queryParams.itemCategory"
             style="width: 240px"
           >
-            <el-option v-for="item in queryBrandOptions" :key="item.id" :label="item.brandName" :value="item.id" />
+            <el-option v-for="item in queryBrandOptions" :key="String(item.id)" :label="item.brandName" :value="String(item.id)" />
           </el-select>
         </el-form-item>
         <el-form-item>
@@ -200,9 +200,10 @@
 import { getItemBrand, delItemBrand, addItemBrand, updateItemBrand, listItemBrandPage, uploadItemBrandImage, deleteItemBrandImage } from '@/api/wms/itemBrand'
 import { listItemModelBrandOptions } from '@/api/wms/itemModel'
 import { useWmsStore } from '@/store/modules/wms'
+import { useItemCatalogDictStore } from '@/store/modules/itemCatalogDict'
 import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
-import { joinCatalogPath, withCategoryPathLabels } from '@/utils/wmsUtil'
+import { joinCatalogPath, toCatalogId, withCategoryPathLabels } from '@/utils/wmsUtil'
 import { useGalleryFillPage } from '@/composables/useGalleryFillPage'
 import CatalogHierarchySteps from '@/components/CatalogHierarchySteps/index.vue'
 import { Plus } from '@element-plus/icons-vue'
@@ -213,6 +214,7 @@ const router = useRouter()
 const route = useRoute()
 const settingsStore = useSettingsStore()
 const wmsStore = useWmsStore()
+const catalogDictStore = useItemCatalogDictStore()
 
 const itemBrandList = ref([])
 const open = ref(false)
@@ -223,6 +225,7 @@ const title = ref('')
 const viewMode = ref(localStorage.getItem('wms.itemBrand.viewMode') || 'list')
 const galleryGridRef = ref(null)
 const queryBrandIds = ref([])
+const hydratingRouteQuery = ref(false)
 const imageUploadRef = ref(null)
 const pendingImageFile = ref(null)
 const pendingImageUrl = ref('')
@@ -356,8 +359,8 @@ function goModels(row) {
   router.push({
     path: '/basic/itemModel',
     query: {
-      itemBrand: row.id,
-      itemCategory: queryParams.value.itemCategory || row.itemCategory || undefined,
+      itemBrand: toCatalogId(row.id),
+      itemCategory: toCatalogId(queryParams.value.itemCategory || row.itemCategory),
       view: 'gallery'
     }
   })
@@ -387,6 +390,7 @@ async function refreshQueryBrandOptions() {
 }
 
 async function handleQueryCategoryChange() {
+  if (hydratingRouteQuery.value) return
   queryParams.value.id = undefined
   await refreshQueryBrandOptions()
 }
@@ -464,8 +468,8 @@ async function handleUpdate(row) {
   // Prefer brand-owned image; if only model fallback URL, leave form empty so user can upload own.
   const hasOwnImage = !!data.imageOssId
   form.value = {
-    id: data.id,
-    itemCategory: data.itemCategory || null,
+    id: toCatalogId(data.id),
+    itemCategory: toCatalogId(data.itemCategory) || null,
     brandName: data.brandName || null,
     imageOssId: hasOwnImage ? String(data.imageOssId) : null,
     imageUrl: hasOwnImage ? (data.imageUrl || data.coverImageUrl || '') : ''
@@ -499,6 +503,7 @@ function submitForm() {
       proxy.$modal.msgSuccess(payload.id ? tr('修改成功') : tr('新增成功'))
       open.value = false
       resetImageState()
+      catalogDictStore.invalidateAll()
       await wmsStore.getItemBrandList()
       await getList()
     } finally {
@@ -517,22 +522,34 @@ async function handleDelete(row) {
   await proxy.$modal.confirm(tip)
   await delItemBrand(row.id, categoryId)
   proxy.$modal.msgSuccess(tr('删除成功'))
+  catalogDictStore.invalidateAll()
   await wmsStore.getItemBrandList()
   await getList()
 }
 
-function applyRouteQuery() {
+async function applyRouteQuery() {
   const q = route.query || {}
-  if (q.itemCategory) {
-    queryParams.value.itemCategory = Number(q.itemCategory) || q.itemCategory
-  }
-  if (q.view === 'gallery' || q.view === 'list') {
-    viewMode.value = q.view
+  hydratingRouteQuery.value = true
+  try {
+    if (q.itemCategory) {
+      queryParams.value.itemCategory = toCatalogId(q.itemCategory)
+    }
+    if (q.view === 'gallery' || q.view === 'list') {
+      viewMode.value = q.view
+    }
+    await nextTick()
+  } finally {
+    hydratingRouteQuery.value = false
   }
 }
 
-applyRouteQuery()
-refreshQueryBrandOptions().finally(() => getList())
+async function initPage() {
+  await applyRouteQuery()
+  await refreshQueryBrandOptions()
+  await getList()
+}
+
+initPage()
 </script>
 
 <style scoped>
