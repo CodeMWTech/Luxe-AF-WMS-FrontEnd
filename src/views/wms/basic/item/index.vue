@@ -74,6 +74,11 @@
       :DEFECT_TAG_OPTIONS="DEFECT_TAG_OPTIONS"
       :ITEM_SIZE_OPTIONS="ITEM_SIZE_OPTIONS"
       :format-item-size-label="formatItemSizeLabel"
+      :format-accessory-tag-label="formatAccessoryTagLabel"
+      :format-defect-tag-label="formatDefectTagLabel"
+      :format-defect-tag-tooltip="formatDefectTagTooltip"
+      :format-bag-inch-hint="formatBagInchHint"
+      :bag-dim-labels="bagDimLabels"
       :supplier-options="supplierOptions"
       :is-supplier-user="isSupplierUser"
       :can-view-cost-price="canViewCostPrice"
@@ -535,19 +540,26 @@ function resolveFormBrandId(itemBrandIds, itemBrand) {
 const AUTH_AGENCY_OPTIONS = ['Entrupy', 'Real Authentication', 'Legitmark', 'CheckCheck', 'N/A']
 /** 成色固定选项 */
 const ITEM_CONDITION_OPTIONS = ['S', 'A', 'B', 'C', 'D']
-/** 配件常用选项（可点击快速填入，也可自行输入） */
-const ACCESSORY_TAG_OPTIONS = ['Dustbag', 'Box', 'ID card', 'Lock & Key', 'Strap', 'Receipt']
-/** 瑕疵气泡（字母角标 + 短标签，悬停看全文，写入仍用完整英文） */
+/** 配件常用选项（界面中英对照，点击写入英文） */
+const ACCESSORY_TAG_OPTIONS = [
+  { value: 'Dustbag', zh: '防尘袋' },
+  { value: 'Box', zh: '盒子' },
+  { value: 'ID card', zh: '身份卡' },
+  { value: 'Lock & Key', zh: '锁和钥匙' },
+  { value: 'Strap', zh: '肩带' },
+  { value: 'Receipt', zh: '收据' }
+]
+/** 瑕疵气泡（中文方便认，悬停看对照，写入仍用完整英文） */
 const DEFECT_TAG_OPTIONS = [
-  { code: 'A', short: 'New/Unused', value: 'Brand New / Unused with protective seals intact' },
-  { code: 'B', short: 'Like New', value: 'Pristine / Like New / No noticeable signs of wear' },
-  { code: 'C', short: 'Hairline', value: 'Like New / Faint hairline scratches on hardware only' },
-  { code: 'D', short: 'Scuffs', value: 'Slight exterior scuffs / light surface rubbing' },
-  { code: 'E', short: 'Corners', value: 'Minor rubbing at bottom corners / edges' },
-  { code: 'F', short: 'Handle', value: 'Light wear / indentations on handle & shoulder strap' },
-  { code: 'G', short: 'Hardware', value: 'Visible scratches / tarnish on metal parts' },
-  { code: 'H', short: 'Interior', value: 'Minor stains / indentations partially inside' },
-  { code: 'I', short: 'Overall', value: 'Light overall wear across leather, corners & hardware' }
+  { code: 'A', short: 'New/Unused', shortZh: '全新未使用', value: 'Brand New / Unused with protective seals intact', valueZh: '全新未使用，保护封条完好' },
+  { code: 'B', short: 'Like New', shortZh: '近新', value: 'Pristine / Like New / No noticeable signs of wear', valueZh: '近新，无明显使用痕迹' },
+  { code: 'C', short: 'Hairline', shortZh: '细痕', value: 'Like New / Faint hairline scratches on hardware only', valueZh: '近新，仅五金有轻微细划痕' },
+  { code: 'D', short: 'Scuffs', shortZh: '轻微磨损', value: 'Slight exterior scuffs / light surface rubbing', valueZh: '外表轻微擦伤或表面轻磨' },
+  { code: 'E', short: 'Corners', shortZh: '边角磨损', value: 'Minor rubbing at bottom corners / edges', valueZh: '底部边角轻微磨损' },
+  { code: 'F', short: 'Handle', shortZh: '手柄磨损', value: 'Light wear / indentations on handle & shoulder strap', valueZh: '手柄和肩带有轻微压痕或磨损' },
+  { code: 'G', short: 'Hardware', shortZh: '五金划痕', value: 'Visible scratches / tarnish on metal parts', valueZh: '五金有明显划痕或氧化' },
+  { code: 'H', short: 'Interior', shortZh: '内里污渍', value: 'Minor stains / indentations partially inside', valueZh: '内部有轻微污渍或压痕' },
+  { code: 'I', short: 'Overall', shortZh: '整体磨损', value: 'Light overall wear across leather, corners & hardware', valueZh: '皮革、边角和五金整体轻微使用痕迹' }
 ]
 const ITEM_SIZE_OPTIONS = [
   { value: 'Micro', label: '微型' },
@@ -565,6 +577,55 @@ function formatItemSizeLabel(size) {
   const zh = ITEM_SIZE_LABEL_MAP[size]
   if (!zh) return String(size)
   return isEn.value ? String(size) : `${zh} ${size}`
+}
+
+const CM_PER_INCH = 2.54
+function roundBagDim(value) {
+  const n = Number(value)
+  if (value == null || value === '' || Number.isNaN(n)) return undefined
+  return Math.round(n * 100) / 100
+}
+function inchToCm(inch) {
+  const n = roundBagDim(inch)
+  return n == null ? undefined : roundBagDim(n * CM_PER_INCH)
+}
+function cmToInch(cm) {
+  const n = roundBagDim(cm)
+  return n == null ? undefined : roundBagDim(n / CM_PER_INCH)
+}
+function bagDimensionsToCm(item = {}) {
+  return {
+    bagWidth: inchToCm(item.bagWidth),
+    bagHeight: inchToCm(item.bagHeight),
+    bagDepth: inchToCm(item.bagDepth)
+  }
+}
+function bagDimensionsToInch(item = {}) {
+  return {
+    bagWidth: cmToInch(item.bagWidth),
+    bagHeight: cmToInch(item.bagHeight),
+    bagDepth: cmToInch(item.bagDepth)
+  }
+}
+const bagDimLabels = computed(() => isEn.value
+  ? { length: 'Length', width: 'Width', height: 'Height' }
+  : { length: '长', width: '宽', height: '高' })
+function formatBagInchHint(cm) {
+  const inch = cmToInch(cm)
+  if (inch == null) return ''
+  return isEn.value ? `≈ ${inch} inch` : `约 ${inch} 英寸`
+}
+function formatAccessoryTagLabel(tag) {
+  return isEn.value ? tag.value : `${tag.zh} ${tag.value}`
+}
+function formatDefectTagLabel(tag, expanded) {
+  if (expanded) {
+    return isEn.value ? tag.value : `${tag.valueZh} / ${tag.value}`
+  }
+  return isEn.value ? tag.short : `${tag.shortZh} ${tag.short}`
+}
+function formatDefectTagTooltip(tag) {
+  return isEn.value ? tag.value : `${tag.valueZh}\n${tag.value}`
 }
 
 /** 点击配件 tag 时追加到输入框（已包含则不重复添加） */
@@ -762,9 +823,9 @@ const formRules = computed(() => ({
   defaultQty: [requiredNumber(tr('数量不能为空'))],
   defect: [{ required: true, message: tr('瑕疵不能为空'), trigger: [] }],
   size: [{ required: true, message: tr('尺寸不能为空'), trigger: [] }],
-  bagWidth: [requiredNumber(tr('包宽不能为空'))],
-  bagHeight: [requiredNumber(tr('包高不能为空'))],
-  bagDepth: [requiredNumber(tr('包深不能为空'))],
+  bagWidth: [requiredNumber(tr('长不能为空'))],
+  bagHeight: [requiredNumber(tr('宽不能为空'))],
+  bagDepth: [requiredNumber(tr('高不能为空'))],
   accessories: [{ required: true, message: tr('配件不能为空'), trigger: [] }],
   consignInfo: [{ required: true, message: tr('寄售信息不能为空'), trigger: [] }]
 }))
@@ -1441,6 +1502,7 @@ const handleUpdate = (row) => {
       form.value.modelId = toCatalogId(form.value.modelId)
       form.value.materialId = toCatalogId(form.value.materialId)
       form.value.authAgency = parseAuthAgencyList(form.value.authAgency)
+      Object.assign(form.value, bagDimensionsToCm(form.value))
       if (form.value.cared == null) form.value.cared = false
       if (form.value.itemBrand) {
         formBrandIds.value = [form.value.itemBrand]
@@ -1543,6 +1605,7 @@ const submitForm = async () => {
       normalizeUploadedImageMeta()
       const payload = {
         ...form.value,
+        ...bagDimensionsToInch(form.value),
         itemBrand: form.value.itemBrand,
         authAgency: serializeAuthAgency(form.value.authAgency),
         ...(canEditCostPrice.value ? {} : { costPrice: undefined }),
@@ -1552,7 +1615,7 @@ const submitForm = async () => {
       delete payload.itemBrands
       await updateItem(payload);
     } else {
-      const payload = { ...form.value };
+      const payload = { ...form.value, ...bagDimensionsToInch(form.value) };
       payload.itemBrand = form.value.itemBrand
       payload.authAgency = serializeAuthAgency(form.value.authAgency);
       delete payload.itemBrands

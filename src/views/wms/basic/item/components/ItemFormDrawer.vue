@@ -206,7 +206,7 @@
                     <el-tooltip
                       v-for="tag in DEFECT_TAG_OPTIONS"
                       :key="tag.value"
-                      :content="tag.value"
+                      :content="formatDefectTagTooltip(tag)"
                       placement="top"
                       :show-after="200"
                     >
@@ -217,7 +217,7 @@
                         @click="emit('append-defect-tag', tag.value)"
                       >
                         <span class="defect-tag-code">{{ tag.code }}</span>
-                        <span>{{ defectTagsExpanded ? tag.value : tag.short }}</span>
+                        <span>{{ formatDefectTagLabel(tag, defectTagsExpanded) }}</span>
                       </el-tag>
                     </el-tooltip>
                   </div>
@@ -250,16 +250,22 @@
                     :placeholder="tr('请输入配件信息，或点击下方标签快速填入')"
                   />
                   <div class="accessory-tags mt8">
-                    <el-tag
+                    <el-tooltip
                       v-for="tag in ACCESSORY_TAG_OPTIONS"
-                      :key="tag"
-                      class="accessory-tag"
-                      type="info"
-                      effect="plain"
-                      @click="emit('append-accessory-tag', tag)"
+                      :key="tag.value"
+                      :content="formatAccessoryTagLabel(tag)"
+                      placement="top"
+                      :show-after="200"
                     >
-                      {{ tag }}
-                    </el-tag>
+                      <el-tag
+                        class="accessory-tag"
+                        type="info"
+                        effect="plain"
+                        @click="emit('append-accessory-tag', tag.value)"
+                      >
+                        {{ formatAccessoryTagLabel(tag) }}
+                      </el-tag>
+                    </el-tooltip>
                   </div>
                 </el-form-item>
               </el-col>
@@ -279,30 +285,33 @@
                 </el-form-item>
               </el-col>
             </el-row>
-            <!-- Bag dimensions (inches) -->
+            <!-- Bag dimensions: input cm, persist inches -->
             <el-row :gutter="24">
               <el-col :span="8">
-                <el-form-item :label="tr('包宽')" prop="bagWidth">
+                <el-form-item :label="bagDimLabels.length" prop="bagWidth">
                   <div class="inch-field">
                     <el-input-number v-model="form.bagWidth" :min="0" :precision="2" :controls="false" style="width: 100%" />
-                    <span class="inch-unit">{{ tr('英寸') }}</span>
+                    <span class="inch-unit">{{ tr('厘米') }}</span>
                   </div>
+                  <div v-if="formatBagInchHint(form.bagWidth)" class="price-hint">{{ formatBagInchHint(form.bagWidth) }}</div>
                 </el-form-item>
               </el-col>
               <el-col :span="8">
-                <el-form-item :label="tr('包高')" prop="bagHeight">
+                <el-form-item :label="bagDimLabels.width" prop="bagHeight">
                   <div class="inch-field">
                     <el-input-number v-model="form.bagHeight" :min="0" :precision="2" :controls="false" style="width: 100%" />
-                    <span class="inch-unit">{{ tr('英寸') }}</span>
+                    <span class="inch-unit">{{ tr('厘米') }}</span>
                   </div>
+                  <div v-if="formatBagInchHint(form.bagHeight)" class="price-hint">{{ formatBagInchHint(form.bagHeight) }}</div>
                 </el-form-item>
               </el-col>
               <el-col :span="8">
-                <el-form-item :label="tr('包深')" prop="bagDepth">
+                <el-form-item :label="bagDimLabels.height" prop="bagDepth">
                   <div class="inch-field">
                     <el-input-number v-model="form.bagDepth" :min="0" :precision="2" :controls="false" style="width: 100%" />
-                    <span class="inch-unit">{{ tr('英寸') }}</span>
+                    <span class="inch-unit">{{ tr('厘米') }}</span>
                   </div>
+                  <div v-if="formatBagInchHint(form.bagDepth)" class="price-hint">{{ formatBagInchHint(form.bagDepth) }}</div>
                 </el-form-item>
               </el-col>
             </el-row>
@@ -468,6 +477,11 @@ const props = defineProps({
   DEFECT_TAG_OPTIONS: { type: Array, default: () => [] },
   ITEM_SIZE_OPTIONS: { type: Array, default: () => [] },
   formatItemSizeLabel: { type: Function, default: (size) => size },
+  formatAccessoryTagLabel: { type: Function, default: (tag) => tag?.value || tag },
+  formatDefectTagLabel: { type: Function, default: (tag, expanded) => (expanded ? tag.value : tag.short) },
+  formatDefectTagTooltip: { type: Function, default: (tag) => tag?.value || '' },
+  formatBagInchHint: { type: Function, default: () => '' },
+  bagDimLabels: { type: Object, default: () => ({ length: '长', width: '宽', height: '高' }) },
   supplierOptions: { type: Array, default: () => [] },
   isSupplierUser: { type: Boolean, default: false },
   canViewCostPrice: { type: Boolean, default: false },
