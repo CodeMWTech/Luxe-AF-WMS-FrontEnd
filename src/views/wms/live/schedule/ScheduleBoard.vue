@@ -19,6 +19,7 @@
                   <small v-if="entry.row.rateTypeName">{{ entry.row.rateTypeName }}</small>
                   <span v-if="entry.row.scheduleStatus === 'CANCELLED'" class="state">{{ tr('已取消') }}</span>
                   <span v-else-if="entry.row.scheduleStatus === 'PENDING'" class="state">{{ tr('待确认') }}</span>
+                  <span v-if="notificationStates[String(entry.row.id)]" class="sms-state" :class="`sms-${notificationStates[String(entry.row.id)].toLowerCase()}`">{{ tr(notificationStateLabels[notificationStates[String(entry.row.id)]] || notificationStates[String(entry.row.id)]) }}</span>
                   <span v-if="conflicts.has(idKey(entry.row.id))" class="conflict">! {{ tr('人员冲突') }}</span>
                   <small v-if="entry.row.remark" class="remark">{{ entry.row.remark }}</small>
                 </button>
@@ -39,7 +40,8 @@ import { computed } from 'vue'
 import { useLiveI18n } from '../useLiveI18n'
 import { displayDate } from '../shared'
 import { idKey, timeLabel, scheduleGroups, conflictingSchedules, operatorColorStyle } from './scheduleDisplay'
-const props = defineProps({ rows: { type: Array, default: () => [] }, operators: { type: Array, default: () => [] }, accounts: { type: Array, default: () => [] }, employees: { type: Array, default: () => [] }, weeks: { type: Array, default: () => [] }, view: { type: String, default: 'channel' }, canEdit: Boolean })
+import { notificationStateLabels } from './smsDisplay'
+const props = defineProps({ rows: { type: Array, default: () => [] }, operators: { type: Array, default: () => [] }, accounts: { type: Array, default: () => [] }, employees: { type: Array, default: () => [] }, weeks: { type: Array, default: () => [] }, view: { type: String, default: 'channel' }, canEdit: Boolean, notificationStates: { type: Object, default: () => ({}) } })
 defineEmits(['open', 'add'])
 const { tr } = useLiveI18n()
 const dimensions = { channel: '频道', operator: '运营', host: '主播' }
@@ -69,6 +71,9 @@ const colorStyle = entry => operatorColorStyle(entry.operator && people.value.ge
 .shift-card.cancelled strong, .shift-card.cancelled .host-name { text-decoration: line-through; }
 .shift-card small, .state { color: var(--el-text-color-regular); }
 .conflict { color: var(--el-color-danger); }
+.sms-state { font-size: 11px; color: var(--el-text-color-secondary); }
+.sms-changed, .sms-unknown { color: var(--el-color-warning-dark-2); font-weight: 600; }
+.sms-published { color: var(--el-color-success-dark-2); }
 .remark { border-top: 1px solid var(--el-border-color-lighter); padding-top: 5px; }
 .add-shift { margin: 0; }
 .empty-cell { color: var(--el-text-color-placeholder); }

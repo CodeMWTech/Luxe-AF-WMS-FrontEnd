@@ -2,7 +2,7 @@
   <div data-runtime-i18n-ignore="true" class="live-page">
     <div class="live-hero">
       <div><h2>{{ tr('排班计划') }}</h2><p>{{ tr('查看所选周排班') }}</p></div>
-      <div class="live-actions"><el-button @click="exportRows">{{ tr('导出 CSV') }}</el-button><el-button type="primary" v-hasPermi="['wms:live:schedule:edit']" @click="openDialog()">{{ tr('新增排班') }}</el-button></div>
+      <div class="live-actions"><SmsNotifications :scope="notificationScope" :employees="hostOptions" :refresh-key="smsRefreshKey" @states="notificationStates = $event" /><el-button @click="exportRows">{{ tr('导出 CSV') }}</el-button><el-button type="primary" v-hasPermi="['wms:live:schedule:edit']" @click="openDialog()">{{ tr('新增排班') }}</el-button></div>
     </div>
     <el-card class="live-filter schedule-filter" shadow="never">
       <div class="schedule-filter-bar">
@@ -40,7 +40,7 @@
         </el-radio-group>
         <span>{{ tr('显示直播时段') }}</span>
       </div>
-      <ScheduleBoard :rows="rows" :operators="operators" :accounts="options.accounts" :employees="options.employees" :weeks="calendarWeeks" :view="view" :can-edit="canEdit" @open="openDialog" @add="openDialog" />
+      <ScheduleBoard :rows="rows" :operators="operators" :accounts="options.accounts" :employees="options.employees" :weeks="calendarWeeks" :view="view" :can-edit="canEdit" :notification-states="notificationStates" @open="openDialog" @add="openDialog" />
     </el-card>
     <el-dialog data-runtime-i18n-ignore="true" v-model="colorDialog.open" :title="tr('修改 {0} 的颜色', [colorDialog.name])" width="360px" append-to-body :close-on-click-modal="!colorDialog.saving" :show-close="!colorDialog.saving" :close-on-press-escape="!colorDialog.saving">
       <el-color-picker v-model="colorDialog.color" color-format="hex" :show-alpha="false" :disabled="colorDialog.saving" />
@@ -85,6 +85,7 @@
 
 <script setup>
 import ScheduleBoard from './ScheduleBoard.vue'
+import SmsNotifications from './SmsNotifications.vue'
 import { idKey, isActiveOperator, assignmentSummary } from './scheduleDisplay'
 import { checkPermi } from '@/utils/permission'
 import LiveAccountSelect from '../components/LiveAccountSelect.vue'
@@ -144,6 +145,8 @@ const validateEndTime = (_rule, value, callback) => {
 }
 const rules = computed(() => ({ scheduleDate: [{ required: true, message: tr('请选择日期') }], employeeId: [{ required: true, message: tr('请选择主播') }], accountId: [{ required: true, message: tr('请选择直播平台') }], rateTypeId: [{ required: true, message: tr('请选择场次类型') }], startTime: [{ required: true, message: tr('请选择开始时间') }], endTime: [{ validator: validateEndTime, trigger: 'change' }] }))
 const weekDateRange = computed(() => selectedWeekRange(selectedWeek.value))
+const notificationStates = ref({}), smsRefreshKey = ref(0)
+const notificationScope = ref({ ...query, startDate: weekDateRange.value[0], endDate: weekDateRange.value[1] })
 const days = computed(() => {
   const sunday = parseLocalDate(weekDateRange.value[0])
   return Array.from({ length: 7 }, (_, index) => {
@@ -167,9 +170,10 @@ let loadSequence = 0
 async function load() {
   const sequence = ++loadSequence
   const colorSequence = colorSaveSequence
+  const requestScope = { ...query, startDate: weekDateRange.value[0], endDate: weekDateRange.value[1] }
   loading.value = true
   try {
-    const [references, people, hosts, res] = await Promise.all([getLiveOptions(), listScheduleOperators(), listScheduleHosts(), listScheduleCalendar({ ...query, startDate: weekDateRange.value[0], endDate: weekDateRange.value[1] })])
+    const [references, people, hosts, res] = await Promise.all([getLiveOptions(), listScheduleOperators(), listScheduleHosts(), listScheduleCalendar(requestScope)])
     if (sequence !== loadSequence) return
     Object.assign(options, references)
     hostOptions.value = hosts.data || []
@@ -178,6 +182,8 @@ async function load() {
       return saved && saved.sequence > colorSequence ? { ...operator, color: saved.color } : operator
     })
     rows.value = res.data || []
+    notificationScope.value = requestScope
+    smsRefreshKey.value++
   } finally { if (sequence === loadSequence) loading.value = false }
 }
 function defaultScheduleDate() { const today = isoDate(); return today >= weekDateRange.value[0] && today <= weekDateRange.value[1] ? today : weekDateRange.value[0] }
