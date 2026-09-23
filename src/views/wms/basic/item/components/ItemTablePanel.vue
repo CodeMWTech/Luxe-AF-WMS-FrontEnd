@@ -140,7 +140,7 @@ function formatBagDimensions(item) {
   if (!item || (item.bagWidth == null && item.bagHeight == null && item.bagDepth == null)) {
     return ''
   }
-  return `${item.bagWidth ?? '-'} x ${item.bagHeight ?? '-'} x ${item.bagDepth ?? '-'} ${props.tr('英寸')}`
+  return `${item.bagWidth ?? '-'} x ${item.bagDepth ?? '-'} x ${item.bagHeight ?? '-'} ${props.tr('英寸')}`
 }
 
 defineExpose({

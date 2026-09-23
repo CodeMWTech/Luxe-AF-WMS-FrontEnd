@@ -824,8 +824,8 @@ const formRules = computed(() => ({
   defect: [{ required: true, message: tr('瑕疵不能为空'), trigger: [] }],
   size: [{ required: true, message: tr('尺寸不能为空'), trigger: [] }],
   bagWidth: [requiredNumber(isEn.value ? 'Bag Width cannot be empty' : '长不能为空')],
-  bagHeight: [requiredNumber(isEn.value ? 'Bag Depth cannot be empty' : '宽不能为空')],
-  bagDepth: [requiredNumber(isEn.value ? 'Bag Height cannot be empty' : '高不能为空')],
+  bagDepth: [requiredNumber(isEn.value ? 'Bag Depth cannot be empty' : '宽不能为空')],
+  bagHeight: [requiredNumber(isEn.value ? 'Bag Height cannot be empty' : '高不能为空')],
   accessories: [{ required: true, message: tr('配件不能为空'), trigger: [] }],
   consignInfo: [{ required: true, message: tr('寄售信息不能为空'), trigger: [] }]
 }))
