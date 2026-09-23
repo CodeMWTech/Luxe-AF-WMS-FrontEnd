@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <el-dialog v-model="visible" :title="t('platformListings.publishTitle')" width="min(1100px, 94vw)" :close-on-click-modal="false" destroy-on-close @open="onOpen" @closed="onClosed">
     <el-steps :active="step" align-center finish-status="success" style="margin-bottom:24px">
       <el-step :title="t('platformListings.stepSelectProducts')" />
@@ -83,26 +83,30 @@
       <el-form label-width="100px">
         <el-form-item :label="t('platformListings.filterShop')" required>
           <el-select v-model="chosenShopId" filterable style="width:300px" @change="onShopChange">
-            <el-option v-for="s in shopList" :key="s.id" :label="s.shopName + ' (' + s.platform + ')'" :value="s.id" />
+            <el-option v-for="s in shopList" :key="s.id" :label="s.shopName + ' (' + listingPlatformName(s.platform) + ')'" :value="s.id" />
           </el-select>
         </el-form-item>
         <el-form-item :label="t('platformListings.selectTemplate')" required>
           <el-select v-model="chosenTemplateId" filterable style="width:300px" :disabled="!chosenPlatform">
             <el-option v-for="tpl in templateList" :key="tpl.id" :label="tpl.templateName" :value="tpl.id">
               <span>{{ tpl.templateName }}</span>
-              <el-tag size="small" style="margin-left:8px" :type="tpl.platform === 'EBAY' ? '' : 'danger'">{{ tpl.platform === 'EBAY' ? 'eBay' : 'TikTok' }}</el-tag>
+              <el-tag size="small" style="margin-left:8px" :type="listingPlatformTagType(tpl.platform)">{{ listingPlatformName(tpl.platform) }}</el-tag>
             </el-option>
           </el-select>
         </el-form-item>
         <el-form-item v-if="chosenTemplate">
           <el-descriptions :column="2" border size="small">
-            <el-descriptions-item :label="t('platformListings.templatePlatformLabel')">{{ chosenPlatform === 'EBAY' ? 'eBay' : 'TikTok Shop' }}</el-descriptions-item>
+            <el-descriptions-item :label="t('platformListings.templatePlatformLabel')">{{ listingPlatformName(chosenPlatform) }}</el-descriptions-item>
             <el-descriptions-item :label="t('platformListings.templatePriceSourceLabel')">{{ chosenTemplate.priceSource === 'CUSTOM' ? t('platformListings.priceSourceCustom') : t('platformListings.priceSourceSelling') }}</el-descriptions-item>
             <el-descriptions-item :label="t('platformListings.templateMarkupLabel')">{{ chosenTemplate.priceMarkupValue != null ? chosenTemplate.priceMarkupValue + (chosenTemplate.priceMarkupType === 'PERCENT' ? '%' : '') : '-' }}</el-descriptions-item>
+            <el-descriptions-item v-if="isWhatnotPublish" :label="t('platformListings.currency')">{{ chosenTemplate.whatnotCurrency || '-' }}</el-descriptions-item>
+            <el-descriptions-item v-if="isWhatnotPublish" :label="t('platformListings.whatnotFormatQuantity')">{{ t('platformListings.whatnotSingleBin') }}</el-descriptions-item>
             <el-descriptions-item :label="t('platformListings.templateTitleFormatLabel')" :span="2">{{ chosenTemplate.titleFormat || '{brand} {material} {year} {itemName}' }}</el-descriptions-item>
           </el-descriptions>
         </el-form-item>
       </el-form>
+      <el-alert v-if="isWhatnotPublish" :title="t('platformListings.whatnotSubmittedHint')" :description="t('platformListings.whatnotPriceDeltaHint')" type="info" show-icon :closable="false" />
+      <el-alert v-if="isWhatnotPublish && chosenTemplate && !chosenTemplate.whatnotAutoPublishConfirmed" :title="t('platformListings.whatnotTemplateIncomplete')" type="error" :closable="false" style="margin-top:12px" />
     </div>
 
     <!-- Step 3: 预览确认 -->
@@ -140,14 +144,16 @@
         :closable="false"
         style="margin-bottom:12px"
       />
-      <div v-if="previewList.length" class="channel-preview" :class="chosenPlatform === 'EBAY' ? 'ebay-preview' : 'tiktok-preview'">
+      <el-alert v-if="isWhatnotPublish" :title="t('platformListings.whatnotSubmittedHint')" :description="t('platformListings.whatnotPriceDeltaHint')" type="info" show-icon :closable="false" style="margin-bottom:12px" />
+      <el-alert v-if="hasWhatnotPreviewErrors" :title="t('platformListings.whatnotPreviewInvalid')" type="error" show-icon :closable="false" style="margin-bottom:12px" />
+      <div v-if="previewList.length" class="channel-preview" :class="isWhatnotPublish ? 'whatnot-preview' : (chosenPlatform === 'EBAY' ? 'ebay-preview' : 'tiktok-preview')">
         <div class="preview-media">
           <el-image v-if="previewList[0].images && previewList[0].images.length" :src="previewList[0].images[0]" fit="contain" />
           <div v-else class="empty-media">{{ t('platformListings.noImage') }}</div>
         </div>
         <div class="preview-content">
           <div class="preview-platform-row">
-            <div class="preview-platform">{{ chosenPlatform === 'EBAY' ? t('platformListings.ebayPreviewLabel') : t('platformListings.tiktokPreviewLabel') }}</div>
+            <div class="preview-platform">{{ isWhatnotPublish ? t('platformListings.whatnotPreviewLabel') : (chosenPlatform === 'EBAY' ? t('platformListings.ebayPreviewLabel') : t('platformListings.tiktokPreviewLabel')) }}</div>
             <el-tag size="small" :type="isAuctionRow(previewList[0]) ? 'warning' : 'success'" effect="dark">
               {{ getListingTypeLabel(previewList[0]) }}
             </el-tag>
@@ -186,7 +192,7 @@
             <el-input
               v-model="row.overrideTitle"
               size="small"
-              :maxlength="isEbayPublish ? EBAY_TITLE_MAX_LENGTH : undefined"
+              :maxlength="isEbayPublish ? EBAY_TITLE_MAX_LENGTH : (isWhatnotPublish ? 255 : undefined)"
               :show-word-limit="isEbayPublish"
               :class="{ 'title-input-error': isEbayTitleTooLong(row) }"
             />
@@ -227,8 +233,9 @@
           <template #default="{ row }">
             <el-input-number
               v-model="row.overridePrice"
-              :precision="2"
-              :min="TIKTOK_PRICE_MIN"
+              :precision="isWhatnotPublish ? undefined : 2"
+              :step="1"
+              :min="isWhatnotPublish ? 1 : TIKTOK_PRICE_MIN"
               :max="isTiktokPublish ? TIKTOK_PRICE_MAX : undefined"
               size="small"
               controls-position="right"
@@ -236,6 +243,7 @@
               :class="{ 'price-input-error': isTiktokPriceInvalid(row) }"
               @change="normalizeOverridePrice(row)"
             />
+            <div v-if="isWhatnotPublish" class="price-warning">{{ t('platformListings.whatnotIntegerPriceHint') }}</div>
             <div v-if="isTiktokPriceInvalid(row)" class="price-error">
               {{ t('platformListings.tiktokPriceRangeHint') }}
             </div>
@@ -264,9 +272,9 @@
       <el-button v-if="step === 0" type="primary" @click="goStep2" :disabled="selectedSkus.length === 0">
         {{ t('platformListings.nextStep') }} ({{ selectedSkus.length }})
       </el-button>
-      <el-button v-if="step === 1" type="primary" @click="goStep3" :disabled="!chosenTemplateId">{{ t('platformListings.nextStep') }}</el-button>
-      <el-button v-if="step === 2" type="primary" @click="doPublish" :loading="publishing" :disabled="hasEbayTitleTooLong || hasTiktokPriceInvalid || hasMissingTiktokBrand">
-        {{ t('platformListings.startPublish') }} ({{ previewList.length }})
+      <el-button v-if="step === 1" type="primary" @click="goStep3" :disabled="!chosenTemplateId || (isWhatnotPublish && !chosenTemplate?.whatnotAutoPublishConfirmed)">{{ t('platformListings.nextStep') }}</el-button>
+      <el-button v-if="step === 2" type="primary" @click="doPublish" :loading="publishing" :disabled="previewLoading || !previewList.length || hasEbayTitleTooLong || hasTiktokPriceInvalid || hasMissingTiktokBrand || hasWhatnotPreviewErrors">
+        {{ t(isWhatnotPublish ? 'platformListings.whatnotSubmitChannel' : 'platformListings.startPublish') }} ({{ previewList.length }})
       </el-button>
     </template>
   </el-dialog>
@@ -275,6 +283,7 @@
 <script setup>
 import { ref, reactive, computed, nextTick, getCurrentInstance } from 'vue'
 import { listInventoryBoard } from '@/api/wms/inventory'
+import { listingPlatformName, listingPlatformTagType, isWhatnotPreviewValid } from '@/utils/listingPlatform'
 import { listAllTemplates, previewTemplate, batchPublish, searchTiktokT1Brands } from '@/api/wms/platformListing'
 import { listAllPlatformShops } from '@/api/wms/platformShop'
 
@@ -448,11 +457,15 @@ const previewLoading = ref(false)
 const previewList = ref([])
 const isEbayPublish = computed(() => chosenPlatform.value === 'EBAY')
 const isTiktokPublish = computed(() => chosenPlatform.value === 'TIKTOK')
+const isWhatnotPublish = computed(() => chosenPlatform.value === 'SHOPIFY')
+const hasWhatnotPreviewErrors = computed(() => isWhatnotPublish.value && previewList.value.some(row => !isWhatnotPreviewValid(row)))
 const isAuctionPublish = computed(() => {
+  if (isWhatnotPublish.value) return false
   const listingType = chosenTemplate.value?.listingType || previewList.value[0]?.listingType
   return String(listingType || '').toUpperCase() === 'AUCTION'
 })
 const previewPrimaryPriceLabel = computed(() => {
+  if (isWhatnotPublish.value) return t('platformListings.whatnotBinPrice')
   if (isTiktokPublish.value) {
     return isAuctionPublish.value ? t('platformListings.tiktokAuctionBuyItNowPrice') : t('platformListings.retailPrice')
   }
@@ -569,10 +582,12 @@ function getPreviewDescription(row) {
 }
 
 function isAuctionRow(row) {
+  if (isWhatnotPublish.value) return false
   return String(row?.listingType || chosenTemplate.value?.listingType || '').toUpperCase() === 'AUCTION'
 }
 
 function getListingTypeLabel(row) {
+  if (isWhatnotPublish.value) return t('platformListings.whatnotBin')
   return isAuctionRow(row)
     ? t('platformListings.tiktokAuction')
     : t('platformListings.tiktokFixedPrice')
@@ -657,7 +672,9 @@ async function loadPreviews() {
           tiktokBrandId: '',
           overrideTitle: data.title || '',
           overridePrice: normalizePreviewPrice(data.price ?? 0),
-          listingType: data.listingType || chosenTemplate.value?.listingType || 'FIXED_PRICE',
+          listingType: isWhatnotPublish.value ? 'FIXED_PRICE' : data.listingType || chosenTemplate.value?.listingType || 'FIXED_PRICE',
+          currency: data.currency || chosenTemplate.value?.whatnotCurrency || 'USD',
+          quantity: isWhatnotPublish.value ? 1 : data.quantity,
           sellingPrice: data.sellingPrice ?? sku.sellingPrice,
           images: data.images || []
         })
@@ -666,6 +683,8 @@ async function loadPreviews() {
           skuId: sku.skuId || sku.id,
           skuCode: sku.skuCode,
           tiktokBrandId: '',
+          previewError: true,
+          currency: chosenTemplate.value?.whatnotCurrency || 'USD',
           overrideTitle: '',
           overridePrice: 0,
           listingType: chosenTemplate.value?.listingType || 'FIXED_PRICE',
@@ -696,7 +715,7 @@ async function onOpen() {
     step.value = 1
   }
   listAllPlatformShops().then(res => {
-    shopList.value = res.rows || res.data || []
+    shopList.value = (res.rows || res.data || []).filter(shop => ['EBAY', 'TIKTOK', 'SHOPIFY'].includes(shop.platform))
   })
 }
 
@@ -726,6 +745,10 @@ async function goStep3() {
     proxy.$modal.msgWarning(t('platformListings.selectTemplateRequired'))
     return
   }
+  if (isWhatnotPublish.value && chosenTemplate.value?.whatnotAutoPublishConfirmed !== true) {
+    proxy.$modal.msgWarning(t('platformListings.whatnotTemplateIncomplete'))
+    return
+  }
   step.value = 2
   if (isTiktokPublish.value) resetTiktokBrandState()
   await loadPreviews()
@@ -738,6 +761,11 @@ async function goStep3() {
 }
 
 async function doPublish() {
+  if (previewLoading.value || !previewList.value.length) return
+  if (isWhatnotPublish.value && (hasWhatnotPreviewErrors.value || chosenTemplate.value?.whatnotAutoPublishConfirmed !== true)) {
+    proxy.$modal.msgWarning(t('platformListings.whatnotPreviewInvalid'))
+    return
+  }
   if (hasEbayTitleTooLong.value) {
     proxy.$modal.msgWarning(t('platformListings.ebayTitleTooLongSummary', { count: ebayTitleTooLongRows.value.length }))
     return
@@ -788,7 +816,7 @@ async function doPublish() {
       customBrandIds,
       confirmBelowSellingPrice: hasBelowSellingPrice.value
     })
-    proxy.$modal.msgSuccess(t('platformListings.publishSuccess'))
+    proxy.$modal.msgSuccess(t(isWhatnotPublish.value ? 'platformListings.whatnotPublishSuccess' : 'platformListings.publishSuccess'))
     visible.value = false
     emit('success')
   } catch {
@@ -817,6 +845,8 @@ function openWithSkus(skuIds) {
 defineExpose({ open, openWithSkus })
 </script>
 <style scoped>
+.whatnot-preview { border-color: #b8d8be; background: #f6faf7; }
+.whatnot-preview .preview-platform { color: #28773c; }
 .publish-image-alert {
   margin-bottom: 10px;
 }

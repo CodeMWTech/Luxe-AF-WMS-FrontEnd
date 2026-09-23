@@ -1,16 +1,17 @@
-﻿<template>
+<template>
   <div class="app-container listing-templates">
     <el-card class="filter-card">
       <el-form :model="queryParams" ref="queryRef" :inline="true" @submit.prevent="handleQuery">
         <el-form-item :label="t('platformListings.filterPlatform')">
-          <el-select v-model="queryParams.platform" clearable style="width:140px">
+          <el-select v-model="queryParams.platform" clearable style="width:140px" @change="queryParams.shopId = null">
             <el-option label="TikTok Shop" value="TIKTOK" />
+            <el-option label="Whatnot" value="SHOPIFY" />
             <el-option label="eBay" value="EBAY" />
           </el-select>
         </el-form-item>
         <el-form-item :label="t('platformListings.searchByShop')">
           <el-select v-model="queryParams.shopId" clearable filterable style="width:160px" :placeholder="t('platformListings.searchByShop')">
-            <el-option v-for="s in shopList" :key="s.id" :label="s.shopName" :value="s.id" />
+            <el-option v-for="s in queryShopList" :key="s.id" :label="s.shopName" :value="s.id" />
           </el-select>
         </el-form-item>
         <el-form-item :label="t('platformListings.templateName')">
@@ -29,12 +30,12 @@
         <el-table-column :label="t('platformListings.templateName')" prop="templateName" min-width="150" />
         <el-table-column :label="t('platformListings.templatePlatform')" prop="platform" width="100" align="center">
           <template #default="{ row }">
-            <el-tag :type="row.platform === 'EBAY' ? '' : 'danger'" size="small">{{ row.platform === 'EBAY' ? 'eBay' : 'TikTok' }}</el-tag>
+            <el-tag :type="listingPlatformTagType(row.platform)" size="small">{{ listingPlatformName(row.platform) }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column :label="t('platformListings.filterShop')" prop="shopName" width="160" show-overflow-tooltip />
         <el-table-column :label="t('platformListings.defaultPrice')" width="110" align="right">
-          <template #default="{ row }">{{ row.priceMarkupValue != null ? '$' + Number(row.priceMarkupValue).toFixed(2) : '-' }}</template>
+          <template #default="{ row }">{{ row.priceMarkupValue != null ? (row.platform === 'SHOPIFY' ? (row.whatnotCurrency || '') + ' ' : '$') + Number(row.priceMarkupValue).toFixed(2) : '-' }}</template>
         </el-table-column>
         <el-table-column :label="t('platformListings.titleFormat')" prop="titleFormat" min-width="200" show-overflow-tooltip />
         <el-table-column :label="t('platformListings.templateStatus')" width="90" align="center">
@@ -54,8 +55,8 @@
     </el-card>
 
     <!-- 新建/编辑弹窗 -->
-    <el-dialog v-model="dialog.visible" :title="dialog.title" width="min(1180px, 94vw)" :close-on-click-modal="false" destroy-on-close top="20px">
-      <el-form ref="formRef" :model="form" :rules="rules" label-position="top" class="template-dialog-body">
+    <el-dialog v-model="dialog.visible" :title="dialog.title" width="min(1180px, 94vw)" :close-on-click-modal="false" destroy-on-close top="20px" @close="invalidateTemplateDetail">
+      <el-form ref="formRef" v-loading="templateDetailLoading" :model="form" :rules="rules" label-position="top" class="template-dialog-body">
 
         <!-- ============ 公共头部 ============ -->
         <el-row :gutter="16" style="margin-bottom:16px">
@@ -68,12 +69,13 @@
             <el-select v-model="form.platform" :disabled="dialog.isEdit" style="width:100%" @change="onPlatformChange">
               <el-option label="eBay" value="EBAY" />
               <el-option label="TikTok Shop" value="TIKTOK" />
+              <el-option label="Whatnot" value="SHOPIFY" />
             </el-select>
           </el-col>
           <el-col :span="6">
             <div class="field-label required">{{ t('platformListings.filterShop') }}</div>
             <el-select v-model="form.shopId" filterable style="width:100%" :placeholder="t('platformListings.templateSelectShop')" :disabled="dialog.isEdit" @change="onShopChange">
-              <el-option v-for="s in filteredShopList" :key="s.id" :label="s.shopName + ' (' + s.platform + ')'" :value="s.id" />
+              <el-option v-for="s in filteredShopList" :key="s.id" :label="s.shopName + ' (' + listingPlatformName(s.platform) + ')'" :value="s.id" />
             </el-select>
           </el-col>
           <el-col :span="4">
@@ -238,7 +240,7 @@
               <div>
                 <div class="tiktok-page-title">{{ form.templateName || t('platformListings.tiktokTemplateFallback') }}</div>
               </div>
-              <el-button class="tiktok-update-btn" type="primary" size="small" @click="submitForm" :loading="submitting">{{ t('platformListings.update') }}</el-button>
+              <el-button class="tiktok-update-btn" type="primary" size="small" @click="submitForm" :loading="submitting || templateDetailLoading" :disabled="templateSaveDisabled">{{ t('platformListings.update') }}</el-button>
             </div>
 
             <div class="tiktok-layout">
@@ -411,10 +413,45 @@
             </div>
           </div>
         </template>
+        <template v-if="form.platform === 'SHOPIFY'">
+          <div class="whatnot-template">
+            <h3>{{ t('platformListings.whatnotTemplateTitle') }}</h3>
+            <WhatnotShopFields ref="whatnotShopFieldsRef" :form="form" />
+            <el-divider />
+            <el-form-item :label="t('platformListings.titleFormat')" required>
+              <el-input ref="titleInputRef" v-model="form.defaultTitle" maxlength="255" show-word-limit :placeholder="t('platformListings.productNamePlaceholder')" @focus="handleTextFocus('title', $event)" @click="rememberTextSelection('title', $event)" @keyup="rememberTextSelection('title', $event)" @select="rememberTextSelection('title', $event)" @blur="rememberTextSelection('title', $event)" />
+            </el-form-item>
+            <el-form-item :label="t('platformListings.ebayDescription')" required>
+              <div style="width:100%" @focusin="lastFocusedField = 'description'"><Editor ref="descriptionEditorRef" v-model="form.descriptionFormat" :height="240" :min-height="200" /></div>
+            </el-form-item>
+            <el-row :gutter="16">
+              <el-col :xs="24" :sm="12">
+                <el-form-item :label="t('platformListings.whatnotBinPrice')">
+                  <el-input-number v-model="form.defaultPrice" :min="1" :step="1" style="width:100%" />
+                  <el-button v-if="form.defaultPrice != null" link type="warning" @click="form.defaultPrice = null">{{ t('platformListings.priceResetDefault') }}</el-button>
+                  <div class="whatnot-template-hint">{{ t('platformListings.priceDefaultHint') }}</div>
+                  <div class="whatnot-template-hint">{{ t('platformListings.whatnotIntegerPriceHint') }}</div>
+                  <div class="whatnot-template-hint">{{ t('platformListings.whatnotPriceDeltaHint') }}</div>
+                </el-form-item>
+              </el-col>
+              <el-col :xs="24" :sm="12">
+                <el-form-item :label="t('platformListings.whatnotFormatQuantity')"><el-input :model-value="t('platformListings.whatnotSingleBin')" readonly /></el-form-item>
+              </el-col>
+              <el-col :xs="24" :sm="12">
+                <el-form-item prop="packageWeightValue" :label="t('platformListings.packageWeight')" required>
+                  <el-input-number v-model="form.packageWeightValue" :min="0" :precision="weightPrecision" :step="weightStep" style="width:100%" />
+                </el-form-item>
+              </el-col>
+              <el-col :xs="24" :sm="12">
+                <el-form-item :label="t('platformListings.packageWeightUnit')"><el-select v-model="form.packageWeightUnit" style="width:100%"><el-option v-for="unit in weightUnitOptions" :key="unit.value" :label="unit.label" :value="unit.value" /></el-select></el-form-item>
+              </el-col>
+            </el-row>
+          </div>
+        </template>
       </el-form>
       <template #footer>
         <el-button @click="dialog.visible = false">{{ t('platformListings.cancel') }}</el-button>
-        <el-button type="primary" @click="submitForm" :loading="submitting">{{ t('platformListings.save') }}</el-button>
+        <el-button type="primary" @click="submitForm" :loading="submitting || templateDetailLoading" :disabled="templateSaveDisabled">{{ t('platformListings.save') }}</el-button>
       </template>
     </el-dialog>
   </div>
@@ -426,6 +463,8 @@ import { useI18n } from 'vue-i18n'
 import { listTemplates, addTemplate, updateTemplate, delTemplate, getTemplate, getCategories, getCategoryById, getEbayPolicies, getTiktokWarehouses, getTiktokCategoryAttributes } from '@/api/wms/platformListing'
 import { listAllPlatformShops } from '@/api/wms/platformShop'
 import { insertTextAtSelection } from '@/utils/textSelection'
+import { listingPlatformName, listingPlatformTagType, isWhatnotPriceValid } from '@/utils/listingPlatform'
+import WhatnotShopFields from './components/WhatnotShopFields.vue'
 
 const { proxy } = getCurrentInstance()
 const { locale } = useI18n()
@@ -446,6 +485,7 @@ const loadingPolicies = ref(false)
 const fulfillmentPolicies = ref([])
 const paymentPolicies = ref([])
 const returnPolicies = ref([])
+const whatnotShopFieldsRef = ref(null)
 const shopList = ref([])
 const filteredShopList = ref([])
 
@@ -464,9 +504,10 @@ function filterShops() {
 function onPlatformChange() {
   lastFocusedField.value = 'title'
   applyPlatformUnitDefaults()
-  if (form.platform === 'TIKTOK') form.listingType = 'FIXED_PRICE'
+  if (['TIKTOK', 'SHOPIFY'].includes(form.platform)) form.listingType = 'FIXED_PRICE'
   filterShops()
   form.shopId = null
+  resetWhatnotFields()
   warehouseList.value = []
   form.tiktokWarehouseId = ''
   clearEbayPolicies()
@@ -517,6 +558,7 @@ function loadTiktokChildren(node, resolve) {
 }
 
 const queryParams = reactive({ pageNum: 1, pageSize: 10, platform: '', templateName: '', shopId: null })
+const queryShopList = computed(() => shopList.value.filter(shop => !queryParams.platform || shop.platform === queryParams.platform))
 
 const initForm = {
   id: null, templateName: '', platform: 'EBAY', shopId: null, listingType: 'FIXED_PRICE', listingDuration: 'Days_7',
@@ -531,6 +573,7 @@ const initForm = {
   tiktokCategoryId: '', tiktokCategoryVersion: 'v2', tiktokSaveMode: 'LISTING',
   tiktokProductAttributes: '',
   tiktokWarehouseId: '', tiktokQuantity: 1, tiktokCurrency: 'USD', tiktokCodAllowed: false,
+  whatnotLocationId: '', whatnotPublicationId: '', whatnotCategoryId: '', whatnotCurrency: '', whatnotAutoPublishConfirmed: false,
   packageWeightValue: null, packageWeightUnit: 'POUND', packageLength: null, packageWidth: null, packageHeight: null, packageDimensionUnit: 'INCH'
 }
 const form = reactive({ ...initForm })
@@ -663,6 +706,9 @@ const rules = {
   packageHeight: [{ validator: validatePositiveNumber, trigger: 'change' }]
 }
 const dialog = reactive({ visible: false, title: '', isEdit: false })
+const templateDetailLoading = ref(false)
+let templateDetailSequence = 0
+const templateSaveDisabled = computed(() => templateDetailLoading.value || (dialog.isEdit && !form.id))
 
 const tiktokAttributeDefinitions = ref([])
 const tiktokAttributeSelections = reactive({})
@@ -905,7 +951,16 @@ function insertParam(placeholder) {
   })
 }
 
+function resetWhatnotFields() {
+  form.whatnotLocationId = ''
+  form.whatnotPublicationId = ''
+  form.whatnotCategoryId = ''
+  form.whatnotCurrency = ''
+  form.whatnotAutoPublishConfirmed = false
+}
+
 function onShopChange() {
+  resetWhatnotFields()
   const preservedAttributes = buildTiktokProductAttributes()
   warehouseList.value = []
   form.tiktokWarehouseId = ''
@@ -967,11 +1022,24 @@ function clearFormValidate() {
   nextTick(() => formRef.value?.clearValidate?.())
 }
 
-function handleAdd() { resetForm(); filterShops(); dialog.title = t('platformListings.templateCreateTitle'); dialog.isEdit = false; dialog.visible = true; clearFormValidate() }
+function invalidateTemplateDetail() {
+  ++templateDetailSequence
+  templateDetailLoading.value = false
+}
+
+function isCurrentTemplateDetail(sequence) {
+  return sequence === templateDetailSequence && dialog.visible && dialog.isEdit
+}
+
+function handleAdd() { invalidateTemplateDetail(); resetForm(); filterShops(); dialog.title = t('platformListings.templateCreateTitle'); dialog.isEdit = false; dialog.visible = true; clearFormValidate() }
 function handleEdit(row) {
+  const sequence = ++templateDetailSequence
+  templateDetailLoading.value = true
   resetForm(); dialog.title = t('platformListings.templateEditTitle'); dialog.isEdit = true
   getTemplate(row.id).then(res => {
+    if (!isCurrentTemplateDetail(sequence)) return
     const d = res.data || {}
+    if (!d.id || String(d.id) !== String(row.id)) throw new Error('Template detail ID mismatch')
     Object.assign(form, {
       id: d.id, templateName: d.templateName, platform: d.platform, shopId: d.shopId,
       listingType: d.listingType || 'FIXED_PRICE', listingDuration: d.listingDuration || 'Days_7',
@@ -993,6 +1061,8 @@ function handleEdit(row) {
       tiktokCategoryId: d.tiktokCategoryId || '', tiktokCategoryVersion: d.tiktokCategoryVersion || 'v2', tiktokSaveMode: d.tiktokSaveMode || 'LISTING',
       tiktokProductAttributes: d.tiktokProductAttributes || '',
       tiktokWarehouseId: d.tiktokWarehouseId || '', tiktokQuantity: 1, tiktokCurrency: d.tiktokCurrency || 'USD', tiktokCodAllowed: !!d.tiktokCodAllowed,
+      whatnotLocationId: String(d.whatnotLocationId || ''), whatnotPublicationId: String(d.whatnotPublicationId || ''),
+      whatnotCategoryId: d.whatnotCategoryId || '', whatnotCurrency: d.whatnotCurrency || '', whatnotAutoPublishConfirmed: d.whatnotAutoPublishConfirmed === true,
       packageWeightValue: d.packageWeightValue, packageWeightUnit: d.packageWeightUnit || 'POUND', packageLength: d.packageLength,
       packageWidth: d.packageWidth, packageHeight: d.packageHeight, packageDimensionUnit: d.packageDimensionUnit || 'INCH'
     })
@@ -1000,10 +1070,12 @@ function handleEdit(row) {
     // 预加载类目/仓库/策略列表，翻译 ID 为英文名称
     const platform = d.platform
     const catId = platform === 'EBAY' ? d.ebayCategoryId : d.tiktokCategoryId
-    if (catId && platform) {
+    if (catId && ['EBAY', 'TIKTOK'].includes(platform)) {
       getCategories(platform, null, 'en').then(r => {
+        if (!isCurrentTemplateDetail(sequence)) return
         const items = (r.data || []).map(c => ({ ...c }))
         getCategoryById(platform, catId).then(catRes => {
+          if (!isCurrentTemplateDetail(sequence)) return
           const cat = catRes.data || {}
           const label = cat.label || catId
           if (!items.find(c => c.id === catId)) {
@@ -1012,43 +1084,54 @@ function handleEdit(row) {
           if (platform === 'EBAY') ebayCategoryTree.value = items
           else tiktokCategoryTree.value = items
         }).catch(() => {
+          if (!isCurrentTemplateDetail(sequence)) return
           if (platform === 'EBAY') ebayCategoryTree.value = items
           else tiktokCategoryTree.value = items
         })
       }).catch(() => {})
     } else if (platform === 'EBAY') {
       getCategories('EBAY', null, 'en').then(r => {
+        if (!isCurrentTemplateDetail(sequence)) return
         ebayCategoryTree.value = r.data || []
       }).catch(() => {})
     }
     // TikTok：加载仓库列表让 select 显示仓库名而非 ID
     if (platform === 'TIKTOK' && d.shopId) {
       getTiktokWarehouses(d.shopId).then(res => {
-      loadTiktokAttributes(d.tiktokProductAttributes)
+        if (!isCurrentTemplateDetail(sequence)) return
+        loadTiktokAttributes(d.tiktokProductAttributes)
         warehouseList.value = res.data || []
       }).catch(() => {})
     }
     // eBay：加载策略列表让 select 显示策略名而非 ID
     if (platform === 'EBAY' && d.shopId) {
       getEbayPolicies(d.shopId).then(res => {
+        if (!isCurrentTemplateDetail(sequence)) return
         const data = res.data || {}
         fulfillmentPolicies.value = data.fulfillmentPolicies || []
         paymentPolicies.value = data.paymentPolicies || []
         returnPolicies.value = data.returnPolicies || []
       }).catch(() => {})
     }
+  }).catch(() => {
+    if (isCurrentTemplateDetail(sequence)) proxy.$modal.msgError(t('platformListings.templateDetailLoadFailed'))
+  }).finally(() => {
+    if (sequence === templateDetailSequence) templateDetailLoading.value = false
   })
   dialog.visible = true
   clearFormValidate()
 }
 
 function submitForm() {
+  if (templateSaveDisabled.value || !dialog.visible) return
+  const sequence = templateDetailSequence
   if (!formRef.value) {
     submitValidatedForm()
     return
   }
   // 无论 Element Form 校验是否通过，都进入统一校验以汇总并提示全部缺失项。
   formRef.value.validate(() => {
+    if (sequence !== templateDetailSequence || templateSaveDisabled.value || !dialog.visible) return
     submitValidatedForm()
   })
 }
@@ -1081,12 +1164,14 @@ function submitValidatedForm() {
   if (!form.shopId) { proxy.$modal.msgWarning(t('platformListings.shopRequired')); return }
 
   const isEbay = form.platform === 'EBAY'
-  tiktokValidationAttempted.value = !isEbay
-  if (!isEbay && isTiktokRetailPriceInvalid()) {
+  const isTiktok = form.platform === 'TIKTOK'
+  const isWhatnot = form.platform === 'SHOPIFY'
+  tiktokValidationAttempted.value = isTiktok
+  if (isTiktok && isTiktokRetailPriceInvalid()) {
     proxy.$modal.msgWarning(t('platformListings.tiktokPriceRangeHint'))
     return
   }
-  if (!isEbay && isTiktokAuctionStartPriceInvalid()) {
+  if (isTiktok && isTiktokAuctionStartPriceInvalid()) {
     proxy.$modal.msgWarning(t('platformListings.tiktokAuctionStartPriceInvalid'))
     return
   }
@@ -1101,7 +1186,7 @@ function submitValidatedForm() {
 
   // 保存模板时所有必填项均为硬校验，不再提供“仍然保存”。
   const missing = []
-  if (!isPositiveValue(form.packageLength) || !isPositiveValue(form.packageWidth) || !isPositiveValue(form.packageHeight)) {
+  if (!isWhatnot && (!isPositiveValue(form.packageLength) || !isPositiveValue(form.packageWidth) || !isPositiveValue(form.packageHeight))) {
     missing.push(t('platformListings.packageDimensionsLabel'))
   }
   if (!isPositiveValue(form.packageWeightValue)) {
@@ -1119,16 +1204,16 @@ function submitValidatedForm() {
   if (isEbay && !form.ebayPaymentPolicyId) {
     missing.push(t('platformListings.paymentPolicy'))
   }
-  if (!isEbay && !String(form.defaultTitle || '').trim()) {
+  if ((isTiktok || isWhatnot) && !String(form.defaultTitle || '').trim()) {
     missing.push(t('platformListings.productNameLabel'))
   }
-  if (!isEbay && !form.tiktokWarehouseId) {
+  if (isTiktok && !form.tiktokWarehouseId) {
     missing.push(t('platformListings.warehouse'))
   }
-  if (!isEbay && !form.tiktokCategoryId) {
+  if (isTiktok && !form.tiktokCategoryId) {
     missing.push(t('platformListings.category'))
   }
-  if (!isEbay && form.tiktokCategoryId) {
+  if (isTiktok && form.tiktokCategoryId) {
     if (tiktokAttributeLoading.value) {
       proxy.$modal.msgWarning(t('platformListings.tiktokAttributesLoading'))
       focusFirstRequiredError()
@@ -1142,6 +1227,10 @@ function submitValidatedForm() {
     if (missingTiktokRequiredAttributes.value.length > 0) {
       missing.push(...missingTiktokRequiredAttributes.value.map(attribute => attribute.name))
     }
+  }
+  if (isWhatnot) {
+    missing.push(...(whatnotShopFieldsRef.value?.validate() || [t('platformListings.whatnotConfigRequired')]))
+    if (form.defaultPrice != null && form.defaultPrice !== '' && !isWhatnotPriceValid(form.defaultPrice)) missing.push(t('platformListings.whatnotIntegerPriceHint'))
   }
   if (isRichTextEmpty(form.descriptionFormat)) {
     missing.push(t('platformListings.ebayDescription'))
@@ -1185,9 +1274,9 @@ function doSubmit(isEbay) {
   submitting.value = true
   const data = {
     id: form.id, templateName: form.templateName, platform: form.platform,
-    shopId: form.shopId, listingType: form.listingType, listingDuration: form.listingDuration,
+    shopId: form.shopId, listingType: form.platform === 'SHOPIFY' ? 'FIXED_PRICE' : form.listingType, listingDuration: form.listingDuration,
     // buyItNowPrice：eBay=一口价，TikTok 拍卖=起拍价
-    status: form.enabled ? 'ENABLED' : 'DISABLED', buyItNowPrice: optionalNumber(form.buyItNowPrice),
+    status: form.enabled ? 'ENABLED' : 'DISABLED', buyItNowPrice: form.platform === 'SHOPIFY' ? null : optionalNumber(form.buyItNowPrice),
     titleFormat: form.defaultTitle,          // 复用此字段存标题
     priceSource: 'CUSTOM',                   // 始终自定义价格
     priceMarkupValue: optionalNumber(form.defaultPrice),     // TikTok 始终为 Retail price
@@ -1207,6 +1296,11 @@ function doSubmit(isEbay) {
     tiktokCategoryId: form.tiktokCategoryId || null, tiktokCategoryVersion: form.tiktokCategoryVersion || null, tiktokSaveMode: form.tiktokSaveMode || null,
     tiktokProductAttributes: JSON.stringify(buildTiktokProductAttributes()),
     tiktokWarehouseId: form.tiktokWarehouseId || null, tiktokQuantity: 1, tiktokCurrency: form.tiktokCurrency || null, tiktokCodAllowed: form.tiktokCodAllowed,
+    whatnotLocationId: form.platform === 'SHOPIFY' ? form.whatnotLocationId : null,
+    whatnotPublicationId: form.platform === 'SHOPIFY' ? form.whatnotPublicationId : null,
+    whatnotCategoryId: form.platform === 'SHOPIFY' ? form.whatnotCategoryId || null : null,
+    whatnotCurrency: form.platform === 'SHOPIFY' ? form.whatnotCurrency : null,
+    whatnotAutoPublishConfirmed: form.platform === 'SHOPIFY' && form.whatnotAutoPublishConfirmed,
     packageWeightValue: form.packageWeightValue,
     packageWeightUnit: form.packageWeightUnit,
     packageLength: form.packageLength, packageWidth: form.packageWidth, packageHeight: form.packageHeight,
@@ -1272,6 +1366,7 @@ function onTiktokCategoryChange(val) {
 }
 
 function validateLeafCategory() {
+  if (form.platform === 'SHOPIFY') return true
   const isEbay = form.platform === 'EBAY'
   const leafIds = isEbay ? ebayLeafIds.value : tiktokLeafIds.value
   const catId = isEbay ? form.ebayCategoryId : form.tiktokCategoryId
@@ -1286,6 +1381,8 @@ onMounted(() => { loadShops(); getList() })
 </script>
 
 <style scoped>
+.whatnot-template { padding: 20px; background: #f6faf7; border: 1px solid #d8eadb; border-radius: 8px; }
+.whatnot-template-hint { width: 100%; color: #606266; font-size: 13px; }
 .listing-templates .filter-card { margin-bottom: 0; }
 .template-dialog-body {
   max-height: 72vh;

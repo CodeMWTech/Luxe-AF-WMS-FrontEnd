@@ -118,3 +118,13 @@ export function getEbayPolicies(shopId, refresh) {
 export function getTiktokWarehouses(shopId) {
   return request({ url: '/wms/platform/listings/tiktok/warehouses', method: 'get', params: { shopId } })
 }
+
+/** Shopify 库存位置、Whatnot 渠道和店铺币种 */
+export function getWhatnotConfig(shopId) {
+  return request({ url: '/wms/platform/listings/whatnot/config', method: 'get', params: { shopId } })
+}
+
+/** 搜索 Shopify 商品分类（Whatnot 模板可选） */
+export function searchWhatnotCategories(shopId, query) {
+  return request({ url: '/wms/platform/listings/whatnot/categories', method: 'get', params: { shopId, query } })
+}
