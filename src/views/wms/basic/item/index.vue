@@ -608,7 +608,7 @@ function bagDimensionsToInch(item = {}) {
   }
 }
 const bagDimLabels = computed(() => isEn.value
-  ? { length: 'Length', width: 'Width', height: 'Height' }
+  ? { length: 'Bag Width', width: 'Bag Depth', height: 'Bag Height' }
   : { length: '长', width: '宽', height: '高' })
 function formatBagInchHint(cm) {
   const inch = cmToInch(cm)
@@ -823,9 +823,9 @@ const formRules = computed(() => ({
   defaultQty: [requiredNumber(tr('数量不能为空'))],
   defect: [{ required: true, message: tr('瑕疵不能为空'), trigger: [] }],
   size: [{ required: true, message: tr('尺寸不能为空'), trigger: [] }],
-  bagWidth: [requiredNumber(tr('长不能为空'))],
-  bagHeight: [requiredNumber(tr('宽不能为空'))],
-  bagDepth: [requiredNumber(tr('高不能为空'))],
+  bagWidth: [requiredNumber(isEn.value ? 'Bag Width cannot be empty' : '长不能为空')],
+  bagHeight: [requiredNumber(isEn.value ? 'Bag Depth cannot be empty' : '宽不能为空')],
+  bagDepth: [requiredNumber(isEn.value ? 'Bag Height cannot be empty' : '高不能为空')],
   accessories: [{ required: true, message: tr('配件不能为空'), trigger: [] }],
   consignInfo: [{ required: true, message: tr('寄售信息不能为空'), trigger: [] }]
 }))
