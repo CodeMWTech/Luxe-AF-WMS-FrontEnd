@@ -6,6 +6,25 @@ export function getSourceWarehouseAndSkuKey (row) {
   return row.sourceWarehouseId + '_' + row.skuId
 }
 
+/** Keep catalog IDs as strings. Number() truncates snowflake IDs and breaks filters. */
+export function toCatalogId(value) {
+  if (value == null || value === '') return undefined
+  const text = String(value).trim()
+  if (!text || text === 'undefined' || text === 'null' || text === 'NaN') return undefined
+  return text
+}
+
+/** Keep tree-select values as strings so snowflake IDs match route/form state. */
+export function stringifyCatalogTree(nodes) {
+  if (!Array.isArray(nodes) || !nodes.length) return []
+  return nodes.map((node) => ({
+    ...node,
+    id: toCatalogId(node.id) ?? node.id,
+    parentId: node.parentId == null ? node.parentId : (toCatalogId(node.parentId) ?? node.parentId),
+    children: stringifyCatalogTree(node.children || [])
+  }))
+}
+
 /**
  * Clone category tree for tree-select:
  * - pathLabel: full path for the closed input (e.g. Accessory/Belts)
@@ -19,12 +38,30 @@ export function withCategoryPathLabels(nodes, parentPath = []) {
     const children = withCategoryPathLabels(node.children || [], path)
     return {
       ...node,
+      id: toCatalogId(node.id) ?? node.id,
       shortLabel: name,
       label: name,
       pathLabel: path.length ? path.join('/') : name,
       children: children.length ? children : undefined
     }
   })
+}
+
+export function findCatalogNode(nodes, id) {
+  const target = toCatalogId(id)
+  if (!target || !Array.isArray(nodes)) return null
+  for (const node of nodes) {
+    if (toCatalogId(node.id) === target) return node
+    const found = findCatalogNode(node.children, id)
+    if (found) return found
+  }
+  return null
+}
+
+export function isCatalogLeafId(nodes, id) {
+  const node = findCatalogNode(nodes, id)
+  if (!node) return false
+  return !Array.isArray(node.children) || node.children.length === 0
 }
 
 /** Join selected catalog hierarchy labels for list titles, e.g. Handbag / LV / 包型列表 */

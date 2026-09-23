@@ -1,6 +1,7 @@
 import { nextTick, reactive, toRefs } from 'vue'
 import { addItemCategory, delItemCategory, updateItemCategory, updateOrderNum } from '@/api/wms/itemCategory'
 import { useWmsStore } from '@/store/modules/wms'
+import { useItemCatalogDictStore } from '@/store/modules/itemCatalogDict'
 
 const initCategoryFormData = {
   id: undefined,
@@ -38,6 +39,7 @@ export function useItemCategory({
   getList
 }) {
   const wmsStore = useWmsStore()
+  const catalogDictStore = useItemCatalogDictStore()
   const categoryDialog = reactive({
     visible: false,
     title: ''
@@ -48,6 +50,7 @@ export function useItemCategory({
   const refreshCategoryData = () => {
     wmsStore.getItemCategoryList()
     wmsStore.getItemCategoryTreeList()
+    catalogDictStore.invalidateAll()
   }
 
   const resetType = () => {

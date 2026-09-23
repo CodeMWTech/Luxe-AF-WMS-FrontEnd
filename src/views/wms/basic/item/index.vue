@@ -43,6 +43,7 @@
           :get-item-row-key="getItemRowKey"
           :field-label="fieldLabel"
           :get-main-image-url="getMainImageUrl"
+          :format-item-size-label="formatItemSizeLabel"
           :tr="tr"
           @toggle-category="toggleCategoryPanel"
           @export="handleExport"
@@ -61,12 +62,18 @@
       :dialog="dialog"
       :sku-loading="skuLoading"
       :form="form"
-      :rules="rules"
+      :rules="formRules"
       :item-category-tree-select-list="itemCategoryTreeSelectList"
       :form-brand-options="formBrandOptions"
+      :form-brand-loading="formBrandLoading"
+      :form-model-loading="formModelLoading"
+      :form-material-loading="formMaterialLoading"
       :ITEM_CONDITION_OPTIONS="ITEM_CONDITION_OPTIONS"
       :AUTH_AGENCY_OPTIONS="AUTH_AGENCY_OPTIONS"
       :ACCESSORY_TAG_OPTIONS="ACCESSORY_TAG_OPTIONS"
+      :DEFECT_TAG_OPTIONS="DEFECT_TAG_OPTIONS"
+      :ITEM_SIZE_OPTIONS="ITEM_SIZE_OPTIONS"
+      :format-item-size-label="formatItemSizeLabel"
       :supplier-options="supplierOptions"
       :is-supplier-user="isSupplierUser"
       :can-view-cost-price="canViewCostPrice"
@@ -93,6 +100,7 @@
       @cost-price-change="handleCostPriceChange"
       @material-change="handleMaterialChange"
       @append-accessory-tag="appendAccessoryTag"
+      @append-defect-tag="appendDefectTag"
       @image-drag-start="onImageDragStart"
       @image-drop="onImageDrop"
       @retry-image="retryItemImage"
@@ -324,17 +332,17 @@ import { listSupplierNoPage, getCurrentSupplier } from '@/api/wms/supplier';
 import { computed, getCurrentInstance, nextTick, onActivated, onBeforeUnmount, onMounted, reactive, ref, toRefs, watch } from 'vue';
 import { ElForm, ElMessage } from 'element-plus';
 import {getRowspanMethod} from "@/utils/getRowSpanMethod";
-import {listItemSkuPage, delItemSku, listItemSku, exportItemSku} from "@/api/wms/itemSku";
+import {listItemSkuPage, delItemSku, exportItemSku} from "@/api/wms/itemSku";
 import {useRoute} from "vue-router";
 import Qrcode from 'qrcode'
 import JSBarcode from 'jsbarcode'
 import {useWmsStore} from '@/store/modules/wms'
+import { useItemCatalogDictStore } from '@/store/modules/itemCatalogDict'
 import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
 import { CircleCheckFilled, UploadFilled } from '@element-plus/icons-vue'
 import { formatDateTimeForQuery } from '@/utils/laTime'
-import { listItemModel, listItemModelBrandOptions, listItemModelMaterialOptions } from '@/api/wms/itemModel'
-import { listItemMaterial } from '@/api/wms/itemMaterial'
+import { toCatalogId, withCategoryPathLabels, isCatalogLeafId } from '@/utils/wmsUtil'
 import { blobValidate } from '@/utils/ruoyi'
 import { downloadXlsx, getExportLanguageHeaders, getExportLanguagePayload, prepareLanguageXlsx } from '@/utils/xlsxTranslate'
 import { saveAs } from 'file-saver'
@@ -446,7 +454,7 @@ const toggleCategoryPanel = () => {
   isCategoryPanelCollapsed.value = !isCategoryPanelCollapsed.value;
 }
 watch(isCategoryPanelCollapsed, () => nextTick(layoutItemTable));
-const itemCategoryTreeSelectList = computed(() => useWmsStore().itemCategoryTreeList);
+const itemCategoryTreeSelectList = computed(() => withCategoryPathLabels(useWmsStore().itemCategoryTreeList || []));
 const itemCategoryTreeOptionsList = computed(() => {
   let data = [...itemCategoryTreeSelectList.value];
   data.unshift({
@@ -461,6 +469,21 @@ const loading = ref(true);
 const showSearch = ref(true);
 const total = ref(0);
 const skuLoading = ref(false)
+const hydratingItemForm = ref(false)
+const formCatalogToken = ref(0)
+const formBrandLoading = ref(false)
+const formModelLoading = ref(false)
+const formMaterialLoading = ref(false)
+const catalogDictStore = useItemCatalogDictStore()
+
+function nextFormCatalogToken() {
+  formCatalogToken.value += 1
+  return formCatalogToken.value
+}
+
+function isCurrentFormCatalog(token) {
+  return token === formCatalogToken.value
+}
 /** 创建时间选择器默认时间：当天 00:00:00 - 23:59:59（参考库存记录） */
 const defaultTime = reactive([new Date(2000, 0, 1, 0, 0, 0), new Date(2000, 0, 1, 23, 59, 59)])
 const queryFormRef = ref(ElForm);
@@ -514,6 +537,35 @@ const AUTH_AGENCY_OPTIONS = ['Entrupy', 'Real Authentication', 'Legitmark', 'Che
 const ITEM_CONDITION_OPTIONS = ['S', 'A', 'B', 'C', 'D']
 /** 配件常用选项（可点击快速填入，也可自行输入） */
 const ACCESSORY_TAG_OPTIONS = ['Dustbag', 'Box', 'ID card', 'Lock & Key', 'Strap', 'Receipt']
+/** 瑕疵气泡（字母角标 + 短标签，悬停看全文，写入仍用完整英文） */
+const DEFECT_TAG_OPTIONS = [
+  { code: 'A', short: 'New/Unused', value: 'Brand New / Unused with protective seals intact' },
+  { code: 'B', short: 'Like New', value: 'Pristine / Like New / No noticeable signs of wear' },
+  { code: 'C', short: 'Hairline', value: 'Like New / Faint hairline scratches on hardware only' },
+  { code: 'D', short: 'Scuffs', value: 'Slight exterior scuffs / light surface rubbing' },
+  { code: 'E', short: 'Corners', value: 'Minor rubbing at bottom corners / edges' },
+  { code: 'F', short: 'Handle', value: 'Light wear / indentations on handle & shoulder strap' },
+  { code: 'G', short: 'Hardware', value: 'Visible scratches / tarnish on metal parts' },
+  { code: 'H', short: 'Interior', value: 'Minor stains / indentations partially inside' },
+  { code: 'I', short: 'Overall', value: 'Light overall wear across leather, corners & hardware' }
+]
+const ITEM_SIZE_OPTIONS = [
+  { value: 'Micro', label: '微型' },
+  { value: 'Mini', label: '迷你' },
+  { value: 'Small', label: '小号' },
+  { value: 'Medium', label: '中号' },
+  { value: 'Large', label: '大号' },
+  { value: 'Extra Large', label: '加大号' },
+  { value: 'Nano', label: '超迷你' }
+]
+const ITEM_SIZE_LABEL_MAP = Object.fromEntries(ITEM_SIZE_OPTIONS.map(item => [item.value, item.label]))
+
+function formatItemSizeLabel(size) {
+  if (size == null || size === '') return ''
+  const zh = ITEM_SIZE_LABEL_MAP[size]
+  if (!zh) return String(size)
+  return isEn.value ? String(size) : `${zh} ${size}`
+}
 
 /** 点击配件 tag 时追加到输入框（已包含则不重复添加） */
 const appendAccessoryTag = (tag) => {
@@ -521,6 +573,12 @@ const appendAccessoryTag = (tag) => {
   const parts = val.split(/[,，、\n]+/).map(s => s.trim()).filter(Boolean)
   if (parts.includes(tag)) return
   form.value.accessories = parts.length ? parts.concat(tag).join(', ') : tag
+}
+const appendDefectTag = (tag) => {
+  const val = form.value.defect || ''
+  const parts = val.split(/[,，、\n]+/).map(s => s.trim()).filter(Boolean)
+  if (parts.includes(tag)) return
+  form.value.defect = parts.length ? parts.concat(tag).join(', ') : tag
 }
 /** 列表主图缓存与加载状态（兜底按 itemId 请求） */
 const listMainImageUrlMap = ref(new Map())
@@ -592,6 +650,10 @@ const initFormData = {
   modelId: undefined,
   defect: undefined,
   accessories: undefined,
+  size: undefined,
+  bagWidth: undefined,
+  bagHeight: undefined,
+  bagDepth: undefined,
   remark: undefined,
   imageList: [], // 商品图片列表（编辑时由接口返回，项为 { id, url, isMain, sort }）
   skuCode: undefined, // SKU编码（与规格表第一行同步，主表校验与提示）
@@ -663,7 +725,49 @@ const data = reactive({
     ],
   }
 });
-const {queryParams, form, rules} = toRefs(data);
+const {queryParams, form} = toRefs(data);
+function requiredNumber(message) {
+  return {
+    required: true,
+    validator: (_rule, value, callback) => {
+      if (value === null || value === undefined || value === '') {
+        callback(new Error(message))
+        return
+      }
+      callback()
+    },
+    trigger: []
+  }
+}
+const formRules = computed(() => ({
+  ...data.rules,
+  itemCategory: [{
+    required: true,
+    validator: (_rule, value, callback) => {
+      if (value === null || value === undefined || value === '') {
+        callback(new Error(tr('分类不能为空')))
+        return
+      }
+      if (!isCatalogLeafId(itemCategoryTreeSelectList.value, value)) {
+        callback(new Error(tr('请选择最末级分类')))
+        return
+      }
+      callback()
+    },
+    trigger: 'change'
+  }],
+  costPrice: canViewCostPrice.value ? [requiredNumber(tr('成本价不能为空'))] : [],
+  sellingPrice: canViewSellingPrice.value ? [requiredNumber(tr('销售价不能为空'))] : [],
+  authAgency: [{ type: 'array', required: true, min: 1, message: tr('鉴定机构不能为空'), trigger: [] }],
+  defaultQty: [requiredNumber(tr('数量不能为空'))],
+  defect: [{ required: true, message: tr('瑕疵不能为空'), trigger: [] }],
+  size: [{ required: true, message: tr('尺寸不能为空'), trigger: [] }],
+  bagWidth: [requiredNumber(tr('包宽不能为空'))],
+  bagHeight: [requiredNumber(tr('包高不能为空'))],
+  bagDepth: [requiredNumber(tr('包深不能为空'))],
+  accessories: [{ required: true, message: tr('配件不能为空'), trigger: [] }],
+  consignInfo: [{ required: true, message: tr('寄售信息不能为空'), trigger: [] }]
+}))
 const appliedRouteSkuCode = ref('')
 
 function applyRouteSkuFilter() {
@@ -689,6 +793,7 @@ const formModelList = ref([])
 const formMaterialList = ref([])
 /** Brand ids allowed for current form category (legacy originals vs Rebag tree). */
 const formBrandIds = ref([])
+const lastFormCategory = ref()
 
 const formBrandOptions = computed(() => {
   const all = useWmsStore().itemBrandList || []
@@ -698,16 +803,29 @@ const formBrandOptions = computed(() => {
 })
 
 async function refreshFormBrandOptions({ keepCurrentBrand = false } = {}) {
-  formBrandIds.value = []
-  if (!form.value.itemCategory) return
+  const token = formCatalogToken.value
+  const category = toCatalogId(form.value.itemCategory)
+  if (!category) {
+    if (isCurrentFormCatalog(token)) formBrandIds.value = []
+    return
+  }
+  const cached = catalogDictStore.peekBrandIds(category)
+  if (!cached) formBrandLoading.value = true
   try {
-    const res = await listItemModelBrandOptions(form.value.itemCategory)
-    formBrandIds.value = res.data || []
+    const ids = await catalogDictStore.loadBrandIds(category)
+    if (!isCurrentFormCatalog(token)) return
+    if (toCatalogId(form.value.itemCategory) !== category) return
+    formBrandIds.value = ids
   } catch (_) {
+    if (!isCurrentFormCatalog(token)) return
+    if (toCatalogId(form.value.itemCategory) !== category) return
     formBrandIds.value = []
+  } finally {
+    if (isCurrentFormCatalog(token)) formBrandLoading.value = false
   }
   if (
-    keepCurrentBrand
+    isCurrentFormCatalog(token)
+    && keepCurrentBrand
     && form.value.itemBrand
     && !formBrandIds.value.map(String).includes(String(form.value.itemBrand))
   ) {
@@ -716,81 +834,107 @@ async function refreshFormBrandOptions({ keepCurrentBrand = false } = {}) {
 }
 
 async function handleFormCategoryChange() {
+  if (hydratingItemForm.value) return
+  const current = toCatalogId(form.value.itemCategory)
+  if (current === lastFormCategory.value) return
+  lastFormCategory.value = current
   form.value.itemBrand = undefined
   form.value.modelId = undefined
   form.value.materialId = undefined
   form.value.material = undefined
   modelMaterialIds.value = []
+  formModelList.value = []
+  formMaterialList.value = []
   await refreshFormBrandOptions()
 }
 
 const hasItemModelContext = computed(() => !!form.value.itemBrand && !!form.value.itemCategory)
 const hasItemMaterialContext = computed(() => hasItemModelContext.value && !!form.value.modelId)
 
-const filteredItemModelList = computed(() => {
-  const brand = form.value.itemBrand
-  const category = form.value.itemCategory
-  if (!brand || !category) return []
-  return formModelList.value.filter(item => {
-    return String(item.itemBrand) === String(brand) && String(item.itemCategory) === String(category)
-  })
-})
+const filteredItemModelList = computed(() => formModelList.value)
 
 const filteredItemMaterialList = computed(() => {
-  const brand = form.value.itemBrand
-  const category = form.value.itemCategory
-  const model = form.value.modelId
-  if (!brand || !category || !model) return []
+  if (!formMaterialList.value.length) return []
+  if (!modelMaterialIds.value.length) return formMaterialList.value
   const materialIdSet = new Set(modelMaterialIds.value.map(id => String(id)))
-  return formMaterialList.value.filter(item => {
-    const materialModelId = item.modelId
-    const brandMatched = String(item.itemBrand) === String(brand)
-    const categoryMatched = String(item.itemCategory) === String(category)
-    const modelMatched = String(materialModelId) === String(model)
-    const relationMatched = modelMaterialIds.value.length === 0 || materialIdSet.has(String(item.id))
-    return categoryMatched && brandMatched && modelMatched && relationMatched
-  })
+  return formMaterialList.value.filter(item => materialIdSet.has(String(item.id)))
 })
 
-async function loadFormModels() {
-  const brand = form.value.itemBrand
-  const category = form.value.itemCategory
+async function loadFormModels({ keepCurrentModel = false } = {}) {
+  const token = formCatalogToken.value
+  const brand = toCatalogId(form.value.itemBrand)
+  const category = toCatalogId(form.value.itemCategory)
   if (!brand || !category) {
-    formModelList.value = []
+    if (isCurrentFormCatalog(token)) formModelList.value = []
     return
   }
+  const cached = catalogDictStore.peekModels({ itemCategory: category, itemBrand: brand })
+  if (!cached) formModelLoading.value = true
   try {
-    const res = await listItemModel({
-      status: '1',
-      itemBrand: brand,
-      itemCategory: category
-    })
-    formModelList.value = res.data || []
+    const list = await catalogDictStore.loadModels({ itemCategory: category, itemBrand: brand })
+    if (!isCurrentFormCatalog(token)) return
+    if (toCatalogId(form.value.itemBrand) !== brand || toCatalogId(form.value.itemCategory) !== category) return
+    formModelList.value = list
   } catch (_) {
+    if (!isCurrentFormCatalog(token)) return
+    if (toCatalogId(form.value.itemBrand) !== brand || toCatalogId(form.value.itemCategory) !== category) return
     formModelList.value = []
+  } finally {
+    if (isCurrentFormCatalog(token)) formModelLoading.value = false
+  }
+  if (
+    isCurrentFormCatalog(token)
+    && keepCurrentModel
+    && form.value.modelId
+    && !formModelList.value.some(item => String(item.id) === String(form.value.modelId))
+  ) {
+    formModelList.value = [{
+      id: form.value.modelId,
+      modelName: form.value.modelName || String(form.value.modelId),
+      imageUrl: form.value.modelImageUrl,
+      itemBrand: form.value.itemBrand,
+      itemCategory: form.value.itemCategory
+    }, ...formModelList.value]
   }
 }
 
-async function loadModelMaterialOptions(modelId) {
-  if (!modelId) {
+async function loadModelMaterialOptions(modelId, { keepCurrentMaterial = false } = {}) {
+  const token = formCatalogToken.value
+  const id = toCatalogId(modelId)
+  if (!id) {
+    if (!isCurrentFormCatalog(token)) return
     modelMaterialIds.value = []
     formMaterialList.value = []
-    form.value.materialId = undefined
-    form.value.material = undefined
+    if (!keepCurrentMaterial) {
+      form.value.materialId = undefined
+      form.value.material = undefined
+    }
     return
   }
+  const cached = catalogDictStore.peekMaterials({ modelId: id })
+  if (!cached) formMaterialLoading.value = true
   try {
-    const [idsRes, listRes] = await Promise.all([
-      listItemModelMaterialOptions(modelId),
-      listItemMaterial({ status: '1', modelId })
-    ])
-    modelMaterialIds.value = idsRes.data || []
-    formMaterialList.value = listRes.data || []
+    const { ids, list } = await catalogDictStore.loadMaterials({ modelId: id })
+    if (!isCurrentFormCatalog(token)) return
+    if (toCatalogId(form.value.modelId) !== id) return
+    modelMaterialIds.value = ids
+    formMaterialList.value = list
   } catch (_) {
+    if (!isCurrentFormCatalog(token)) return
+    if (toCatalogId(form.value.modelId) !== id) return
     modelMaterialIds.value = []
     formMaterialList.value = []
+  } finally {
+    if (isCurrentFormCatalog(token)) formMaterialLoading.value = false
   }
-  if (form.value.materialId && modelMaterialIds.value.length > 0 && !modelMaterialIds.value.some(id => String(id) === String(form.value.materialId))) {
+  if (!isCurrentFormCatalog(token) || toCatalogId(form.value.modelId) !== id) return
+  if (keepCurrentMaterial) {
+    if (form.value.materialId && !modelMaterialIds.value.some(mid => String(mid) === String(form.value.materialId))) {
+      modelMaterialIds.value = [...modelMaterialIds.value, form.value.materialId]
+    }
+    return
+  }
+  if (form.value.materialId && modelMaterialIds.value.length > 0 && !modelMaterialIds.value.some(mid => String(mid) === String(form.value.materialId))) {
     form.value.materialId = undefined
     form.value.material = undefined
   }
@@ -806,7 +950,10 @@ const selectedItemMaterial = computed(() => findSelectOptionById(formMaterialLis
 watch(
   () => [form.value.itemBrand, form.value.itemCategory],
   async () => {
+    if (hydratingItemForm.value) return
+    const token = formCatalogToken.value
     if (!hasItemModelContext.value) {
+      if (!isCurrentFormCatalog(token)) return
       formModelList.value = []
       formMaterialList.value = []
       modelMaterialIds.value = []
@@ -814,7 +961,12 @@ watch(
     }
     const keepModelId = form.value.modelId
     await loadFormModels()
-    if (keepModelId && !filteredItemModelList.value.some(item => String(item.id) === String(keepModelId))) {
+    if (!isCurrentFormCatalog(token)) return
+    if (
+      keepModelId
+      && filteredItemModelList.value.length
+      && !filteredItemModelList.value.some(item => String(item.id) === String(keepModelId))
+    ) {
       form.value.modelId = undefined
       form.value.materialId = undefined
       form.value.material = undefined
@@ -826,6 +978,7 @@ watch(
 watch(
   () => form.value.modelId,
   async (modelId, oldModelId) => {
+    if (hydratingItemForm.value) return
     if (modelId === oldModelId) return
     await loadModelMaterialOptions(modelId)
   }
@@ -834,7 +987,9 @@ watch(
 watch(
   () => filteredItemMaterialList.value,
   () => {
+    if (hydratingItemForm.value || formMaterialLoading.value) return
     if (!form.value.materialId) return
+    if (!filteredItemMaterialList.value.length) return
     const exists = filteredItemMaterialList.value.some(item => String(item.id) === String(form.value.materialId))
     if (!exists) {
       form.value.materialId = undefined
@@ -1206,6 +1361,7 @@ const handleDeleteItemSku = async (row, index) => {
   await loadModelMaterialOptions(form.value.modelId)
 }
 const cancel = () => {
+  nextFormCatalogToken()
   reset();
   dialog.visible = false;
 }
@@ -1224,6 +1380,7 @@ const reset = () => {
   formBrandIds.value = [];
   formModelList.value = [];
   formMaterialList.value = [];
+  lastFormCategory.value = undefined;
   itemFormRef.value?.resetFields();
 }
 
@@ -1245,61 +1402,101 @@ const getItemRowKey = (row) => row?.skuId
 
 /** 新增按钮操作 */
 const handleAdd = () => {
+  hydratingItemForm.value = true
+  nextFormCatalogToken()
   resetItemSkuList()
+  reset()
   dialog.visible = true;
   dialog.title = isEn.value ? 'Add Item' : "新增商品";
-  nextTick(async () => {
-    reset();
+  nextTick(() => {
+    hydratingItemForm.value = false
   });
 }
 /** 修改按钮操作 */
 const handleUpdate = (row) => {
+  hydratingItemForm.value = true
+  nextFormCatalogToken()
   resetItemSkuList()
   skuLoading.value = true
+  reset()
   dialog.visible = true;
   dialog.title = isEn.value ? 'Edit Item' : "修改商品";
   nextTick(async () => {
     try {
-      reset();
       const _id = row?.itemId
-      const [skuRes, itemRes] = await Promise.all([
-        listItemSku({ itemId: _id }),
+      const [itemRes] = await Promise.all([
         getItem(_id),
         initItemBrandDataIfNeeded()
       ])
-      Object.assign(skuForm.itemSkuList, skuRes.data)
       const itemData = itemRes.data || {}
+      const skuList = Array.isArray(itemData.sku) && itemData.sku.length
+        ? itemData.sku.map((item) => ({ ...item }))
+        : skuForm.itemSkuList
+      skuForm.itemSkuList = skuList
       const imageList = (itemData.imageList || itemData.images || []).map((img, idx) => normalizeServerImage(img, idx))
       form.value = { ...form.value, ...row.item, ...itemData, imageList }
-      // 表单品牌为单选（字符串 ID，避免雪花精度问题）；鉴定机构为多选
-      form.value.itemBrand = resolveFormBrandId(form.value.itemBrandIds, form.value.itemBrand)
+      form.value.itemCategory = toCatalogId(form.value.itemCategory)
+      lastFormCategory.value = form.value.itemCategory
+      form.value.itemBrand = toCatalogId(resolveFormBrandId(form.value.itemBrandIds, form.value.itemBrand) || form.value.itemBrand)
+      form.value.modelId = toCatalogId(form.value.modelId)
+      form.value.materialId = toCatalogId(form.value.materialId)
       form.value.authAgency = parseAuthAgencyList(form.value.authAgency)
-      await refreshFormBrandOptions({ keepCurrentBrand: true })
-      await loadFormModels()
-      await loadModelMaterialOptions(form.value.modelId)
+      if (form.value.cared == null) form.value.cared = false
+      if (form.value.itemBrand) {
+        formBrandIds.value = [form.value.itemBrand]
+      }
+      if (form.value.modelId) {
+        formModelList.value = [{
+          id: form.value.modelId,
+          modelName: form.value.modelName || String(form.value.modelId),
+          imageUrl: form.value.modelImageUrl,
+          itemBrand: form.value.itemBrand,
+          itemCategory: form.value.itemCategory
+        }]
+      }
       normalizeUploadedImageMeta()
       form.value.skuCode = skuForm.itemSkuList[0]?.skuCode ?? ''
       form.value.costPrice = canViewCostPrice.value ? (skuForm.itemSkuList[0]?.costPrice ?? null) : null
       form.value.sellingPrice = canViewSellingPrice.value ? (skuForm.itemSkuList[0]?.sellingPrice ?? null) : null
+      skuLoading.value = false
+      await Promise.all([
+        refreshFormBrandOptions({ keepCurrentBrand: true }),
+        loadFormModels({ keepCurrentModel: true }),
+        loadModelMaterialOptions(form.value.modelId, { keepCurrentMaterial: true })
+      ])
+      await nextTick()
     } catch (error) {
       dialog.visible = false
       proxy?.$modal.msgError(error?.msg || error?.message || '加载商品详情失败')
     } finally {
+      hydratingItemForm.value = false
       skuLoading.value = false
     }
   });
 }
+function scrollToFirstFormError() {
+  nextTick(() => {
+    const errorItem = document.querySelector('.el-drawer__body .el-form-item.is-error')
+    errorItem?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  })
+}
+
 const submitForm = async () => {
-  if (!hasRequiredItemImage()) {
-    proxy?.$modal.msgError('商品图片不能为空')
-    validateItemImagesOnNextTick()
-    return
-  }
-  // 先校验商品主表（含商品名称、分类、品牌、成色、年份、SKU编码等）
   try {
     await itemFormRef.value.validate();
   } catch {
+    scrollToFirstFormError()
+    if (!hasRequiredItemImage()) {
+      proxy?.$modal.msgError(tr('商品图片不能为空'))
+    }
     return;
+  }
+
+  if (!hasRequiredItemImage()) {
+    proxy?.$modal.msgError(tr('商品图片不能为空'))
+    validateItemImagesOnNextTick()
+    scrollToFirstFormError()
+    return
   }
 
   // 将主表填的 SKU 编码同步到规格行，再提交
@@ -2425,8 +2622,23 @@ onActivated(() => {
   gap: 8px;
 }
 
-.item-page .action-btn {
-  min-width: 96px;
+  .item-page .action-btn {
+    min-width: 96px;
+  }
+
+.inch-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+.inch-field .el-input-number {
+  flex: 1;
+}
+.inch-unit {
+  flex: 0 0 auto;
+  color: #606266;
+  white-space: nowrap;
 }
 
 .item-page.is-en .action-btn {

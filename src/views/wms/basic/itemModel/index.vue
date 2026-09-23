@@ -41,7 +41,7 @@
             style="width: 220px"
             @change="handleQueryBrandChange"
           >
-            <el-option v-for="item in queryBrandOptions" :key="item.id" :label="item.brandName" :value="item.id" />
+            <el-option v-for="item in queryBrandOptions" :key="String(item.id)" :label="item.brandName" :value="String(item.id)" />
           </el-select>
         </el-form-item>
         <el-form-item :label="tr('包型名称')" prop="id">
@@ -53,7 +53,7 @@
             :disabled="!queryParams.itemBrand"
             style="width: 240px"
           >
-            <el-option v-for="item in queryModelOptions" :key="item.id" :label="item.modelName" :value="item.id" />
+            <el-option v-for="item in queryModelOptions" :key="String(item.id)" :label="item.modelName" :value="String(item.id)" />
           </el-select>
         </el-form-item>
         <el-form-item>
@@ -180,7 +180,7 @@
             :disabled="!form.itemCategory"
             style="width: 100%"
           >
-            <el-option v-for="item in formBrandOptions" :key="item.id" :label="item.brandName" :value="item.id" />
+            <el-option v-for="item in formBrandOptions" :key="String(item.id)" :label="item.brandName" :value="String(item.id)" />
           </el-select>
         </el-form-item>
         <el-form-item :label="tr('包型名称')" prop="modelName">
@@ -231,9 +231,10 @@
 <script setup name="ItemModel">
 import { listItemModelPage, listItemModel, getItemModel, delItemModel, addItemModel, updateItemModel, uploadItemModelImage, deleteItemModelImage, listItemModelBrandOptions } from '@/api/wms/itemModel'
 import { useWmsStore } from '@/store/modules/wms'
+import { useItemCatalogDictStore } from '@/store/modules/itemCatalogDict'
 import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
-import { joinCatalogPath, sortByCatalogName, withCategoryPathLabels } from '@/utils/wmsUtil'
+import { joinCatalogPath, sortByCatalogName, toCatalogId, withCategoryPathLabels } from '@/utils/wmsUtil'
 import { useGalleryFillPage } from '@/composables/useGalleryFillPage'
 import CatalogHierarchySteps from '@/components/CatalogHierarchySteps/index.vue'
 import { Plus } from '@element-plus/icons-vue'
@@ -243,6 +244,7 @@ const { proxy } = getCurrentInstance()
 const router = useRouter()
 const route = useRoute()
 const settingsStore = useSettingsStore()
+const catalogDictStore = useItemCatalogDictStore()
 const itemModelList = ref([])
 const total = ref(0)
 const open = ref(false)
@@ -258,6 +260,7 @@ const imageMarkedForRemoval = ref(false)
 const queryBrandIds = ref([])
 const formBrandIds = ref([])
 const queryModelOptions = ref([])
+const hydratingRouteQuery = ref(false)
 
 const data = reactive({
   form: {},
@@ -310,6 +313,7 @@ async function refreshQueryModelOptions() {
 }
 
 async function handleQueryCategoryChange() {
+  if (hydratingRouteQuery.value) return
   queryParams.value.itemBrand = undefined
   queryParams.value.id = undefined
   queryBrandIds.value = []
@@ -324,6 +328,7 @@ async function handleQueryCategoryChange() {
 }
 
 async function handleQueryBrandChange() {
+  if (hydratingRouteQuery.value) return
   queryParams.value.id = undefined
   await refreshQueryModelOptions()
 }
@@ -447,9 +452,9 @@ function goMaterials(row) {
   router.push({
     path: '/basic/itemMaterial',
     query: {
-      itemCategory: row.itemCategory || undefined,
-      itemBrand: row.itemBrand || undefined,
-      modelId: row.id,
+      itemCategory: toCatalogId(row.itemCategory),
+      itemBrand: toCatalogId(row.itemBrand),
+      modelId: toCatalogId(row.id),
       view: 'gallery'
     }
   })
@@ -554,6 +559,9 @@ async function handleUpdate(row) {
   reset()
   const res = await getItemModel(row.id)
   form.value = { ...res.data, imageOssId: res.data?.imageOssId ? String(res.data.imageOssId) : null, imageUrl: res.data?.imageUrl || '' }
+  form.value.itemCategory = toCatalogId(form.value.itemCategory)
+  form.value.itemBrand = toCatalogId(form.value.itemBrand)
+  form.value.id = toCatalogId(form.value.id)
   if (form.value.itemCategory) {
     try {
       const brandRes = await listItemModelBrandOptions(form.value.itemCategory)
@@ -591,6 +599,7 @@ function submitForm() {
       proxy.$modal.msgSuccess(payload.id ? tr('修改成功') : tr('新增成功'))
       open.value = false
       resetImageState()
+      catalogDictStore.invalidateAll()
       await useWmsStore().getItemModelList()
       await getList()
     } finally {
@@ -603,25 +612,35 @@ async function handleDelete(row) {
   await proxy.$modal.confirm(isEn.value ? `Confirm delete model [${row.modelName}]?` : `确认删除包型【${row.modelName}】吗？`)
   await delItemModel(row.id)
   proxy.$modal.msgSuccess(tr('删除成功'))
+  catalogDictStore.invalidateAll()
   await useWmsStore().getItemModelList()
   await getList()
 }
 
 async function applyRouteQuery() {
   const q = route.query || {}
-  if (q.itemCategory) queryParams.value.itemCategory = Number(q.itemCategory) || q.itemCategory
-  if (q.itemBrand) queryParams.value.itemBrand = Number(q.itemBrand) || q.itemBrand
-  if (q.view === 'gallery' || q.view === 'list') viewMode.value = q.view
-  if (queryParams.value.itemCategory) {
-    try {
-      const res = await listItemModelBrandOptions(queryParams.value.itemCategory)
-      queryBrandIds.value = res.data || []
-    } catch (e) {
-      queryBrandIds.value = []
+  hydratingRouteQuery.value = true
+  try {
+    if (q.itemCategory) queryParams.value.itemCategory = toCatalogId(q.itemCategory)
+    if (q.itemBrand) queryParams.value.itemBrand = toCatalogId(q.itemBrand)
+    if (q.view === 'gallery' || q.view === 'list') viewMode.value = q.view
+    if (queryParams.value.itemCategory) {
+      try {
+        const res = await listItemModelBrandOptions(queryParams.value.itemCategory)
+        queryBrandIds.value = res.data || []
+        if (queryParams.value.itemBrand && !queryBrandIds.value.map(String).includes(String(queryParams.value.itemBrand))) {
+          queryBrandIds.value = [...queryBrandIds.value, queryParams.value.itemBrand]
+        }
+      } catch (e) {
+        queryBrandIds.value = queryParams.value.itemBrand ? [queryParams.value.itemBrand] : []
+      }
     }
-  }
-  if (queryParams.value.itemBrand) {
-    await refreshQueryModelOptions()
+    if (queryParams.value.itemBrand) {
+      await refreshQueryModelOptions()
+    }
+    await nextTick()
+  } finally {
+    hydratingRouteQuery.value = false
   }
 }
 

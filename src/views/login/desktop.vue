@@ -72,9 +72,9 @@
         <div class="form-options">
           <el-checkbox v-model="loginForm.rememberMe">{{ $t('login.rememberMe') }}</el-checkbox>
         </div>
-        <el-form-item prop="smsConsent" class="login-consent-item">
-          <LoginConsentNotice v-model="loginForm.smsConsent" variant="desktop" />
-        </el-form-item>
+        <div class="login-consent-item">
+          <LoginConsentNotice variant="desktop" />
+        </div>
         <el-form-item class="login-action">
           <el-button
             :loading="loading"
@@ -114,7 +114,6 @@ const loginForm = ref({
   username: '',
   password: '',
   rememberMe: false,
-  smsConsent: false,
   code: '',
   uuid: ''
 })
@@ -125,14 +124,7 @@ const loginRules = computed(() => ({
     { min: 2, max: 50, trigger: 'blur', message: t('login.ruleUsernameLength') }
   ],
   password: [{ required: true, trigger: 'blur', message: t('login.rulePasswordRequired') }],
-  code: [{ required: true, trigger: 'change', message: t('login.ruleCodeRequired') }],
-  smsConsent: [{
-    validator: (_rule, value, callback) => {
-      if (!value) callback(new Error(t('login.ruleConsentRequired')))
-      else callback()
-    },
-    trigger: 'change'
-  }]
+  code: [{ required: true, trigger: 'change', message: t('login.ruleCodeRequired') }]
 }))
 
 const codeUrl = ref('')
@@ -181,7 +173,6 @@ function getCookie() {
     username: username === undefined ? loginForm.value.username : username,
     password: password === undefined ? loginForm.value.password : decrypt(password),
     rememberMe: rememberMe === undefined ? false : Boolean(rememberMe),
-    smsConsent: false,
     code: '',
     uuid: ''
   }
