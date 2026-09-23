@@ -297,21 +297,21 @@
                 </el-form-item>
               </el-col>
               <el-col :span="8">
-                <el-form-item :label="bagDimLabels.width" prop="bagHeight">
-                  <div class="inch-field">
-                    <el-input-number v-model="form.bagHeight" :min="0" :precision="2" :controls="false" style="width: 100%" />
-                    <span class="inch-unit">{{ tr('厘米') }}</span>
-                  </div>
-                  <div v-if="formatBagInchHint(form.bagHeight)" class="price-hint">{{ formatBagInchHint(form.bagHeight) }}</div>
-                </el-form-item>
-              </el-col>
-              <el-col :span="8">
-                <el-form-item :label="bagDimLabels.height" prop="bagDepth">
+                <el-form-item :label="bagDimLabels.width" prop="bagDepth">
                   <div class="inch-field">
                     <el-input-number v-model="form.bagDepth" :min="0" :precision="2" :controls="false" style="width: 100%" />
                     <span class="inch-unit">{{ tr('厘米') }}</span>
                   </div>
                   <div v-if="formatBagInchHint(form.bagDepth)" class="price-hint">{{ formatBagInchHint(form.bagDepth) }}</div>
+                </el-form-item>
+              </el-col>
+              <el-col :span="8">
+                <el-form-item :label="bagDimLabels.height" prop="bagHeight">
+                  <div class="inch-field">
+                    <el-input-number v-model="form.bagHeight" :min="0" :precision="2" :controls="false" style="width: 100%" />
+                    <span class="inch-unit">{{ tr('厘米') }}</span>
+                  </div>
+                  <div v-if="formatBagInchHint(form.bagHeight)" class="price-hint">{{ formatBagInchHint(form.bagHeight) }}</div>
                 </el-form-item>
               </el-col>
             </el-row>
