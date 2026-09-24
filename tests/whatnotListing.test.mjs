@@ -3,7 +3,7 @@ import test from 'node:test'
 import { readFile } from 'node:fs/promises'
 
 const source = await readFile(new URL('../src/utils/listingPlatform.js', import.meta.url), 'utf8')
-const { isListingChannelActive, isListingWithdrawable, isListingRetryable, isListingDeletable, isWhatnotPriceValid, isWhatnotPreviewValid } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`)
+const { isListingChannelActive, isListingWithdrawable, isListingRetryable, isListingDeletable, isWhatnotPriceValid, isWhatnotPreviewValid, isShopifyProductPriceValid, getListingReviewPrice } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`)
 
 test('submitted Whatnot records can be withdrawn or synced without duplicating or deleting publication records', () => {
   const row = { platform: 'SHOPIFY', listingStatus: 'SUBMITTED' }
@@ -37,9 +37,9 @@ test('Whatnot rejects fractional prices instead of silently rounding or truncati
 })
 
 test('Whatnot submission requires a successful preview with a usable title, price and images', () => {
-  const row = { overrideTitle: 'Gucci bag', overridePrice: 100, images: ['https://example.com/item.jpg'] }
+  const row = { overrideTitle: 'Gucci bag', overridePrice: 100, whatnotAuctionPrice: 1, images: ['https://example.com/item.jpg'] }
   assert.equal(isWhatnotPreviewValid(row), true)
-  for (const patch of [{ previewError: true }, { overrideTitle: '' }, { overrideTitle: '  ' }, { overrideTitle: 'A'.repeat(256) }, { overridePrice: 100.5 }, { images: [] }, { images: undefined }]) {
+  for (const patch of [{ previewError: true }, { overrideTitle: '' }, { overrideTitle: '  ' }, { overrideTitle: 'A'.repeat(256) }, { overridePrice: 100.501 }, { images: [] }, { images: undefined }]) {
     assert.equal(isWhatnotPreviewValid({ ...row, ...patch }), false)
   }
 })
@@ -59,4 +59,33 @@ test('failed records without a Shopify product and failures on other platforms c
     assert.equal(isListingWithdrawable({ platform, listingStatus: 'FAILED', platformProductId: '123' }), false)
     assert.equal(isListingWithdrawable({ platform, listingStatus: 'LISTED' }), true)
   }
+})
+
+test('Shopify prices keep cents while auction starts remain whole amounts', () => {
+  for (const value of [788.4, '788.40', 0.01, 8000]) assert.equal(isShopifyProductPriceValid(value), true)
+  for (const value of [0, -1, 1.001, null, '', Infinity]) assert.equal(isShopifyProductPriceValid(value), false)
+  assert.equal(isWhatnotPriceValid(1.5), false)
+})
+
+test('auction previews require a separate valid starting price without replacing the product price', () => {
+  const row = { listingType: 'AUCTION', overrideTitle: 'Gucci bag', overridePrice: 150, whatnotAuctionPrice: 1, images: ['item.jpg'] }
+  assert.equal(isWhatnotPreviewValid(row), true)
+  assert.equal(row.overridePrice, 150)
+  for (const whatnotAuctionPrice of [undefined, null, '', 0, -1, 0.5, 1.5, Infinity]) {
+    assert.equal(isWhatnotPreviewValid({ ...row, whatnotAuctionPrice }), false)
+  }
+  for (const whatnotBuyItNowPrice of [null, undefined, '', 100]) {
+    assert.equal(isWhatnotPreviewValid({ ...row, whatnotBuyItNowPrice }), true)
+  }
+
+})
+
+test('retired BIN overrides and auction starts do not change the product price review', () => {
+  const row = { overridePrice: 100, whatnotAuctionPrice: 1, whatnotBuyItNowPrice: 1, listingType: 'FIXED_PRICE' }
+  assert.equal(getListingReviewPrice(row, 'SHOPIFY'), 100)
+  assert.equal(getListingReviewPrice({ ...row, listingType: 'AUCTION' }, 'SHOPIFY'), 100)
+  assert.equal(getListingReviewPrice({ ...row, overridePrice: 10, whatnotBuyItNowPrice: 100 }, 'SHOPIFY'), 10)
+  assert.equal(getListingReviewPrice({ ...row, whatnotBuyItNowPrice: null }, 'SHOPIFY'), 100)
+  assert.equal(getListingReviewPrice(row, 'EBAY'), 100)
+  assert.equal(getListingReviewPrice(row, 'TIKTOK'), 100)
 })
