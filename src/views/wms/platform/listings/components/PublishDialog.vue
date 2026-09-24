@@ -98,15 +98,14 @@
           <el-descriptions :column="2" border size="small">
             <el-descriptions-item :label="t('platformListings.templatePlatformLabel')">{{ listingPlatformName(chosenPlatform) }}</el-descriptions-item>
             <el-descriptions-item :label="t('platformListings.templatePriceSourceLabel')">{{ chosenTemplate.priceSource === 'CUSTOM' ? t('platformListings.priceSourceCustom') : t('platformListings.priceSourceSelling') }}</el-descriptions-item>
-            <el-descriptions-item :label="t('platformListings.templateMarkupLabel')">{{ chosenTemplate.priceMarkupValue != null ? chosenTemplate.priceMarkupValue + (chosenTemplate.priceMarkupType === 'PERCENT' ? '%' : '') : '-' }}</el-descriptions-item>
-            <el-descriptions-item v-if="isWhatnotPublish" :label="t('platformListings.currency')">{{ chosenTemplate.whatnotCurrency || '-' }}</el-descriptions-item>
-            <el-descriptions-item v-if="isWhatnotPublish" :label="t('platformListings.whatnotFormatQuantity')">{{ t('platformListings.whatnotSingleBin') }}</el-descriptions-item>
+            <el-descriptions-item :label="t(isWhatnotPublish ? 'platformListings.whatnotProductPrice' : 'platformListings.templateMarkupLabel')">{{ chosenTemplate.priceMarkupValue != null ? chosenTemplate.priceMarkupValue + (chosenTemplate.priceMarkupType === 'PERCENT' ? '%' : '') : '-' }}</el-descriptions-item>
+            <el-descriptions-item v-if="isWhatnotPublish" :label="t('platformListings.whatnotTargetCategory')" :span="2">{{ chosenTemplate.whatnotTargetCategoryName || (chosenTemplate.whatnotTargetCategoryValue ? t('platformListings.whatnotSavedCategory') : t('platformListings.whatnotCategoryDefault')) }}</el-descriptions-item>
+            <el-descriptions-item v-if="isWhatnotPublish" :label="t('platformListings.whatnotAuctionPrice')">{{ formatMoney(chosenTemplate.whatnotAuctionPrice, chosenTemplate.whatnotCurrency || 'USD') }}</el-descriptions-item>
             <el-descriptions-item :label="t('platformListings.templateTitleFormatLabel')" :span="2">{{ chosenTemplate.titleFormat || '{brand} {material} {year} {itemName}' }}</el-descriptions-item>
           </el-descriptions>
         </el-form-item>
       </el-form>
       <el-alert v-if="isWhatnotPublish" :title="t('platformListings.whatnotSubmittedHint')" :description="t('platformListings.whatnotPriceDeltaHint')" type="info" show-icon :closable="false" />
-      <el-alert v-if="isWhatnotPublish && chosenTemplate && !chosenTemplate.whatnotAutoPublishConfirmed" :title="t('platformListings.whatnotTemplateIncomplete')" type="error" :closable="false" style="margin-top:12px" />
     </div>
 
     <!-- Step 3: 预览确认 -->
@@ -154,7 +153,7 @@
         <div class="preview-content">
           <div class="preview-platform-row">
             <div class="preview-platform">{{ isWhatnotPublish ? t('platformListings.whatnotPreviewLabel') : (chosenPlatform === 'EBAY' ? t('platformListings.ebayPreviewLabel') : t('platformListings.tiktokPreviewLabel')) }}</div>
-            <el-tag size="small" :type="isAuctionRow(previewList[0]) ? 'warning' : 'success'" effect="dark">
+            <el-tag v-if="!isWhatnotPublish" size="small" :type="isAuctionRow(previewList[0]) ? 'warning' : 'success'" effect="dark">
               {{ getListingTypeLabel(previewList[0]) }}
             </el-tag>
           </div>
@@ -164,10 +163,13 @@
               <span>{{ previewPrimaryPriceLabel }}</span>
               <strong>{{ formatMoney(previewList[0].overridePrice, previewList[0].currency || 'USD') }}</strong>
             </div>
-            <div v-if="isAuctionRow(previewList[0])" class="preview-price-item">
+            <div v-if="isWhatnotPublish || isAuctionRow(previewList[0])" class="preview-price-item">
               <span>{{ previewSecondaryPriceLabel }}</span>
               <strong>{{ formatMoney(getSecondaryPreviewPrice(previewList[0]), previewList[0].currency || 'USD') }}</strong>
             </div>
+          </div>
+          <div v-if="isWhatnotPublish" class="preview-meta">
+            <span>{{ t('platformListings.whatnotTargetCategory') }}: {{ previewList[0].whatnotTargetCategoryName || (previewList[0].whatnotTargetCategoryValue ? t('platformListings.whatnotSavedCategory') : t('platformListings.whatnotCategoryDefault')) }}</span>
           </div>
           <div class="preview-meta">
             <span>{{ t('platformListings.sku') }} {{ previewList[0].skuCode }}</span>
@@ -180,7 +182,7 @@
       </div>
       <el-table :data="previewList" v-loading="previewLoading" border stripe max-height="320">
         <el-table-column :label="t('platformListings.sku')" prop="skuCode" width="110" />
-        <el-table-column :label="t('platformListings.format')" width="100" align="center">
+        <el-table-column v-if="!isWhatnotPublish" :label="t('platformListings.format')" width="100" align="center">
           <template #default="{ row }">
             <el-tag size="small" :type="isAuctionRow(row) ? 'warning' : 'success'">
               {{ getListingTypeLabel(row) }}
@@ -233,9 +235,9 @@
           <template #default="{ row }">
             <el-input-number
               v-model="row.overridePrice"
-              :precision="isWhatnotPublish ? undefined : 2"
+              :precision="2"
               :step="1"
-              :min="isWhatnotPublish ? 1 : TIKTOK_PRICE_MIN"
+              :min="TIKTOK_PRICE_MIN"
               :max="isTiktokPublish ? TIKTOK_PRICE_MAX : undefined"
               size="small"
               controls-position="right"
@@ -247,15 +249,18 @@
             <div v-if="isTiktokPriceInvalid(row)" class="price-error">
               {{ t('platformListings.tiktokPriceRangeHint') }}
             </div>
-            <div v-else-if="isBelowSellingPrice(row)" class="price-warning">
+            <div v-else-if="isProductPriceBelowSellingPrice(row)" class="price-warning">
               {{ t('platformListings.lowPriceRowHint') }}
             </div>
           </template>
         </el-table-column>
-        <el-table-column v-if="isAuctionPublish" :label="previewSecondaryPriceLabel" width="135" align="right">
+        <el-table-column v-if="isWhatnotPublish || isAuctionPublish" :label="previewSecondaryPriceLabel" width="135" align="right">
           <template #default="{ row }">
             {{ formatMoney(getSecondaryPreviewPrice(row), row.currency || 'USD') }}
           </template>
+        </el-table-column>
+        <el-table-column v-if="isWhatnotPublish" :label="t('platformListings.whatnotTargetCategory')" min-width="180">
+          <template #default="{ row }">{{ row.whatnotTargetCategoryName || (row.whatnotTargetCategoryValue ? t('platformListings.whatnotSavedCategory') : t('platformListings.whatnotCategoryDefault')) }}</template>
         </el-table-column>
         <el-table-column :label="t('platformListings.image')" width="70" align="center">
           <template #default="{ row }">
@@ -272,7 +277,7 @@
       <el-button v-if="step === 0" type="primary" @click="goStep2" :disabled="selectedSkus.length === 0">
         {{ t('platformListings.nextStep') }} ({{ selectedSkus.length }})
       </el-button>
-      <el-button v-if="step === 1" type="primary" @click="goStep3" :disabled="!chosenTemplateId || (isWhatnotPublish && !chosenTemplate?.whatnotAutoPublishConfirmed)">{{ t('platformListings.nextStep') }}</el-button>
+      <el-button v-if="step === 1" type="primary" @click="goStep3" :disabled="!chosenTemplateId">{{ t('platformListings.nextStep') }}</el-button>
       <el-button v-if="step === 2" type="primary" @click="doPublish" :loading="publishing" :disabled="previewLoading || !previewList.length || hasEbayTitleTooLong || hasTiktokPriceInvalid || hasMissingTiktokBrand || hasWhatnotPreviewErrors">
         {{ t(isWhatnotPublish ? 'platformListings.whatnotSubmitChannel' : 'platformListings.startPublish') }} ({{ previewList.length }})
       </el-button>
@@ -283,7 +288,7 @@
 <script setup>
 import { ref, reactive, computed, nextTick, getCurrentInstance } from 'vue'
 import { listInventoryBoard } from '@/api/wms/inventory'
-import { listingPlatformName, listingPlatformTagType, isWhatnotPreviewValid } from '@/utils/listingPlatform'
+import { listingPlatformName, listingPlatformTagType, isWhatnotPreviewValid, getListingReviewPrice } from '@/utils/listingPlatform'
 import { listAllTemplates, previewTemplate, batchPublish, searchTiktokT1Brands } from '@/api/wms/platformListing'
 import { listAllPlatformShops } from '@/api/wms/platformShop'
 
@@ -460,12 +465,11 @@ const isTiktokPublish = computed(() => chosenPlatform.value === 'TIKTOK')
 const isWhatnotPublish = computed(() => chosenPlatform.value === 'SHOPIFY')
 const hasWhatnotPreviewErrors = computed(() => isWhatnotPublish.value && previewList.value.some(row => !isWhatnotPreviewValid(row)))
 const isAuctionPublish = computed(() => {
-  if (isWhatnotPublish.value) return false
   const listingType = chosenTemplate.value?.listingType || previewList.value[0]?.listingType
   return String(listingType || '').toUpperCase() === 'AUCTION'
 })
 const previewPrimaryPriceLabel = computed(() => {
-  if (isWhatnotPublish.value) return t('platformListings.whatnotBinPrice')
+  if (isWhatnotPublish.value) return t('platformListings.whatnotProductPrice')
   if (isTiktokPublish.value) {
     return isAuctionPublish.value ? t('platformListings.tiktokAuctionBuyItNowPrice') : t('platformListings.retailPrice')
   }
@@ -474,7 +478,7 @@ const previewPrimaryPriceLabel = computed(() => {
     : t('platformListings.buyItNowPrice')
 })
 const previewSecondaryPriceLabel = computed(() => (
-  isTiktokPublish.value
+  isWhatnotPublish.value ? t('platformListings.whatnotAuctionPrice') : isTiktokPublish.value
     ? t('platformListings.startPrice')
     : t('platformListings.buyItNowPrice')
 ))
@@ -582,18 +586,18 @@ function getPreviewDescription(row) {
 }
 
 function isAuctionRow(row) {
-  if (isWhatnotPublish.value) return false
   return String(row?.listingType || chosenTemplate.value?.listingType || '').toUpperCase() === 'AUCTION'
 }
 
 function getListingTypeLabel(row) {
-  if (isWhatnotPublish.value) return t('platformListings.whatnotBin')
+  if (isWhatnotPublish.value) return t(isAuctionRow(row) ? 'platformListings.whatnotAuction' : 'platformListings.whatnotBin')
   return isAuctionRow(row)
     ? t('platformListings.tiktokAuction')
     : t('platformListings.tiktokFixedPrice')
 }
 
 function getSecondaryPreviewPrice(row) {
+  if (isWhatnotPublish.value) return row?.whatnotAuctionPrice
   if (!isAuctionRow(row)) return null
   return isTiktokPublish.value ? row?.startingBidPrice : row?.buyItNowPrice
 }
@@ -609,8 +613,14 @@ function validPositiveNumber(value) {
   return Number.isFinite(num) && num > 0 ? num : null
 }
 
+function isProductPriceBelowSellingPrice(row) {
+  const productPrice = validPositiveNumber(row?.overridePrice)
+  const sellingPrice = validPositiveNumber(row?.sellingPrice)
+  return productPrice != null && sellingPrice != null && productPrice < sellingPrice
+}
+
 function isBelowSellingPrice(row) {
-  const channelPrice = validPositiveNumber(row?.overridePrice)
+  const channelPrice = getListingReviewPrice(row, chosenPlatform.value)
   const sellingPrice = validPositiveNumber(row?.sellingPrice)
   return channelPrice != null && sellingPrice != null && channelPrice < sellingPrice
 }
@@ -624,7 +634,7 @@ function buildLowPriceConfirmMessage() {
   const details = belowSellingPriceRows.value.slice(0, 5).map(row => {
     return t('platformListings.lowPriceConfirmDetail', {
       sku: row.skuCode || row.skuId || '-',
-      listingPrice: formatMoney(row.overridePrice, row.currency || 'USD'),
+      listingPrice: formatMoney(getListingReviewPrice(row, chosenPlatform.value), row.currency || 'USD'),
       sellingPrice: formatMoney(row.sellingPrice, row.currency || 'USD')
     })
   }).join('\n')
@@ -672,7 +682,7 @@ async function loadPreviews() {
           tiktokBrandId: '',
           overrideTitle: data.title || '',
           overridePrice: normalizePreviewPrice(data.price ?? 0),
-          listingType: isWhatnotPublish.value ? 'FIXED_PRICE' : data.listingType || chosenTemplate.value?.listingType || 'FIXED_PRICE',
+          listingType: data.listingType || chosenTemplate.value?.listingType || 'FIXED_PRICE',
           currency: data.currency || chosenTemplate.value?.whatnotCurrency || 'USD',
           quantity: isWhatnotPublish.value ? 1 : data.quantity,
           sellingPrice: data.sellingPrice ?? sku.sellingPrice,
@@ -745,10 +755,6 @@ async function goStep3() {
     proxy.$modal.msgWarning(t('platformListings.selectTemplateRequired'))
     return
   }
-  if (isWhatnotPublish.value && chosenTemplate.value?.whatnotAutoPublishConfirmed !== true) {
-    proxy.$modal.msgWarning(t('platformListings.whatnotTemplateIncomplete'))
-    return
-  }
   step.value = 2
   if (isTiktokPublish.value) resetTiktokBrandState()
   await loadPreviews()
@@ -762,7 +768,7 @@ async function goStep3() {
 
 async function doPublish() {
   if (previewLoading.value || !previewList.value.length) return
-  if (isWhatnotPublish.value && (hasWhatnotPreviewErrors.value || chosenTemplate.value?.whatnotAutoPublishConfirmed !== true)) {
+  if (isWhatnotPublish.value && hasWhatnotPreviewErrors.value) {
     proxy.$modal.msgWarning(t('platformListings.whatnotPreviewInvalid'))
     return
   }

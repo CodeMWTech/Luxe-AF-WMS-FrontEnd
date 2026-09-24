@@ -426,8 +426,8 @@
             </el-form-item>
             <el-row :gutter="16">
               <el-col :xs="24" :sm="12">
-                <el-form-item :label="t('platformListings.whatnotBinPrice')">
-                  <el-input-number v-model="form.defaultPrice" :min="1" :step="1" style="width:100%" />
+                <el-form-item :label="t('platformListings.whatnotProductPrice')">
+                  <el-input-number v-model="form.defaultPrice" :min="0.01" :precision="2" :step="1" style="width:100%" />
                   <el-button v-if="form.defaultPrice != null" link type="warning" @click="form.defaultPrice = null">{{ t('platformListings.priceResetDefault') }}</el-button>
                   <div class="whatnot-template-hint">{{ t('platformListings.priceDefaultHint') }}</div>
                   <div class="whatnot-template-hint">{{ t('platformListings.whatnotIntegerPriceHint') }}</div>
@@ -435,7 +435,7 @@
                 </el-form-item>
               </el-col>
               <el-col :xs="24" :sm="12">
-                <el-form-item :label="t('platformListings.whatnotFormatQuantity')"><el-input :model-value="t('platformListings.whatnotSingleBin')" readonly /></el-form-item>
+                <el-form-item :label="t('platformListings.quantity')"><el-input :model-value="t('platformListings.whatnotQuantity')" readonly /></el-form-item>
               </el-col>
               <el-col :xs="24" :sm="12">
                 <el-form-item prop="packageWeightValue" :label="t('platformListings.packageWeight')" required>
@@ -463,7 +463,7 @@ import { useI18n } from 'vue-i18n'
 import { listTemplates, addTemplate, updateTemplate, delTemplate, getTemplate, getCategories, getCategoryById, getEbayPolicies, getTiktokWarehouses, getTiktokCategoryAttributes } from '@/api/wms/platformListing'
 import { listAllPlatformShops } from '@/api/wms/platformShop'
 import { insertTextAtSelection } from '@/utils/textSelection'
-import { listingPlatformName, listingPlatformTagType, isWhatnotPriceValid } from '@/utils/listingPlatform'
+import { listingPlatformName, listingPlatformTagType, isShopifyProductPriceValid } from '@/utils/listingPlatform'
 import WhatnotShopFields from './components/WhatnotShopFields.vue'
 
 const { proxy } = getCurrentInstance()
@@ -504,7 +504,8 @@ function filterShops() {
 function onPlatformChange() {
   lastFocusedField.value = 'title'
   applyPlatformUnitDefaults()
-  if (['TIKTOK', 'SHOPIFY'].includes(form.platform)) form.listingType = 'FIXED_PRICE'
+  if (form.platform === 'TIKTOK') form.listingType = 'FIXED_PRICE'
+  if (form.platform === 'SHOPIFY') form.listingType = 'CHANNEL_MANAGED'
   filterShops()
   form.shopId = null
   resetWhatnotFields()
@@ -574,6 +575,7 @@ const initForm = {
   tiktokProductAttributes: '',
   tiktokWarehouseId: '', tiktokQuantity: 1, tiktokCurrency: 'USD', tiktokCodAllowed: false,
   whatnotLocationId: '', whatnotPublicationId: '', whatnotCategoryId: '', whatnotCurrency: '', whatnotAutoPublishConfirmed: false,
+  whatnotTargetCategoryValue: '', whatnotTargetCategoryName: '', whatnotAuctionPrice: 1, whatnotBuyItNowPrice: null, whatnotAuctionConfirmed: false,
   packageWeightValue: null, packageWeightUnit: 'POUND', packageLength: null, packageWidth: null, packageHeight: null, packageDimensionUnit: 'INCH'
 }
 const form = reactive({ ...initForm })
@@ -957,6 +959,11 @@ function resetWhatnotFields() {
   form.whatnotCategoryId = ''
   form.whatnotCurrency = ''
   form.whatnotAutoPublishConfirmed = false
+  form.whatnotTargetCategoryValue = ''
+  form.whatnotTargetCategoryName = ''
+  form.whatnotAuctionPrice = 1
+  form.whatnotBuyItNowPrice = null
+  form.whatnotAuctionConfirmed = false
 }
 
 function onShopChange() {
@@ -1063,6 +1070,8 @@ function handleEdit(row) {
       tiktokWarehouseId: d.tiktokWarehouseId || '', tiktokQuantity: 1, tiktokCurrency: d.tiktokCurrency || 'USD', tiktokCodAllowed: !!d.tiktokCodAllowed,
       whatnotLocationId: String(d.whatnotLocationId || ''), whatnotPublicationId: String(d.whatnotPublicationId || ''),
       whatnotCategoryId: d.whatnotCategoryId || '', whatnotCurrency: d.whatnotCurrency || '', whatnotAutoPublishConfirmed: d.whatnotAutoPublishConfirmed === true,
+      whatnotTargetCategoryValue: d.whatnotTargetCategoryValue || '', whatnotTargetCategoryName: d.whatnotTargetCategoryName || '',
+      whatnotAuctionPrice: d.whatnotAuctionPrice ?? 1, whatnotBuyItNowPrice: d.whatnotBuyItNowPrice ?? null, whatnotAuctionConfirmed: d.whatnotAuctionConfirmed === true,
       packageWeightValue: d.packageWeightValue, packageWeightUnit: d.packageWeightUnit || 'POUND', packageLength: d.packageLength,
       packageWidth: d.packageWidth, packageHeight: d.packageHeight, packageDimensionUnit: d.packageDimensionUnit || 'INCH'
     })
@@ -1230,7 +1239,7 @@ function submitValidatedForm() {
   }
   if (isWhatnot) {
     missing.push(...(whatnotShopFieldsRef.value?.validate() || [t('platformListings.whatnotConfigRequired')]))
-    if (form.defaultPrice != null && form.defaultPrice !== '' && !isWhatnotPriceValid(form.defaultPrice)) missing.push(t('platformListings.whatnotIntegerPriceHint'))
+    if (form.defaultPrice != null && form.defaultPrice !== '' && !isShopifyProductPriceValid(form.defaultPrice)) missing.push(t('platformListings.whatnotIntegerPriceHint'))
   }
   if (isRichTextEmpty(form.descriptionFormat)) {
     missing.push(t('platformListings.ebayDescription'))
@@ -1274,7 +1283,7 @@ function doSubmit(isEbay) {
   submitting.value = true
   const data = {
     id: form.id, templateName: form.templateName, platform: form.platform,
-    shopId: form.shopId, listingType: form.platform === 'SHOPIFY' ? 'FIXED_PRICE' : form.listingType, listingDuration: form.listingDuration,
+    shopId: form.shopId, listingType: form.platform === 'SHOPIFY' ? 'CHANNEL_MANAGED' : form.listingType, listingDuration: form.listingDuration,
     // buyItNowPrice：eBay=一口价，TikTok 拍卖=起拍价
     status: form.enabled ? 'ENABLED' : 'DISABLED', buyItNowPrice: form.platform === 'SHOPIFY' ? null : optionalNumber(form.buyItNowPrice),
     titleFormat: form.defaultTitle,          // 复用此字段存标题
@@ -1298,9 +1307,14 @@ function doSubmit(isEbay) {
     tiktokWarehouseId: form.tiktokWarehouseId || null, tiktokQuantity: 1, tiktokCurrency: form.tiktokCurrency || null, tiktokCodAllowed: form.tiktokCodAllowed,
     whatnotLocationId: form.platform === 'SHOPIFY' ? form.whatnotLocationId : null,
     whatnotPublicationId: form.platform === 'SHOPIFY' ? form.whatnotPublicationId : null,
-    whatnotCategoryId: form.platform === 'SHOPIFY' ? form.whatnotCategoryId || null : null,
-    whatnotCurrency: form.platform === 'SHOPIFY' ? form.whatnotCurrency : null,
-    whatnotAutoPublishConfirmed: form.platform === 'SHOPIFY' && form.whatnotAutoPublishConfirmed,
+    whatnotCategoryId: null,
+    whatnotCurrency: form.platform === 'SHOPIFY' ? 'USD' : null,
+    whatnotAutoPublishConfirmed: false,
+    whatnotTargetCategoryValue: form.platform === 'SHOPIFY' ? form.whatnotTargetCategoryValue || null : null,
+    whatnotTargetCategoryName: form.platform === 'SHOPIFY' && form.whatnotTargetCategoryValue ? form.whatnotTargetCategoryName || null : null,
+    whatnotAuctionPrice: form.platform === 'SHOPIFY' ? optionalNumber(form.whatnotAuctionPrice) : null,
+    whatnotBuyItNowPrice: null,
+    whatnotAuctionConfirmed: false,
     packageWeightValue: form.packageWeightValue,
     packageWeightUnit: form.packageWeightUnit,
     packageLength: form.packageLength, packageWidth: form.packageWidth, packageHeight: form.packageHeight,

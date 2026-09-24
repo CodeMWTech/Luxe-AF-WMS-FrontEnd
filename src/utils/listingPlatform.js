@@ -23,15 +23,36 @@ export function isListingDeletable(row) {
   return row?.listingStatus === 'DELISTED'
 }
 
-// Whatnot ignores fractional amounts. Reject them so WMS never silently changes the price.
+// Auction starts are whole amounts; Shopify product prices are validated separately.
 export function isWhatnotPriceValid(value) {
   if (value == null || String(value).trim() === '') return false
   const price = Number(value)
   return Number.isSafeInteger(price) && price > 0
 }
 
+export function isWhatnotAuction(template) {
+  return template?.listingType === 'AUCTION'
+}
+
+export function isWhatnotOptionalPriceValid(value) {
+  return value == null || value === '' || isWhatnotPriceValid(value)
+}
+
+export function isShopifyProductPriceValid(value) {
+  if (value == null || !/^\d+(?:\.\d{1,2})?$/.test(String(value).trim())) return false
+  const price = Number(value)
+  return Number.isFinite(price) && price > 0 && price <= Number.MAX_SAFE_INTEGER / 100
+}
+
 export function isWhatnotPreviewValid(row) {
   const title = String(row?.overrideTitle || '').trim()
   return !row?.previewError && title.length > 0 && title.length <= 255
-    && isWhatnotPriceValid(row?.overridePrice) && Array.isArray(row?.images) && row.images.length > 0
+    && isShopifyProductPriceValid(row?.overridePrice) && Array.isArray(row?.images) && row.images.length > 0
+    && isWhatnotPriceValid(row?.whatnotAuctionPrice)
+}
+
+// Only the Shopify product price is reviewed; the auction start is independent.
+export function getListingReviewPrice(row, platform) {
+  const price = Number(row?.overridePrice)
+  return Number.isFinite(price) && price > 0 ? price : null
 }

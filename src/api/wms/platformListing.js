@@ -128,3 +128,13 @@ export function getWhatnotConfig(shopId) {
 export function searchWhatnotCategories(shopId, query) {
   return request({ url: '/wms/platform/listings/whatnot/categories', method: 'get', params: { shopId, query } })
 }
+
+/** 读取 Whatnot 插件的商品元字段定义与可用性 */
+export function getWhatnotMetafields(shopId) {
+  return request({ url: '/wms/platform/listings/whatnot/metafields', method: 'get', params: { shopId } })
+}
+
+/** 获取 Whatnot 插件允许的真实类目值；value 必须原样提交 */
+export function searchWhatnotTargetCategories(shopId, query = '') {
+  return request({ url: '/wms/platform/listings/whatnot/target-categories', method: 'get', params: { shopId, query } })
+}
