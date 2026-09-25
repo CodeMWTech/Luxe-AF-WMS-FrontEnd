@@ -19,6 +19,32 @@
           </el-col>
         </el-row>
         <el-row :gutter="16">
+          <el-col :xs="24" :sm="24" :md="snapshotDateColSpan" :lg="snapshotDateColSpan">
+            <el-form-item :label="tr('库存日期')" prop="snapshotDate">
+              <el-date-picker
+                v-model="queryParams.snapshotDate"
+                type="date"
+                format="MM/DD/YYYY"
+                value-format="YYYY-MM-DD"
+                :placeholder="snapshotDatePlaceholder"
+                :disabled-date="disableFutureSnapshotDate"
+                :editable="true"
+                clearable
+                style="width: 100%"
+                @change="handleSnapshotDateChange"
+              />
+            </el-form-item>
+          </el-col>
+          <el-col v-if="!isSupplierUser" :xs="24" :sm="24" :md="supplierFilterColSpan" :lg="supplierFilterColSpan">
+            <el-form-item :label="tr('供应商')" prop="supplierId">
+              <el-select v-model="queryParams.supplierId" :placeholder="tr('请选择供应商')" clearable filterable style="width: 100%">
+                <el-option :label="tr('Luxeaf 自有')" :value="-1" />
+                <el-option v-for="s in supplierOptions" :key="s.id" :label="s.supplierName" :value="s.id" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="16">
           <el-col :xs="24" :sm="12" :md="6" :lg="6">
             <el-form-item :label="tr('仓库')" prop="warehouseId">
               <el-select style="width: 100%" v-model="queryParams.warehouseId" :placeholder="tr('请选择仓库')"
@@ -127,32 +153,6 @@
           <el-col :xs="24" :sm="12" :md="6" :lg="6">
             <el-form-item :label="tr('寄售信息')" prop="consignInfo">
               <el-input v-model="queryParams.consignInfo" clearable :placeholder="tr('请输入')" @keyup.enter="handleQuery" />
-            </el-form-item>
-          </el-col>
-        </el-row>
-        <el-row :gutter="16">
-          <el-col v-if="!isSupplierUser" :xs="24" :sm="24" :md="supplierFilterColSpan" :lg="supplierFilterColSpan">
-            <el-form-item :label="tr('供应商')" prop="supplierId">
-              <el-select v-model="queryParams.supplierId" :placeholder="tr('请选择供应商')" clearable filterable style="width: 100%">
-                <el-option :label="tr('Luxeaf 自有')" :value="-1" />
-                <el-option v-for="s in supplierOptions" :key="s.id" :label="s.supplierName" :value="s.id" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col :xs="24" :sm="24" :md="snapshotDateColSpan" :lg="snapshotDateColSpan">
-            <el-form-item :label="tr('库存日期')" prop="snapshotDate">
-              <el-date-picker
-                v-model="queryParams.snapshotDate"
-                type="date"
-                format="MM/DD/YYYY"
-                value-format="YYYY-MM-DD"
-                :placeholder="snapshotDatePlaceholder"
-                :disabled-date="disableFutureSnapshotDate"
-                :editable="true"
-                clearable
-                style="width: 100%"
-                @change="handleSnapshotDateChange"
-              />
             </el-form-item>
           </el-col>
         </el-row>
