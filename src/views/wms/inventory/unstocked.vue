@@ -343,7 +343,7 @@
         <el-table-column :label="tr('成色')" prop="itemCondition" width="88" align="center">
           <template #default="{ row }">
             <el-tag v-if="row.itemCondition" type="info" size="small">{{ row.itemCondition }}</el-tag>
-            <span v-else>-</span>
+            <span v-else>--</span>
           </template>
         </el-table-column>
         <el-table-column :label="tr('年份')" prop="year" width="80" align="center" sortable="custom">
@@ -359,7 +359,7 @@
         >
           <template #default="{ row }">
             <span v-if="row.costPrice != null && row.costPrice !== ''">{{ formatMoney(row.costPrice) }}</span>
-            <span v-else>-</span>
+            <span v-else>--</span>
           </template>
         </el-table-column>
         <el-table-column
@@ -372,8 +372,15 @@
         >
           <template #default="{ row }">
             <span v-if="row.sellingPrice != null && row.sellingPrice !== ''">{{ formatMoney(row.sellingPrice) }}</span>
-            <span v-else>-</span>
+            <span v-else>--</span>
           </template>
+        </el-table-column>
+        <el-table-column :label="tr('包型')" prop="modelName" min-width="120" align="center" show-overflow-tooltip>
+          <template #default="{ row }">{{ cellText(row.modelName) }}</template>
+        </el-table-column>
+        <el-table-column v-for="field in ITEM_DIMENSION_FIELDS" :key="field.key" :prop="field.key"
+                         :label="tr(field.label)" min-width="115" align="center" show-overflow-tooltip>
+          <template #default="{ row }">{{ cellText(row[field.key]) }}</template>
         </el-table-column>
         <el-table-column :label="tr('材质')" prop="material" min-width="100" align="center" show-overflow-tooltip>
           <template #default="{ row }">{{ cellText(row.material) }}</template>
@@ -405,13 +412,13 @@
         <el-table-column :label="tr('创建时间')" prop="createTime" width="168" align="center" sortable="custom">
           <template #default="{ row }">
             <span v-if="row.createTime">{{ formatTime(row.createTime) }}</span>
-            <span v-else>-</span>
+            <span v-else>--</span>
           </template>
         </el-table-column>
         <el-table-column :label="tr('状态')" width="108" align="center">
           <template #default="{ row }">
             <el-tag v-if="row.neverInbound" type="warning" size="small">{{ tr('未入库') }}</el-tag>
-            <span v-else>-</span>
+            <span v-else>--</span>
           </template>
         </el-table-column>
         <el-table-column :label="tr('操作')" width="200" align="center" fixed="right">
@@ -442,6 +449,7 @@ import { computed, getCurrentInstance, nextTick, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useWmsStore } from '@/store/modules/wms'
 import useSettingsStore from '@/store/modules/settings'
+import { ITEM_DIMENSION_FIELDS } from '@/utils/itemDetailFields'
 import { translateByMap } from '@/locales/runtime-map'
 import { blobValidate } from '@/utils/ruoyi'
 import { downloadXlsx, getExportLanguageHeaders, getExportLanguagePayload, prepareLanguageXlsx } from '@/utils/xlsxTranslate'
@@ -640,6 +648,8 @@ function buildUnstockedPdfColumns() {
     { key: 'brand', label: tr('品牌'), render: row => escapeHtml(row.brandName || '--') },
     { key: 'condition', label: tr('成色'), render: row => escapeHtml(row.itemCondition || '--') },
     { key: 'year', label: tr('年份'), className: 'number-cell', render: row => row.year != null ? escapeHtml(row.year) : '--' },
+    { key: 'modelName', label: tr('包型'), render: row => escapeHtml(row.modelName || '--') },
+    ...ITEM_DIMENSION_FIELDS.map(field => ({ key: field.key, label: tr(field.label), render: row => escapeHtml(row[field.key] ?? '--') })),
     { key: 'material', label: tr('材质'), render: row => escapeHtml(row.material || '--') },
     { key: 'defect', label: tr('缺陷'), render: row => escapeHtml(row.defect || '--') },
     { key: 'accessories', label: tr('配件'), render: row => escapeHtml(row.accessories || '--') },
@@ -712,33 +722,33 @@ function handleBatchExportPdf() {
 }
 
 function cellText(v) {
-  if (v === null || v === undefined || v === '') return '-'
+  if (v === null || v === undefined || (typeof v === 'string' && v.trim() === '')) return '--'
   return v
 }
 
 function cellNumberOrDash(v, precision = 0) {
-  if (v === null || v === undefined || v === '') return '-'
+  if (v === null || v === undefined || (typeof v === 'string' && v.trim() === '')) return '--'
   const n = Number(v)
-  if (!Number.isFinite(n)) return '-'
+  if (!Number.isFinite(n)) return '--'
   return precision > 0 ? n.toFixed(precision) : String(n)
 }
 
 function formatMoney(v) {
   const n = Number(v)
-  if (!Number.isFinite(n)) return '-'
+  if (!Number.isFinite(n)) return '--'
   return n.toFixed(2)
 }
 
 function formatCurrency(v) {
   const n = Number(v)
-  if (!Number.isFinite(n)) return '-'
+  if (!Number.isFinite(n)) return '--'
   return '$ ' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 function formatCared(v) {
   if (v === true) return tr('已护理')
   if (v === false) return tr('未护理')
-  return '-'
+  return '--'
 }
 
 function formatTime(t) {

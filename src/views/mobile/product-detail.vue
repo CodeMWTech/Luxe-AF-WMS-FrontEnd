@@ -116,6 +116,8 @@
 import { computed, getCurrentInstance, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { itemDimensionFields } from '@/utils/itemDetailFields'
+import { translateByMap } from '@/locales/runtime-map'
 import { useI18n } from 'vue-i18n'
 import { getItem, getItemImages } from '@/api/wms/item'
 import { getItemSku } from '@/api/wms/itemSku'
@@ -140,7 +142,8 @@ import {
 
 const route = useRoute()
 const { proxy } = getCurrentInstance()
-const { t } = useI18n()
+const { t, locale } = useI18n()
+const tr = text => translateByMap(text, locale.value)
 const wmsStore = useWmsStore()
 
 const loading = ref(false)
@@ -342,6 +345,10 @@ const basicFields = computed(() => {
     { label: t('mobile.labelYear'), value: displayValue(item.year) },
     { label: t('mobile.labelMaterial'), value: displayValue(item.materialName) },
     { label: t('mobile.labelCondition'), value: displayValue(item.itemCondition) },
+    ...itemDimensionFields(item, tr),
+    { label: tr('是否已护理'), value: item.cared === null || item.cared === undefined ? '--' : tr(item.cared ? '是' : '否') },
+    { label: tr('鉴定机构'), value: displayValue(item.authAgency) },
+    { label: tr('寄售信息'), value: displayValue(item.consignInfo) },
     { label: t('mobile.labelDefect'), value: displayValue(item.defect) },
     { label: t('mobile.labelAccessories'), value: displayValue(item.accessories) },
     { label: t('mobile.labelRemark'), value: displayValue(item.remark) }

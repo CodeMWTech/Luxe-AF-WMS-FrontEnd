@@ -1,6 +1,9 @@
 import livePayrollMessages from './live-payroll'
 
 const zhToEnMap = {
+  '长（英寸）': 'Length (in)',
+  '宽（英寸）': 'Depth (in)',
+  '高（英寸）': 'Height (in)',
   首页: 'Home',
   系统概述: 'System Overview',
   个人中心: 'Profile',
@@ -54,6 +57,8 @@ const zhToEnMap = {
   批量操作: 'Batch Operations',
   批量导出为Excel: 'Batch Export Excel',
   批量导出为PDF: 'Batch Export PDF',
+  导出为PDF: 'Export PDF',
+  商品详细信息: 'Product Details',
   批量导出成功: 'Batch export successful',
   批量导出失败: 'Batch export failed',
   '导出任务已提交，文件正在后台生成': 'Export task submitted. The file is being generated in the background.',
@@ -622,6 +627,12 @@ const zhToEnMap = {
   高不能为空: 'Height cannot be empty',
   尺寸: 'Size',
   请选择尺寸: 'Select Size',
+  外观材质: 'Exterior Material',
+  请选择外观材质: 'Select Exterior Material',
+  外观材质不能为空: 'Exterior Material cannot be empty',
+  产地: 'Country of Origin',
+  请选择产地: 'Select Country of Origin',
+  产地不能为空: 'Country of Origin cannot be empty',
   包宽: 'Bag Width',
   包高: 'Bag Height',
   包深: 'Bag Depth',
