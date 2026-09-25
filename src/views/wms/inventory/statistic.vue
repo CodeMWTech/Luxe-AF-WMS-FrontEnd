@@ -4,11 +4,10 @@
       <el-form
         :model="queryParams"
         ref="queryRef"
-        :label-width="isEn ? '142px' : '90px'"
+        :label-width="isEn ? '168px' : '90px'"
         class="statistic-query-form mt12"
         @submit.prevent="handleQuery"
       >
-        <!-- 维度与库存快照日期 -->
         <el-row :gutter="16">
           <el-col :xs="24" :sm="12">
             <el-form-item :label="tr('维度')" prop="itemId">
@@ -16,22 +15,6 @@
                 <el-radio-button label="item">{{ tr('商品') }}</el-radio-button>
                 <el-radio-button label="warehouse">{{ tr('仓库') }}</el-radio-button>
               </el-radio-group>
-            </el-form-item>
-          </el-col>
-          <el-col :xs="24" :sm="12">
-            <el-form-item :label="tr('库存日期')" prop="snapshotDate">
-              <el-date-picker
-                v-model="queryParams.snapshotDate"
-                type="date"
-                format="MM/DD/YYYY"
-                value-format="YYYY-MM-DD"
-                :placeholder="snapshotDatePlaceholder"
-                :disabled-date="disableFutureSnapshotDate"
-                :editable="true"
-                clearable
-                style="width: 100%"
-                @change="handleSnapshotDateChange"
-              />
             </el-form-item>
           </el-col>
         </el-row>
@@ -148,6 +131,32 @@
           </el-col>
         </el-row>
         <el-row :gutter="16">
+          <el-col v-if="!isSupplierUser" :xs="24" :sm="24" :md="supplierFilterColSpan" :lg="supplierFilterColSpan">
+            <el-form-item :label="tr('供应商')" prop="supplierId">
+              <el-select v-model="queryParams.supplierId" :placeholder="tr('请选择供应商')" clearable filterable style="width: 100%">
+                <el-option :label="tr('Luxeaf 自有')" :value="-1" />
+                <el-option v-for="s in supplierOptions" :key="s.id" :label="s.supplierName" :value="s.id" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :xs="24" :sm="24" :md="snapshotDateColSpan" :lg="snapshotDateColSpan">
+            <el-form-item :label="tr('库存日期')" prop="snapshotDate">
+              <el-date-picker
+                v-model="queryParams.snapshotDate"
+                type="date"
+                format="MM/DD/YYYY"
+                value-format="YYYY-MM-DD"
+                :placeholder="snapshotDatePlaceholder"
+                :disabled-date="disableFutureSnapshotDate"
+                :editable="true"
+                clearable
+                style="width: 100%"
+                @change="handleSnapshotDateChange"
+              />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="16">
           <el-col :xs="24" :sm="24" :md="priceFilterColSpan" :lg="priceFilterColSpan">
             <el-form-item :label="tr('\u521b\u5efa\u65f6\u95f4')" prop="createTimeRange">
               <el-date-picker
@@ -217,14 +226,14 @@
     </el-card>
 
     <el-card class="mt20">
-      <el-row :gutter="10" class="mb8" type="flex" justify="space-between">
-        <el-col :span="12">
+      <div class="table-toolbar mb8">
+        <div class="toolbar-left">
           <span class="page-title">{{ tr('库存统计') }}</span>
           <el-tag v-if="queryParams.snapshotDate" class="ml10" type="info">
             {{ tr('日终库存快照') }}：{{ queryParams.snapshotDate }}
           </el-tag>
-        </el-col>
-        <el-col :span="12" class="toolbar-right">
+        </div>
+        <div class="toolbar-right">
           <el-checkbox v-model="filterNonZero" :label="tr('过滤掉库存不为0的商品')" size="large" @change="handleChangeFilterNonZero"/>
           <el-checkbox v-model="filterable" :label="tr('过滤掉库存为0的商品')" size="large" @change="handleChangeFilterZero"/>
           <el-button
@@ -246,8 +255,8 @@
           >
             {{ tr('导出记录') }}
           </el-button>
-        </el-col>
-      </el-row>
+        </div>
+      </div>
 
       <!-- 批量操作栏 -->
       <div v-if="batchMode" class="batch-action-bar">
@@ -416,6 +425,9 @@
               </span>
             </template>
           </el-table-column>
+          <el-table-column :label="tr('供应商')" :min-width="isEn ? 140 : 120" align="center" show-overflow-tooltip>
+            <template #default="{ row }">{{ formatSupplierName(row) }}</template>
+          </el-table-column>
         </template>
 
         <!-- ========== 商品维度列 ========== -->
@@ -488,6 +500,9 @@
             <template #default="{ row }">
               {{ getWarehouseName(row) }}
             </template>
+          </el-table-column>
+          <el-table-column :label="tr('供应商')" :min-width="isEn ? 140 : 120" align="center" show-overflow-tooltip>
+            <template #default="{ row }">{{ formatSupplierName(row) }}</template>
           </el-table-column>
         </template>
 
@@ -605,7 +620,7 @@
               v-for="field in detailFieldList"
               :key="field.label"
               class="detail-field"
-              :class="{ 'is-wide': field.wide }"
+              :class="{ 'is-wide': field.wide, 'is-break': field.breakRow }"
             >
               <div class="detail-field-label">{{ field.label }}</div>
               <div class="detail-field-value" data-runtime-i18n-ignore="true">
@@ -712,6 +727,7 @@ import {
   submitInventoryBoardExportTask
 } from '@/api/wms/inventory'
 import { downloadItemImage, getItemImages } from '@/api/wms/item'
+import { getCurrentSupplier, listSupplierNoPage } from '@/api/wms/supplier'
 import { computed, getCurrentInstance, nextTick, onActivated, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { getRowspanMethod } from '@/utils/getRowSpanMethod'
@@ -733,6 +749,11 @@ const canViewSellingPrice = computed(() => proxy?.$auth?.hasPermi('wms:itemSelli
 const canViewCostPrice = computed(() => proxy?.$auth?.hasPermi('wms:itemCostPrice:view'))
 const visiblePriceFilterCount = computed(() => Number(canViewCostPrice.value) + Number(canViewSellingPrice.value))
 const priceFilterColSpan = computed(() => visiblePriceFilterCount.value === 0 ? 12 : visiblePriceFilterCount.value === 1 ? 8 : 6)
+const supplierFilterColSpan = computed(() => Math.min(24, priceFilterColSpan.value * 2))
+const snapshotDateColSpan = computed(() => {
+  if (isSupplierUser.value) return 12
+  return Math.max(6, 24 - supplierFilterColSpan.value)
+})
 const itemCategoryTreeSelectList = computed(() => useWmsStore().itemCategoryTreeList)
 const AUTH_AGENCY_OPTIONS = ['Entrupy', 'Real Authentication', 'Legitmark', 'CheckCheck', 'N/A']
 const ITEM_CONDITION_OPTIONS = ['S', 'A', 'B', 'C', 'D']
@@ -777,25 +798,34 @@ const detailFieldList = computed(() => {
   const fields = [
     { label: tr('商品分类'), value: displayValue(getCategoryName(item)) },
     { label: tr('商品品牌'), value: displayValue(getBrandName(item)) },
+    { label: tr('供应商'), value: formatSupplierName(item) },
     { label: tr('年份'), value: displayValue(item.year) },
     { label: tr('成色'), value: displayValue(item.itemCondition) },
     { label: tr('包型'), value: displayValue(item.modelName) },
     { label: tr('材质'), value: displayValue(item.materialName || item.material) },
     { label: tr('外观材质'), value: displayValue(item.exteriorMaterial) },
-    { label: tr('产地'), value: displayValue(item.countryOfOrigin) },
-    ...itemDimensionFields(item, tr)
+    { label: tr('产地'), value: displayValue(item.countryOfOrigin) }
   ]
+  const dimFields = itemDimensionFields(item, { isEn: isEn.value })
+  const sizeField = dimFields.find(field => field.key === 'size')
+  const bagFields = dimFields.filter(field => field.key !== 'size')
+  if (sizeField) {
+    fields.push(sizeField)
+  }
   if (canViewCostPrice.value) {
     fields.push({ label: tr('成本价'), value: formatMoney(sku.costPrice) })
   }
   if (canViewSellingPrice.value) {
     fields.push({ label: tr('销售价'), value: formatMoney(sku.sellingPrice) })
   }
+  bagFields.forEach((field, index) => {
+    fields.push(index === 0 ? { ...field, breakRow: true } : field)
+  })
   fields.push(
     { label: tr('数量'), value: displayValue(item.defaultQty) },
     { label: tr('是否已护理'), value: formatCared(item.cared) },
     { label: tr('鉴定机构'), value: displayValue(item.authAgency) },
-    { label: tr('寄售信息'), value: displayValue(item.consignInfo) },
+    { label: tr('寄售信息'), value: displayValue(item.consignInfo), wide: true },
     { label: tr('瑕疵'), value: displayValue(item.defect), wide: true },
     { label: tr('配件'), value: accessoryList.value.length ? '' : '--', type: 'accessories', wide: true },
     { label: tr('备注'), value: displayValue(item.remark), wide: true }
@@ -820,6 +850,8 @@ const snapshotDatePlaceholder = (() => {
   return `${month}/${day}/${year}`
 })()
 
+const supplierOptions = ref([])
+const isSupplierUser = ref(false)
 const filterable = ref(true)
 const filterNonZero = ref(false)
 const batchMode = ref(false)
@@ -833,6 +865,7 @@ const queryParams = ref({
   itemName: undefined,
   skuCode: undefined,
   itemCategory: undefined,
+  supplierId: undefined,
   itemBrand: [],
   itemCondition: undefined,
   year: undefined,
@@ -1277,6 +1310,10 @@ function getSkuCode(row) {
   return row?.skuCode || '-'
 }
 
+function formatSupplierName(row) {
+  return row?.supplierName || tr('Luxeaf 自有')
+}
+
 function canCopyText(value) {
   return value !== undefined && value !== null && value !== ''
 }
@@ -1599,6 +1636,8 @@ const buildDetailDataFromRow = (row, images) => ({
     bagHeight: row.bagHeight,
     exteriorMaterial: row.exteriorMaterial,
     countryOfOrigin: row.countryOfOrigin,
+    supplierId: row.supplierId,
+    supplierName: row.supplierName,
     defect: row.defect,
     accessories: row.accessories,
     cared: row.cared,
@@ -1990,6 +2029,7 @@ function handleBatchExportPdf() {
       },
       { key: 'itemName', label: tr('商品名称'), render: row => escapeHtml(row.itemName || '--') },
       { key: 'skuCode', label: tr('SKU编号'), render: row => escapeHtml(row.skuCode || '--') },
+      { key: 'supplier', label: tr('供应商'), render: row => escapeHtml(formatSupplierName(row)) },
       { key: 'warehouse', label: tr('仓库'), render: row => escapeHtml(row.warehouseName || '--') },
       { key: 'quantity', label: tr('库存数量'), className: 'number-cell', render: row => row.quantity != null ? escapeHtml(row.quantity) : '--' },
       { key: 'receiptTime', label: tr('入库时间'), render: row => escapeHtml(formatTime(row.receiptTime)) },
@@ -2314,11 +2354,29 @@ const handleBatchPublish = () => {
 
 const tr = (text) => translateByMap(text, settingsStore.language || 'zh-cn')
 
+async function initSupplierData() {
+  try {
+    const res = await getCurrentSupplier()
+    isSupplierUser.value = !!(res.data && res.data.isSupplier)
+  } catch (_) {
+    isSupplierUser.value = false
+  }
+  if (!isSupplierUser.value) {
+    try {
+      const res = await listSupplierNoPage({ status: 0 })
+      supplierOptions.value = res.data || []
+    } catch (_) {
+      supplierOptions.value = []
+    }
+  }
+}
+
 onMounted(() => {
   useWmsStore().getWarehouseList()
   useWmsStore().getItemBrandList()
   useWmsStore().getItemCategoryList()
   useWmsStore().getItemCategoryTreeList()
+  initSupplierData()
   applyRouteSkuFilter()
   getList()
 })
@@ -2343,9 +2401,11 @@ onActivated(() => {
 
 .inventory-statistic-page.is-en .statistic-query-form :deep(.el-form-item__label) {
   white-space: nowrap;
-  line-height: 18px;
+  flex-wrap: nowrap;
+  line-height: 32px;
   justify-content: flex-end;
-  word-break: normal;
+  word-break: keep-all;
+  overflow-wrap: normal;
 }
 
 .inventory-statistic-page.is-en .statistic-query-form :deep(.el-form-item__content) {
@@ -2377,13 +2437,41 @@ onActivated(() => {
   color: var(--el-text-color-secondary, #909399);
 }
 
+.table-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+}
+
 .toolbar-right {
-  text-align: right;
   display: flex;
   justify-content: flex-end;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 12px;
+  flex-wrap: nowrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.toolbar-right :deep(.el-checkbox) {
+  margin-right: 0;
+  height: auto;
+  white-space: nowrap;
+}
+
+.toolbar-right :deep(.el-checkbox__label) {
+  padding-left: 6px;
+  white-space: nowrap;
+}
+
+.is-en .toolbar-right :deep(.el-button) {
+  padding: 8px 12px;
 }
 
 .batch-action-bar {
@@ -2543,17 +2631,13 @@ onActivated(() => {
 .detail-field {
   min-width: 0;
   display: grid;
-  grid-template-columns: 132px minmax(0, 1fr);
+  grid-template-columns: 140px minmax(0, 1fr);
   border-right: 1px solid var(--el-border-color-lighter, #ebeef5);
   border-bottom: 1px solid var(--el-border-color-lighter, #ebeef5);
 }
 
-.is-en .detail-field-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
 .is-en .detail-field {
-  grid-template-columns: 176px minmax(0, 1fr);
+  grid-template-columns: 168px minmax(0, 1fr);
 }
 
 .is-en .detail-field-label {
@@ -2568,17 +2652,27 @@ onActivated(() => {
   grid-column: 1 / -1;
 }
 
+.detail-field.is-break {
+  grid-column-start: 1;
+}
+
 .detail-field-label {
-  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  padding: 14px 16px 14px 20px;
   background: var(--el-fill-color-light, #f5f7fa);
   color: var(--el-text-color-regular, #606266);
   font-weight: 600;
+  line-height: 1.5;
 }
 
 .detail-field-value {
   min-width: 0;
-  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  padding: 14px 20px 14px 16px;
   color: var(--el-text-color-primary, #303133);
+  line-height: 1.5;
   word-break: break-word;
 }
 

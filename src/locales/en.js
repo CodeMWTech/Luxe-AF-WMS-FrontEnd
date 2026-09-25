@@ -1004,7 +1004,7 @@ export default {
     unitPound: 'Pounds (lb)',
     unitOunce: 'Ounces (oz)',
     unitCentimeter: 'Centimeters (cm)',
-    unitInch: 'Inches (in)',
+    unitInch: 'Inches (inch)',
     cancel: 'Cancel',
     save: 'Save',
   },

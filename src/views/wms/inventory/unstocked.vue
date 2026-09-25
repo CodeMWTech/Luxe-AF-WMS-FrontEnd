@@ -379,8 +379,8 @@
           <template #default="{ row }">{{ cellText(row.modelName) }}</template>
         </el-table-column>
         <el-table-column v-for="field in ITEM_DIMENSION_FIELDS" :key="field.key" :prop="field.key"
-                         :label="tr(field.label)" min-width="115" align="center" show-overflow-tooltip>
-          <template #default="{ row }">{{ cellText(row[field.key]) }}</template>
+                         :label="itemDimensionLabel(field, isEn)" min-width="115" align="center" show-overflow-tooltip>
+          <template #default="{ row }">{{ formatItemDimensionValue(field.key, row[field.key], isEn) }}</template>
         </el-table-column>
         <el-table-column :label="tr('材质')" prop="material" min-width="100" align="center" show-overflow-tooltip>
           <template #default="{ row }">{{ cellText(row.material) }}</template>
@@ -449,7 +449,7 @@ import { computed, getCurrentInstance, nextTick, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useWmsStore } from '@/store/modules/wms'
 import useSettingsStore from '@/store/modules/settings'
-import { ITEM_DIMENSION_FIELDS } from '@/utils/itemDetailFields'
+import { ITEM_DIMENSION_FIELDS, formatItemDimensionValue, itemDimensionLabel } from '@/utils/itemDetailFields'
 import { translateByMap } from '@/locales/runtime-map'
 import { blobValidate } from '@/utils/ruoyi'
 import { downloadXlsx, getExportLanguageHeaders, getExportLanguagePayload, prepareLanguageXlsx } from '@/utils/xlsxTranslate'
@@ -649,7 +649,7 @@ function buildUnstockedPdfColumns() {
     { key: 'condition', label: tr('成色'), render: row => escapeHtml(row.itemCondition || '--') },
     { key: 'year', label: tr('年份'), className: 'number-cell', render: row => row.year != null ? escapeHtml(row.year) : '--' },
     { key: 'modelName', label: tr('包型'), render: row => escapeHtml(row.modelName || '--') },
-    ...ITEM_DIMENSION_FIELDS.map(field => ({ key: field.key, label: tr(field.label), render: row => escapeHtml(row[field.key] ?? '--') })),
+    ...ITEM_DIMENSION_FIELDS.map(field => ({ key: field.key, label: itemDimensionLabel(field, isEn.value), render: row => escapeHtml(formatItemDimensionValue(field.key, row[field.key], isEn.value)) })),
     { key: 'material', label: tr('材质'), render: row => escapeHtml(row.material || '--') },
     { key: 'defect', label: tr('缺陷'), render: row => escapeHtml(row.defect || '--') },
     { key: 'accessories', label: tr('配件'), render: row => escapeHtml(row.accessories || '--') },

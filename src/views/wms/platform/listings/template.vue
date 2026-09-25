@@ -599,11 +599,11 @@ const dimensionUnitOptions = computed(() => {
   locale.value
   return form.platform === 'TIKTOK'
     ? [
-        { label: t('platformListings.unitInch'), value: 'INCH', short: 'in' },
+        { label: t('platformListings.unitInch'), value: 'INCH', short: 'inch' },
         { label: t('platformListings.unitCentimeter'), value: 'CENTIMETER', short: 'cm' }
       ]
     : [
-        { label: t('platformListings.unitInch'), value: 'INCH', short: 'in' },
+        { label: t('platformListings.unitInch'), value: 'INCH', short: 'inch' },
         { label: t('platformListings.unitCentimeter'), value: 'CENTIMETER', short: 'cm' }
       ]
 })

@@ -1016,7 +1016,7 @@ export default {
     unitPound: '磅 (lb)',
     unitOunce: '盎司 (oz)',
     unitCentimeter: '厘米 (cm)',
-    unitInch: '英寸 (in)',
+    unitInch: '英寸 (inch)',
     cancel: '取消',
     save: '保存',
   },
