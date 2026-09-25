@@ -1,8 +1,22 @@
 <template>
-    <el-drawer :title="dialog.title" v-model="dialog.visible" size="80%" append-to-body :close-on-click-modal="false">
-      <div v-loading="skuLoading">
+    <el-drawer
+      class="item-form-drawer"
+      :title="dialog.title"
+      v-model="dialog.visible"
+      size="80%"
+      append-to-body
+      :close-on-click-modal="false"
+    >
+      <div v-loading="skuLoading" class="item-form-drawer__body">
         <el-card>
-          <el-form ref="itemFormRef" :model="form" :rules="rules" :label-width="isEn ? '170px' : '120px'" :validate-on-rule-change="false">
+          <el-form
+            ref="itemFormRef"
+            :class="{ 'is-en': isEn }"
+            :model="form"
+            :rules="rules"
+            :label-width="isEn ? '176px' : '120px'"
+            :validate-on-rule-change="false"
+          >
             <!-- 1.商品名称 2.商品分类 -->
             <el-row :gutter="24">
               <el-col :span="12">
@@ -15,25 +29,29 @@
                   </div>
                 </el-form-item>
               </el-col>
-              <el-col :span="10">
+              <el-col :span="12">
                 <el-form-item :label="tr('商品分类')" prop="itemCategory">
-                  <el-tree-select
-                    v-model="form.itemCategory"
-                    :data="itemCategoryTreeSelectList"
-                    :props="{ value: 'id', label: 'label', children: 'children' }"
-                    value-key="id"
-                    :placeholder="tr('请选择最末级分类')"
-                    expand-on-click-node
-                    style="width: 100%!important;"
-                    @change="emit('category-change', $event)"
-                  />
+                  <div class="category-field">
+                    <el-tree-select
+                      v-model="form.itemCategory"
+                      :data="itemCategoryTreeSelectList"
+                      :props="{ value: 'id', label: 'label', children: 'children' }"
+                      value-key="id"
+                      :placeholder="tr('请选择最末级分类')"
+                      expand-on-click-node
+                      class="category-select"
+                      @change="emit('category-change', $event)"
+                    />
+                    <el-button
+                      link
+                      icon="Plus"
+                      type="primary"
+                      class="add-category-btn"
+                      v-hasPermi="['wms:item:edit']"
+                      @click="emit('add-category')"
+                    >{{ tr('新增分类') }}</el-button>
+                  </div>
                 </el-form-item>
-              </el-col>
-              <el-col :span="2">
-                <el-button link icon="Plus" type="primary" style="height: 32px!important;line-height: 32px!important;"
-                           v-hasPermi="['wms:item:edit']"
-                           @click="emit('add-category')">{{ tr('新增分类') }}
-                </el-button>
               </el-col>
             </el-row>
             <!-- 3.SKU编码 4.商品品牌 -->
@@ -322,8 +340,8 @@
                 </el-form-item>
               </el-col>
             </el-row>
-            <!-- Bag dimensions: input cm, persist inches -->
-            <el-row :gutter="24">
+            <!-- 长 / 宽 / 高 同一行，label-width 跟表单一致，左边和 Size 对齐 -->
+            <el-row :gutter="24" class="bag-dim-row">
               <el-col :span="8">
                 <el-form-item :label="bagDimLabels.length" prop="bagWidth">
                   <div class="inch-field">
@@ -585,8 +603,54 @@ defineExpose({
 
 <style scoped>
 .mt8 { margin-top: 8px; }
+.item-form-drawer__body {
+  min-width: 0;
+  overflow-x: hidden;
+}
+:deep(.el-row) {
+  min-width: 0;
+}
+:deep(.el-col) {
+  min-width: 0;
+}
+:deep(.el-form-item__content) {
+  min-width: 0;
+}
 :deep(.el-form-item__label) {
   line-height: 32px;
+  white-space: nowrap;
+  flex-wrap: nowrap;
+  word-break: keep-all;
+  overflow-wrap: normal;
+}
+.el-form.is-en :deep(.el-form-item__label) {
+  justify-content: flex-end;
+  padding-right: 12px;
+}
+.category-field,
+.item-name-with-tag {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+.category-select,
+.item-name-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100% !important;
+}
+.category-select :deep(.el-select),
+.category-select :deep(.el-select__wrapper) {
+  width: 100%;
+}
+.add-category-btn,
+.name-tag-btn {
+  flex: 0 0 auto;
+  height: 32px !important;
+  line-height: 32px !important;
+  padding: 0 4px;
   white-space: nowrap;
 }
 .exterior-material-select :deep(.el-select__wrapper) {
@@ -649,6 +713,8 @@ defineExpose({
   display: flex;
   align-items: center;
   gap: 8px;
+  width: 100%;
+  min-width: 0;
 }
 .inch-unit {
   color: #909399;
@@ -659,5 +725,16 @@ defineExpose({
   color: #909399;
   font-size: 12px;
   line-height: 1.5;
+}
+.inch-field :deep(.el-input-number) {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto;
+}
+</style>
+
+<style>
+.item-form-drawer .el-drawer__body {
+  overflow-x: hidden;
 }
 </style>
