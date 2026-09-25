@@ -1,9 +1,12 @@
 import livePayrollMessages from './live-payroll'
 
 const zhToEnMap = {
-  '长（英寸）': 'Length (in)',
-  '宽（英寸）': 'Depth (in)',
-  '高（英寸）': 'Height (in)',
+  '长（英寸）': 'Bag Width (inch)',
+  '宽（英寸）': 'Bag Depth (inch)',
+  '高（英寸）': 'Bag Height (inch)',
+  '长（厘米）': 'Bag Width (cm)',
+  '宽（厘米）': 'Bag Depth (cm)',
+  '高（厘米）': 'Bag Height (cm)',
   首页: 'Home',
   系统概述: 'System Overview',
   个人中心: 'Profile',
@@ -279,8 +282,8 @@ const zhToEnMap = {
   盘库: 'Stocktake',
   盘库单: 'Stocktake Order',
   维度: 'Dimension',
-  过滤掉库存不为0的商品: 'Hide items with non-zero inventory',
-  过滤掉库存为0的商品: 'Hide items with zero inventory',
+  过滤掉库存不为0的商品: 'Hide in-stock',
+  过滤掉库存为0的商品: 'Hide zero-stock',
   暂无库存: 'No inventory',
   库存记录: 'Inventory History',
   暂无库存记录: 'No inventory history',
