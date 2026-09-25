@@ -567,6 +567,7 @@
       size="60%"
       append-to-body
       class="inventory-detail-drawer"
+      :class="{ 'is-en': isEn }"
     >
       <template #header>
         <div class="detail-drawer-header">
@@ -586,8 +587,8 @@
         <template v-if="detailItem || detailSku">
           <div class="detail-header">
             <div>
-              <h2 class="detail-title">{{ displayValue(detailItem?.itemName) }}</h2>
-              <div class="detail-subtitle">
+              <h2 class="detail-title" data-runtime-i18n-ignore="true">{{ displayValue(detailItem?.itemName) }}</h2>
+              <div class="detail-subtitle" data-runtime-i18n-ignore="true">
                 <span>SKU {{ displayValue(detailSku?.skuCode) }}</span>
                 <span v-if="getBrandName(detailItem)">·</span>
                 <span v-if="getBrandName(detailItem)">{{ getBrandName(detailItem) }}</span>
@@ -607,7 +608,7 @@
               :class="{ 'is-wide': field.wide }"
             >
               <div class="detail-field-label">{{ field.label }}</div>
-              <div class="detail-field-value">
+              <div class="detail-field-value" data-runtime-i18n-ignore="true">
                 <div v-if="field.type === 'accessories' && accessoryList.length" class="accessory-list">
                   <el-tag v-for="tag in accessoryList" :key="tag" type="info" effect="plain">{{ tag }}</el-tag>
                 </div>
@@ -780,6 +781,8 @@ const detailFieldList = computed(() => {
     { label: tr('成色'), value: displayValue(item.itemCondition) },
     { label: tr('包型'), value: displayValue(item.modelName) },
     { label: tr('材质'), value: displayValue(item.materialName || item.material) },
+    { label: tr('外观材质'), value: displayValue(item.exteriorMaterial) },
+    { label: tr('产地'), value: displayValue(item.countryOfOrigin) },
     ...itemDimensionFields(item, tr)
   ]
   if (canViewCostPrice.value) {
@@ -1594,6 +1597,8 @@ const buildDetailDataFromRow = (row, images) => ({
     bagWidth: row.bagWidth,
     bagDepth: row.bagDepth,
     bagHeight: row.bagHeight,
+    exteriorMaterial: row.exteriorMaterial,
+    countryOfOrigin: row.countryOfOrigin,
     defect: row.defect,
     accessories: row.accessories,
     cared: row.cared,
@@ -2014,6 +2019,8 @@ function handleBatchExportPdf() {
     }
     columns.push(
       { key: 'condition', label: tr('成色'), render: row => escapeHtml(row.itemCondition || '--') },
+      { key: 'exteriorMaterial', label: tr('外观材质'), render: row => escapeHtml(row.exteriorMaterial || '--') },
+      { key: 'countryOfOrigin', label: tr('产地'), render: row => escapeHtml(row.countryOfOrigin || '--') },
       { key: 'defect', label: tr('瑕疵'), render: row => escapeHtml(row.defect || '--') }
     )
 
@@ -2539,6 +2546,22 @@ onActivated(() => {
   grid-template-columns: 132px minmax(0, 1fr);
   border-right: 1px solid var(--el-border-color-lighter, #ebeef5);
   border-bottom: 1px solid var(--el-border-color-lighter, #ebeef5);
+}
+
+.is-en .detail-field-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.is-en .detail-field {
+  grid-template-columns: 176px minmax(0, 1fr);
+}
+
+.is-en .detail-field-label {
+  white-space: nowrap;
+}
+
+.is-en .detail-drawer-header :deep(.el-button) {
+  white-space: nowrap;
 }
 
 .detail-field.is-wide {

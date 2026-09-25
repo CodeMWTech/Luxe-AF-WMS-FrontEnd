@@ -2,7 +2,7 @@
     <el-drawer :title="dialog.title" v-model="dialog.visible" size="80%" append-to-body :close-on-click-modal="false">
       <div v-loading="skuLoading">
         <el-card>
-          <el-form ref="itemFormRef" :model="form" :rules="rules" label-width="120px" :validate-on-rule-change="false">
+          <el-form ref="itemFormRef" :model="form" :rules="rules" :label-width="isEn ? '170px' : '120px'" :validate-on-rule-change="false">
             <!-- 1.商品名称 2.商品分类 -->
             <el-row :gutter="24">
               <el-col :span="12">
@@ -187,6 +187,43 @@
                         <span class="image-option-name">{{ item.materialName }}</span>
                         <el-icon v-if="String(form.materialId) === String(item.id)" class="image-option-check"><Check /></el-icon>
                       </div>
+                    </el-option>
+                  </el-select>
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <el-row :gutter="24">
+              <el-col :span="12">
+                <el-form-item :label="tr('外观材质')" prop="exteriorMaterial">
+                  <el-select
+                    v-model="form.exteriorMaterial"
+                    multiple
+                    filterable
+                    :placeholder="tr('请选择外观材质')"
+                    class="exterior-material-select"
+                    style="width: 100%"
+                  >
+                    <el-option
+                      v-for="item in EXTERIOR_MATERIAL_OPTIONS"
+                      :key="item.value"
+                      :label="item.value"
+                      :value="item.value"
+                    >
+                      {{ formatExteriorMaterialLabel(item) }}
+                    </el-option>
+                  </el-select>
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item :label="tr('产地')" prop="countryOfOrigin">
+                  <el-select v-model="form.countryOfOrigin" :placeholder="tr('请选择产地')" clearable filterable style="width: 100%">
+                    <el-option
+                      v-for="item in COUNTRY_OF_ORIGIN_OPTIONS"
+                      :key="item.value"
+                      :label="item.value"
+                      :value="item.value"
+                    >
+                      {{ formatCountryOfOriginLabel(item) }}
                     </el-option>
                   </el-select>
                 </el-form-item>
@@ -476,7 +513,11 @@ const props = defineProps({
   ACCESSORY_TAG_OPTIONS: { type: Array, default: () => [] },
   DEFECT_TAG_OPTIONS: { type: Array, default: () => [] },
   ITEM_SIZE_OPTIONS: { type: Array, default: () => [] },
+  EXTERIOR_MATERIAL_OPTIONS: { type: Array, default: () => [] },
+  COUNTRY_OF_ORIGIN_OPTIONS: { type: Array, default: () => [] },
   formatItemSizeLabel: { type: Function, default: (size) => size },
+  formatExteriorMaterialLabel: { type: Function, default: (item) => item?.value || item },
+  formatCountryOfOriginLabel: { type: Function, default: (item) => item?.value || item },
   formatAccessoryTagLabel: { type: Function, default: (tag) => tag?.value || tag },
   formatDefectTagLabel: { type: Function, default: (tag, expanded) => (expanded ? tag.value : tag.short) },
   formatDefectTagTooltip: { type: Function, default: (tag) => tag?.value || '' },
@@ -501,6 +542,7 @@ const props = defineProps({
   hasUploadingImages: { type: Boolean, default: false },
   uploadingImageCount: { type: Number, default: 0 },
   buttonLoading: { type: Boolean, default: false },
+  isEn: { type: Boolean, default: false },
   tr: { type: Function, required: true }
 })
 
@@ -543,6 +585,17 @@ defineExpose({
 
 <style scoped>
 .mt8 { margin-top: 8px; }
+:deep(.el-form-item__label) {
+  line-height: 32px;
+  white-space: nowrap;
+}
+.exterior-material-select :deep(.el-select__wrapper) {
+  height: auto;
+  min-height: 32px;
+}
+.exterior-material-select :deep(.el-select__selection) {
+  flex-wrap: wrap;
+}
 .accessory-tags {
   display: flex;
   flex-wrap: wrap;

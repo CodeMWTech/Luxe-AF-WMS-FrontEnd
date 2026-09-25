@@ -73,7 +73,11 @@
       :ACCESSORY_TAG_OPTIONS="ACCESSORY_TAG_OPTIONS"
       :DEFECT_TAG_OPTIONS="DEFECT_TAG_OPTIONS"
       :ITEM_SIZE_OPTIONS="ITEM_SIZE_OPTIONS"
+      :EXTERIOR_MATERIAL_OPTIONS="EXTERIOR_MATERIAL_OPTIONS"
+      :COUNTRY_OF_ORIGIN_OPTIONS="COUNTRY_OF_ORIGIN_OPTIONS"
       :format-item-size-label="formatItemSizeLabel"
+      :format-exterior-material-label="formatExteriorMaterialLabel"
+      :format-country-of-origin-label="formatCountryOfOriginLabel"
       :format-accessory-tag-label="formatAccessoryTagLabel"
       :format-defect-tag-label="formatDefectTagLabel"
       :format-defect-tag-tooltip="formatDefectTagTooltip"
@@ -98,6 +102,7 @@
       :has-uploading-images="hasUploadingImages"
       :uploading-image-count="uploadingImageCount"
       :button-loading="buttonLoading"
+      :is-en="isEn"
       :tr="tr"
       @open-name-tag-drawer="openNameTagDrawer"
       @add-category="handleAddType(true)"
@@ -572,6 +577,71 @@ const ITEM_SIZE_OPTIONS = [
   { value: 'Nano', label: '超迷你' }
 ]
 const ITEM_SIZE_LABEL_MAP = Object.fromEntries(ITEM_SIZE_OPTIONS.map(item => [item.value, item.label]))
+const EXTERIOR_MATERIAL_OPTIONS = [
+  { value: 'Acrylic', zh: '亚克力' },
+  { value: 'Bamboo', zh: '竹子' },
+  { value: 'Canvas', zh: '帆布' },
+  { value: 'Cotton', zh: '棉' },
+  { value: 'Denim', zh: '牛仔' },
+  { value: 'Exotic Leather', zh: '特殊皮' },
+  { value: 'Faux Leather', zh: '人造皮' },
+  { value: 'Fur', zh: '皮草' },
+  { value: 'Jacquard', zh: '提花布' },
+  { value: 'Leather', zh: '真皮' },
+  { value: 'Linen', zh: '亚麻' },
+  { value: 'Metal', zh: '金属' },
+  { value: 'Nylon', zh: '尼龙' },
+  { value: 'Patent Leather', zh: '漆皮' },
+  { value: 'Pony Hair', zh: '马毛' },
+  { value: 'PVC', zh: '聚氯乙烯' },
+  { value: 'Raffia', zh: '编制草' },
+  { value: 'Satin', zh: '缎面' },
+  { value: 'Suede', zh: '麂皮' },
+  { value: 'Velvet', zh: '天鹅绒' },
+  { value: 'Wicker', zh: '藤编' }
+]
+const COUNTRY_OF_ORIGIN_OPTIONS = [
+  { value: 'France', zh: '法国' },
+  { value: 'Italy', zh: '意大利' },
+  { value: 'Spain', zh: '西班牙' },
+  { value: 'United States', zh: '美国' },
+  { value: 'United Kingdom', zh: '英国' },
+  { value: 'Portugal', zh: '葡萄牙' },
+  { value: 'Romania', zh: '罗马尼亚' },
+  { value: 'Turkey', zh: '土耳其' }
+]
+function formatExteriorMaterialLabel(item) {
+  if (!item) return ''
+  return isEn.value ? item.value : `${item.value} ${item.zh}`
+}
+function formatCountryOfOriginLabel(item) {
+  if (!item) return ''
+  return isEn.value ? item.value : `${item.value} ${item.zh}`
+}
+function resolveEnglishOption(token, options) {
+  const raw = String(token || '').trim()
+  if (!raw) return ''
+  const exact = options.find(item => item.value === raw)
+  if (exact) return exact.value
+  const lower = raw.toLowerCase().replace(/\s+/g, '')
+  const matched = [...options]
+    .sort((a, b) => b.value.length - a.value.length)
+    .find(item => {
+      const valueKey = item.value.toLowerCase().replace(/\s+/g, '')
+      return lower === valueKey || lower.startsWith(valueKey) || lower.includes(item.zh)
+    })
+  return matched ? matched.value : ''
+}
+function parseExteriorMaterialList(value) {
+  const tokens = Array.isArray(value)
+    ? value
+    : String(value || '').split(/[,，、;/|]+/)
+  return [...new Set(tokens.map(token => resolveEnglishOption(token, EXTERIOR_MATERIAL_OPTIONS)).filter(Boolean))]
+}
+function serializeExteriorMaterial(value) {
+  const list = parseExteriorMaterialList(value)
+  return list.length ? list.join(', ') : undefined
+}
 
 function formatItemSizeLabel(size) {
   if (size == null || size === '') return ''
@@ -716,6 +786,8 @@ const initFormData = {
   bagWidth: undefined,
   bagHeight: undefined,
   bagDepth: undefined,
+  exteriorMaterial: [],
+  countryOfOrigin: undefined,
   remark: undefined,
   imageList: [], // 商品图片列表（编辑时由接口返回，项为 { id, url, isMain, sort }）
   skuCode: undefined, // SKU编码（与规格表第一行同步，主表校验与提示）
@@ -824,6 +896,8 @@ const formRules = computed(() => ({
   defaultQty: [requiredNumber(tr('数量不能为空'))],
   defect: [{ required: true, message: tr('瑕疵不能为空'), trigger: [] }],
   size: [{ required: true, message: tr('尺寸不能为空'), trigger: [] }],
+  exteriorMaterial: [{ type: 'array', required: true, min: 1, message: tr('外观材质不能为空'), trigger: [] }],
+  countryOfOrigin: [{ required: true, message: tr('产地不能为空'), trigger: [] }],
   bagWidth: [requiredNumber(isEn.value ? 'Bag Width cannot be empty' : '长不能为空')],
   bagDepth: [requiredNumber(isEn.value ? 'Bag Depth cannot be empty' : '宽不能为空')],
   bagHeight: [requiredNumber(isEn.value ? 'Bag Height cannot be empty' : '高不能为空')],
@@ -1502,6 +1576,8 @@ const handleUpdate = (row) => {
       form.value.modelId = toCatalogId(form.value.modelId)
       form.value.materialId = toCatalogId(form.value.materialId)
       form.value.authAgency = parseAuthAgencyList(form.value.authAgency)
+      form.value.exteriorMaterial = parseExteriorMaterialList(form.value.exteriorMaterial)
+      form.value.countryOfOrigin = resolveEnglishOption(form.value.countryOfOrigin, COUNTRY_OF_ORIGIN_OPTIONS) || undefined
       Object.assign(form.value, bagDimensionsToCm(form.value))
       if (form.value.cared == null) form.value.cared = false
       if (form.value.itemBrand) {
@@ -1609,6 +1685,8 @@ const submitForm = async () => {
         ...itemRelationPayload(form.value),
         itemBrand: form.value.itemBrand,
         authAgency: serializeAuthAgency(form.value.authAgency),
+        exteriorMaterial: serializeExteriorMaterial(form.value.exteriorMaterial),
+        countryOfOrigin: resolveEnglishOption(form.value.countryOfOrigin, COUNTRY_OF_ORIGIN_OPTIONS) || undefined,
         ...(canEditCostPrice.value ? {} : { costPrice: undefined }),
         ...(canEditSellingPrice.value ? {} : { sellingPrice: undefined }),
         imageList: buildImageListPayload()
@@ -1619,6 +1697,8 @@ const submitForm = async () => {
       const payload = { ...form.value, ...bagDimensionsToInch(form.value), ...itemRelationPayload(form.value) };
       payload.itemBrand = form.value.itemBrand
       payload.authAgency = serializeAuthAgency(form.value.authAgency);
+      payload.exteriorMaterial = serializeExteriorMaterial(form.value.exteriorMaterial);
+      payload.countryOfOrigin = resolveEnglishOption(form.value.countryOfOrigin, COUNTRY_OF_ORIGIN_OPTIONS) || undefined;
       delete payload.itemBrands
       payload.pendingImageCount = pendingImageFiles.value.length;
       if (!canEditCostPrice.value) {
