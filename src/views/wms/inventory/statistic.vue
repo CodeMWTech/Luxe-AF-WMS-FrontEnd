@@ -720,6 +720,7 @@ import { translateByMap } from '@/locales/runtime-map'
 import { blobValidate } from '@/utils/ruoyi'
 import { formatDateForQuery, formatDateTimeForQuery } from '@/utils/laTime'
 import { formatBrandNames, parseBrandIdList } from '@/utils/itemBrand'
+import { itemDimensionFields } from '@/utils/itemDetailFields'
 import PublishDialog from '@/views/wms/platform/listings/components/PublishDialog.vue'
 const route = useRoute()
 
@@ -778,7 +779,8 @@ const detailFieldList = computed(() => {
     { label: tr('年份'), value: displayValue(item.year) },
     { label: tr('成色'), value: displayValue(item.itemCondition) },
     { label: tr('包型'), value: displayValue(item.modelName) },
-    { label: tr('材质'), value: displayValue(item.materialName || item.material) }
+    { label: tr('材质'), value: displayValue(item.materialName || item.material) },
+    ...itemDimensionFields(item, tr)
   ]
   if (canViewCostPrice.value) {
     fields.push({ label: tr('成本价'), value: formatMoney(sku.costPrice) })
@@ -797,19 +799,6 @@ const detailFieldList = computed(() => {
   )
   return fields
 })
-
-function getDetailExportLabels() {
-  // 与 detailFieldList 顺序一致，跟随界面语言
-  const labels = [
-    tr('商品分类'), tr('商品品牌'), tr('年份'), tr('成色'), tr('包型'), tr('材质')
-  ]
-  if (canViewCostPrice.value) labels.push(tr('成本价'))
-  if (canViewSellingPrice.value) labels.push(tr('销售价'))
-  labels.push(
-    tr('数量'), tr('是否已护理'), tr('鉴定机构'), tr('寄售信息'), tr('瑕疵'), tr('配件'), tr('备注')
-  )
-  return labels
-}
 
 const DEFAULT_INVENTORY_SORT = {
   prop: 'receiptTime',
@@ -1111,9 +1100,8 @@ function exportDetailPdf() {
   const sku = detailSku.value || {}
   const title = displayValue(item.itemName)
   const caredLabel = tr('是否已护理')
-  const exportLabels = getDetailExportLabels()
-  const rows = detailFieldList.value.map((field, index) => {
-    const label = exportLabels[index] || field.label
+  const rows = detailFieldList.value.map(field => {
+    const label = field.label
     const value = field.type === 'accessories' && accessoryList.value.length
       ? accessoryList.value.join(', ')
       : label === caredLabel && detailItem.value?.cared !== null && detailItem.value?.cared !== undefined
@@ -1602,6 +1590,10 @@ const buildDetailDataFromRow = (row, images) => ({
     year: row.year,
     material: row.material,
     modelName: row.modelName,
+    size: row.size,
+    bagWidth: row.bagWidth,
+    bagDepth: row.bagDepth,
+    bagHeight: row.bagHeight,
     defect: row.defect,
     accessories: row.accessories,
     cared: row.cared,

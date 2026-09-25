@@ -320,6 +320,7 @@
 </template>
 
 <script setup name="Item">
+import { itemRelationPayload } from '@/utils/itemDetailFields'
 import {
   getItem,
   delItem,
@@ -995,7 +996,7 @@ async function loadModelMaterialOptions(modelId, { keepCurrentMaterial = false }
     }
     return
   }
-  if (form.value.materialId && modelMaterialIds.value.length > 0 && !modelMaterialIds.value.some(mid => String(mid) === String(form.value.materialId))) {
+  if (form.value.materialId && !modelMaterialIds.value.some(mid => String(mid) === String(form.value.materialId))) {
     form.value.materialId = undefined
     form.value.material = undefined
   }
@@ -1025,7 +1026,6 @@ watch(
     if (!isCurrentFormCatalog(token)) return
     if (
       keepModelId
-      && filteredItemModelList.value.length
       && !filteredItemModelList.value.some(item => String(item.id) === String(keepModelId))
     ) {
       form.value.modelId = undefined
@@ -1606,6 +1606,7 @@ const submitForm = async () => {
       const payload = {
         ...form.value,
         ...bagDimensionsToInch(form.value),
+        ...itemRelationPayload(form.value),
         itemBrand: form.value.itemBrand,
         authAgency: serializeAuthAgency(form.value.authAgency),
         ...(canEditCostPrice.value ? {} : { costPrice: undefined }),
@@ -1615,7 +1616,7 @@ const submitForm = async () => {
       delete payload.itemBrands
       await updateItem(payload);
     } else {
-      const payload = { ...form.value, ...bagDimensionsToInch(form.value) };
+      const payload = { ...form.value, ...bagDimensionsToInch(form.value), ...itemRelationPayload(form.value) };
       payload.itemBrand = form.value.itemBrand
       payload.authAgency = serializeAuthAgency(form.value.authAgency);
       delete payload.itemBrands

@@ -1,6 +1,9 @@
 import livePayrollMessages from './live-payroll'
 
 const zhToEnMap = {
+  '长（英寸）': 'Length (in)',
+  '宽（英寸）': 'Depth (in)',
+  '高（英寸）': 'Height (in)',
   首页: 'Home',
   系统概述: 'System Overview',
   个人中心: 'Profile',

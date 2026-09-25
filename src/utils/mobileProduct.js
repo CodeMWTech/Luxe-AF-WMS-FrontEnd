@@ -169,6 +169,13 @@ export function buildDetailViewModel(payload = {}, images = []) {
     modelName: pickField(item, 'modelName') || pickField(merged, 'modelName'),
     materialName: pickField(item, 'materialName', 'material') || pickField(merged, 'materialName', 'material'),
     year: pickField(item, 'year') ?? pickField(merged, 'year'),
+    size: pickField(item, 'size') ?? pickField(merged, 'size'),
+    bagWidth: pickField(item, 'bagWidth') ?? pickField(merged, 'bagWidth'),
+    bagDepth: pickField(item, 'bagDepth') ?? pickField(merged, 'bagDepth'),
+    bagHeight: pickField(item, 'bagHeight') ?? pickField(merged, 'bagHeight'),
+    consignInfo: pickField(item, 'consignInfo') ?? pickField(merged, 'consignInfo'),
+    authAgency: pickField(item, 'authAgency') ?? pickField(merged, 'authAgency'),
+    cared: pickField(item, 'cared') ?? pickField(merged, 'cared'),
     accessories: pickField(item, 'accessories') || pickField(merged, 'accessories'),
     itemBrand: pickField(item, 'itemBrand') ?? pickField(merged, 'itemBrand'),
     itemCategory: pickField(item, 'itemCategory') ?? pickField(merged, 'itemCategory'),
@@ -214,6 +221,9 @@ export function enrichDetailMetadata(detail, store) {
   }
   if (detail.year === null || detail.year === undefined || detail.year === '') {
     detail.year = item.year
+  }
+  for (const key of ['size', 'bagWidth', 'bagDepth', 'bagHeight', 'consignInfo', 'authAgency', 'cared']) {
+    if (detail[key] === null || detail[key] === undefined || detail[key] === '') detail[key] = item[key]
   }
   if (!detail.accessories) {
     detail.accessories = item.accessories
