@@ -1,6 +1,12 @@
 import livePayrollMessages from './live-payroll'
 
 const zhToEnMap = {
+  '联系人加载失败，请重试': 'Failed to load contacts. Please retry.',
+  '请先选择关联角色': 'Select an associated role first',
+  '该角色下暂无用户': 'No users in this role',
+  '该角色用户均未填写联系电话': 'No users in this role have a phone number',
+  '未填写': 'Not provided',
+  '重试': 'Retry',
   '长（英寸）': 'Bag Width (inch)',
   '宽（英寸）': 'Bag Depth (inch)',
   '高（英寸）': 'Bag Height (inch)',
@@ -143,6 +149,8 @@ const zhToEnMap = {
   供应商: 'Supplier',
   供应商管理: 'Supplier Management',
   供应商名称: 'Supplier Name',
+  供应商简称: 'Supplier Short Name',
+  未填写时显示供应商名称: 'Leave blank to display the supplier name',
   供应商编码: 'Supplier Code',
   审批: 'Approval',
   审批中: 'Pending Review',

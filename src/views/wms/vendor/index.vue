@@ -24,7 +24,7 @@
       </el-form-item>
       <el-form-item v-if="identityResolved && !isSupplierUser" :label="text('供货商', 'Supplier')" prop="supplierId">
         <el-select v-model="queryParams.supplierId" :placeholder="text('全部供货商', 'All suppliers')" clearable filterable>
-          <el-option v-for="supplier in supplierOptions" :key="supplier.id" :label="supplier.supplierName" :value="supplier.id" />
+          <el-option v-for="supplier in supplierOptions" :key="supplier.id" :label="supplierDisplayName(supplier)" :title="supplier.supplierName" :value="supplier.id" />
         </el-select>
       </el-form-item>
       <el-form-item :label="text('统计状态', 'Status')" prop="quantityStatus">
@@ -97,7 +97,7 @@
           </div>
         </template>
       </el-table-column>
-      <el-table-column :label="text('供货商', 'Supplier')" prop="supplierName" min-width="150" show-overflow-tooltip />
+      <el-table-column :label="text('供货商', 'Supplier')" prop="supplierName" :formatter="supplierDisplayName" min-width="150" show-overflow-tooltip />
       <el-table-column label="SKU" prop="skuCode" min-width="145" show-overflow-tooltip />
       <el-table-column :label="text('商品个数', 'Added')" align="right" min-width="105">
         <template #default="{ row }">
@@ -211,7 +211,7 @@
             filterable
             style="width: 100%"
           >
-            <el-option v-for="supplier in supplierOptions" :key="supplier.id" :label="supplier.supplierName" :value="supplier.id" />
+            <el-option v-for="supplier in supplierOptions" :key="supplier.id" :label="supplierDisplayName(supplier)" :title="supplier.supplierName" :value="supplier.id" />
           </el-select>
         </el-form-item>
       </el-form>
@@ -239,7 +239,7 @@
         class="preview-alert"
       />
       <el-descriptions :column="4" border class="preview-summary">
-        <el-descriptions-item :label="text('供货商', 'Supplier')">{{ settlementPreview.supplierName || text('多个供货商', 'Multiple suppliers') }}</el-descriptions-item>
+        <el-descriptions-item :label="text('供货商', 'Supplier')">{{ supplierDisplayName(settlementPreview) || text('多个供货商', 'Multiple suppliers') }}</el-descriptions-item>
         <el-descriptions-item label="SKU">{{ settlementPreview.skuCount || 0 }}</el-descriptions-item>
         <el-descriptions-item :label="text('全部商品数量', 'All product qty')">{{ quantity(settlementPreview.productQuantity) }}</el-descriptions-item>
         <el-descriptions-item :label="text('平台外已售数量', 'Off-platform sold qty')">{{ quantity(settlementPreview.offPlatformSoldQuantity) }}</el-descriptions-item>
@@ -305,7 +305,7 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column :label="text('供货商', 'Supplier')" prop="supplierName" min-width="105" show-overflow-tooltip />
+        <el-table-column :label="text('供货商', 'Supplier')" prop="supplierName" :formatter="supplierDisplayName" min-width="105" show-overflow-tooltip />
         <el-table-column label="SKU" prop="skuCode" min-width="135" />
         <el-table-column :label="text('商品', 'Item')" prop="itemName" min-width="180" show-overflow-tooltip />
         <el-table-column :label="text('商品上架时间', 'Item listing time')" prop="createdTime" width="175">
@@ -423,7 +423,7 @@
       destroy-on-close
     >
       <el-alert
-        :title="text('可勾选当前供货商的已采购 SKU；翻页或查询时会保留全部已选项。已在结算明细中的 SKU 会同步原行勾选状态，不会重复新增结算明细。', 'Select purchased SKUs for this supplier. Selections are retained across pages and searches. Existing preview SKUs sync their selection instead of creating duplicates.')"
+        :title="text('仅显示当前供货商仍有剩余可强制结算金额的已采购 SKU，已结清的不再显示；翻页或查询时会保留全部已选项。已在结算明细中的 SKU 会同步原行勾选状态，不会重复新增结算明细。', 'Only purchased SKUs with a positive remaining forced-settlement amount are shown; fully settled SKUs are excluded. Selections are retained across pages and searches. Existing preview SKUs sync their selection instead of creating duplicates.')"
         type="warning"
         show-icon
         :closable="false"
@@ -480,10 +480,21 @@
         />
       </div>
       <template #footer>
-        <el-button @click="forceSkuVisible = false">{{ text('取消', 'Cancel') }}</el-button>
-        <el-button type="warning" :disabled="!forceSkuSelected.length" @click="addForcedSkuLines">
-          {{ text(`同步/添加（${forceSkuSelected.length}项）`, `Sync/Add (${forceSkuSelected.length})`) }}
-        </el-button>
+        <div class="force-sku-footer">
+          <div class="force-sku-selected-summary" role="status" aria-live="polite">
+            <span>{{ text('当前勾选结算总额', 'Selected settlement total') }}</span>
+            <strong>{{ money(forceSkuSelectedAmount) }}</strong>
+            <div class="force-sku-selected-summary__tip">
+              {{ text('含跨页勾选；已有明细按本次金额，新增 SKU 按剩余可强制结算金额。', 'Includes selections across pages. Existing lines use their current settlement amounts; new SKUs use the remaining amount available to force.') }}
+            </div>
+          </div>
+          <div class="force-sku-footer__actions">
+            <el-button @click="forceSkuVisible = false">{{ text('取消', 'Cancel') }}</el-button>
+            <el-button type="warning" :disabled="!forceSkuSelected.length" @click="addForcedSkuLines">
+              {{ text(`同步/添加（${forceSkuSelected.length}项）`, `Sync/Add (${forceSkuSelected.length})`) }}
+            </el-button>
+          </div>
+        </div>
       </template>
     </el-dialog>
 
@@ -493,6 +504,7 @@
 <script setup name="SupplierSettlement">
 import { computed, getCurrentInstance, nextTick, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { supplierDisplayName } from '@/utils/supplier'
 import { getCurrentSupplier, listSupplierNoPage } from '@/api/wms/supplier'
 import {
   confirmSupplierSettlement,
@@ -544,6 +556,17 @@ const forceSkuRows = ref([])
 const forceSkuTotal = ref(0)
 const forceSkuSelectionCache = ref(new Map())
 const forceSkuSelected = computed(() => Array.from(forceSkuSelectionCache.value.values()))
+const forceSkuSelectedAmount = computed(() => {
+  const existingBySku = new Map((preview.value.lines || []).map(line => [String(line.skuId), line]))
+  // Match sync/add: preserve edited existing amounts and use remaining amounts only for new SKUs.
+  return forceSkuSelected.value.reduce((totalCents, row) => {
+    const existingLine = existingBySku.get(String(row.skuId))
+    const amount = existingLine
+      ? existingLine.pendingSettlementAmount
+      : (canSelectForceSku(row) ? forceCandidateRemainingAmount(row) : 0)
+    return totalCents + amountInCents(amount)
+  }, 0) / 100
+})
 const forceSkuTableRef = ref()
 let forceSkuRequestSequence = 0
 const forceSkuQuery = reactive({
@@ -847,6 +870,7 @@ async function loadForceSkuCandidates() {
   try {
     const response = await listSupplierSkuOverview({
       supplierId: preview.value.supplierId,
+      quantityStatus: 'FORCE_AVAILABLE',
       skuCode: forceSkuQuery.skuCode,
       itemName: forceSkuQuery.itemName,
       pageNum: forceSkuQuery.pageNum,
@@ -887,6 +911,7 @@ function toForcedSettlementLine(row) {
   return {
     supplierId: row.supplierId,
     supplierName: row.supplierName,
+    supplierShortName: row.supplierShortName,
     itemId: row.itemId,
     skuId: row.skuId,
     skuCode: row.skuCode,
@@ -1432,6 +1457,41 @@ onMounted(async () => {
 
 .force-sku-query {
   margin-bottom: 4px;
+}
+
+.force-sku-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.force-sku-selected-summary {
+  flex: 1 1 300px;
+  text-align: left;
+  color: var(--el-text-color-regular);
+}
+
+.force-sku-selected-summary strong {
+  display: inline-block;
+  margin-left: 10px;
+  font-size: 20px;
+  color: var(--el-color-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.force-sku-selected-summary__tip {
+  margin-top: 4px;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.force-sku-footer__actions {
+  display: flex;
+  flex: 0 0 auto;
+  margin-left: auto;
 }
 
 .preview-pagination,
