@@ -1103,6 +1103,8 @@ const zhToEnMap = {
   '用于登录系统的账号名，支持邮箱等形式；创建后不可修改。': 'Login account name; email-style names are supported. Cannot be changed after creation.',
   '系统已预设初始密码，可直接使用；也可自行修改后再提交。': 'A default password is preset; use it as-is or change it before submitting.',
   '必填项；不修改时默认「在职」。': 'Required; defaults to Active if unchanged.',
+  '已归档员工可改回「在职」或「试用期」，保存后同步到 HR 员工档案。': 'Archived employees can be set back to Active or Probation. Saving syncs the HR employee record.',
+  '已归档员工可改回「在职」或「试用期」，保存后同步到用户管理。': 'Archived employees can be set back to Active or Probation. Saving syncs User Management.',
   '必填项；不修改时默认 W2。': 'Required; defaults to W2 if unchanged.',
   '必备文件仅支持单个 PDF；多个文件请合并为压缩包后上传到「其他文件」。': 'Required files: one PDF per slot; zip multiple files and upload under Other Files.',
   '其他文件支持多种格式，可批量上传；如需打包多个文件，可先压缩再上传。': 'Other files: multiple formats and batch upload; zip first if needed.',
