@@ -683,8 +683,9 @@
                   <el-select v-model="form.employeeStatus" :placeholder="tr('请选择员工状态')" style="width: 100%" :disabled="isLinkedUserReadonly">
                     <el-option :label="tr('在职')" :value="0" />
                     <el-option :label="tr('试用期')" :value="1" />
-                    <el-option v-if="proxy.$auth.hasPermi('wms:employee:archive')" :label="tr('已归档')" :value="3" />
+                    <el-option v-if="form.archiveLocked || proxy.$auth.hasPermi('wms:employee:archive')" :label="tr('已归档')" :value="3" />
                   </el-select>
+                  <div v-if="form.archiveLocked && !isLinkedUserReadonly" class="field-hint">{{ tr('已归档员工可改回「在职」或「试用期」，保存后同步到用户管理。') }}</div>
                 </el-form-item>
               </el-col>
               <el-col :span="12" v-if="form.employeeStatus === 3">
@@ -1494,7 +1495,7 @@ function handleUpdate(row) {
     reset()
     loadFormOptions()
     getEmployee(row.id).then(res => {
-      form.value = { ...res.data, postIds: applyEmployeePostIds(res.data) }
+      form.value = { ...res.data, postIds: applyEmployeePostIds(res.data), archiveLocked: Number(res.data?.employeeStatus) >= 2 }
       syncFormSelectors()
       syncPostIdsFromUser(res.data?.userId)
       open.value = true
@@ -1506,7 +1507,7 @@ function handleUpdate(row) {
   reset()
   loadFormOptions()
   getEmployee(row.id).then(res => {
-    form.value = { ...res.data, postIds: applyEmployeePostIds(res.data) }
+    form.value = { ...res.data, postIds: applyEmployeePostIds(res.data), archiveLocked: Number(res.data?.employeeStatus) >= 2 }
     syncFormSelectors()
     syncPostIdsFromUser(res.data?.userId)
     open.value = true
@@ -1523,6 +1524,10 @@ function submitForm() {
     if (!valid) return
     buttonLoading.value = true
     const payload = { ...form.value }
+    delete payload.archiveLocked
+    if (Number(payload.employeeStatus) < 2) {
+      payload.departureDate = null
+    }
     payload.postIds = Array.isArray(payload.postIds) ? payload.postIds.filter(id => id != null && id !== '') : []
     if (!payload.postIds.length) {
       payload.position = ''
@@ -2792,6 +2797,12 @@ loadCapabilities().then(() => {
   }
   .drawer-permission-alert {
     margin-bottom: 16px;
+  }
+  .field-hint {
+    margin-top: 4px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: #909399;
   }
 }
 </style>

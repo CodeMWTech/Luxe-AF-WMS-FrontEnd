@@ -265,12 +265,13 @@
                      </el-col>
                      <el-col :span="12">
                         <el-form-item :label="tr('员工状态')">
-                           <el-select v-model="form.employeeStatus" :placeholder="tr('请选择员工状态')" style="width: 100%" :disabled="form.archiveLocked">
+                           <el-select v-model="form.employeeStatus" :placeholder="tr('请选择员工状态')" style="width: 100%">
                               <el-option :label="tr('在职')" :value="0" />
                               <el-option :label="tr('试用期')" :value="1" />
                               <el-option v-if="form.archiveLocked || proxy.$auth.hasPermi('wms:employee:archive')" :label="tr('已归档')" :value="3" />
                            </el-select>
-                           <div class="field-hint">{{ tr('必填项；不修改时默认「在职」。') }}</div>
+                           <div class="field-hint" v-if="form.archiveLocked">{{ tr('已归档员工可改回「在职」或「试用期」，保存后同步到 HR 员工档案。') }}</div>
+                           <div class="field-hint" v-else>{{ tr('必填项；不修改时默认「在职」。') }}</div>
                         </el-form-item>
                      </el-col>
                      <el-col :span="12" v-if="form.employeeStatus === 3">
@@ -752,7 +753,7 @@ function buildSavePayload() {
     postIds: form.value.postIds,
     remark: form.value.remark,
     employeeStatus: form.value.employeeStatus ?? 0,
-    departureDate: form.value.departureDate,
+    departureDate: Number(form.value.employeeStatus) >= 2 ? form.value.departureDate : null,
     taxFormType: form.value.taxFormType || 'W2',
     salaryType: form.value.salaryType,
     baseSalary: form.value.baseSalary,
