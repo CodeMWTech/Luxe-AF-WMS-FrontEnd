@@ -353,7 +353,7 @@ onActivated(loadAll)
 @import '../live.scss';
 .rate-config-shell { display: grid; grid-template-columns: 280px minmax(0, 1fr); align-items: start; gap: 16px; min-height: 680px; }
 .employee-panel, .rate-detail-panel { background: #fff; border: 1px solid #e9eaf1; border-radius: 14px; box-shadow: 0 4px 20px rgba(37, 48, 74, .05); }
-.employee-panel { position: sticky; top: 16px; display: flex; height: clamp(420px, calc(100vh - 198px), 760px); min-height: 0; flex-direction: column; overflow: hidden; }
+.employee-panel { position: sticky; top: 16px; display: flex; height: max(420px, calc(100vh - 198px)); min-height: 0; flex-direction: column; overflow: hidden; }
 .employee-search { padding: 14px 12px 10px; border-bottom: 1px solid #f0f1f5; }
 .employee-list { min-height: 0; flex: 1; padding: 8px; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
 .employee-item { width: 100%; display: flex; align-items: center; gap: 10px; padding: 10px; border: 1px solid transparent; border-radius: 10px; background: transparent; color: #30364a; text-align: left; cursor: pointer; transition: .18s ease; }

@@ -4,11 +4,11 @@
       <h3>{{ tr('所选周') }} · {{ displayDate(week[0].date) }} — {{ displayDate(week[6].date) }}</h3>
       <div class="board-scroll" role="region" :aria-label="tr('排班计划')" tabindex="0">
         <table class="board-table">
-          <thead><tr><th scope="col">{{ tr(dimensions[view]) }}</th><th v-for="day in week" :key="day.date" scope="col" :class="{ today: day.today }">{{ displayDate(day.date).slice(0, 5) }}<span>{{ tr(weekdays[new Date(`${day.date}T12:00:00`).getDay()]) }}</span></th></tr></thead>
+          <thead><tr><th scope="col">{{ tr(dimensions[view]) }}</th><th v-for="day in week" :key="day.date" scope="col">{{ displayDate(day.date).slice(0, 5) }}<span>{{ tr(weekdays[new Date(`${day.date}T12:00:00`).getDay()]) }}</span></th></tr></thead>
           <tbody>
             <tr v-for="group in groups" :key="group.id">
               <th scope="row"><strong>{{ group.id === 'unassigned' ? tr(group.label) : group.label }}</strong><small v-if="group.secondary">{{ group.secondary }}</small></th>
-              <td v-for="day in week" :key="day.date" :class="{ today: day.today }">
+              <td v-for="day in week" :key="day.date">
                 <button v-for="entry in entries(group, day.date)" :key="entry.key" type="button" class="shift-card"
                   :class="{ pending: entry.row.scheduleStatus === 'PENDING', cancelled: entry.row.scheduleStatus === 'CANCELLED' }"
                   :style="colorStyle(entry)" @click="$emit('open', entry.row)">
@@ -61,7 +61,6 @@ const colorStyle = entry => operatorColorStyle(entry.operator && people.value.ge
 .board-table th:first-child { width: 160px; }
 .board-table th span, .board-table th small { display: block; margin-top: 4px; color: var(--el-text-color-secondary); font-size: 12px; overflow-wrap: anywhere; }
 .board-table tbody th { padding-top: 14px; background: var(--el-bg-color); }
-.board-table .today { background-color: var(--el-color-primary-light-9); }
 .shift-card { display: flex; flex-direction: column; gap: 4px; width: 100%; margin-bottom: 7px; padding: 10px; border: 1px solid transparent; border-left: 4px solid var(--operator-color); border-radius: 6px; background: var(--operator-fill); color: var(--el-text-color-primary); font: inherit; font-size: 12px; text-align: left; cursor: pointer; overflow-wrap: anywhere; }
 .shift-card strong { font-variant-numeric: tabular-nums; }
 .shift-card .host-name { font-weight: 600; font-size: 13px; }
