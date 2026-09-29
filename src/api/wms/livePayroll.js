@@ -95,3 +95,9 @@ export const listScheduleOperators = () => request({ url: `${base}/schedules/ope
 export const updateScheduleOperatorColor = (employeeId, color) => request({ url: `${base}/schedules/operators/${employeeId}/color`, method: 'put', data: { color }, silentError: true })
 
 export const listScheduleHosts = () => request({ url: `${base}/schedules/hosts`, method: 'get', params: { includeInactive: true } })
+
+// 人工确认主播周排班短信；发送请求含幂等 requestId。
+export const previewScheduleSms = data => request({ url: `${base}/schedule-sms/preview`, method: 'post', data })
+export const sendScheduleSms = data => request({ url: `${base}/schedule-sms/send`, method: 'post', data, timeout: 30000 })
+export const listScheduleSmsRecords = params => request({ url: `${base}/schedule-sms/records`, method: 'get', params })
+export const refreshScheduleSmsStatus = id => request({ url: `${base}/schedule-sms/records/${id}/refresh`, method: 'post', timeout: 25000 })

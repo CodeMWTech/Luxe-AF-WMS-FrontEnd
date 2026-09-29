@@ -2,7 +2,7 @@
   <div data-runtime-i18n-ignore="true" class="live-page">
     <div class="live-hero">
       <div><h2>{{ tr('排班计划') }}</h2><p>{{ tr('查看所选周排班') }}</p></div>
-      <div class="live-actions"><el-button @click="exportRows">{{ tr('导出 CSV') }}</el-button><el-button type="primary" v-hasPermi="['wms:live:schedule:edit']" @click="openDialog()">{{ tr('新增排班') }}</el-button></div>
+      <div class="live-actions"><el-button v-hasPermi="['wms:live:schedule:sms:list']" @click="smsRecordsRef.show(weekDateRange[0])">{{ tr('短信记录') }}</el-button><el-button type="primary" v-hasPermi="['wms:live:schedule:sms:send']" @click="smsRef.show(weekDateRange[0], query.employeeId)">{{ tr('发送排班短信') }}</el-button><el-button @click="exportRows">{{ tr('导出 CSV') }}</el-button><el-button type="primary" v-hasPermi="['wms:live:schedule:edit']" @click="openDialog()">{{ tr('新增排班') }}</el-button></div>
     </div>
     <el-card class="live-filter schedule-filter" shadow="never">
       <div class="schedule-filter-bar">
@@ -80,11 +80,15 @@
         </div>
       </template>
     </el-dialog>
+    <LiveScheduleSmsDialog ref="smsRef" @sent="handleSmsSent" />
+    <LiveScheduleSmsRecordsDialog ref="smsRecordsRef" />
   </div>
 </template>
 
 <script setup>
 import ScheduleBoard from './ScheduleBoard.vue'
+import LiveScheduleSmsDialog from './LiveScheduleSmsDialog.vue'
+import LiveScheduleSmsRecordsDialog from './LiveScheduleSmsRecordsDialog.vue'
 import { idKey, isActiveOperator, assignmentSummary } from './scheduleDisplay'
 import { checkPermi } from '@/utils/permission'
 import LiveAccountSelect from '../components/LiveAccountSelect.vue'
@@ -95,6 +99,8 @@ import { addSchedule, deleteSchedule, getLiveOptions, listScheduleCalendar, list
 import { displayDate, downloadCsv, isoDate, LIVE_DATE_FORMAT, weekRange, selectedWeekRange } from '../shared'
 const { tr, isEn, messageNode } = useLiveI18n()
 const { proxy } = getCurrentInstance()
+const smsRef = ref(), smsRecordsRef = ref()
+function handleSmsSent(week) { if (checkPermi(['wms:live:schedule:sms:list'])) smsRecordsRef.value.show(week) }
 
 const loading = ref(false), view = ref('channel'), formRef = ref()
 const canEdit = computed(() => checkPermi(['wms:live:schedule:edit']))
