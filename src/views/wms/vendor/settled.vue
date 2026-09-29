@@ -11,7 +11,7 @@
     <el-form v-if="identityResolved" :inline="true" class="query-form">
       <el-form-item v-if="!isSupplierUser" :label="text('供应商', 'Supplier')">
         <el-select v-model="queryParams.supplierId" :placeholder="text('全部供应商', 'All suppliers')" clearable filterable>
-          <el-option v-for="supplier in supplierOptions" :key="supplier.id" :label="supplier.supplierName" :value="supplier.id" />
+          <el-option v-for="supplier in supplierOptions" :key="supplier.id" :label="supplierDisplayName(supplier)" :title="supplier.supplierName" :value="supplier.id" />
         </el-select>
       </el-form-item>
       <el-form-item :label="text('状态', 'Status')">
@@ -39,7 +39,7 @@
 
     <el-table v-loading="loading" :data="rows" border stripe>
       <el-table-column :label="text('结算单号', 'Settlement no.')" prop="settlementNo" min-width="190" />
-      <el-table-column :label="text('供应商', 'Supplier')" prop="supplierName" min-width="160" show-overflow-tooltip />
+      <el-table-column :label="text('供应商', 'Supplier')" prop="supplierName" :formatter="supplierDisplayName" min-width="160" show-overflow-tooltip />
       <el-table-column :label="text('状态', 'Status')" width="110" align="center">
         <template #default="{ row }"><el-tag :type="statusTagType(row.recordStatus)">{{ statusText(row.recordStatus) }}</el-tag></template>
       </el-table-column>
@@ -88,7 +88,7 @@
     >
       <el-descriptions :column="4" border class="detail-summary">
         <el-descriptions-item :label="text('结算单号', 'Settlement no.')">{{ detail.settlementNo || '-' }}</el-descriptions-item>
-        <el-descriptions-item :label="text('供应商', 'Supplier')">{{ detail.supplierName || '-' }}</el-descriptions-item>
+        <el-descriptions-item :label="text('供应商', 'Supplier')">{{ supplierDisplayName(detail) || '-' }}</el-descriptions-item>
         <el-descriptions-item :label="text('状态', 'Status')"><el-tag :type="statusTagType(detail.recordStatus)">{{ statusText(detail.recordStatus) }}</el-tag></el-descriptions-item>
         <el-descriptions-item :label="text('操作时间', 'Operated at')">{{ displayTime(detail.recordedAt) }}</el-descriptions-item>
         <el-descriptions-item label="SKU">{{ detail.skuCount || 0 }}</el-descriptions-item>
@@ -143,6 +143,7 @@
 <script setup name="SupplierSettled">
 import { computed, getCurrentInstance, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { supplierDisplayName } from '@/utils/supplier'
 import { getCurrentSupplier, listSupplierNoPage } from '@/api/wms/supplier'
 import { deleteSupplierSettlementDraft, getSupplierSettlementRecord, listSupplierSettlementRecords } from '@/api/wms/supplierSettlement'
 
