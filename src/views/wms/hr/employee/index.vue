@@ -97,7 +97,7 @@
         type="warning"
         show-icon
         :closable="false"
-        class="mt16"
+        class="missing-files-alert"
       >
         <template #title>
           {{ missingAlertTitle }}
@@ -2180,6 +2180,10 @@ loadCapabilities().then(() => {
   }
   .stats-row {
     margin-top: 20px;
+    margin-bottom: 20px;
+  }
+  .missing-files-alert {
+    margin-top: 0;
   }
   .stat-card {
     background: #fafafa;
@@ -2207,6 +2211,7 @@ loadCapabilities().then(() => {
     line-height: 1.4;
   }
   .workspace-row {
+    margin-top: 20px;
     align-items: stretch;
     &.is-detail-open {
       align-items: flex-start;
