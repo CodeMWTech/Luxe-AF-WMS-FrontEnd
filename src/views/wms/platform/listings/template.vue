@@ -222,11 +222,6 @@
               <div class="ebay-note shipping-hint">{{ t('platformListings.packageSizeHint') }} &nbsp;|&nbsp; {{ t('platformListings.packageWeightHint') }}</div>
             </section>
 
-            <section class="ebay-section preferences-section">
-              <div class="ebay-section-title-row"><h3>{{ t('platformListings.preferences') }}</h3></div>
-              <div class="toggle-row"><span>{{ t('platformListings.returnsAccepted') }}</span><el-switch v-model="form.ebayReturnsAccepted" /></div>
-              <div class="toggle-row"><span>{{ t('platformListings.privateListing') }}</span><el-switch v-model="form.ebayPrivateListing" /></div>
-            </section>
           </div>
         </template>
 
@@ -569,7 +564,7 @@ const initForm = {
   ebaySubtitle: '', ebayQuantity: 1, ebayMarketplaceId: 'EBAY_US', ebayCurrency: 'USD',
   ebayDepartment: 'Women', ebayExteriorColor: 'N/A', ebaySize: 'N/A', ebayProductLine: 'N/A', ebayCountry: 'US',
   ebayLocation: 'Los Angeles, California', ebayPostalCode: '90048', ebayDispatchTimeMax: 3,
-  ebayShippingService: 'USPSParcel', ebayShippingCost: 0, ebayReturnsAccepted: false, ebayBestOfferEnabled: false, ebayPrivateListing: false,
+  ebayShippingService: 'USPSParcel', ebayShippingCost: 0, ebayBestOfferEnabled: false,
   ebayFulfillmentPolicyId: '', ebayPaymentPolicyId: '', ebayReturnPolicyId: '',
   tiktokCategoryId: '', tiktokCategoryVersion: 'v2', tiktokSaveMode: 'LISTING',
   tiktokProductAttributes: '',
@@ -1061,7 +1056,7 @@ function handleEdit(row) {
       ebaySize: d.ebaySize || 'N/A', ebayProductLine: d.ebayProductLine || 'N/A', ebayCountry: d.ebayCountry || 'US',
       ebayLocation: d.ebayLocation || 'Los Angeles, California', ebayPostalCode: d.ebayPostalCode || '90048', ebayDispatchTimeMax: d.ebayDispatchTimeMax || 3,
       ebayShippingService: d.ebayShippingService || 'USPSParcel', ebayShippingCost: d.ebayShippingCost ?? 0,
-      ebayReturnsAccepted: !!d.ebayReturnsAccepted, ebayBestOfferEnabled: !!d.ebayBestOfferEnabled, ebayPrivateListing: !!d.ebayPrivateListing,
+      ebayBestOfferEnabled: !!d.ebayBestOfferEnabled,
       ebayFulfillmentPolicyId: d.ebayFulfillmentPolicyId || '',
       ebayPaymentPolicyId: d.ebayPaymentPolicyId || '',
       ebayReturnPolicyId: d.ebayReturnPolicyId || '',
@@ -1298,7 +1293,7 @@ function doSubmit(isEbay) {
     ebayProductLine: form.ebayProductLine || null, ebayCountry: form.ebayCountry || null, ebayLocation: form.ebayLocation || null,
     ebayPostalCode: form.ebayPostalCode || null, ebayDispatchTimeMax: form.ebayDispatchTimeMax,
     ebayShippingService: form.ebayShippingService || null, ebayShippingCost: form.ebayShippingCost,
-    ebayReturnsAccepted: form.ebayReturnsAccepted, ebayBestOfferEnabled: form.ebayBestOfferEnabled, ebayPrivateListing: form.ebayPrivateListing,
+    ebayBestOfferEnabled: form.ebayBestOfferEnabled,
     ebayFulfillmentPolicyId: form.ebayFulfillmentPolicyId || null,
     ebayPaymentPolicyId: form.ebayPaymentPolicyId || null,
     ebayReturnPolicyId: form.ebayReturnPolicyId || null,
@@ -1648,7 +1643,6 @@ onMounted(() => { loadShops(); getList() })
 .ebay-rich-editor :deep(.ql-container),
 .tiktok-rich-editor :deep(.ql-container) { border: 0; font-size: 13px; }
 .payment-policy-card,
-.preference-card,
 .policy-card,
 .disclosure-row {
   border: 1px solid #ededed;
@@ -1663,7 +1657,6 @@ onMounted(() => { loadShops(); getList() })
   padding: 12px 14px;
 }
 .payment-policy-card p,
-.preference-card p,
 .disclosure-row p { margin: 4px 0 0; color: #666; font-size: 12px; line-height: 1.4; }
 .policy-card-list {
   display: grid;
@@ -1674,8 +1667,6 @@ onMounted(() => { loadShops(); getList() })
 .policy-card { padding: 12px; }
 .policy-title { margin-bottom: 8px; font-size: 12px; font-weight: 700; }
 .shipping-metrics { margin-top: 14px; }
-.preference-card { padding: 12px 14px; margin-bottom: 12px; }
-.toggle-row,
 .disclosure-row {
   display: flex;
   align-items: center;
