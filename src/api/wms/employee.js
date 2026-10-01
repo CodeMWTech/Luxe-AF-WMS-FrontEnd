@@ -60,7 +60,7 @@ export function getEmployeeByUserId(userId) {
 export function saveEmployeeWithUser(data) {
   return request({
     url: '/wms/employee/saveWithUser',
-    method: 'post',
+    method: data && data.userId ? 'put' : 'post',
     data
   })
 }

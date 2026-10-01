@@ -27,6 +27,7 @@ export const importAttendance = data => request({
 export const listSchedules = params => request({ url: `${base}/schedules/list`, method: 'get', params })
 export const listScheduleCalendar = params => request({ url: `${base}/schedules/calendar`, method: 'get', params })
 export const listScheduleRateTypes = params => request({ url: `${base}/schedules/rate-types`, method: 'get', params })
+export const listScheduleRateAccounts = params => request({ url: `${base}/schedules/rate-accounts`, method: 'get', params })
 export const addSchedule = data => request({ url: `${base}/schedules`, method: 'post', data })
 export const updateSchedule = data => request({ url: `${base}/schedules`, method: 'put', data })
 export const deleteSchedule = id => request({ url: `${base}/schedules/${id}`, method: 'delete' })

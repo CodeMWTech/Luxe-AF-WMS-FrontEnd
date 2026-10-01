@@ -120,9 +120,17 @@
       <el-table ref="operlogRef" v-loading="loading" :data="operlogList" @selection-change="handleSelectionChange" :default-sort="defaultSort" @sort-change="handleSortChange">
          <el-table-column type="selection" width="50" align="center" />
          <el-table-column :label="tr('日志编号')" align="center" prop="operId" />
-         <el-table-column :label="tr('系统模块')" align="center" prop="title" :show-overflow-tooltip="true">
+         <el-table-column class-name="module-title-col" :label="tr('系统模块')" align="center" prop="title" min-width="140">
             <template #default="scope">
-               <span>{{ displayModuleTitle(scope.row.title) }}</span>
+               <el-tooltip
+                  :content="displayModuleTitle(scope.row.title)"
+                  placement="top"
+                  :show-after="300"
+                  :disabled="!displayModuleTitle(scope.row.title)"
+                  popper-class="operlog-module-tooltip"
+               >
+                  <span class="module-title-text">{{ displayModuleTitle(scope.row.title) }}</span>
+               </el-tooltip>
             </template>
          </el-table-column>
          <el-table-column :label="tr('操作类型')" align="center" prop="businessType">
@@ -525,6 +533,18 @@ getList();
 </script>
 <style scoped>
 .operlog-page.is-en .el-form-item__label { white-space: nowrap; }
+.operlog-page :deep(.module-title-col .cell) {
+  white-space: normal;
+  word-break: normal;
+  overflow: visible;
+  text-overflow: clip;
+  line-height: 22px;
+}
+.operlog-page :deep(.module-title-text) {
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: middle;
+}
 .operlog-page .action-btn { min-width: 96px; }
 .operlog-page.is-en .action-btn { min-width: 110px; }
 .filter-form {
@@ -539,5 +559,15 @@ getList();
   .filter-item-time {
     width: 100%;
   }
+}
+</style>
+<style>
+.operlog-module-tooltip.el-popper {
+  max-width: 420px;
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.5;
+  overflow: visible;
+  text-overflow: clip;
 }
 </style>

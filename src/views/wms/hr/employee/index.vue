@@ -167,18 +167,17 @@
             <div class="selection-hint-status">{{ batchDownloadScopeHint }}</div>
           </div>
 
-          <div class="list-table-wrap" :class="{ 'is-scroll-mode': !!selectedEmployee }">
+          <div class="list-table-wrap">
             <el-table
               ref="employeeTableRef"
               v-loading="loading"
               :data="employeeList"
               highlight-current-row
               stripe
-              v-bind="employeeTableSizeBind"
               @current-change="handleSelectEmployee"
               @selection-change="handleSelectionChange"
               class="employee-table"
-              :class="{ 'is-scrollable': !!selectedEmployee }"
+              height="100%"
               size="small"
             >
               <el-table-column type="selection" width="42" v-if="canBatchDownload" />
@@ -216,19 +215,17 @@
             </el-table>
           </div>
 
-          <div v-show="total > 0 && !selectedEmployee" class="list-pagination">
+          <div v-show="total > 0" class="list-pagination">
             <pagination
               :total="total"
               v-model:page="queryParams.pageNum"
               v-model:limit="queryParams.pageSize"
-              layout="total, prev, pager, next, jumper"
+              :page-sizes="[10, 20, 30, 50]"
+              :pager-count="5"
+              layout="total, sizes, prev, pager, next, jumper"
               :auto-scroll="false"
               @pagination="getList"
             />
-          </div>
-          <div v-show="selectedEmployee && employeeList.length > 0" class="list-scroll-hint">
-            {{ tr('已选中员工，请在名单上滚动鼠标浏览') }}
-            （{{ employeeList.length }} / {{ total }}）
           </div>
         </el-card>
       </el-col>
@@ -765,36 +762,12 @@ import {
   updateEmployee
 } from '@/api/wms/employee'
 
-const LIST_PAGE_SIZE = 10
-/** 选中员工后拉取足够多的名单，才能在固定高度区域内滚轮浏览 */
-const LIST_SCROLL_SIZE = 500
+const PAGE_SIZE_OPTIONS = [10, 20, 30, 50]
 
 const router = useRouter()
 const { proxy } = getCurrentInstance()
 const permissionStore = usePermissionStore()
-const listViewportMax = ref(420)
 const employeeTableRef = ref(null)
-
-function updateListViewportMax() {
-  // 固定可视高度，保证多数情况下名单会溢出 → 滚轮有响应；又不撑开整页
-  listViewportMax.value = Math.min(480, Math.max(320, window.innerHeight - 420))
-}
-
-onMounted(() => {
-  updateListViewportMax()
-  window.addEventListener('resize', updateListViewportMax)
-})
-onBeforeUnmount(() => {
-  window.removeEventListener('resize', updateListViewportMax)
-})
-
-/** 未选中：撑满卡片；已选中：固定 height，表格内部出现滚动条，滚轮可滑动 */
-const employeeTableSizeBind = computed(() => {
-  if (!selectedEmployee.value) {
-    return { height: '100%' }
-  }
-  return { height: listViewportMax.value }
-})
 
 const TAX_FORM_PERM = {
   W2: 'wms:employee:tax:w2',
@@ -1363,30 +1336,14 @@ function handleDeptFilterChange(val) {
 function clearSelectedEmployee() {
   selectedEmployee.value = null
   currentAttachments.value = []
-  if (queryParams.value.pageSize !== LIST_PAGE_SIZE) {
-    queryParams.value.pageSize = LIST_PAGE_SIZE
-    queryParams.value.pageNum = 1
-  }
-}
-
-function ensureListScrollMode() {
-  if (queryParams.value.pageSize === LIST_SCROLL_SIZE && queryParams.value.pageNum === 1) {
-    nextTick(() => syncTableCurrentRow())
-    return Promise.resolve()
-  }
-  queryParams.value.pageNum = 1
-  queryParams.value.pageSize = LIST_SCROLL_SIZE
-  return getList({ preserveDetail: true }).then(() => {
-    nextTick(() => syncTableCurrentRow())
-  })
 }
 
 function syncTableCurrentRow() {
-  if (!selectedEmployee.value || !employeeTableRef.value) return
-  const matched = employeeList.value.find(item => item.id === selectedEmployee.value.id)
-  if (matched) {
-    employeeTableRef.value.setCurrentRow?.(matched)
-  }
+  if (!employeeTableRef.value) return
+  const matched = selectedEmployee.value
+    ? employeeList.value.find(item => item.id === selectedEmployee.value.id)
+    : null
+  employeeTableRef.value.setCurrentRow?.(matched || null)
 }
 
 function getList(options = {}) {
@@ -1394,24 +1351,16 @@ function getList(options = {}) {
   return listEmployee(buildListParams()).then(res => {
     employeeList.value = res.rows || []
     total.value = res.total || 0
-    if (selectedEmployee.value) {
-      const matched = employeeList.value.find(item => item.id === selectedEmployee.value.id)
+    const selectedId = selectedEmployee.value?.id
+    if (selectedId && !options.preserveDetail) {
+      const matched = employeeList.value.find(item => item.id === selectedId)
       if (matched) {
-        if (!options.preserveDetail) {
-          return loadEmployeeDetail(matched.id)
-        }
-      } else {
-        clearSelectedEmployee()
-        queryParams.value.pageSize = LIST_PAGE_SIZE
-        queryParams.value.pageNum = 1
-        return listEmployee(buildListParams()).then(paged => {
-          employeeList.value = paged.rows || []
-          total.value = paged.total || 0
-        })
+        return loadEmployeeDetail(matched.id)
       }
     }
   }).finally(() => {
     loading.value = false
+    nextTick(() => syncTableCurrentRow())
   })
 }
 
@@ -1434,8 +1383,9 @@ function handleViewModeChange() {
 
 function handleQuery() {
   queryParams.value.pageNum = 1
-  // 已打开详情时保持滚动模式的大批量加载，否则分页 10 条
-  queryParams.value.pageSize = selectedEmployee.value ? LIST_SCROLL_SIZE : LIST_PAGE_SIZE
+  if (!PAGE_SIZE_OPTIONS.includes(Number(queryParams.value.pageSize))) {
+    queryParams.value.pageSize = PAGE_SIZE_OPTIONS[0]
+  }
   getList()
 }
 
@@ -1451,12 +1401,9 @@ function resetFilters() {
 }
 
 function handleSelectEmployee(row) {
-  if (!row) return
-  // 滚动模式刷新列表后 setCurrentRow 会再次触发，避免重复拉详情
-  if (selectedEmployee.value?.id === row.id && queryParams.value.pageSize === LIST_SCROLL_SIZE) {
-    return
-  }
-  loadEmployeeDetail(row.id).then(() => ensureListScrollMode())
+  if (!row?.id) return
+  if (selectedEmployee.value?.id === row.id) return
+  loadEmployeeDetail(row.id)
 }
 
 function handleSelectionChange(rows) {
@@ -2211,34 +2158,19 @@ loadCapabilities().then(() => {
   .workspace-row {
     margin-top: 20px;
     align-items: stretch;
-    &.is-detail-open {
-      align-items: flex-start;
-      min-height: 0;
-    }
+    height: calc(100vh - 280px);
+    min-height: 560px;
   }
   .workspace-col {
     display: flex;
-    min-height: 640px;
-  }
-  .workspace-row.is-detail-open .workspace-col {
     min-height: 0;
-  }
-  /* 选中详情后：左侧名单高度随内容，不跟右侧强行拉齐 */
-  .workspace-row.is-detail-open .workspace-col:first-child {
-    align-self: flex-start;
-    height: auto;
-    max-height: calc(100vh - 140px);
-  }
-  .workspace-row.is-detail-open .workspace-col:last-child {
-    align-self: stretch;
-    min-height: 640px;
-    max-height: calc(100vh - 140px);
-    height: calc(100vh - 140px);
+    height: 100%;
   }
   .workspace-panel {
     flex: 1;
     width: 100%;
     height: 100%;
+    min-height: 0;
     :deep(.el-card__body) {
       display: flex;
       flex-direction: column;
@@ -2249,34 +2181,14 @@ loadCapabilities().then(() => {
     }
   }
   .list-card {
+    height: 100%;
     :deep(.el-card__body) {
       padding: 12px 14px 12px;
-      min-height: 640px;
-    }
-    &.is-detail-open {
-      height: auto !important;
-      max-height: calc(100vh - 140px);
-      :deep(.el-card__body) {
-        min-height: 0;
-        height: auto !important;
-        max-height: calc(100vh - 140px);
-        overflow: hidden;
-      }
     }
   }
   .detail-card {
-    min-height: 640px;
-    :deep(.el-card__body) {
-      min-height: 640px;
-    }
-  }
-  .workspace-row.is-detail-open .detail-card {
-    min-height: 0;
     height: 100%;
-    :deep(.el-card__body) {
-      min-height: 0;
-      height: 100%;
-    }
+    min-height: 0;
   }
   .list-toolbar {
     display: flex;
@@ -2332,34 +2244,18 @@ loadCapabilities().then(() => {
     }
   }
   .list-table-wrap {
-    flex: 1;
+    flex: 1 1 auto;
+    height: 0;
     min-height: 0;
     margin-top: 8px;
-    display: flex;
-    flex-direction: column;
     overflow: hidden;
-    &.is-scroll-mode {
-      flex: 0 0 auto;
-      overflow: hidden;
-    }
   }
   .employee-table {
-    flex: 1;
     width: 100%;
-    min-height: 0;
-    :deep(.el-table) {
-      height: 100% !important;
-    }
-    &.is-scrollable {
-      flex: 0 0 auto;
-      /* 固定高度由 el-table height 控制，保证 body 可滚轮 */
-      :deep(.el-table__body-wrapper) {
-        overflow-y: auto !important;
-        overscroll-behavior: contain;
-      }
-      :deep(.el-scrollbar__wrap) {
-        overscroll-behavior: contain;
-      }
+    height: 100%;
+    :deep(.el-table__body-wrapper),
+    :deep(.el-scrollbar__wrap) {
+      overscroll-behavior: contain;
     }
     :deep(.el-table__header th) {
       background: #f5f7fa;
