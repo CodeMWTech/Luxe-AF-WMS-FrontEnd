@@ -77,9 +77,9 @@
       </el-table>
 
       <!-- 添加或修改部门对话框 -->
-      <el-dialog :title="title" v-model="open" width="600px" append-to-body>
-         <el-form ref="deptRef" :model="form" :rules="rules" label-width="80px">
-            <el-row>
+      <el-dialog :title="title" v-model="open" width="600px" :style="{ maxWidth: 'calc(100vw - 32px)' }" append-to-body>
+         <el-form ref="deptRef" scroll-to-error :model="form" :rules="rules" label-width="80px">
+            <el-row :gutter="16">
                <el-col :span="24" v-if="form.parentId !== 0">
                   <el-form-item :label="tr('上级部门')" prop="parentId">
                      <el-tree-select
@@ -92,32 +92,30 @@
                      />
                   </el-form-item>
                </el-col>
-               <el-col :span="12">
+               <el-col :xs="24" :sm="12">
                   <el-form-item :label="tr('部门名称')" prop="deptName">
                      <el-input v-model="form.deptName" :placeholder="tr('请输入部门名称')" />
                   </el-form-item>
                </el-col>
-               <el-col :span="12">
+               <el-col :xs="24" :sm="12">
                   <el-form-item :label="tr('显示排序')" prop="orderNum">
                      <el-input-number v-model="form.orderNum" controls-position="right" :min="0" />
                   </el-form-item>
                </el-col>
-               <el-col :span="12">
+               <el-col :xs="24" :sm="12">
                   <el-form-item :label="tr('负责人')" prop="leader">
                      <el-input v-model="form.leader" :placeholder="tr('请输入负责人')" maxlength="20" />
                   </el-form-item>
                </el-col>
-               <el-col :span="12">
-                  <el-form-item :label="tr('联系电话')" prop="phone">
-                     <el-input v-model="form.phone" :placeholder="tr('请输入联系电话')" maxlength="11" />
-                  </el-form-item>
-               </el-col>
-               <el-col :span="12">
+               <el-col :xs="24" :sm="12">
                   <el-form-item :label="tr('邮箱')" prop="email">
                      <el-input v-model="form.email" :placeholder="tr('请输入邮箱')" maxlength="50" />
                   </el-form-item>
                </el-col>
-               <el-col :span="12">
+               <el-col :span="24">
+                  <PhoneField ref="phoneField" :label="tr('联系电话')" field="phone" v-model="form.phone" />
+               </el-col>
+               <el-col :span="24">
                   <el-form-item :label="tr('部门状态')">
                      <el-radio-group v-model="form.status">
                         <el-radio
@@ -175,7 +173,6 @@ const rules = computed(() => ({
   deptName: [{ required: true, message: tr("部门名称不能为空"), trigger: "blur" }],
   orderNum: [{ required: true, message: tr("显示排序不能为空"), trigger: "blur" }],
   email: [{ type: "email", message: tr("请输入正确的邮箱地址"), trigger: ["blur", "change"] }],
-  phone: [{ pattern: /^1[3|4|5|6|7|8|9][0-9]\d{8}$/, message: tr("请输入正确的手机号码"), trigger: "blur" }]
 }));
 
 /** 查询部门列表 */
@@ -259,13 +256,13 @@ function submitForm() {
           proxy.$modal.msgSuccess(tr("修改成功"));
           open.value = false;
           getList();
-        });
+        }).catch(error => { proxy.$refs.phoneField?.setServerError(error); });
       } else {
         addDept(form.value).then(response => {
           proxy.$modal.msgSuccess(tr("新增成功"));
           open.value = false;
           getList();
-        });
+        }).catch(error => { proxy.$refs.phoneField?.setServerError(error); });
       }
     }
   });

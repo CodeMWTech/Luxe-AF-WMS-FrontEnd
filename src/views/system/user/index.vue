@@ -194,7 +194,7 @@
 
       <!-- 添加或修改用户（同步员工档案） -->
       <el-drawer v-model="open" :title="title" size="58%" append-to-body>
-         <el-form :model="form" :rules="rules" ref="userRef" :label-width="drawerLabelWidth">
+         <el-form :model="form" :rules="rules" ref="userRef" scroll-to-error :label-width="drawerLabelWidth">
             <el-tabs v-model="activeTab" :before-leave="beforeTabLeave">
                <el-tab-pane :label="tr('基本信息')" name="basic">
                   <el-row :gutter="16">
@@ -226,9 +226,7 @@
                         </el-form-item>
                      </el-col>
                      <el-col :span="12">
-                        <el-form-item :label="tr('手机号码')" prop="phonenumber">
-                           <el-input v-model="form.phonenumber" :placeholder="tr('请输入手机号码')" />
-                        </el-form-item>
+                        <PhoneField ref="phoneField" :label="tr('手机号码')" field="phonenumber" v-model="form.phonenumber" sms />
                      </el-col>
                      <el-col :span="12">
                         <el-form-item :label="tr('邮箱')" prop="email">
@@ -847,7 +845,7 @@ function submitForm() {
       proxy.$modal.msgSuccess(form.value.userId ? "修改成功" : "新增成功");
       open.value = false;
       getList();
-    }).finally(() => {
+    }).catch(error => { proxy.$refs.phoneField?.setServerError(error); }).finally(() => {
       buttonLoading.value = false;
     });
   });

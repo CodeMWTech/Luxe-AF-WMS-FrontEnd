@@ -592,7 +592,7 @@
         <template #title>{{ hrText('该员工已关联登录账号，当前无法修改资料', 'This employee has a linked login account; profile editing is read-only') }}</template>
         {{ linkedUserReadonlyHint }}
       </el-alert>
-      <el-form ref="employeeRef" :model="form" :rules="rules" :label-width="drawerLabelWidth">
+      <el-form ref="employeeRef" scroll-to-error :model="form" :rules="rules" :label-width="drawerLabelWidth">
         <el-tabs v-model="activeTab" :before-leave="beforeTabLeave">
           <el-tab-pane :label="tr('基本信息')" name="basic">
             <el-row :gutter="20" class="employee-basic-grid">
@@ -655,9 +655,7 @@
                 </el-form-item>
               </el-col>
               <el-col :span="12">
-                <el-form-item :label="tr('联系电话')" prop="phone">
-                  <el-input v-model="form.phone" :placeholder="tr('请输入手机号码')" :disabled="isLinkedUserReadonly" />
-                </el-form-item>
+                <PhoneField ref="phoneField" :label="tr('联系电话')" field="phone" v-model="form.phone" :disabled="isLinkedUserReadonly" sms />
               </el-col>
               <el-col :span="12">
                 <el-form-item :label="tr('邮箱')" prop="email">
@@ -1546,7 +1544,7 @@ function submitForm() {
       if (payload.id) {
         loadEmployeeDetail(payload.id)
       }
-    }).finally(() => {
+    }).catch(error => { proxy.$refs.phoneField?.setServerError(error); }).finally(() => {
       buttonLoading.value = false
     })
   })

@@ -28,6 +28,7 @@ import { parseTime, resetForm, addDateRange, handleTree, selectDictLabel, select
 
 // 分页组件
 import Pagination from '@/components/Pagination'
+import PhoneField from '@/components/PhoneField/index.vue'
 // 自定义表格工具组件
 import RightToolbar from '@/components/RightToolbar'
 // 富文本组件
@@ -63,6 +64,7 @@ app.config.globalProperties.selectDictLabels = selectDictLabels
 // 全局组件挂载
 app.component('DictTag', DictTag)
 app.component('Pagination', Pagination)
+app.component('PhoneField', PhoneField)
 app.component('TreeSelect', TreeSelect)
 app.component('FileUpload', FileUpload)
 app.component('ImageUpload', ImageUpload)
