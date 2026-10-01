@@ -1,11 +1,9 @@
 <template>
-   <el-form ref="userRef" :model="user" :rules="rules" :label-width="isEn ? '110px' : '80px'">
+   <el-form ref="userRef" scroll-to-error :model="user" :rules="rules" :label-width="isEn ? '110px' : '80px'">
       <el-form-item :label="tr('用户信息')" prop="nickName">
          <el-input v-model="user.nickName" maxlength="30" />
       </el-form-item>
-      <el-form-item :label="tr('手机号码')" prop="phonenumber">
-         <el-input v-model="user.phonenumber" />
-      </el-form-item>
+      <PhoneField ref="phoneField" :label="tr('手机号码')" field="phonenumber" v-model="user.phonenumber" autocomplete="tel" sms />
       <el-form-item :label="tr('邮箱')" prop="email">
          <el-input v-model="user.email" maxlength="50" />
       </el-form-item>
@@ -49,7 +47,7 @@ function submit() {
     if (valid) {
       updateUserProfile(props.user).then(response => {
         proxy.$modal.msgSuccess(tr("修改成功"));
-      });
+      }).catch(error => { proxy.$refs.phoneField?.setServerError(error); });
     }
   });
 };

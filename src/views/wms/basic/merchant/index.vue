@@ -83,7 +83,7 @@
     </el-card>
     <!-- 添加或修改往来单位对话框 -->
     <el-drawer :title="title" v-model="open" append-to-body size="50%">
-      <el-form ref="merchantRef" :model="form" :rules="rules" :label-width="drawerLabelWidth">
+      <el-form ref="merchantRef" scroll-to-error :model="form" :rules="rules" :label-width="drawerLabelWidth">
         <el-form-item :label="tr('编号')" prop="merchantCode">
           <el-input v-model="form.merchantCode" :placeholder="tr('请输入') + tr('编号')" />
         </el-form-item>
@@ -112,12 +112,8 @@
         <el-form-item :label="tr('地址')" prop="address">
           <el-input v-model="form.address" :placeholder="tr('请输入') + tr('地址')" />
         </el-form-item>
-        <el-form-item :label="tr('手机号')" prop="mobile">
-          <el-input v-model="form.mobile" :placeholder="tr('请输入') + tr('手机号')" />
-        </el-form-item>
-        <el-form-item :label="tr('座机号')" prop="tel">
-          <el-input v-model="form.tel" :placeholder="tr('请输入') + tr('座机号')" />
-        </el-form-item>
+        <PhoneField ref="phoneField" :label="tr('手机号')" field="mobile" v-model="form.mobile"  />
+        <PhoneField ref="telField" :label="tr('座机号')" field="tel" v-model="form.tel" allow-extension />
         <el-form-item :label="tr('联系人')" prop="contactPerson">
           <el-input v-model="form.contactPerson" :placeholder="tr('请输入') + tr('联系人')" />
         </el-form-item>
@@ -267,7 +263,7 @@ function submitForm() {
           proxy.$modal.msgSuccess("修改成功");
           open.value = false;
           getList();
-        }).finally(() => {
+        }).catch(error => { proxy.$refs.phoneField?.setServerError(error); proxy.$refs.telField?.setServerError(error); }).finally(() => {
           buttonLoading.value = false;
         });
       } else {
@@ -275,7 +271,7 @@ function submitForm() {
           proxy.$modal.msgSuccess("新增成功");
           open.value = false;
           getList();
-        }).finally(() => {
+        }).catch(error => { proxy.$refs.phoneField?.setServerError(error); proxy.$refs.telField?.setServerError(error); }).finally(() => {
           buttonLoading.value = false;
         });
       }
