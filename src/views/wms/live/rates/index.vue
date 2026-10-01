@@ -351,11 +351,11 @@ onActivated(loadAll)
 
 <style scoped lang="scss">
 @import '../live.scss';
-.rate-config-shell { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 16px; min-height: 680px; }
+.rate-config-shell { display: grid; grid-template-columns: 280px minmax(0, 1fr); align-items: start; gap: 16px; min-height: 680px; }
 .employee-panel, .rate-detail-panel { background: #fff; border: 1px solid #e9eaf1; border-radius: 14px; box-shadow: 0 4px 20px rgba(37, 48, 74, .05); }
-.employee-panel { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.employee-panel { position: sticky; top: 16px; display: flex; height: max(420px, calc(100vh - 198px)); min-height: 0; flex-direction: column; overflow: hidden; }
 .employee-search { padding: 14px 12px 10px; border-bottom: 1px solid #f0f1f5; }
-.employee-list { flex: 1; padding: 8px; }
+.employee-list { min-height: 0; flex: 1; padding: 8px; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
 .employee-item { width: 100%; display: flex; align-items: center; gap: 10px; padding: 10px; border: 1px solid transparent; border-radius: 10px; background: transparent; color: #30364a; text-align: left; cursor: pointer; transition: .18s ease; }
 .employee-item:hover { background: #f5f7fb; }
 .employee-item.active { border-color: #cbd9ff; background: #edf3ff; }
@@ -413,7 +413,7 @@ onActivated(loadAll)
 .amount-change b { color: #a4abbb; font-weight: 400; }
 .amount-change strong { color: #3563e9; }
 @media (max-width: 1050px) { .rate-config-shell { grid-template-columns: 230px minmax(0, 1fr); } .rate-type-row { grid-template-columns: minmax(100px, 1fr) minmax(180px, 1.2fr) auto; } }
-@media (max-width: 760px) { .rate-config-shell { grid-template-columns: 1fr; } .employee-summary { align-items: flex-start; flex-direction: column; } .rate-type-row { grid-template-columns: 1fr auto; } .rate-value { grid-column: 1 / -1; grid-row: 2; flex-wrap: wrap; } .rate-actions { grid-column: 2; grid-row: 1; } .sync-targets :deep(.el-checkbox-group) { grid-template-columns: 1fr; } }
+@media (max-width: 760px) { .rate-config-shell { grid-template-columns: 1fr; align-items: stretch; } .employee-panel { position: static; height: 420px; min-height: 260px; max-height: calc(100vh - 180px); } .employee-summary { align-items: flex-start; flex-direction: column; } .rate-type-row { grid-template-columns: 1fr auto; } .rate-value { grid-column: 1 / -1; grid-row: 2; flex-wrap: wrap; } .rate-actions { grid-column: 2; grid-row: 1; } .sync-targets :deep(.el-checkbox-group) { grid-template-columns: 1fr; } }
 </style>
 
 <style lang="scss">

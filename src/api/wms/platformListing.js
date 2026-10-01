@@ -45,8 +45,8 @@ export function getListing(id) {
 }
 
 /** 批量上架（异步） */
-export function batchPublish(data) {
-  return request({ url: '/wms/platform/listings', method: 'post', data })
+export function batchPublish(data, config = {}) {
+  return request({ ...config, url: '/wms/platform/listings', method: 'post', data })
 }
 
 /** 下架 */

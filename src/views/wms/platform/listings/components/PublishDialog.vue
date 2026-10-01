@@ -110,6 +110,9 @@
 
     <!-- Step 3: 预览确认 -->
     <div v-if="step === 2">
+      <el-alert v-if="publishError" ref="publishErrorRef" :title="t('platformListings.publishFailed')" type="error" show-icon :closable="false" class="publish-errors-alert">
+        <div class="publish-errors" data-runtime-i18n-ignore="true">{{ publishError }}</div>
+      </el-alert>
       <el-alert :title="t('platformListings.previewSelectedSummary', { count: selectedSkus.length, template: chosenTemplate?.templateName || '-' })" type="info" :closable="false" style="margin-bottom:12px" />
       <el-alert
         v-if="hasEbayTitleTooLong"
@@ -301,6 +304,8 @@ const emit = defineEmits(['success'])
 const visible = ref(false)
 const step = ref(0)
 const publishing = ref(false)
+const publishError = ref('')
+const publishErrorRef = ref()
 const EBAY_TITLE_MAX_LENGTH = 80
 const TIKTOK_PRICE_MIN = 0.01
 const TIKTOK_PRICE_MAX = 50000
@@ -712,6 +717,7 @@ async function loadPreviews() {
 
 // ==================== Navigation ====================
 async function onOpen() {
+  publishError.value = ''
   step.value = 0
   resetTiktokBrandState()
   invParams.pageNum = 1
@@ -730,6 +736,7 @@ async function onOpen() {
 }
 
 function onClosed() {
+  publishError.value = ''
   resetPublishSelection()
   preSelectedSkuIds.value = null
   previewList.value = []
@@ -751,6 +758,7 @@ function goStep2() {
 }
 
 async function goStep3() {
+  publishError.value = ''
   if (!chosenTemplateId.value) {
     proxy.$modal.msgWarning(t('platformListings.selectTemplateRequired'))
     return
@@ -812,6 +820,7 @@ async function doPublish() {
     }
   })
   publishing.value = true
+  publishError.value = ''
   try {
     await batchPublish({
       templateId: chosenTemplateId.value,
@@ -821,12 +830,14 @@ async function doPublish() {
       customPrices,
       customBrandIds,
       confirmBelowSellingPrice: hasBelowSellingPrice.value
-    })
+    }, { silentError: true })
     proxy.$modal.msgSuccess(t(isWhatnotPublish.value ? 'platformListings.whatnotPublishSuccess' : 'platformListings.publishSuccess'))
     visible.value = false
     emit('success')
-  } catch {
-    proxy.$modal.msgError(t('platformListings.publishFailed'))
+  } catch (error) {
+    publishError.value = error?.message || (typeof error === 'string' ? error : t('platformListings.publishFailed'))
+    await nextTick()
+    publishErrorRef.value?.$el?.scrollIntoView?.({ block: 'nearest' })
   } finally {
     publishing.value = false
   }
@@ -855,6 +866,15 @@ defineExpose({ open, openWithSkus })
 .whatnot-preview .preview-platform { color: #28773c; }
 .publish-image-alert {
   margin-bottom: 10px;
+}
+
+.publish-errors-alert { margin-bottom: 12px; }
+.publish-errors {
+  max-height: 260px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .selected-sku-panel {

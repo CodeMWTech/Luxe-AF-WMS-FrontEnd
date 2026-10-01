@@ -546,6 +546,7 @@ function resolveFormBrandId(itemBrandIds, itemBrand) {
 const AUTH_AGENCY_OPTIONS = ['Entrupy', 'Real Authentication', 'Legitmark', 'CheckCheck', 'N/A']
 /** 成色固定选项 */
 const ITEM_CONDITION_OPTIONS = ['S', 'A', 'B', 'C', 'D']
+const DEFAULT_ACCESSORIES = 'None'
 /** 配件常用选项（界面中英对照，点击写入英文） */
 const ACCESSORY_TAG_OPTIONS = [
   { value: 'Dustbag', zh: '防尘袋' },
@@ -702,9 +703,11 @@ function formatDefectTagTooltip(tag) {
 /** 点击配件 tag 时追加到输入框（已包含则不重复添加） */
 const appendAccessoryTag = (tag) => {
   const val = form.value.accessories || ''
-  const parts = val.split(/[,，、\n]+/).map(s => s.trim()).filter(Boolean)
-  if (parts.includes(tag)) return
-  form.value.accessories = parts.length ? parts.concat(tag).join(', ') : tag
+  const parts = val.split(/[,，、\n]+/)
+    .map(s => s.trim())
+    .filter(part => part && part.toLowerCase() !== DEFAULT_ACCESSORIES.toLowerCase())
+  if (!parts.includes(tag)) parts.push(tag)
+  form.value.accessories = parts.join(', ')
 }
 const appendDefectTag = (tag) => {
   const val = form.value.defect || ''
@@ -781,7 +784,7 @@ const initFormData = {
   materialId: undefined,
   modelId: undefined,
   defect: undefined,
-  accessories: undefined,
+  accessories: DEFAULT_ACCESSORIES,
   size: undefined,
   bagWidth: undefined,
   bagHeight: undefined,
