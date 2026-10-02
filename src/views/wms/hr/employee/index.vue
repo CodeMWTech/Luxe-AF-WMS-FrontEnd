@@ -2103,7 +2103,26 @@ loadCapabilities().then(() => {
 </script>
 
 <style scoped lang="scss">
+:global(.main-container.hasTagsView) .employee-page {
+  height: calc(100vh - 84px);
+}
+@media (max-width: 991px) {
+  .employee-page,
+  :global(.main-container.hasTagsView) .employee-page {
+    height: auto;
+    overflow: visible;
+  }
+}
 .employee-page {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  height: calc(100vh - 50px);
+  min-height: 0;
+  overflow: hidden;
+  .hero-card {
+    flex: 0 0 auto;
+  }
   .hero-title {
     margin: 0 0 8px;
     font-size: 24px;
@@ -2156,10 +2175,11 @@ loadCapabilities().then(() => {
     line-height: 1.4;
   }
   .workspace-row {
-    margin-top: 20px;
+    flex: 1 1 auto;
+    min-height: 0;
+    margin-top: 16px;
     align-items: stretch;
-    height: calc(100vh - 280px);
-    min-height: 560px;
+    overflow: hidden;
   }
   .workspace-col {
     display: flex;
@@ -2167,15 +2187,18 @@ loadCapabilities().then(() => {
     height: 100%;
   }
   .workspace-panel {
+    display: flex;
     flex: 1;
+    flex-direction: column;
     width: 100%;
     height: 100%;
     min-height: 0;
     :deep(.el-card__body) {
       display: flex;
+      flex: 1 1 auto;
       flex-direction: column;
       box-sizing: border-box;
-      height: 100%;
+      height: auto;
       min-height: 0;
       overflow: hidden;
     }
@@ -2638,6 +2661,27 @@ loadCapabilities().then(() => {
     :deep(.el-card__body) {
       justify-content: center;
       align-items: center;
+    }
+  }
+  @media (max-width: 991px) {
+    height: auto;
+    overflow: visible;
+    .workspace-row {
+      flex: none;
+      height: auto;
+      overflow: visible;
+    }
+    .workspace-col {
+      height: auto;
+      margin-bottom: 16px;
+    }
+    .list-card,
+    .detail-card {
+      min-height: 480px;
+    }
+    .list-table-wrap {
+      flex: none;
+      height: 360px;
     }
   }
   .permission-notice {
