@@ -102,19 +102,6 @@
                      <el-input-number v-model="form.orderNum" controls-position="right" :min="0" />
                   </el-form-item>
                </el-col>
-               <el-col :xs="24" :sm="12">
-                  <el-form-item :label="tr('负责人')" prop="leader">
-                     <el-input v-model="form.leader" :placeholder="tr('请输入负责人')" maxlength="20" />
-                  </el-form-item>
-               </el-col>
-               <el-col :xs="24" :sm="12">
-                  <el-form-item :label="tr('邮箱')" prop="email">
-                     <el-input v-model="form.email" :placeholder="tr('请输入邮箱')" maxlength="50" />
-                  </el-form-item>
-               </el-col>
-               <el-col :span="24">
-                  <PhoneField ref="phoneField" :label="tr('联系电话')" field="phone" v-model="form.phone" />
-               </el-col>
                <el-col :span="24">
                   <el-form-item :label="tr('部门状态')">
                      <el-radio-group v-model="form.status">
@@ -172,7 +159,6 @@ const rules = computed(() => ({
   parentId: [{ required: true, message: tr("上级部门不能为空"), trigger: "blur" }],
   deptName: [{ required: true, message: tr("部门名称不能为空"), trigger: "blur" }],
   orderNum: [{ required: true, message: tr("显示排序不能为空"), trigger: "blur" }],
-  email: [{ type: "email", message: tr("请输入正确的邮箱地址"), trigger: ["blur", "change"] }],
 }));
 
 /** 查询部门列表 */
@@ -195,9 +181,6 @@ function reset() {
     parentId: undefined,
     deptName: undefined,
     orderNum: 0,
-    leader: undefined,
-    phone: undefined,
-    email: undefined,
     status: "1"
   };
   proxy.resetForm("deptRef");
@@ -251,18 +234,22 @@ function handleUpdate(row) {
 function submitForm() {
   proxy.$refs["deptRef"].validate(valid => {
     if (valid) {
-      if (form.value.deptId != undefined) {
-        updateDept(form.value).then(response => {
+      const payload = { ...form.value }
+      delete payload.leader
+      delete payload.phone
+      delete payload.email
+      if (payload.deptId != undefined) {
+        updateDept(payload).then(() => {
           proxy.$modal.msgSuccess(tr("修改成功"));
           open.value = false;
           getList();
-        }).catch(error => { proxy.$refs.phoneField?.setServerError(error); });
+        });
       } else {
-        addDept(form.value).then(response => {
+        addDept(payload).then(() => {
           proxy.$modal.msgSuccess(tr("新增成功"));
           open.value = false;
           getList();
-        }).catch(error => { proxy.$refs.phoneField?.setServerError(error); });
+        });
       }
     }
   });
