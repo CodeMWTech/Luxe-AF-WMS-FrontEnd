@@ -1071,6 +1071,8 @@ const zhToEnMap = {
   '搜索用户信息、用户名、手机、邮箱、部门、岗位等': 'Search name, user name, phone, email, dept, post...',
   '支持搜索员工档案中已填写的各类信息，含用户昵称、登录名、手机、邮箱、部门、岗位、备注等': 'Search across profile fields: legal name, user name, phone, email, department, post, remarks, etc.',
   '支持搜索员工档案中已填写的各类信息，含用户信息、用户名、手机、邮箱、部门、岗位、备注等': 'Search across profile fields: legal name, user name, phone, email, department, post, remarks, etc.',
+  '勾选用于批量导出附件；点击行查看详情。': 'Check rows to batch-export attachments; click a row for details.',
+  '点击员工行查看详情': 'Click an employee row to view details',
   '全部职位': 'All Positions',
   '全部税务身份': 'All Tax Identities',
   '导出员工 Excel': 'Export Employee Excel',

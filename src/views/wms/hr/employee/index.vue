@@ -117,8 +117,8 @@
               @keyup.enter="handleQuery"
             />
             <el-button type="primary" icon="Search" @click="handleQuery">{{ tr('搜索') }}</el-button>
+            <el-button icon="Refresh" @click="resetFilters">{{ tr('重置') }}</el-button>
           </div>
-          <div class="search-hint">{{ tr('支持搜索员工档案中已填写的各类信息，含用户信息、用户名、手机、邮箱、部门、岗位、备注等') }}</div>
           <div class="filter-bar">
             <el-select v-model="queryParams.viewMode" class="filter-item" @change="handleViewModeChange">
               <el-option :label="tr('在职员工')" value="active" />
@@ -156,15 +156,14 @@
               <el-option :label="tr('有账号')" :value="'1'" />
               <el-option :label="tr('无账号')" :value="'0'" />
             </el-select>
-            <el-button icon="Refresh" @click="resetFilters">{{ tr('重置') }}</el-button>
           </div>
 
           <div v-if="canBatchDownload" class="selection-hint-block">
             <div class="selection-hint-text">
               <el-icon class="selection-hint-icon"><InfoFilled /></el-icon>
-              {{ tr('左侧勾选用于「按文件类型导出」批量下载附件；不勾选时默认当前页全部，点击行仅查看详情。') }}
+              <span>{{ tr('勾选用于批量导出附件；点击行查看详情。') }}</span>
+              <span class="selection-hint-status">{{ batchDownloadScopeHint }}</span>
             </div>
-            <div class="selection-hint-status">{{ batchDownloadScopeHint }}</div>
           </div>
 
           <div class="list-table-wrap">
@@ -2103,14 +2102,40 @@ loadCapabilities().then(() => {
 </script>
 
 <style scoped lang="scss">
+:global(.main-container.hasTagsView) .employee-page {
+  height: calc(100vh - 84px);
+}
+@media (max-width: 991px) {
+  .employee-page,
+  :global(.main-container.hasTagsView) .employee-page {
+    height: auto;
+    overflow: visible;
+  }
+}
 .employee-page {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 16px;
+  box-sizing: border-box;
+  height: calc(100vh - 50px);
+  min-height: 0;
+  overflow: hidden;
+  .hero-card {
+    min-height: 0;
+    :deep(.el-card__body) {
+      padding: 16px 18px 14px;
+    }
+  }
   .hero-title {
-    margin: 0 0 8px;
-    font-size: 24px;
+    margin: 0 0 6px;
+    font-size: 20px;
+    line-height: 1.3;
   }
   .hero-desc {
     margin: 0;
     color: #909399;
+    font-size: 13px;
+    line-height: 1.45;
   }
   .hero-header {
     display: flex;
@@ -2124,42 +2149,55 @@ loadCapabilities().then(() => {
     flex-wrap: wrap;
   }
   .stats-row {
-    margin-top: 20px;
-    margin-bottom: 20px;
+    margin-top: 14px;
+    margin-bottom: 12px;
   }
   .missing-files-alert {
     margin-top: 0;
+    :deep(.el-alert__title) {
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+      overflow: hidden;
+      line-height: 1.4;
+    }
   }
   .stat-card {
     background: #fafafa;
     border: 1px solid #ebeef5;
     border-radius: 8px;
-    padding: 16px;
-    min-height: 96px;
+    padding: 12px 14px;
+    min-height: 76px;
   }
   .stat-label {
     color: #909399;
-    font-size: 13px;
+    font-size: 12px;
   }
   .stat-value {
-    font-size: 28px;
+    font-size: 24px;
     font-weight: 600;
-    margin-top: 8px;
+    margin-top: 4px;
+    line-height: 1.2;
     &.warning {
       color: #e6a23c;
     }
   }
   .stat-sub {
-    margin-top: 6px;
+    margin-top: 4px;
     color: #a8abb2;
-    font-size: 12px;
-    line-height: 1.4;
+    font-size: 11px;
+    line-height: 1.35;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
   }
   .workspace-row {
-    margin-top: 20px;
+    min-height: 0;
+    height: 100%;
+    margin-top: 0 !important;
     align-items: stretch;
-    height: calc(100vh - 280px);
-    min-height: 560px;
+    overflow: hidden;
   }
   .workspace-col {
     display: flex;
@@ -2167,15 +2205,18 @@ loadCapabilities().then(() => {
     height: 100%;
   }
   .workspace-panel {
+    display: flex;
     flex: 1;
+    flex-direction: column;
     width: 100%;
     height: 100%;
     min-height: 0;
     :deep(.el-card__body) {
       display: flex;
+      flex: 1 1 auto;
       flex-direction: column;
       box-sizing: border-box;
-      height: 100%;
+      height: auto;
       min-height: 0;
       overflow: hidden;
     }
@@ -2195,59 +2236,52 @@ loadCapabilities().then(() => {
     gap: 8px;
     align-items: center;
     flex-shrink: 0;
+    flex-wrap: wrap;
     .search-input {
-      flex: 1;
-      min-width: 160px;
+      flex: 1 1 160px;
+      min-width: 0;
     }
   }
-  .search-hint {
-    margin-top: 4px;
-    font-size: 12px;
-    color: #a8abb2;
-    line-height: 1.35;
-    flex-shrink: 0;
-  }
   .selection-hint-block {
-    margin-top: 8px;
+    margin-top: 6px;
     flex-shrink: 0;
   }
   .selection-hint-text {
     display: flex;
-    align-items: flex-start;
-    gap: 4px;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
     font-size: 12px;
     color: #909399;
-    line-height: 1.4;
+    line-height: 1.35;
   }
   .selection-hint-icon {
-    margin-top: 2px;
     flex-shrink: 0;
     font-size: 14px;
   }
   .selection-hint-status {
-    margin-top: 3px;
     font-size: 12px;
     color: #409eff;
     line-height: 1.35;
   }
   .filter-bar {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px 8px;
     margin-top: 8px;
     flex-shrink: 0;
-    .filter-item {
-      width: 140px;
-    }
+    align-items: center;
+    .filter-item,
     .filter-dept-tree {
-      width: 180px;
+      width: 100%;
+      min-width: 0;
     }
   }
   .list-table-wrap {
     flex: 1 1 auto;
     height: 0;
     min-height: 0;
-    margin-top: 8px;
+    margin-top: 6px;
     overflow: hidden;
   }
   .employee-table {
@@ -2274,8 +2308,8 @@ loadCapabilities().then(() => {
   }
   .list-pagination {
     flex-shrink: 0;
-    margin-top: 10px;
-    padding-top: 10px;
+    margin-top: 8px;
+    padding-top: 8px;
     border-top: 1px solid #ebeef5;
     width: 100%;
     display: flex;
@@ -2563,11 +2597,9 @@ loadCapabilities().then(() => {
   }
   &.is-en {
     .filter-bar {
-      .filter-item {
-        width: 190px;
-      }
+      .filter-item,
       .filter-dept-tree {
-        width: 210px;
+        width: 100%;
       }
     }
     .hero-actions {
@@ -2638,6 +2670,27 @@ loadCapabilities().then(() => {
     :deep(.el-card__body) {
       justify-content: center;
       align-items: center;
+    }
+  }
+  @media (max-width: 991px) {
+    height: auto;
+    overflow: visible;
+    .workspace-row {
+      flex: none;
+      height: auto;
+      overflow: visible;
+    }
+    .workspace-col {
+      height: auto;
+      margin-bottom: 16px;
+    }
+    .list-card,
+    .detail-card {
+      min-height: 480px;
+    }
+    .list-table-wrap {
+      flex: none;
+      height: 360px;
     }
   }
   .permission-notice {
