@@ -47,7 +47,7 @@ test('operator color styles validate custom values and use a neutral unassigned 
   assert.equal(display.operatorColorStyle('url(x)')['--operator-color'], '#9CA3AF')
 })
 
-async function pageFixture(api = {}, editable = true) {
+async function pageFixture(api = {}, editable = true, storage) {
   const source = await readFile(new URL('../src/views/wms/live/schedule/index.vue', import.meta.url), 'utf8')
   const { descriptor } = parse(source)
   const compiled = compileScript(descriptor, { id: 'schedule-test' }).content
@@ -55,10 +55,10 @@ async function pageFixture(api = {}, editable = true) {
     vue: { ...vue, onMounted() {}, onActivated() {}, getCurrentInstance: () => ({ proxy: { $modal: { msgSuccess() {}, msgWarning() {} } } }) },
     '../useLiveI18n': { useLiveI18n: () => ({ tr: text => text, isEn: vue.ref(false), messageNode: text => text }) },
     '@/utils/permission': { checkPermi: () => editable }, './scheduleDisplay': display, '../shared': shared,
-    '@/api/wms/livePayroll': { getLiveOptions: async () => ({ employees: [], accounts: [], rateTypes: [] }), listScheduleOperators: async () => ({ data: [operator('1'), operator('2')] }), listScheduleCalendar: async () => ({ data: [schedule()] }), listScheduleHosts: async () => ({ data: [{ value: '9007199254740993', label: 'Host', employeeStatus: 0 }] }), listScheduleRateTypes: async () => ({ data: [{ id: '5' }] }), ...api }
+    '@/api/wms/livePayroll': { getLiveOptions: async () => ({ employees: [], accounts: [], rateTypes: [] }), listScheduleOperators: async () => ({ data: [operator('1'), operator('2')] }), listScheduleCalendar: async () => ({ data: [schedule()] }), listScheduleHosts: async () => ({ data: [{ value: '9007199254740993', label: 'Host', employeeStatus: 0 }] }), listScheduleRateTypes: async () => ({ data: [{ id: '5' }] }), listScheduleRateAccounts: async () => ({ data: ['1'] }), ...api }
   }
-  const create = new Function('modules', compiled.replace(/^import \{([^}]+)\} from ['"]([^'"]+)['"];?$/gm, (_, bindings, name) => `const {${bindings.replace(/\bas\b/g, ':')}} = modules[${JSON.stringify(name)}]`).replace(/^import (\w+) from ['"]([^'"]+)['"];?$/gm, (_, binding, name) => `const ${binding} = modules[${JSON.stringify(name)}]`).replace('export default', 'return'))
-  return create(modules).setup({}, { expose() {}, emit() {} })
+  const create = new Function('modules', 'localStorage', compiled.replace(/^import \{([^}]+)\} from ['"]([^'"]+)['"];?$/gm, (_, bindings, name) => `const {${bindings.replace(/\bas\b/g, ':')}} = modules[${JSON.stringify(name)}]`).replace(/^import (\w+) from ['"]([^'"]+)['"];?$/gm, (_, binding, name) => `const ${binding} = modules[${JSON.stringify(name)}]`).replace('export default', 'return'))
+  return create(modules, storage).setup({}, { expose() {}, emit() {} })
 }
 test('failed color save keeps old configuration and supports retry with shared server result', async () => {
   let fail = true
@@ -77,6 +77,60 @@ test('switching dimensions retains filters and the full operator legend', async 
   const page = await pageFixture(); page.query.employeeId = '1'; page.query.accountId = '2'; page.selectedWeek.value = '2026-09-13'
   await page.load(); page.view.value = 'operator'; page.view.value = 'host'
   assert.equal(page.query.employeeId, '1'); assert.equal(page.query.accountId, '2'); assert.equal(page.selectedWeek.value, '2026-09-13'); assert.equal(page.activeOperators.value.length, 2)
+})
+test('week navigation queries Monday through Sunday and keeps filters across year boundaries', async () => {
+  const requests = []
+  const page = await pageFixture({ listScheduleCalendar: async query => { requests.push(query); return { data: [] } } })
+  Object.assign(page.query, { employeeId: '1', accountId: '2', rateTypeId: '5' })
+  await page.handleWeekChange('2027-01-03')
+  assert.equal(page.selectedWeek.value, '2026-12-28')
+  await page.shiftWeek(1)
+  assert.deepEqual(page.weekDateRange.value, ['2027-01-04', '2027-01-10'])
+  await page.shiftWeek(-1)
+  assert.deepEqual(page.weekDateRange.value, ['2026-12-28', '2027-01-03'])
+  for (const request of requests) {
+    assert.equal(request.employeeId, '1'); assert.equal(request.accountId, '2')
+    assert.equal(request.rateTypeId, '5'); assert.equal('employeeScope' in request, false)
+    assert.equal(new Date(`${request.startDate}T12:00:00`).getDay(), 1)
+    assert.equal(new Date(`${request.endDate}T12:00:00`).getDay(), 0)
+  }
+  for (const view of ['channel', 'operator', 'host']) {
+    page.view.value = view
+    assert.deepEqual(page.calendarWeeks.value[0].map(day => day.date), ['2026-12-28', '2026-12-29', '2026-12-30', '2026-12-31', '2027-01-01', '2027-01-02', '2027-01-03'])
+  }
+})
+test('returning to today restores the current Monday-first week and reloads it', async () => {
+  let requested
+  const page = await pageFixture({ listScheduleCalendar: async query => { requested = query; return { data: [] } } })
+  page.selectedWeek.value = '2028-02-29'
+  await page.goToCurrentWeek()
+  assert.deepEqual(page.weekDateRange.value, shared.selectedWeekRange(shared.isoDate()))
+  assert.deepEqual([requested.startDate, requested.endDate], shared.weekRange())
+})
+test('reopening the page restores the last selected week, including arrows and today', async () => {
+  const values = new Map()
+  const storage = { getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) }
+  const page = await pageFixture({}, true, storage)
+  await page.handleWeekChange('2028-02-29')
+  let reopened = await pageFixture({}, true, storage)
+  assert.deepEqual(reopened.weekDateRange.value, ['2028-02-28', '2028-03-05'])
+  await reopened.shiftWeek(1)
+  reopened = await pageFixture({}, true, storage)
+  assert.deepEqual(reopened.weekDateRange.value, ['2028-03-06', '2028-03-12'])
+  await reopened.goToCurrentWeek()
+  reopened = await pageFixture({}, true, storage)
+  assert.deepEqual(reopened.weekDateRange.value, shared.weekRange())
+})
+test('invalid saved dates and unavailable browser storage still allow week selection', async () => {
+  for (const saved of [null, '', 'invalid', '2026-02-30', '2026-13-01', '2026-9-01']) {
+    const page = await pageFixture({}, true, { getItem: () => saved })
+    assert.deepEqual(page.weekDateRange.value, shared.weekRange())
+  }
+  const page = await pageFixture({}, true, {
+    getItem() { throw Error('storage blocked') }, setItem() { throw Error('storage full') }
+  })
+  await page.handleWeekChange('2027-01-03')
+  assert.deepEqual(page.weekDateRange.value, ['2026-12-28', '2027-01-03'])
 })
 test('late queries cannot replace the current week data or legend', async () => {
   let resolveOld, n = 0

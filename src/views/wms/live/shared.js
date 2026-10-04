@@ -44,13 +44,8 @@ export function monthRange(offset = 0) {
 }
 
 export function weekRange(offset = 0) {
-  const [year, month, day] = isoDate().split('-').map(Number)
-  const now = new Date(year, month - 1, day)
-  const sunday = new Date(now)
-  sunday.setDate(now.getDate() - now.getDay() + offset * 7)
-  const saturday = new Date(sunday)
-  saturday.setDate(sunday.getDate() + 6)
-  return [isoDate(sunday), isoDate(saturday)]
+  const [year, month, day] = selectedWeekRange()[0].split('-').map(Number)
+  return selectedWeekRange(isoDate(new Date(year, month - 1, day + offset * 7)))
 }
 
 export function money(value, currency = 'USD') {
@@ -107,9 +102,9 @@ export function adjustmentStatusLabel(value) {
 }
 export function selectedWeekRange(selectedDate = isoDate()) {
   const [year, month, day] = selectedDate.split('-').map(Number)
-  const sunday = new Date(year, month - 1, day)
-  sunday.setDate(sunday.getDate() - sunday.getDay())
-  const end = new Date(sunday)
-  end.setDate(sunday.getDate() + 6)
-  return [isoDate(sunday), isoDate(end)]
+  const monday = new Date(year, month - 1, day)
+  monday.setDate(monday.getDate() - (monday.getDay() + 6) % 7)
+  const end = new Date(monday)
+  end.setDate(monday.getDate() + 6)
+  return [isoDate(monday), isoDate(end)]
 }

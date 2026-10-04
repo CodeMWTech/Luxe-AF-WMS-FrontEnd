@@ -26,30 +26,31 @@ async function setup(file, modules, props={}) {
 }
 const vueModule={...vue,onMounted(){},onActivated(){},getCurrentInstance:()=>({proxy:{$modal:{msgSuccess(){},msgWarning(){}},$prompt:async()=>({value:'receipt'})}})}
 
-test('single-week calendar handles Sunday, Saturday, year boundaries and leap day',()=>{
-  assert.deepEqual(shared.selectedWeekRange('2026-09-06'),['2026-09-06','2026-09-12'])
-  assert.deepEqual(shared.selectedWeekRange('2026-09-12'),['2026-09-06','2026-09-12'])
-  assert.deepEqual(shared.selectedWeekRange('2026-12-31'),['2026-12-27','2027-01-02'])
-  assert.deepEqual(shared.selectedWeekRange('2028-02-29'),['2028-02-27','2028-03-04'])
+test('Monday-first calendar handles Sunday, Monday, Saturday, year boundaries and leap day',()=>{
+  assert.deepEqual(shared.selectedWeekRange('2026-09-06'),['2026-08-31','2026-09-06'])
+  assert.deepEqual(shared.selectedWeekRange('2026-09-07'),['2026-09-07','2026-09-13'])
+  assert.deepEqual(shared.selectedWeekRange('2026-09-12'),['2026-09-07','2026-09-13'])
+  assert.deepEqual(shared.selectedWeekRange('2026-12-31'),['2026-12-28','2027-01-03'])
+  assert.deepEqual(shared.selectedWeekRange('2028-02-29'),['2028-02-28','2028-03-05'])
 })
-test('calendar fetch and export both use the visible seven days and employee scope',async()=>{
+test('calendar fetch and export both use the visible seven days without an employee status filter',async()=>{
   const calls={query:null,export:null}
   const page=await setup('schedule/index.vue',{
     vue:vueModule,
     '../components/LiveEmployeeSelect.vue':{},'../components/LiveEmployeeName.vue':{},
-    '@/api/wms/livePayroll':{getLiveOptions:async()=>({employees:[],accounts:[],rateTypes:[]}),listScheduleCalendar:async q=>{calls.query=q;return{data:[{scheduleDate:'2026-09-06',employeeName:'A'},{scheduleDate:'2026-09-12',employeeName:'B'}]}}},
+    '@/api/wms/livePayroll':{getLiveOptions:async()=>({employees:[],accounts:[],rateTypes:[]}),listScheduleCalendar:async q=>{calls.query=q;return{data:[{scheduleDate:'2026-09-07',employeeName:'A'},{scheduleDate:'2026-09-13',employeeName:'B'}]}}},
     '@/store/modules/settings':()=>({language:'zh-cn'}),'@/locales/runtime-map':{translateByMap:t=>t},
     '../shared':{...shared,downloadCsv:(...args)=>{calls.export=args}}
   })
-  page.selectedWeek.value='2026-09-08';page.query.employeeScope='INACTIVE'
+  page.selectedWeek.value='2026-09-08'
   await page.load()
   assert.equal(page.calendarWeeks.value.length,1)
   assert.deepEqual(page.calendarWeeks.value.map(w=>w.length),[7])
-  assert.equal(calls.query.startDate,'2026-09-06');assert.equal(calls.query.endDate,'2026-09-12')
-  assert.equal(calls.query.employeeScope,'INACTIVE')
+  assert.equal(calls.query.startDate,'2026-09-07');assert.equal(calls.query.endDate,'2026-09-13')
+  assert.equal('employeeScope' in calls.query,false)
   page.exportRows()
   assert.equal(calls.export[2].length,2)
-  assert.ok(calls.export[0].includes('2026-09-12'))
+  assert.ok(calls.export[0].includes('2026-09-13'))
   assert.ok(calls.export[1].every(column => !['hostStartTime', 'hostEndTime'].includes(column.key)))
 })
 test('employee picker hides inactive staff by default but preserves history selection',async()=>{
