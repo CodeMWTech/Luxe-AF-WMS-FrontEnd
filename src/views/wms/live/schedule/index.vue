@@ -5,19 +5,14 @@
       <div class="live-actions"><el-button v-hasPermi="['wms:live:schedule:sms:list']" @click="smsRecordsRef.show(weekDateRange[0])">{{ tr('短信记录') }}</el-button><el-button type="primary" v-hasPermi="['wms:live:schedule:sms:send']" @click="smsRef.show(weekDateRange[0], query.employeeId)">{{ tr('发送排班短信') }}</el-button><el-button @click="exportRows">{{ tr('导出 CSV') }}</el-button><el-button type="primary" v-hasPermi="['wms:live:schedule:edit']" @click="openDialog()">{{ tr('新增排班') }}</el-button></div>
     </div>
     <el-card class="live-filter schedule-filter" shadow="never">
+      <WeekNavigation class="schedule-week-row" :range="weekDateRange" @today="goToCurrentWeek" @previous="shiftWeek(-1)" @next="shiftWeek(1)" @select="handleWeekChange" />
       <div class="schedule-filter-bar">
         <el-form class="schedule-filter-form" :inline="true">
-          <el-form-item class="week-filter-item" :label="tr('周次')">
-            <div class="week-picker-field">
-              <el-date-picker class="week-picker-input" v-model="selectedWeek" type="date" value-format="YYYY-MM-DD" format="MM/DD/YYYY" placeholder="MM/DD/YYYY" popper-class="schedule-week-picker-popper" :cell-class-name="weekCellClassName" :editable="true" :clearable="false" @change="handleWeekChange" />
-            </div>
-          </el-form-item>
           <el-form-item :label="tr('主播')"><LiveEmployeeSelect v-model="query.employeeId"   :placeholder="tr('全部主播')" :employees="options.employees" /></el-form-item>
           <el-form-item :label="tr('直播平台')"><LiveAccountSelect v-model="query.accountId" clearable :placeholder="tr('全部直播平台')" :accounts="options.accounts" /></el-form-item>
           <el-form-item :label="tr('场次')"><el-select v-model="query.rateTypeId" clearable :placeholder="tr('全部场次')"><el-option v-for="v in options.rateTypes" :key="v.id" :label="v.typeName" :value="v.id" /></el-select></el-form-item>
           <el-form-item class="query-action"><el-button type="primary" @click="load">{{ tr('查询') }}</el-button></el-form-item>
-        <el-form-item :label="tr('主播状态')"><el-select v-model="query.employeeScope" @change="query.pageNum = 1; load()"><el-option :label="tr('全部')" value="ALL" /><el-option :label="tr('在职/试用期')" value="ACTIVE" /><el-option :label="tr('已归档')" value="INACTIVE" /></el-select></el-form-item></el-form>
-
+        </el-form>
       </div>
     </el-card>
     <el-card class="operator-color-panel" shadow="never" :aria-label="tr('运营颜色')">
@@ -92,6 +87,7 @@
 
 <script setup>
 import ScheduleBoard from './ScheduleBoard.vue'
+import WeekNavigation from './WeekNavigation.vue'
 import LiveScheduleSmsDialog from './LiveScheduleSmsDialog.vue'
 import LiveScheduleSmsRecordsDialog from './LiveScheduleSmsRecordsDialog.vue'
 import { idKey, isActiveOperator, assignmentSummary } from './scheduleDisplay'
@@ -138,7 +134,15 @@ const selectableOperators = computed(() => {
   }
   return result
 })
-const selectedWeek = ref(weekRange()[0]), query = reactive({ employeeScope: 'ALL', employeeId: null, accountId: null, rateTypeId: null })
+const SCHEDULE_WEEK_STORAGE_KEY = 'live-payroll:schedule:selected-week'
+function loadSelectedWeek() {
+  try {
+    const saved = localStorage.getItem(SCHEDULE_WEEK_STORAGE_KEY)
+    if (/^\d{4}-\d{2}-\d{2}$/.test(saved) && isoDate(parseLocalDate(saved)) === saved) return selectedWeekRange(saved)[0]
+  } catch (_) {}
+  return weekRange()[0]
+}
+const selectedWeek = ref(loadSelectedWeek()), query = reactive({ employeeId: null, accountId: null, rateTypeId: null })
 const options = reactive({ employees: [], accounts: [], rateTypes: [] }), rows = ref([])
 const dialog = reactive({ open: false, form: {}, loaded: null, rateTypes: [], rateAccountIds: [], loadingRateTypes: false, loadingRateAccounts: false, saving: false })
 let rateTypeRequestSequence = 0
@@ -171,24 +175,27 @@ const validateEndTime = (_rule, value, callback) => {
 const rules = computed(() => ({ scheduleDate: [{ required: true, message: tr('请选择日期') }], employeeId: [{ required: true, message: tr('请选择主播') }], accountId: [{ required: true, message: tr('请选择直播平台') }], rateTypeId: [{ required: true, message: tr('请选择场次类型') }], startTime: [{ required: true, message: tr('请选择开始时间') }], endTime: [{ validator: validateEndTime, trigger: 'change' }] }))
 const weekDateRange = computed(() => selectedWeekRange(selectedWeek.value))
 const days = computed(() => {
-  const sunday = parseLocalDate(weekDateRange.value[0])
+  const monday = parseLocalDate(weekDateRange.value[0])
   return Array.from({ length: 7 }, (_, index) => {
-    const current = new Date(sunday)
-    current.setDate(sunday.getDate() + index)
+    const current = new Date(monday)
+    current.setDate(monday.getDate() + index)
     const date = isoDate(current)
     return { key: date, date, month: current.getMonth() + 1, day: current.getDate(), today: date === isoDate() }
   })
 })
 const calendarWeeks = computed(() => [days.value])
 function parseLocalDate(value) { const [year, month, day] = String(value).split('-').map(Number); return new Date(year, month - 1, day) }
-function weekCellClassName(date) {
-  const value = isoDate(date)
-  if (value < weekDateRange.value[0] || value > weekDateRange.value[1]) return ''
-  if (value === weekDateRange.value[0]) return 'schedule-week-cell schedule-week-start'
-  if (value === weekDateRange.value[1]) return 'schedule-week-cell schedule-week-end'
-  return 'schedule-week-cell'
+async function handleWeekChange(date) {
+  selectedWeek.value = selectedWeekRange(date || selectedWeek.value)[0]
+  try { localStorage.setItem(SCHEDULE_WEEK_STORAGE_KEY, selectedWeek.value) } catch (_) {}
+  await load()
 }
-async function handleWeekChange() { selectedWeek.value = weekDateRange.value[0]; await load() }
+async function shiftWeek(offset) {
+  const monday = parseLocalDate(weekDateRange.value[0])
+  monday.setDate(monday.getDate() + offset * 7)
+  await handleWeekChange(isoDate(monday))
+}
+async function goToCurrentWeek() { await handleWeekChange(isoDate()) }
 let loadSequence = 0
 async function load() {
   const sequence = ++loadSequence
@@ -298,13 +305,10 @@ button.operator-swatch { cursor: pointer; }
 .schedule-board-toolbar { justify-content: space-between; }
 .color-value { margin-left: 16px; }
 .schedule-filter :deep(.el-card__body) { padding: 16px; }
+.schedule-week-row { margin-bottom: 20px; }
 .schedule-filter-bar { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; }
 .schedule-filter-form { display: flex; flex: 1; align-items: flex-end; flex-wrap: wrap; gap: 12px; min-width: 0; }
 .schedule-filter-form :deep(.el-form-item) { margin-right: 0; margin-bottom: 0; }
-.week-filter-item { flex: 0 0 auto; }
-.week-filter-item :deep(.el-form-item__content) { flex: 0 0 170px; width: 170px; min-width: 170px; }
-.week-picker-field { flex: 0 0 170px; width: 170px; max-width: 170px; }
-.schedule-filter-form :deep(.week-picker-input.el-date-editor) { width: 170px !important; max-width: 170px; }
 .query-action { flex: 0 0 auto; }
 .view-switch { flex: 0 0 auto; }
 .week-calendar-wrap { overflow-x: auto; }
@@ -327,23 +331,9 @@ button.operator-swatch { cursor: pointer; }
   .schedule-filter-form :deep(.el-form-item__content),
   .schedule-filter-form :deep(.el-select),
   .schedule-filter-form :deep(.el-date-editor) { width: 100%; }
-  .week-filter-item :deep(.el-form-item__content),
-  .week-picker-field,
-  .schedule-filter-form :deep(.week-picker-input.el-date-editor) { flex-basis: auto; width: 100% !important; max-width: none; min-width: 0; }
 }
 </style>
 <style lang="scss">
-.schedule-week-picker-popper {
-  .el-date-table__row:hover .el-date-table-cell,
-  td.schedule-week-cell .el-date-table-cell { background-color: var(--el-datepicker-inrange-bg-color); }
-  .el-date-table__row:hover td.available:hover { color: var(--el-datepicker-text-color); }
-  .el-date-table__row:hover td:first-child .el-date-table-cell,
-  td.schedule-week-start .el-date-table-cell { margin-left: 5px; border-radius: 15px 0 0 15px; }
-  .el-date-table__row:hover td:last-child .el-date-table-cell,
-  td.schedule-week-end .el-date-table-cell { margin-right: 5px; border-radius: 0 15px 15px 0; }
-  td.schedule-week-end .el-date-table-cell__text { color: #fff; background-color: var(--el-datepicker-active-color); }
-}
-
 .schedule-dialog {
   width: min(820px, calc(100vw - 32px)) !important;
 
