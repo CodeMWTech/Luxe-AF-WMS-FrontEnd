@@ -67,7 +67,7 @@
           <el-form-item :label="tr('排班状态')"><el-select v-model="dialog.form.scheduleStatus"><el-option :label="tr('已确认')" value="CONFIRMED" /><el-option :label="tr('待确认')" value="PENDING" /><el-option :label="tr('已取消')" value="CANCELLED" /></el-select></el-form-item>
           <el-form-item :label="tr('运营')" prop="operatorId">
             <el-select v-model="dialog.form.operatorId" filterable clearable :placeholder="tr('请选择运营')">
-              <el-option v-for="operator in selectableOperators" :key="operator.employeeId" :value="operator.employeeId" :label="operator.name" :disabled="!isActiveOperator(operator)" />
+              <el-option v-for="operator in selectableOperators" :key="operator.employeeId" :value="operator.employeeId" :label="liveEmployeeOptionLabel({ ...operator, label: operator.name }, tr)" :disabled="!isActiveOperator(operator)" />
             </el-select>
           </el-form-item>
           <el-form-item class="wide" :label="tr('备注')"><el-input v-model="dialog.form.remark" type="textarea" :rows="2" /></el-form-item>
@@ -97,7 +97,7 @@ import { useLiveI18n } from '../useLiveI18n'
 import LiveEmployeeSelect from '../components/LiveEmployeeSelect.vue'
 import { onActivated, computed, getCurrentInstance, onMounted, reactive, ref } from 'vue'
 import { addSchedule, deleteSchedule, getLiveOptions, listScheduleCalendar, listScheduleRateAccounts, listScheduleRateTypes, updateSchedule, listScheduleOperators, updateScheduleOperatorColor, listScheduleHosts } from '@/api/wms/livePayroll'
-import { displayDate, downloadCsv, isoDate, LIVE_DATE_FORMAT, weekRange, selectedWeekRange } from '../shared'
+import { displayDate, downloadCsv, isoDate, LIVE_DATE_FORMAT, weekRange, selectedWeekRange, liveEmployeeOptionLabel } from '../shared'
 const { tr, isEn, messageNode } = useLiveI18n()
 const { proxy } = getCurrentInstance()
 const smsRef = ref(), smsRecordsRef = ref()
