@@ -8,10 +8,11 @@ export function listCrmCustomers(query) {
   })
 }
 
-export function getCrmShops() {
+export function getCrmShops(params) {
   return request({
     url: '/wms/crm/customers/shops',
-    method: 'get'
+    method: 'get',
+    params
   })
 }
 
@@ -33,10 +34,11 @@ export function getCrmCustom(params) {
   })
 }
 
-export function getCrmCustomer(platform, buyerKey) {
+export function getCrmCustomer(platform, buyerKey, params) {
   return request({
     url: '/wms/crm/customers/detail',
     method: 'get',
-    params: { platform, buyerKey }
+    params: { platform, buyerKey, ...params },
+    silentError: true
   })
 }
