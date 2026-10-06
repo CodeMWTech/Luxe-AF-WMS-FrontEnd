@@ -64,7 +64,7 @@
             <el-col :span="6">
               <div style="display: flex;align-items: start">
                 <el-form-item :label="tr('总金额')" prop="totalAmount">
-                  <el-input-number style="width:100%" v-model="form.totalAmount" :precision="2" :min="0"></el-input-number>
+                  <el-input-number style="width:100%" v-model="form.totalAmount" :precision="2" :min="0" :disabled="true"></el-input-number>
                 </el-form-item>
                 <el-button link type="primary" @click="handleAutoCalc" style="line-height: 32px">{{ tr('自动计算') }}</el-button>
               </div>
@@ -190,7 +190,6 @@ import SkuSelect from "../../../components/SkuSelect.vue";
 import {useRoute} from "vue-router";
 import {useWmsStore} from '@/store/modules/wms'
 import { numSub, generateNo } from '@/utils/ruoyi'
-import { delReceiptOrderDetail } from '@/api/wms/receiptOrderDetail'
 import {getWarehouseAndSkuKey} from "@/utils/wmsUtil";
 import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
@@ -392,12 +391,13 @@ const save = async () => {
 }
 
 const getParamsBeforeSave = (orderStatus) => {
+  updateTotals()
   let details = []
   if (form.value.details?.length) {
     details = form.value.details.map(it => {
       return {
         id: it.id,
-        skuId: it.itemSku.id,
+        skuId: it.skuId ?? it.itemSku?.id,
         amount: it.amount,
         quantity: it.quantity,
         warehouseId: form.value.warehouseId,
@@ -407,6 +407,7 @@ const getParamsBeforeSave = (orderStatus) => {
 
   return {
     id: form.value.id,
+    editToken: form.value.editToken,
     orderNo: form.value.orderNo,
     orderStatus,
     optType: form.value.optType,
@@ -469,15 +470,15 @@ const doWarehousing = async () => {
       return ElMessage.error('请选择商品')
     }
     if (form.value.details?.length) {
-      const invalidQuantityList = form.value.details.filter(it => !it.quantity)
+      const invalidQuantityList = form.value.details.filter(it => !it.quantity || Number(it.quantity) <= 0)
       if (invalidQuantityList?.length) {
         return ElMessage.error('请选择数量')
       }
       const invalidAmountList = form.value.details.filter(
-        it => it.amount === null || it.amount === undefined || it.amount === '' || Number(it.amount) === 0
+        it => it.amount === null || it.amount === undefined || it.amount === '' || Number(it.amount) <= 0
       )
       if (invalidAmountList?.length) {
-        return ElMessage.warning('入库商品金额不能为空且不能为0')
+        return ElMessage.warning('入库商品金额必须大于0')
       }
     }
     const params = getParamsBeforeSave(1);
@@ -496,6 +497,9 @@ const doWarehousing = async () => {
 }
 
 const updateToInvalid = async () => {
+  if (isFormDirty()) {
+    return ElMessage.warning('请先暂存修改，或取消编辑后再作废单据')
+  }
   await proxy?.$modal.confirm('确认作废入库单吗？');
   doSave(-1)
 }
@@ -549,15 +553,12 @@ const loadDetail = (id) => {
 
 const updateTotals = () => {
   let quantitySum = 0
-  let amountSum = undefined
+  let amountSum = 0
   form.value.details.forEach(it => {
     if (it.quantity) {
       quantitySum += Number(it.quantity)
     }
     if (it.amount || it.amount === 0) {
-      if (amountSum === undefined) {
-        amountSum = 0
-      }
       amountSum = numSub(amountSum, -Number(it.amount))
     }
   })
@@ -579,25 +580,12 @@ const handleAutoCalc = () => {
 }
 
 const handleDeleteDetail = (row, index) => {
-  if (row.id) {
-    proxy.$modal.confirm('确认删除本条商品明细吗？如确认会立即执行！').then(function () {
-      loading.value = true
-      return delReceiptOrderDetail(row.id);
-    }).then(() => {
-      form.value.details.splice(index, 1)
-      updateTotals()
-      proxy.$modal.msgSuccess("删除成功");
-    }).finally(() => {
-      loading.value = false
-    });
-  } else {
-    form.value.details.splice(index, 1)
-    updateTotals()
-  }
-  const indexOfSelected = selectedSku.value.findIndex(it => row.itemSku.id=== it.id)
-  if (indexOfSelected !== -1) {
-    selectedSku.value.splice(indexOfSelected, 1)
-  }
+  // 删除只改变本次编辑；暂存或完成后才写入数据库。
+  form.value.details.splice(index, 1)
+  const skuId = row.skuId ?? row.itemSku?.id
+  const selectedIndex = selectedSku.value.findIndex(it => String(it.id) === String(skuId))
+  if (selectedIndex !== -1) selectedSku.value.splice(selectedIndex, 1)
+  updateTotals()
 }
 </script>
 

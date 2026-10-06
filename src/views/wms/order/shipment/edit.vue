@@ -198,7 +198,6 @@
 <script setup name="ShipmentOrderEdit">
 import {computed, getCurrentInstance, h, onMounted, reactive, ref, toRef, toRefs, watch} from "vue";
 import {addShipmentOrder, getShipmentOrder, updateShipmentOrder, shipment} from "@/api/wms/shipmentOrder";
-import {delShipmentOrderDetail} from "@/api/wms/shipmentOrderDetail";
 import {ElMessage, ElMessageBox} from "element-plus";
 import {useRoute} from "vue-router";
 import {useWmsStore} from '@/store/modules/wms'
@@ -408,6 +407,7 @@ const save = async () => {
 }
 
 const getParamsBeforeSave = (orderStatus) => {
+  updateTotals()
   let details = []
   if (form.value.details?.length) {
     // 构建参数
@@ -562,6 +562,9 @@ const doShipment = async () => {
 }
 
 const updateToInvalid = async () => {
+  if (isFormDirty()) {
+    return ElMessage.warning('请先暂存修改，或取消编辑后再作废出库单')
+  }
   await proxy?.$modal.confirm('确认作废出库单吗？');
   doSave(-1)
 }
@@ -612,12 +615,14 @@ const loadDetail = (id) => {
 
 const handleChangeWarehouse = (e) => {
   form.value.details = []
+  selectedInventory.value = []
+  updateTotals()
   inventorySelectRef.value.setWarehouseId(form.value.warehouseId)
 }
 
 const updateTotals = () => {
   let quantitySum = 0
-  let amountSum = undefined
+  let amountSum = 0
   form.value.details.forEach(it => {
     if (it.quantity) {
       quantitySum += Number(it.quantity)
@@ -647,19 +652,8 @@ const handleAutoCalc = () => {
 }
 
 const handleDeleteDetail = (row, index) => {
-  if (row.id) {
-    proxy.$modal.confirm('确认删除本条商品明细吗？如确认会立即执行！').then(function () {
-      loading.value = true;
-      return delShipmentOrderDetail(row.id);
-    }).then(() => {
-      form.value.details.splice(index, 1)
-      proxy.$modal.msgSuccess("删除成功");
-    }).finally(()=>{
-      loading.value=false
-    })
-  } else {
-    form.value.details.splice(index, 1)
-  }
+  // 删除仅修改当前表单，暂存或完成出库时才提交数据库。
+  form.value.details.splice(index, 1)
   updateTotals()
   const indexOfSelected = selectedInventory.value.findIndex(it => getWarehouseAndSkuKey(it) === getWarehouseAndSkuKey(row))
   if (indexOfSelected !== -1) {
