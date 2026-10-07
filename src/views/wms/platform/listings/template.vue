@@ -198,7 +198,13 @@
                 </div>
                 <div><label class="ebay-field-label">{{ t('platformListings.currency') }}</label><el-select v-model="form.ebayCurrency" style="width:100%"><el-option label="USD" value="USD" /><el-option label="GBP" value="GBP" /><el-option label="EUR" value="EUR" /><el-option label="AUD" value="AUD" /></el-select></div>
               </div>
-              <el-switch v-model="form.ebayBestOfferEnabled" :active-text="t('platformListings.bestOffer')" :inactive-text="t('platformListings.bestOfferOff')" />
+              <el-switch v-model="form.ebayBestOfferEnabled" :active-text="t('platformListings.bestOffer')" :inactive-text="t('platformListings.bestOfferOff')" @change="handleBestOfferChange" />
+              <div v-if="form.platform === 'EBAY' && form.ebayBestOfferEnabled" class="best-offer-ratio">
+                <label class="ebay-field-label">{{ t('platformListings.minOfferPercent') }}</label>
+                <el-input-number v-model="form.ebayMinOfferPercent" :min="96" :max="100" :precision="2" :step="1" style="width:220px" />
+                <div class="field-hint">{{ t('platformListings.minOfferPercentHint') }}</div>
+                <div v-if="form.listingType === 'AUCTION'" class="field-hint">{{ t('platformListings.minOfferAuctionHint') }}</div>
+              </div>
             </section>
 
             <section class="ebay-section shipping-section">
@@ -564,7 +570,7 @@ const initForm = {
   ebaySubtitle: '', ebayQuantity: 1, ebayMarketplaceId: 'EBAY_US', ebayCurrency: 'USD',
   ebayDepartment: 'Women', ebayExteriorColor: 'N/A', ebaySize: 'N/A', ebayProductLine: 'N/A', ebayCountry: 'US',
   ebayLocation: 'Los Angeles, California', ebayPostalCode: '90048', ebayDispatchTimeMax: 3,
-  ebayShippingService: 'USPSParcel', ebayShippingCost: 0, ebayBestOfferEnabled: false,
+  ebayShippingService: 'USPSParcel', ebayShippingCost: 0, ebayBestOfferEnabled: false, ebayMinOfferPercent: null,
   ebayFulfillmentPolicyId: '', ebayPaymentPolicyId: '', ebayReturnPolicyId: '',
   tiktokCategoryId: '', tiktokCategoryVersion: 'v2', tiktokSaveMode: 'LISTING',
   tiktokProductAttributes: '',
@@ -1057,6 +1063,7 @@ function handleEdit(row) {
       ebayLocation: d.ebayLocation || 'Los Angeles, California', ebayPostalCode: d.ebayPostalCode || '90048', ebayDispatchTimeMax: d.ebayDispatchTimeMax || 3,
       ebayShippingService: d.ebayShippingService || 'USPSParcel', ebayShippingCost: d.ebayShippingCost ?? 0,
       ebayBestOfferEnabled: !!d.ebayBestOfferEnabled,
+      ebayMinOfferPercent: d.ebayMinOfferPercent ?? (d.ebayBestOfferEnabled ? 96 : null),
       ebayFulfillmentPolicyId: d.ebayFulfillmentPolicyId || '',
       ebayPaymentPolicyId: d.ebayPaymentPolicyId || '',
       ebayReturnPolicyId: d.ebayReturnPolicyId || '',
@@ -1273,8 +1280,21 @@ function optionalNumber(value) {
   return value === '' || value == null ? null : value
 }
 
+function handleBestOfferChange(enabled) {
+  if (enabled && (form.ebayMinOfferPercent == null || form.ebayMinOfferPercent === '')) form.ebayMinOfferPercent = 96
+  if (!enabled) form.ebayMinOfferPercent = null
+}
+
 function doSubmit(isEbay) {
   if (!validateLeafCategory()) return
+  if (isEbay && form.ebayBestOfferEnabled) {
+    if (form.ebayMinOfferPercent == null || form.ebayMinOfferPercent === '') form.ebayMinOfferPercent = 96
+    const percent = Number(form.ebayMinOfferPercent)
+    if (!Number.isFinite(percent) || percent < 96 || percent > 100) {
+      proxy.$modal.msgError(t('platformListings.minOfferPercentRange'))
+      return
+    }
+  }
   submitting.value = true
   const data = {
     id: form.id, templateName: form.templateName, platform: form.platform,
@@ -1294,6 +1314,7 @@ function doSubmit(isEbay) {
     ebayPostalCode: form.ebayPostalCode || null, ebayDispatchTimeMax: form.ebayDispatchTimeMax,
     ebayShippingService: form.ebayShippingService || null, ebayShippingCost: form.ebayShippingCost,
     ebayBestOfferEnabled: form.ebayBestOfferEnabled,
+    ebayMinOfferPercent: form.platform === 'EBAY' && form.ebayBestOfferEnabled ? form.ebayMinOfferPercent : null,
     ebayFulfillmentPolicyId: form.ebayFulfillmentPolicyId || null,
     ebayPaymentPolicyId: form.ebayPaymentPolicyId || null,
     ebayReturnPolicyId: form.ebayReturnPolicyId || null,
@@ -1439,6 +1460,7 @@ onMounted(() => { loadShops(); getList() })
 .field-label { font-size: 13px; font-weight: 500; color: #303133; margin-bottom: 4px; margin-top: 4px; }
 .field-label.required::after { content: ' *'; color: #F56C6C; }
 .field-hint { font-size: 12px; color: #909399; margin-top: 2px; }
+.best-offer-ratio { margin-top: 12px; }
 .ebay-field-label.required::after { content: ' *'; color: #F56C6C; }
 .required-hint { color: #F56C6C; }
 .token-row { display: flex; flex-wrap: wrap; gap: 6px; min-height: 32px; align-items: center; }

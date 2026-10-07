@@ -96,7 +96,18 @@
     <el-card class="live-card" shadow="never">
       <template #header>{{ tr('主播汇总 · 总薪酬 = 开播薪酬 + 佣金收入') }}</template>
       <el-table :data="data.employeeSummary" stripe>
-        <el-table-column type="index" :label="tr('排名')" :min-width="isEn ? 145 : 70" /><el-table-column prop="employeeName" :label="tr('主播')" ><template #default="s"><LiveEmployeeName :name="s.row.employeeName" :status="s.row.employeeStatus" /></template></el-table-column><el-table-column prop="sessions" :label="tr('总场次')" /><el-table-column prop="hours" :label="tr('总工时')"><template #default="s">{{ Number(s.row.hours || 0).toFixed(2) }}h</template></el-table-column><el-table-column prop="megaSessions" :label="tr('MEGA场次')" /><el-table-column :label="tr('开播薪酬')"><template #default="s">{{ money(s.row.streamCompensation) }}</template></el-table-column><el-table-column :label="tr('佣金收入')"><template #default="s">{{ money(s.row.commissionIncome) }}</template></el-table-column><el-table-column :label="tr('总薪酬')"><template #default="s"><strong>{{ money(s.row.totalCompensation) }}</strong></template></el-table-column><el-table-column :label="tr('占比')"><template #default="s">{{ s.row.share }}%</template></el-table-column>
+        <el-table-column type="index" :label="tr('排名')" :min-width="isEn ? 145 : 70" /><el-table-column prop="employeeName" :label="tr('主播')" ><template #default="s"><LiveEmployeeName :name="s.row.employeeName" :status="s.row.employeeStatus" /></template></el-table-column><el-table-column prop="sessions" :label="tr('总场次')" /><el-table-column prop="hours" :label="tr('总工时')"><template #default="s">{{ Number(s.row.hours || 0).toFixed(2) }}h</template></el-table-column><el-table-column :label="tr('GMV 合计')"><template #default="s">{{ money(s.row.gmv) }}</template></el-table-column><el-table-column :label="tr('GMV/小时')"><template #default="s">{{ money(s.row.gmvPerHour) }}</template></el-table-column><el-table-column prop="megaSessions" :label="tr('MEGA场次')" /><el-table-column :label="tr('开播薪酬')"><template #default="s">{{ money(s.row.streamCompensation) }}</template></el-table-column><el-table-column :label="tr('佣金收入')"><template #default="s">{{ money(s.row.commissionIncome) }}</template></el-table-column><el-table-column :label="tr('总薪酬')"><template #default="s"><strong>{{ money(s.row.totalCompensation) }}</strong></template></el-table-column><el-table-column :label="tr('占比')"><template #default="s">{{ s.row.share }}%</template></el-table-column>
+      </el-table>
+    </el-card>
+    <el-card class="live-card" shadow="never">
+      <template #header>{{ tr('运营 GMV') }}</template>
+      <div class="muted" style="margin-bottom:12px">{{ tr('按本场运营汇总。换月份查看时使用上方日期。') }}</div>
+      <el-table :data="data.operatorSummary" stripe :empty-text="tr('当前筛选范围内没有填写运营的开播记录')">
+        <el-table-column prop="operatorName" :label="tr('运营')" />
+        <el-table-column prop="sessions" :label="tr('总场次')" />
+        <el-table-column prop="hours" :label="tr('总工时')"><template #default="s">{{ Number(s.row.hours || 0).toFixed(2) }}h</template></el-table-column>
+        <el-table-column :label="tr('GMV 合计')"><template #default="s">{{ money(s.row.gmv) }}</template></el-table-column>
+        <el-table-column :label="tr('GMV/小时')"><template #default="s">{{ money(s.row.gmvPerHour) }}</template></el-table-column>
       </el-table>
     </el-card>
   </div>
@@ -120,7 +131,7 @@ const loading = ref(false)
 const dateRange = ref(monthRange())
 const filters = reactive({ employeeScope:'ALL', employeeId: null, accountId: null, rateTypeId: null })
 const options = reactive({ employees: [], accounts: [], rateTypes: [] })
-const data = reactive({ overview: {}, rateStats: [], dailyTrend: [], platformStats: [], employeeSummary: [], attendance: [], dailyChecklist: [] })
+const data = reactive({ overview: {}, rateStats: [], dailyTrend: [], platformStats: [], employeeSummary: [], operatorSummary: [], attendance: [], dailyChecklist: [] })
 const overview = computed(() => data.overview || {})
 const attendanceUploadRef = ref()
 const attendanceImporting = ref(false)
@@ -150,7 +161,9 @@ const metrics = computed(() => [
   { label: tr('佣金收入'), value: money(overview.value.commissionIncome), hint: tr('仅正常销售') },
   { label: tr('总薪酬'), value: money(overview.value.totalCompensation), hint: tr('开播薪酬 + 佣金') },
   { label: tr('MEGA场次'), value: overview.value.megaSessions || 0, hint: tr('大促/高流量场次') },
-  { label: tr('平均时薪'), value: money(overview.value.averageHourlyRate), hint: tr('基础薪酬 / 总工时') }
+  { label: tr('平均时薪'), value: money(overview.value.averageHourlyRate), hint: tr('基础薪酬 / 总工时') },
+  { label: tr('GMV 合计'), value: money(overview.value.totalGmv), hint: tr('当前筛选范围内的本场 GMV') },
+  { label: tr('GMV/小时'), value: money(overview.value.gmvPerHour), hint: tr('按已填写 GMV 的工时计算') }
 ])
 
 async function load() {
