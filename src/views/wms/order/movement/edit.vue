@@ -123,7 +123,7 @@
                   :placeholder="tr('移库数量') || (isEn ? 'Transfer Qty' : '移库数量')"
                   :min="1"
                   :precision="0"
-                  @change="handleChangeQuantity"
+                  @change="handleChangeQuantity(scope.row)"
                 ></el-input-number>
               </template>
             </el-table-column>
@@ -179,7 +179,6 @@
 <script setup name="MovementOrderEdit">
 import {computed, getCurrentInstance, onMounted, reactive, ref, toRef, toRefs, watch} from "vue";
 import {addMovementOrder, getMovementOrder, updateMovementOrder, movement} from "@/api/wms/movementOrder";
-import {delMovementOrderDetail} from "@/api/wms/movementOrderDetail";
 import {ElMessage, ElMessageBox} from "element-plus";
 import {useRoute} from "vue-router";
 import {useWmsStore} from '@/store/modules/wms'
@@ -325,6 +324,7 @@ const handleOkClick = (item) => {
         sourceWarehouseId: normalized.sourceWarehouseId ?? form.value.sourceWarehouseId,
         targetWarehouseId: normalized.targetWarehouseId ?? form.value.targetWarehouseId,
         inventoryId: normalized.inventoryId,
+        avgReceiptCost: normalized.avgReceiptCost,
       })
     }
   })
@@ -347,13 +347,14 @@ const save = async () => {
   doSave()
 }
 const getParams = (orderStatus) => {
+  updateTotals()
   let details = []
   if (form.value.details?.length) {
     // 构建参数
     details = form.value.details.map(it => {
       return {
         id: it.id,
-        movementOrderId: form.value.id,
+        orderId: form.value.id,
         skuId: it.skuId,
         quantity: it.quantity,
         amount: it.amount,
@@ -364,6 +365,7 @@ const getParams = (orderStatus) => {
   }
   return {
     id: form.value.id,
+    editToken: form.value.editToken,
     orderNo: form.value.orderNo,
     orderStatus,
     remark: form.value.remark,
@@ -455,6 +457,9 @@ const { markAllowLeave } = useOrderEditLeaveGuard({
 })
 
 const doMovement = async () => {
+  if (form.value.sourceWarehouseId === form.value.targetWarehouseId) {
+    return ElMessage.error('源仓库和目标仓库不能相同')
+  }
   await proxy?.$modal.confirm('确认移库吗？<br><span style="color: #f56c6c;">一旦确认，永久保存不可撤销</span>', {
     dangerouslyUseHTMLString: true
   });
@@ -466,15 +471,15 @@ const doMovement = async () => {
     if (!form.value.details?.length) {
       return ElMessage.error('请选择商品')
     }
-    const invalidQuantityList = form.value.details.filter(it => !it.quantity)
+    const invalidQuantityList = form.value.details.filter(it => !it.quantity || Number(it.quantity) <= 0)
     if (invalidQuantityList?.length) {
       return ElMessage.error('请选择移库数量')
     }
     const invalidAmountList = form.value.details.filter(
-      it => it.amount === null || it.amount === undefined || it.amount === '' || Number(it.amount) === 0
+      it => it.amount === null || it.amount === undefined || it.amount === '' || Number(it.amount) <= 0
     )
     if (invalidAmountList?.length) {
-      return ElMessage.warning('移库商品金额不能为空且不能为0')
+      return ElMessage.warning('移库商品金额必须大于0')
     }
 
     //('提交前校验',form.value)
@@ -494,6 +499,9 @@ const doMovement = async () => {
 }
 
 const updateToInvalid = async () => {
+  if (isFormDirty()) {
+    return ElMessage.warning('请先暂存修改，或取消编辑后再作废单据')
+  }
   await proxy?.$modal.confirm('确认作废移库单吗？');
   doSave(-1)
 }
@@ -555,15 +563,12 @@ const handleChangeTargetWarehouse = (e) => {
 
 const updateTotals = () => {
   let quantitySum = 0
-  let amountSum = undefined
+  let amountSum = 0
   form.value.details.forEach(it => {
     if (it.quantity) {
       quantitySum += Number(it.quantity)
     }
     if (it.amount || it.amount === 0) {
-      if (amountSum === undefined) {
-        amountSum = 0
-      }
       amountSum = numSub(amountSum, -Number(it.amount))
     }
   })
@@ -581,24 +586,11 @@ const handleChangeQuantity = (row) => {
 }
 
 const handleDeleteDetail = (row, index) => {
-  if (row.id) {
-    proxy.$modal.confirm('确认删除本条商品明细吗？如确认会立即执行！').then(function () {
-      loading.value = true
-      return delMovementOrderDetail(row.id);
-    }).then(() => {
-      form.value.details.splice(index, 1)
-      proxy.$modal.msgSuccess("删除成功");
-    }).finally(() => {
-      loading.value = false
-    })
-  } else {
-    form.value.details.splice(index, 1)
-  }
+  // 删除只改变本次编辑；暂存或完成后才写入数据库。
+  form.value.details.splice(index, 1)
+  const selectedIndex = selectedInventory.value.findIndex(it => getWarehouseAndSkuKey(it) === getSourceWarehouseAndSkuKey(row))
+  if (selectedIndex !== -1) selectedInventory.value.splice(selectedIndex, 1)
   updateTotals()
-  const indexOfSelected = selectedInventory.value.findIndex(it => getWarehouseAndSkuKey(it) === getSourceWarehouseAndSkuKey(row))
-  if (indexOfSelected !== -1) {
-    selectedInventory.value.splice(indexOfSelected, 1)
-  }
 }
 </script>
 
