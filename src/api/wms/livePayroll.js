@@ -33,6 +33,7 @@ export const updateSchedule = data => request({ url: `${base}/schedules`, method
 export const deleteSchedule = id => request({ url: `${base}/schedules/${id}`, method: 'delete' })
 
 export const listStreams = params => request({ url: `${base}/streams/list`, method: 'get', params })
+export const getStreamGmvSummary = params => request({ url: `${base}/streams/gmv-summary`, method: 'get', params })
 export const listStreamScheduleOptions = params => request({ url: `${base}/streams/schedule-options`, method: 'get', params })
 export const listStreamRateTypes = params => request({ url: `${base}/streams/rate-types`, method: 'get', params })
 export const addStream = data => request({ url: `${base}/streams`, method: 'post', data, silentError: true })
