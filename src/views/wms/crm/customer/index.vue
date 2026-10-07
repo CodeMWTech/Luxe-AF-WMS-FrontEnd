@@ -246,6 +246,45 @@
                     <p v-else class="crm-chart__note">{{ tr('只有一笔订单，还没有间隔。') }}</p>
                   </article>
                 </div>
+                <section v-if="detail.repeatCustomer" class="crm-taste">
+                  <button type="button" class="crm-taste__toggle" :class="{ 'is-open': tasteOpen }" :title="tr('查看这位回头客的消费水平、品牌和品类偏好')" @click="toggleTaste">
+                    <span class="crm-taste__lead">
+                      <i class="crm-taste__mark" />
+                      <span>{{ tr('品位偏好') }}</span>
+                      <span class="crm-taste__hint">{{ tr('看平均消费、品牌和品类') }}</span>
+                    </span>
+                    <em>{{ tasteOpen ? tr('收起') : tr('点击查看') }}</em>
+                  </button>
+                  <div v-show="tasteOpen" class="crm-taste__panel">
+                    <div class="crm-taste__stats">
+                      <div><span>{{ tr('平均每笔') }}</span><strong>{{ moneyText(tasteView.currency, tasteView.stats?.avg) }}</strong></div>
+                      <div><span>{{ tr('中位数') }}</span><strong>{{ moneyText(tasteView.currency, tasteView.stats?.p50) }}</strong></div>
+                      <div><span>{{ tr('最高一笔') }}</span><strong>{{ moneyText(tasteView.currency, tasteView.stats?.max) }}</strong></div>
+                      <div><span>{{ tr('最常买') }}</span><strong>{{ [tasteView.topBrand, tasteView.topCategory].filter(Boolean).join(' · ') || tr('还没对上库存') }}</strong></div>
+                    </div>
+                    <div class="crm-taste__notes">
+                      <p><em>{{ tr('口味') }}</em><span>{{ tasteLines.taste }}</span></p>
+                      <p><em>{{ tr('金额分布') }}</em><span>{{ tasteLines.money }}</span></p>
+                    </div>
+                    <p class="crm-taste__tip">{{ tr('点击图例可暂时隐藏这一项，剩下各项的占比会重新加总为 100%。再点一次即可恢复。') }}</p>
+                    <div class="crm-taste__charts">
+                      <article>
+                        <header>{{ tr('品牌偏好') }}</header>
+                        <div v-if="tasteView.brands.length" ref="tasteBrandEl" class="crm-chart__canvas" />
+                        <p v-else class="crm-chart__note">{{ tr('商品还没有对上库存品牌') }}</p>
+                      </article>
+                      <article>
+                        <header>{{ tr('品类偏好') }}</header>
+                        <div v-if="tasteView.categories.length" ref="tasteCategoryEl" class="crm-chart__canvas" />
+                        <p v-else class="crm-chart__note">{{ tr('商品还没有对上库存品类') }}</p>
+                      </article>
+                    </div>
+                    <article class="crm-taste__band">
+                      <header>{{ tr('金额档') }}</header>
+                      <div ref="tasteBandEl" class="crm-chart__canvas" />
+                    </article>
+                  </div>
+                </section>
                 <div v-if="extraGroups.length" class="crm-extra">
                   <section v-for="group in extraGroups" :key="group.key">
                     <span>{{ group.label }}</span>
@@ -260,13 +299,21 @@
               <div class="crm-orders">
                 <div class="crm-orders__bar">
                   <h3>{{ tr('订单记录') }}</h3>
-                  <div v-if="detail.orders.length > 1" class="crm-split">
-                    <button type="button" :class="{ 'is-on': orderSort === 'asc' }" @click="setOrderSort('asc')">{{ tr('顺序') }}</button>
-                    <button type="button" :class="{ 'is-on': orderSort === 'desc' }" @click="setOrderSort('desc')">{{ tr('倒序') }}</button>
+                  <div class="crm-orders__tools">
+                    <div v-if="detail.orders.length" class="crm-split">
+                      <button type="button" :class="{ 'is-on': skuMatch === 'all' }" @click="skuMatch = 'all'">{{ tr('全部') }}</button>
+                      <button type="button" :class="{ 'is-on': skuMatch === 'matched' }" @click="skuMatch = 'matched'">{{ tr('已匹配SKU') }}</button>
+                      <button type="button" :class="{ 'is-on': skuMatch === 'unmatched' }" @click="skuMatch = 'unmatched'">{{ tr('未匹配SKU') }}</button>
+                    </div>
+                    <div v-if="detail.orders.length > 1" class="crm-split">
+                      <button type="button" :class="{ 'is-on': orderSort === 'asc' }" @click="setOrderSort('asc')">{{ tr('顺序') }}</button>
+                      <button type="button" :class="{ 'is-on': orderSort === 'desc' }" @click="setOrderSort('desc')">{{ tr('倒序') }}</button>
+                    </div>
                   </div>
                 </div>
                 <p v-if="!detail.orders.length" class="muted">{{ tr('这段时间没有订单。') }}</p>
-                <article v-for="order in shownOrders" :key="order.sequence + order.platformOrderId" class="crm-order">
+                <p v-else-if="!listedOrders.length" class="muted">{{ skuEmptyText }}</p>
+                <article v-for="order in listedOrders" :key="order.sequence + order.platformOrderId" class="crm-order">
                   <div class="crm-order__head">
                     <div>
                       <strong>{{ sequenceLabel(order.sequence) }}</strong>
@@ -553,6 +600,11 @@ const detailZoomEl = ref(null)
 const detailZoomOpen = ref(false)
 const detailZoomKind = ref('')
 const orderSort = ref('asc')
+const skuMatch = ref('all')
+const tasteOpen = ref(false)
+const tasteBrandEl = ref(null)
+const tasteCategoryEl = ref(null)
+const tasteBandEl = ref(null)
 const gapFrom = ref(1)
 const gapTo = ref(2)
 const extraOpen = ref(false)
@@ -643,6 +695,86 @@ const gapExplain = computed(() => {
 const shownOrders = computed(() => {
   const orders = detail.value?.orders || []
   return orderSort.value === 'desc' ? [...orders].reverse() : orders
+})
+const listedOrders = computed(() => {
+  return shownOrders.value.flatMap(order => {
+    const products = order.products || []
+    const visible = skuMatch.value === 'matched'
+      ? products.filter(item => item.linked)
+      : skuMatch.value === 'unmatched'
+        ? products.filter(item => !item.linked)
+        : products
+    if (skuMatch.value !== 'all' && !visible.length) return []
+    return [{ ...order, products: visible }]
+  })
+})
+const skuEmptyText = computed(() => {
+  return skuMatch.value === 'matched'
+    ? tr('没有已匹配 SKU 的订单。')
+    : tr('没有未匹配 SKU 的订单。')
+})
+const tasteView = computed(() => {
+  const orders = detail.value?.orders || []
+  const currency = orders.find(order => order.currency)?.currency || ''
+  const stats = numberStats(orders.map(order => Number(order.orderAmount || 0)))
+  const brands = tasteNamed(orders, 'brandName')
+  const categories = tasteNamed(orders, 'categoryName')
+  let products = 0
+  let matched = 0
+  for (const order of orders) {
+    for (const product of order.products || []) {
+      products += 1
+      if (product.brandName || product.categoryName) matched += 1
+    }
+  }
+  const bands = [
+    { name: '500 以下', max: 500 },
+    { name: '500–1,500', max: 1500 },
+    { name: '1,500–3,000', max: 3000 },
+    { name: '3,000–6,000', max: 6000 },
+    { name: '6,000 以上', max: Infinity }
+  ].map(item => ({ name: item.name, max: item.max, count: 0 }))
+  for (const order of orders) {
+    const amount = Number(order.orderAmount || 0)
+    const band = bands.find(item => amount < item.max) || bands[bands.length - 1]
+    band.count += 1
+  }
+  const busiest = [...bands].sort((left, right) => right.count - left.count)[0]
+  return {
+    currency,
+    stats,
+    brands,
+    categories,
+    bands,
+    products,
+    matched,
+    topBrand: brands.find(item => item.name !== '未知' && item.name !== '其他')?.name || '',
+    topCategory: categories.find(item => item.name !== '未知' && item.name !== '其他')?.name || '',
+    bandName: busiest?.count ? busiest.name : ''
+  }
+})
+const tasteLines = computed(() => {
+  const view = tasteView.value
+  const unmatched = Math.max(view.products - view.matched, 0)
+  let taste = tr('这些商品还没有对上库存，品牌和品类在图里记为未知。')
+  if (view.matched && unmatched) {
+    taste = te('已对上库存 {0} 件，共 {1} 件。买得最多的品牌是 {2}，品类是 {3}。没对上的记为未知。', [
+      formatCount(view.matched),
+      formatCount(view.products),
+      view.topBrand || '—',
+      view.topCategory || '—'
+    ])
+  } else if (view.matched) {
+    taste = te('这 {0} 件都对上了库存。买得最多的品牌是 {1}，品类是 {2}。', [
+      formatCount(view.matched),
+      view.topBrand || '—',
+      view.topCategory || '—'
+    ])
+  }
+  return {
+    taste,
+    money: te('更多订单落在 {0}。', [view.bandName || '—'])
+  }
 })
 const detailStory = computed(() => {
   const orders = detail.value?.orders || []
@@ -987,9 +1119,93 @@ function draw(key, el, option) {
 }
 
 function clearDetailCharts() {
-  ['detailAmount', 'detailBrand', 'detailGap'].forEach(key => {
+  ['detailAmount', 'detailBrand', 'detailGap', 'tasteBrand', 'tasteCategory', 'tasteBand'].forEach(key => {
     charts[key]?.dispose()
     delete charts[key]
+  })
+}
+
+function pieRows(items) {
+  const label = name => (name === '未知' || name === '其他') ? tr(name) : name
+  return items.map(item => ({
+    name: label(item.name),
+    value: item.count,
+    itemStyle: item.name === '未知' ? { color: '#d0d5dd' } : (item.name === '其他' ? { color: '#98a2b3' } : undefined)
+  }))
+}
+
+function percentMap(rows) {
+  const total = rows.reduce((sum, row) => sum + row.value, 0)
+  const map = {}
+  if (!total) return map
+  const parts = rows.map(row => {
+    const exact = row.value * 100 / total
+    const base = Math.floor(exact)
+    return { name: row.name, base, frac: exact - base }
+  })
+  let left = 100 - parts.reduce((sum, part) => sum + part.base, 0)
+  ;[...parts].sort((leftPart, rightPart) => rightPart.frac - leftPart.frac).forEach(part => {
+    if (left <= 0) return
+    part.base += 1
+    left -= 1
+  })
+  parts.forEach(part => {
+    map[part.name] = part.base
+  })
+  return map
+}
+
+function pieOption(rows) {
+  const shares = percentMap(rows)
+  return {
+    tooltip: {
+      trigger: 'item',
+      formatter: params => `${params.name}<br/>${formatCount(params.value)}（${shares[params.name] ?? 0}%）`
+    },
+    legend: {
+      type: 'scroll',
+      orient: 'vertical',
+      right: 0,
+      top: 8,
+      bottom: 8,
+      itemWidth: 10,
+      itemHeight: 10,
+      itemGap: 10,
+      data: rows.map(row => row.name),
+      formatter: name => shares[name] == null ? name : `${name}  ${shares[name]}%`,
+      textStyle: { fontSize: 12, color: '#344054', width: 128, overflow: 'break' }
+    },
+    series: [{
+      type: 'pie',
+      radius: ['32%', '52%'],
+      center: ['32%', '50%'],
+      data: rows,
+      label: { show: false }
+    }]
+  }
+}
+
+function bindTastePie(chart, rows) {
+  if (!chart) return
+  const selected = Object.fromEntries(rows.map(row => [row.name, true]))
+  const paint = () => {
+    const visible = rows.filter(row => selected[row.name] !== false)
+    const shares = percentMap(visible)
+    chart.setOption({
+      legend: {
+        formatter: name => shares[name] == null ? name : `${name}  ${shares[name]}%`
+      },
+      tooltip: {
+        formatter: params => `${params.name}<br/>${formatCount(params.value)}（${shares[params.name] ?? 0}%）`
+      }
+    })
+  }
+  chart.off('legendselectchanged')
+  chart.on('legendselectchanged', event => {
+    rows.forEach(row => {
+      selected[row.name] = event.selected[row.name] !== false
+    })
+    paint()
   })
 }
 
@@ -1074,6 +1290,27 @@ function gapsBetween(orders) {
 function topLabel(orders, field) {
   const ranked = countNamed(orders, field).filter(item => item.name && item.name !== '未入库')
   return ranked[0]?.name || ''
+}
+
+function tasteNamed(orders, field) {
+  const counts = new Map()
+  for (const order of orders) {
+    for (const product of order.products || []) {
+      const raw = String(product[field] || '').trim()
+      const name = !raw || raw === '未入库' ? '未知' : raw
+      counts.set(name, (counts.get(name) || 0) + 1)
+    }
+  }
+  const unknown = counts.get('未知') || 0
+  counts.delete('未知')
+  const ranked = [...counts.entries()]
+    .map(([name, count]) => ({ name, count }))
+    .sort((left, right) => right.count - left.count)
+  const shown = ranked.slice(0, 6)
+  const rest = ranked.slice(6).reduce((sum, item) => sum + item.count, 0)
+  if (rest) shown.push({ name: '其他', count: rest })
+  if (unknown) shown.push({ name: '未知', count: unknown })
+  return shown
 }
 
 function countNamed(orders, field, limit = 6) {
@@ -1330,6 +1567,41 @@ function renderDetailCharts() {
       tr('天数')
     ), gaps.length))
   }
+  renderTasteCharts()
+}
+
+function renderTasteCharts() {
+  if (!tasteOpen.value || !detail.value?.repeatCustomer) return
+  const view = tasteView.value
+  if (view.brands.length) {
+    const rows = pieRows(view.brands)
+    draw('tasteBrand', tasteBrandEl.value, pieOption(rows))
+    bindTastePie(charts.tasteBrand, rows)
+  }
+  if (view.categories.length) {
+    const rows = pieRows(view.categories)
+    draw('tasteCategory', tasteCategoryEl.value, pieOption(rows))
+    bindTastePie(charts.tasteCategory, rows)
+  }
+  const option = verticalOption(
+    view.bands.map(item => item.name),
+    view.bands.map(item => item.count),
+    fill('#ffd591', '#fa8c16', false),
+    tr('订单数')
+  )
+  option.grid = { left: 8, right: 16, top: 20, bottom: 8, containLabel: true }
+  option.xAxis.axisLabel = { color: '#344054', fontSize: 12, interval: 0, rotate: 0, hideOverlap: false }
+  option.yAxis.axisLabel = { color: '#344054', fontSize: 12, margin: 10 }
+  draw('tasteBand', tasteBandEl.value, option)
+}
+
+function toggleTaste() {
+  tasteOpen.value = !tasteOpen.value
+  if (!tasteOpen.value) return
+  nextTick(() => requestAnimationFrame(() => {
+    renderTasteCharts()
+    resizeCharts()
+  }))
 }
 
 function focusChart(id) {
@@ -1622,6 +1894,8 @@ async function openCustomer(item, options = {}) {
       products: (order.products || []).map(product => ({ ...product, open: false }))
     }))
     extraOpen.value = false
+    tasteOpen.value = false
+    skuMatch.value = 'all'
     detailSource.value = next
     const begin = dayOf(next.orders[0]?.orderTime || next.firstOrderTime)
     const end = dayOf(next.orders[next.orders.length - 1]?.orderTime || next.lastOrderTime)
@@ -2056,6 +2330,171 @@ onBeforeUnmount(() => {
   cursor: pointer;
   height: 100%;
 }
+.crm-taste {
+  margin: 0 14px 12px;
+  flex: none;
+}
+.crm-taste__toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid #91caff;
+  border-radius: 12px;
+  background: #f0f7ff;
+  box-shadow: inset 4px 0 0 #1677ff;
+  color: #0958d9;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color .15s ease, background .15s ease, box-shadow .15s ease;
+}
+.crm-taste__toggle:hover {
+  border-color: #1677ff;
+  background: #e6f4ff;
+  box-shadow: inset 4px 0 0 #1677ff, 0 6px 16px rgba(22, 119, 255, .14);
+}
+.crm-taste__toggle.is-open {
+  border-bottom-color: transparent;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.crm-taste__lead {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.crm-taste__mark {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #1677ff;
+  box-shadow: 0 0 0 4px rgba(22, 119, 255, .18);
+}
+.crm-taste__hint {
+  display: none;
+  color: #1677ff;
+  font-size: 12px;
+  font-weight: 600;
+}
+.crm-taste__toggle:hover .crm-taste__hint {
+  display: inline;
+}
+.crm-taste__toggle em {
+  flex: none;
+  padding: 3px 10px;
+  border: 1px solid #91caff;
+  border-radius: 999px;
+  background: #fff;
+  color: #1677ff;
+  font-style: normal;
+  font-weight: 700;
+}
+.crm-taste__toggle:hover em {
+  border-color: #1677ff;
+  background: #1677ff;
+  color: #fff;
+}
+.crm-taste__panel {
+  margin-top: 0;
+  padding: 12px;
+  border: 1px solid #91caff;
+  border-top: 0;
+  border-radius: 0 0 12px 12px;
+  background: #fff;
+  box-shadow: inset 4px 0 0 #1677ff;
+}
+.crm-taste__stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+.crm-taste__stats div {
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+.crm-taste__stats span {
+  display: block;
+  margin-bottom: 6px;
+  color: #667085;
+  font-size: 12px;
+  font-weight: 700;
+}
+.crm-taste__stats strong {
+  display: block;
+  color: #1d2433;
+  font-size: 16px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.crm-taste__notes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 0 14px;
+}
+.crm-taste__notes p {
+  display: flex;
+  gap: 10px;
+  margin: 0;
+  color: #344054;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.crm-taste__notes em {
+  flex: none;
+  min-width: 64px;
+  color: #1677ff;
+  font-style: normal;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.crm-taste__tip {
+  margin: 0 0 10px;
+  color: #667085;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.crm-taste__charts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  height: 320px;
+}
+.crm-taste__band {
+  display: flex;
+  flex-direction: column;
+  height: 240px;
+  margin-top: 14px;
+  min-height: 0;
+}
+.crm-taste__band header {
+  flex: none;
+  color: #344054;
+  font-size: 12px;
+  font-weight: 700;
+}
+.crm-taste__charts article {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.crm-taste__charts header {
+  flex: none;
+  color: #344054;
+  font-size: 12px;
+  font-weight: 700;
+}
+.crm-taste__charts .crm-chart__note {
+  margin: auto 0;
+}
 .crm-chips {
   display: flex;
   flex-wrap: wrap;
@@ -2388,6 +2827,12 @@ onBeforeUnmount(() => {
 .crm-orders__bar > span {
   color: #667085;
   font-size: 12px;
+}
+.crm-orders__tools {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
 }
 .crm-orders__bar .crm-split {
   margin: 0;
