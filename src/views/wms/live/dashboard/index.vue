@@ -49,6 +49,43 @@
         <el-table :data="data.attendance" stripe><el-table-column prop="employeeName" :label="tr('主播')" ><template #default="s"><LiveEmployeeName :name="s.row.employeeName" :status="s.row.employeeStatus" /></template></el-table-column><el-table-column prop="planned" :label="tr('计划场次')" /><el-table-column prop="actual" :label="tr('实际场次')" /><el-table-column prop="difference" :label="tr('差异')"><template #default="s"><span :class="s.row.difference >= 0 ? 'positive' : 'negative'">{{ s.row.difference > 0 ? '+' : '' }}{{ s.row.difference }}</span></template></el-table-column><el-table-column :label="tr('状态')"><template #default="s">{{ tr(s.row.status) }}</template></el-table-column></el-table>
       </el-card>
     </div>
+    <el-card class="live-card gmv-panel" shadow="never" v-loading="loading">
+      <div class="gmv-toolbar">
+        <strong>{{ tr('GMV 统计') }}</strong>
+        <el-radio-group v-model="gmvQuery.scope" @change="gmvQuery.personId = ''">
+          <el-radio-button label="ALL">{{ tr('全部') }}</el-radio-button>
+          <el-radio-button label="HOST">{{ tr('按主播') }}</el-radio-button>
+          <el-radio-button label="OPERATOR">{{ tr('按运营') }}</el-radio-button>
+        </el-radio-group>
+        <el-select v-if="gmvQuery.scope === 'HOST'" v-model="gmvQuery.personId" clearable filterable :placeholder="tr('全部主播')">
+          <el-option :label="tr('全部主播')" value="" />
+          <el-option v-for="host in gmvHostOptions" :key="host.employeeId" :label="host.employeeName" :value="host.employeeId" />
+        </el-select>
+        <el-select v-if="gmvQuery.scope === 'OPERATOR'" v-model="gmvQuery.personId" clearable filterable :placeholder="tr('全部运营')">
+          <el-option :label="tr('全部运营')" value="" />
+          <el-option v-for="operator in gmvOperatorOptions" :key="operator.operatorEmployeeId" :label="operator.operatorName" :value="operator.operatorEmployeeId" />
+        </el-select>
+        <el-radio-group v-model="gmvQuery.basis">
+          <el-radio-button label="MONTH">{{ tr('按月') }}</el-radio-button>
+          <el-radio-button label="HOUR">{{ tr('按小时') }}</el-radio-button>
+        </el-radio-group>
+        <el-select v-if="gmvQuery.basis === 'MONTH'" v-model="gmvQuery.month" clearable filterable :placeholder="tr('全部月份')">
+          <el-option :label="tr('全部月份')" value="" />
+          <el-option v-for="month in gmvMonthOptions" :key="month" :label="month" :value="month" />
+        </el-select>
+      </div>
+      <el-table :data="gmvRows" stripe :empty-text="tr('当前筛选里还没有开播记录')">
+        <el-table-column v-if="gmvQuery.scope === 'ALL' && gmvQuery.basis === 'HOUR'" prop="rangeLabel" :label="tr('统计范围')" width="120" />
+        <el-table-column v-if="gmvQuery.scope === 'HOST'" :label="tr('主播')" min-width="140"><template #default="s"><LiveEmployeeName :name="s.row.employeeName" :status="s.row.employeeStatus" /></template></el-table-column>
+        <el-table-column v-if="gmvQuery.scope === 'OPERATOR'" prop="operatorName" :label="tr('运营')" min-width="140" />
+        <el-table-column v-if="gmvQuery.basis === 'MONTH'" prop="month" :label="tr('月份')" width="120" />
+        <el-table-column prop="sessions" :label="tr('总场次')" width="90" />
+        <el-table-column prop="gmvSessions" :label="tr('已填 GMV')" width="100" />
+        <el-table-column :label="tr('工时')" width="110"><template #default="s">{{ Number(s.row.hours || 0).toFixed(2) }}h</template></el-table-column>
+        <el-table-column :label="tr('GMV 合计')" min-width="130"><template #default="s">{{ moneyOrDash(s.row.gmv) }}</template></el-table-column>
+        <el-table-column :label="tr('GMV/小时')" min-width="130"><template #default="s">{{ moneyOrDash(s.row.gmvPerHour) }}</template></el-table-column>
+      </el-table>
+    </el-card>
     <el-card class="live-card checklist-card" shadow="never">
       <template #header>
         <div class="checklist-header">
@@ -99,17 +136,6 @@
         <el-table-column type="index" :label="tr('排名')" :min-width="isEn ? 145 : 70" /><el-table-column prop="employeeName" :label="tr('主播')" ><template #default="s"><LiveEmployeeName :name="s.row.employeeName" :status="s.row.employeeStatus" /></template></el-table-column><el-table-column prop="sessions" :label="tr('总场次')" /><el-table-column prop="hours" :label="tr('总工时')"><template #default="s">{{ Number(s.row.hours || 0).toFixed(2) }}h</template></el-table-column><el-table-column :label="tr('GMV 合计')"><template #default="s">{{ money(s.row.gmv) }}</template></el-table-column><el-table-column :label="tr('GMV/小时')"><template #default="s">{{ money(s.row.gmvPerHour) }}</template></el-table-column><el-table-column prop="megaSessions" :label="tr('MEGA场次')" /><el-table-column :label="tr('开播薪酬')"><template #default="s">{{ money(s.row.streamCompensation) }}</template></el-table-column><el-table-column :label="tr('佣金收入')"><template #default="s">{{ money(s.row.commissionIncome) }}</template></el-table-column><el-table-column :label="tr('总薪酬')"><template #default="s"><strong>{{ money(s.row.totalCompensation) }}</strong></template></el-table-column><el-table-column :label="tr('占比')"><template #default="s">{{ s.row.share }}%</template></el-table-column>
       </el-table>
     </el-card>
-    <el-card class="live-card" shadow="never">
-      <template #header>{{ tr('运营 GMV') }}</template>
-      <div class="muted" style="margin-bottom:12px">{{ tr('按本场运营汇总。换月份查看时使用上方日期。') }}</div>
-      <el-table :data="data.operatorSummary" stripe :empty-text="tr('当前筛选范围内没有填写运营的开播记录')">
-        <el-table-column prop="operatorName" :label="tr('运营')" />
-        <el-table-column prop="sessions" :label="tr('总场次')" />
-        <el-table-column prop="hours" :label="tr('总工时')"><template #default="s">{{ Number(s.row.hours || 0).toFixed(2) }}h</template></el-table-column>
-        <el-table-column :label="tr('GMV 合计')"><template #default="s">{{ money(s.row.gmv) }}</template></el-table-column>
-        <el-table-column :label="tr('GMV/小时')"><template #default="s">{{ money(s.row.gmvPerHour) }}</template></el-table-column>
-      </el-table>
-    </el-card>
   </div>
 </template>
 
@@ -122,7 +148,7 @@ import LiveEmployeeName from '../components/LiveEmployeeName.vue'
 import { watch, onActivated, computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import * as echarts from 'echarts'
-import { getDashboard, getLiveOptions, importAttendance } from '@/api/wms/livePayroll'
+import { getDashboard, getLiveOptions, getStreamGmvSummary, importAttendance } from '@/api/wms/livePayroll'
 import { accountLabel, displayDate, downloadCsv, LIVE_DATE_FORMAT, money, monthRange } from '../shared'
 const { tr, isEn, messageNode } = useLiveI18n()
 const router = useRouter()
@@ -132,6 +158,8 @@ const dateRange = ref(monthRange())
 const filters = reactive({ employeeScope:'ALL', employeeId: null, accountId: null, rateTypeId: null })
 const options = reactive({ employees: [], accounts: [], rateTypes: [] })
 const data = reactive({ overview: {}, rateStats: [], dailyTrend: [], platformStats: [], employeeSummary: [], operatorSummary: [], attendance: [], dailyChecklist: [] })
+const gmvSummary = ref({ entries: [] })
+const gmvQuery = reactive({ scope: 'ALL', personId: '', basis: 'MONTH', month: '' })
 const overview = computed(() => data.overview || {})
 const attendanceUploadRef = ref()
 const attendanceImporting = ref(false)
@@ -166,12 +194,97 @@ const metrics = computed(() => [
   { label: tr('GMV/小时'), value: money(overview.value.gmvPerHour), hint: tr('按已填写 GMV 的工时计算') }
 ])
 
+function moneyOrDash(value) { return value == null || value === '' ? '—' : money(value) }
+function entryHasGmv(entry) { return entry?.gmv != null && entry.gmv !== '' }
+function aggregateEntries(entries) {
+  const withGmv = entries.filter(entryHasGmv)
+  const gmvHours = withGmv.reduce((sum, entry) => sum + Number(entry.hours || 0), 0)
+  const gmv = withGmv.reduce((sum, entry) => sum + Number(entry.gmv || 0), 0)
+  return {
+    sessions: entries.length,
+    gmvSessions: withGmv.length,
+    hours: entries.reduce((sum, entry) => sum + Number(entry.hours || 0), 0),
+    gmv: withGmv.length ? gmv : null,
+    gmvPerHour: withGmv.length && gmvHours > 0 ? gmv / gmvHours : (withGmv.length ? 0 : null)
+  }
+}
+const gmvHostOptions = computed(() => {
+  const seen = new Map()
+  for (const entry of gmvSummary.value.entries || []) {
+    if (entry.employeeId == null || seen.has(String(entry.employeeId))) continue
+    seen.set(String(entry.employeeId), { employeeId: entry.employeeId, employeeName: entry.employeeName })
+  }
+  return [...seen.values()]
+})
+const gmvOperatorOptions = computed(() => {
+  const seen = new Map()
+  for (const entry of gmvSummary.value.entries || []) {
+    if (entry.operatorEmployeeId == null || seen.has(String(entry.operatorEmployeeId))) continue
+    seen.set(String(entry.operatorEmployeeId), { operatorEmployeeId: entry.operatorEmployeeId, operatorName: entry.operatorName })
+  }
+  return [...seen.values()]
+})
+const personScopedGmvEntries = computed(() => {
+  const entries = gmvSummary.value.entries || []
+  if (gmvQuery.scope === 'HOST') {
+    const hosts = entries.filter(entry => entry.employeeId != null)
+    return gmvQuery.personId ? hosts.filter(entry => String(entry.employeeId) === String(gmvQuery.personId)) : hosts
+  }
+  if (gmvQuery.scope === 'OPERATOR') {
+    const operatorsInScope = entries.filter(entry => entry.operatorEmployeeId != null)
+    return gmvQuery.personId ? operatorsInScope.filter(entry => String(entry.operatorEmployeeId) === String(gmvQuery.personId)) : operatorsInScope
+  }
+  return entries
+})
+const gmvMonthOptions = computed(() => {
+  const months = new Set()
+  for (const entry of personScopedGmvEntries.value) {
+    if (entry.month) months.add(entry.month)
+  }
+  return [...months].sort((left, right) => String(right).localeCompare(String(left)))
+})
+const scopedGmvEntries = computed(() => {
+  if (gmvQuery.basis !== 'MONTH' || !gmvQuery.month) return personScopedGmvEntries.value
+  return personScopedGmvEntries.value.filter(entry => entry.month === gmvQuery.month)
+})
+const gmvRows = computed(() => {
+  const groups = new Map()
+  const add = (key, row, entry) => {
+    if (!groups.has(key)) groups.set(key, { ...row, entries: [] })
+    groups.get(key).entries.push(entry)
+  }
+  if (gmvQuery.basis === 'MONTH') {
+    for (const entry of scopedGmvEntries.value) {
+      const month = entry.month || '—'
+      if (gmvQuery.scope === 'HOST') add(`${entry.employeeId}|${month}`, { employeeName: entry.employeeName, employeeStatus: entry.employeeStatus, month }, entry)
+      else if (gmvQuery.scope === 'OPERATOR') add(`${entry.operatorEmployeeId}|${month}`, { operatorName: entry.operatorName, month }, entry)
+      else add(month, { month }, entry)
+    }
+  } else if (gmvQuery.scope === 'HOST') {
+    for (const entry of scopedGmvEntries.value) add(String(entry.employeeId), { employeeName: entry.employeeName, employeeStatus: entry.employeeStatus }, entry)
+  } else if (gmvQuery.scope === 'OPERATOR') {
+    for (const entry of scopedGmvEntries.value) add(String(entry.operatorEmployeeId), { operatorName: entry.operatorName }, entry)
+  } else if (scopedGmvEntries.value.length) {
+    groups.set('ALL', { rangeLabel: tr('全部'), entries: [...scopedGmvEntries.value] })
+  }
+  return [...groups.values()].map(group => {
+    const grouped = group.entries
+    const { entries, ...rest } = group
+    return { ...rest, ...aggregateEntries(grouped) }
+  }).sort((left, right) => {
+    const byMonth = String(right.month || '').localeCompare(String(left.month || ''))
+    if (byMonth) return byMonth
+    return String(left.employeeName || left.operatorName || '').localeCompare(String(right.employeeName || right.operatorName || ''))
+  })
+})
 async function load() {
   loading.value = true
   try {
     Object.assign(options, await getLiveOptions())
-    const res = await getDashboard({ ...filters, startDate: dateRange.value[0], endDate: dateRange.value[1] })
+    const params = { ...filters, startDate: dateRange.value[0], endDate: dateRange.value[1] }
+    const [res, summary] = await Promise.all([getDashboard(params), getStreamGmvSummary(params)])
     Object.assign(data, res.data || {})
+    gmvSummary.value = summary.data || { entries: [] }
     await nextTick(); renderCharts()
   } finally { loading.value = false }
 }
@@ -227,6 +340,9 @@ function exportChecklist() {
     { key: 'clockedLabel', label: tr('是否打卡') }, { key: 'status', label: tr('状态') }
   ], rows)
 }
+watch(gmvMonthOptions, months => {
+  if (gmvQuery.month && !months.includes(gmvQuery.month)) gmvQuery.month = ''
+})
 watch(isEn, () => { if (trendChart && platformChart) renderCharts() })
 function resize() { trendChart?.resize(); platformChart?.resize() }
 onMounted(async () => { Object.assign(options, await getLiveOptions()); await load(); window.addEventListener('resize', resize) })
@@ -237,6 +353,9 @@ onActivated(async () => { Object.assign(options, await getLiveOptions()) })
 <style scoped lang="scss">
 @import '../live.scss';
 
+.gmv-panel { margin-bottom: 20px; }
+.gmv-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 14px; }
+.gmv-toolbar .el-select { width: 180px; }
 .checklist-card { margin-bottom: 20px; }
 .checklist-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .checklist-subtitle { margin-top: 5px; font-size: 12px; font-weight: 400; }

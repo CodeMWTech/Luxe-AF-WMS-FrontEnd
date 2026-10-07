@@ -3,39 +3,6 @@
     <div class="live-hero"><div><h2>{{ tr('开播录入') }}</h2><p>{{ tr('记录开播数据并自动计算薪酬') }}</p></div><div class="live-actions"><el-button @click="exportRows">{{ tr('导出 Excel') }}</el-button><el-button type="primary" v-hasPermi="['wms:live:stream:edit']" @click="openDialog()">{{ tr('新增开播记录') }}</el-button></div></div>
     <div class="metric-grid"><el-card v-for="item in metrics" :key="item.label" class="metric-card" shadow="never"><div class="metric-label">{{ item.label }}</div><div class="metric-value">{{ item.value }}</div><div class="metric-hint">{{ tr('当前筛选页汇总') }}</div></el-card></div>
     <el-card class="live-filter" shadow="never"><el-form :inline="true"><el-form-item :label="tr('日期')"><el-date-picker v-model="dateRange" type="daterange" value-format="YYYY-MM-DD" :format="LIVE_DATE_FORMAT" /></el-form-item><el-form-item><el-input v-model="query.keyword" clearable :placeholder="tr('搜索录入人/备注')" /></el-form-item><el-form-item><LiveEmployeeSelect v-model="query.employeeId"   :placeholder="tr('全部主播')" :employees="options.employees" /></el-form-item><el-form-item><LiveAccountSelect v-model="query.accountId" clearable :placeholder="tr('全部直播平台')" :accounts="options.accounts" /></el-form-item><el-form-item><el-select v-model="query.rateTypeId" clearable :placeholder="tr('全部费率类型')"><el-option v-for="v in options.rateTypes" :key="v.id" :label="v.typeName" :value="v.id" /></el-select></el-form-item><el-form-item><el-button type="primary" @click="load">{{ tr('查询') }}</el-button><el-button @click="reset">{{ tr('重置') }}</el-button></el-form-item><el-form-item :label="tr('主播状态')"><el-select v-model="query.employeeScope" @change="query.pageNum = 1; load()"><el-option :label="tr('全部')" value="ALL" /><el-option :label="tr('在职/试用期')" value="ACTIVE" /><el-option :label="tr('已归档')" value="INACTIVE" /></el-select></el-form-item></el-form></el-card>
-    <el-card class="live-card gmv-panel" shadow="never" v-loading="summaryLoading">
-      <div class="gmv-toolbar">
-        <strong>{{ tr('GMV 统计') }}</strong>
-        <el-radio-group v-model="gmvQuery.scope" @change="gmvQuery.personId = ''">
-          <el-radio-button label="ALL">{{ tr('全部') }}</el-radio-button>
-          <el-radio-button label="HOST">{{ tr('按主播') }}</el-radio-button>
-          <el-radio-button label="OPERATOR">{{ tr('按运营') }}</el-radio-button>
-        </el-radio-group>
-        <el-select v-if="gmvQuery.scope === 'HOST'" v-model="gmvQuery.personId" clearable filterable :placeholder="tr('全部主播')">
-          <el-option :label="tr('全部主播')" value="" />
-          <el-option v-for="host in gmvHostOptions" :key="host.employeeId" :label="host.employeeName" :value="host.employeeId" />
-        </el-select>
-        <el-select v-if="gmvQuery.scope === 'OPERATOR'" v-model="gmvQuery.personId" clearable filterable :placeholder="tr('全部运营')">
-          <el-option :label="tr('全部运营')" value="" />
-          <el-option v-for="operator in gmvOperatorOptions" :key="operator.operatorEmployeeId" :label="operator.operatorName" :value="operator.operatorEmployeeId" />
-        </el-select>
-        <el-radio-group v-model="gmvQuery.basis">
-          <el-radio-button label="MONTH">{{ tr('按月') }}</el-radio-button>
-          <el-radio-button label="HOUR">{{ tr('按小时') }}</el-radio-button>
-        </el-radio-group>
-      </div>
-      <el-table :data="gmvRows" stripe :empty-text="tr('当前筛选里还没有开播记录')">
-        <el-table-column v-if="gmvQuery.scope === 'ALL' && gmvQuery.basis === 'HOUR'" prop="rangeLabel" :label="tr('统计范围')" width="120" />
-        <el-table-column v-if="gmvQuery.scope === 'HOST'" :label="tr('主播')" min-width="140"><template #default="s"><LiveEmployeeName :name="s.row.employeeName" :status="s.row.employeeStatus" /></template></el-table-column>
-        <el-table-column v-if="gmvQuery.scope === 'OPERATOR'" prop="operatorName" :label="tr('运营')" min-width="140" />
-        <el-table-column v-if="gmvQuery.basis === 'MONTH'" prop="month" :label="tr('月份')" width="120" />
-        <el-table-column prop="sessions" :label="tr('总场次')" width="90" />
-        <el-table-column prop="gmvSessions" :label="tr('已填 GMV')" width="100" />
-        <el-table-column :label="tr('工时')" width="110"><template #default="s">{{ Number(s.row.hours || 0).toFixed(2) }}h</template></el-table-column>
-        <el-table-column :label="tr('GMV 合计')" min-width="130"><template #default="s">{{ moneyOrDash(s.row.gmv) }}</template></el-table-column>
-        <el-table-column :label="tr('GMV/小时')" min-width="130"><template #default="s">{{ moneyOrDash(s.row.gmvPerHour) }}</template></el-table-column>
-      </el-table>
-    </el-card>
     <el-card class="live-card" shadow="never"><el-table v-loading="loading" :data="rows" stripe><el-table-column prop="streamDate" :label="tr('日期')" :min-width="isEn ? 145 : 120"><template #default="s">{{ displayDate(s.row.streamDate) }}</template></el-table-column><el-table-column prop="accountLabel" :label="tr('直播平台')" min-width="180"><template #default="s"><LivePlatformTag :account="s.row" :accounts="options.accounts" /></template></el-table-column><el-table-column :label="tr('结算状态')" :min-width="isEn ? 145 : 110"><template #default="s"><el-tag :type="s.row.settlementStatus === 'SETTLED' ? 'success' : 'info'">{{ tr(settlementStatusLabel(s.row.settlementStatus)) }}</el-tag></template></el-table-column><el-table-column prop="employeeName" :label="tr('主播')" ><template #default="s"><LiveEmployeeName :name="s.row.employeeName" :status="s.row.employeeStatus" /></template></el-table-column><el-table-column :label="tr('时间')" :min-width="isEn ? 175 : 150"><template #default="s">{{ shortTime(s.row.startTime) }} - {{ shortTime(s.row.endTime) }}</template></el-table-column><el-table-column :label="tr('工时')"><template #default="s">{{ Number(s.row.durationHours || 0).toFixed(2) }}h</template></el-table-column><el-table-column prop="rateTypeName" :label="tr('费率类型')" min-width="180"><template #default="s"><el-tag class="type-tag">{{ s.row.rateTypeName }}</el-tag></template></el-table-column><el-table-column :label="tr('时薪')"><template #default="s">{{ money(s.row.hourlyRate) }}<sup v-if="s.row.manualRate">*</sup></template></el-table-column><el-table-column :label="tr('特殊')"><template #default="s"><span :class="Number(s.row.specialAmount) >= 0 ? 'positive' : 'negative'">{{ money(s.row.specialAmount) }}</span></template></el-table-column><el-table-column :label="tr('总金额')"><template #default="s"><strong>{{ money(s.row.totalAmount) }}</strong></template></el-table-column><el-table-column prop="operatorName" :label="tr('运营')" min-width="120" /><el-table-column :label="tr('本场 GMV')" min-width="120"><template #default="s">{{ s.row.gmv == null ? '—' : money(s.row.gmv) }}</template></el-table-column><el-table-column :label="tr('GMV/小时')" min-width="120"><template #default="s">{{ s.row.gmvPerHour == null ? '—' : money(s.row.gmvPerHour) }}</template></el-table-column><el-table-column prop="enteredBy" :label="tr('录入人')" /><el-table-column :label="tr('操作')" :min-width="isEn ? 155 : 130" fixed="right"><template #default="s"><el-button link type="primary" :disabled="s.row.settlementStatus !== 'OPEN'" @click="openDialog(s.row)">{{ tr('编辑') }}</el-button><el-button link type="danger" :disabled="s.row.settlementStatus !== 'OPEN'" @click="remove(s.row)">{{ tr('删除') }}</el-button></template></el-table-column></el-table><pagination v-show="total>0" class="stream-pagination" :total="total" v-model:page="query.pageNum" v-model:limit="query.pageSize" @pagination="load" /></el-card>
 
     <el-dialog data-runtime-i18n-ignore="true" v-model="dialog.open" class="stream-entry-dialog" :title="dialog.form.id ? tr('编辑开播记录') : tr('新增开播记录')" width="900px" append-to-body destroy-on-close>
@@ -89,9 +56,9 @@
         </div>
 
         <div class="stream-form-section">
-          <div class="stream-section-title"><span>4</span><div><strong>{{ tr('本场 GMV') }}</strong><small>{{ tr('人工填写本场销售额（美元）。系统用它和工时计算 GMV/小时，不改变薪酬') }}</small></div></div>
+          <div class="stream-section-title"><span>4</span><div><strong>{{ tr('本场 GMV') }}</strong><small>{{ tr('必填。人工填写本场销售额（美元）。系统用它和工时计算 GMV/小时，不改变薪酬') }}</small></div></div>
           <div class="dialog-grid stream-time-grid">
-            <el-form-item :label="tr('本场 GMV（USD）')"><el-input-number v-model="dialog.form.gmv" :min="0" :precision="2" :step="100" /></el-form-item>
+            <el-form-item :label="tr('本场 GMV（USD）')" prop="gmv"><el-input-number v-model="dialog.form.gmv" :min="0" :precision="2" :step="100" /></el-form-item>
             <el-form-item :label="tr('GMV/小时')"><el-input :model-value="sessionGmvPerHourText" disabled /></el-form-item>
           </div>
         </div>
@@ -114,16 +81,14 @@ import { normalizeSpecialInput as normalizeSpecial, specialTotal as sumSpecials,
 import LiveEmployeeSelect from '../components/LiveEmployeeSelect.vue'
 import LiveEmployeeName from '../components/LiveEmployeeName.vue'
 import { onActivated, computed, getCurrentInstance, onMounted, reactive, ref } from 'vue'
-import { addStream, deleteStream, getLiveOptions, getStreamGmvSummary, listScheduleOperators, listStreamRateTypes, listStreamScheduleOptions, listStreams, updateStream } from '@/api/wms/livePayroll'
+import { addStream, deleteStream, getLiveOptions, listScheduleOperators, listStreamRateTypes, listStreamScheduleOptions, listStreams, updateStream } from '@/api/wms/livePayroll'
 import { isActiveOperator } from '../schedule/scheduleDisplay'
 import useUserStore from '@/store/modules/user'
 import { settlementStatusLabel, accountLabel, displayDate, isoDate, LIVE_DATE_FORMAT, money } from '../shared'
 const { tr, isEn, messageNode } = useLiveI18n()
 const userStore = useUserStore()
 const { proxy } = getCurrentInstance()
-const loading = ref(false), summaryLoading = ref(false), rows = ref([]), total = ref(0), formRef = ref(), specialEditor = ref(), operators = ref([])
-const gmvSummary = ref({ overview: {}, hosts: [], operators: [], months: [], entries: [] })
-const gmvQuery = reactive({ scope: 'ALL', personId: '', basis: 'MONTH' })
+const loading = ref(false), rows = ref([]), total = ref(0), formRef = ref(), specialEditor = ref(), operators = ref([])
 const dateRange = ref(null), options = reactive({ employees: [], accounts: [], rateTypes: [], specialTypes: [] })
 const query = reactive({ employeeScope: 'ALL', pageNum: 1, pageSize: 20, keyword: '', employeeId: null, accountId: null, rateTypeId: null })
 const dialog = reactive({ open: false, form: {}, specials: [], rateTypes: [], schedules: [], loadingRateTypes: false, loadingSchedule: false, scheduleMissing: false, submitting: false })
@@ -139,7 +104,8 @@ const rateTypePlaceholder = computed(() => {
   return tr(dialog.rateTypes.length ? '请选择费率类型' : '当前组合无已激活费率')
 })
 const validateEndTime = (_rule, value, callback) => { if (!value) return callback(new Error(tr('请选择结束时间'))); if (dialog.form.startTime === value) return callback(new Error(tr('结束时间不能等于开始时间'))); callback() }
-const rules = computed(() => ({ streamDate: [{ required: true, message: tr('请选择日期') }], employeeId: [{ required: true, message: tr('请选择主播') }], accountId: [{ required: true, message: tr('请选择直播平台') }], rateTypeId: [{ required: true, message: tr('请选择费率类型') }], startTime: [{ required: true, message: tr('请选择开始时间') }], endTime: [{ required: true, message: tr('请选择结束时间') }, { validator: validateEndTime, trigger: 'change' }] }))
+const validateGmv = (_rule, value, callback) => { if (value == null || value === '') return callback(new Error(tr('请填写本场 GMV'))); if (Number(value) < 0) return callback(new Error(tr('本场 GMV 不能小于 0'))); callback() }
+const rules = computed(() => ({ streamDate: [{ required: true, message: tr('请选择日期') }], employeeId: [{ required: true, message: tr('请选择主播') }], accountId: [{ required: true, message: tr('请选择直播平台') }], rateTypeId: [{ required: true, message: tr('请选择费率类型') }], startTime: [{ required: true, message: tr('请选择开始时间') }], endTime: [{ required: true, message: tr('请选择结束时间') }, { validator: validateEndTime, trigger: 'change' }], gmv: [{ required: true, validator: validateGmv, trigger: 'change' }] }))
 const specialTotal = computed(() => sumSpecials(dialog.specials, options.specialTypes))
 const streamDurationText = computed(() => {
   const startMinutes = timeInMinutes(dialog.form.startTime)
@@ -176,98 +142,12 @@ const metrics = computed(() => {
     { label: tr('当前页薪酬'), value: money(pay) }
   ]
 })
-function moneyOrDash(value) { return value == null || value === '' ? '—' : money(value) }
-function entryHasGmv(entry) { return entry?.gmv != null && entry.gmv !== '' }
-function aggregateEntries(entries) {
-  const withGmv = entries.filter(entryHasGmv)
-  const gmvHours = withGmv.reduce((sum, entry) => sum + Number(entry.hours || 0), 0)
-  const gmv = withGmv.reduce((sum, entry) => sum + Number(entry.gmv || 0), 0)
-  return {
-    sessions: entries.length,
-    gmvSessions: withGmv.length,
-    hours: entries.reduce((sum, entry) => sum + Number(entry.hours || 0), 0),
-    gmv: withGmv.length ? gmv : null,
-    gmvPerHour: withGmv.length && gmvHours > 0 ? gmv / gmvHours : (withGmv.length ? 0 : null)
-  }
-}
-const gmvHostOptions = computed(() => {
-  const seen = new Map()
-  for (const entry of gmvSummary.value.entries || []) {
-    if (entry.employeeId == null || seen.has(String(entry.employeeId))) continue
-    seen.set(String(entry.employeeId), { employeeId: entry.employeeId, employeeName: entry.employeeName })
-  }
-  return [...seen.values()]
-})
-const gmvOperatorOptions = computed(() => {
-  const seen = new Map()
-  for (const entry of gmvSummary.value.entries || []) {
-    if (entry.operatorEmployeeId == null || seen.has(String(entry.operatorEmployeeId))) continue
-    seen.set(String(entry.operatorEmployeeId), { operatorEmployeeId: entry.operatorEmployeeId, operatorName: entry.operatorName })
-  }
-  return [...seen.values()]
-})
-const scopedGmvEntries = computed(() => {
-  const entries = gmvSummary.value.entries || []
-  if (gmvQuery.scope === 'HOST') {
-    const hosts = entries.filter(entry => entry.employeeId != null)
-    return gmvQuery.personId ? hosts.filter(entry => String(entry.employeeId) === String(gmvQuery.personId)) : hosts
-  }
-  if (gmvQuery.scope === 'OPERATOR') {
-    const operatorsInScope = entries.filter(entry => entry.operatorEmployeeId != null)
-    return gmvQuery.personId ? operatorsInScope.filter(entry => String(entry.operatorEmployeeId) === String(gmvQuery.personId)) : operatorsInScope
-  }
-  return entries
-})
-const gmvRows = computed(() => {
-  const groups = new Map()
-  const add = (key, row, entry) => {
-    if (!groups.has(key)) groups.set(key, { ...row, entries: [] })
-    groups.get(key).entries.push(entry)
-  }
-  if (gmvQuery.basis === 'MONTH') {
-    for (const entry of scopedGmvEntries.value) {
-      const month = entry.month || '—'
-      if (gmvQuery.scope === 'HOST') add(`${entry.employeeId}|${month}`, { employeeName: entry.employeeName, employeeStatus: entry.employeeStatus, month }, entry)
-      else if (gmvQuery.scope === 'OPERATOR') add(`${entry.operatorEmployeeId}|${month}`, { operatorName: entry.operatorName, month }, entry)
-      else add(month, { month }, entry)
-    }
-  } else if (gmvQuery.scope === 'HOST') {
-    for (const entry of scopedGmvEntries.value) add(String(entry.employeeId), { employeeName: entry.employeeName, employeeStatus: entry.employeeStatus }, entry)
-  } else if (gmvQuery.scope === 'OPERATOR') {
-    for (const entry of scopedGmvEntries.value) add(String(entry.operatorEmployeeId), { operatorName: entry.operatorName }, entry)
-  } else if (scopedGmvEntries.value.length) {
-    groups.set('ALL', { rangeLabel: tr('全部'), entries: [...scopedGmvEntries.value] })
-  }
-  return [...groups.values()].map(group => {
-    const grouped = group.entries
-    const { entries, ...rest } = group
-    return { ...rest, ...aggregateEntries(grouped) }
-  }).sort((left, right) => {
-    const byMonth = String(right.month || '').localeCompare(String(left.month || ''))
-    if (byMonth) return byMonth
-    return String(left.employeeName || left.operatorName || '').localeCompare(String(right.employeeName || right.operatorName || ''))
-  })
-})
 function listQueryParams() {
   const params = { ...query }
   if (dateRange.value?.length === 2) [params.startDate, params.endDate] = dateRange.value
   return params
 }
-async function load() {
-  loading.value = true
-  summaryLoading.value = true
-  const params = listQueryParams()
-  try {
-    Object.assign(options, await getLiveOptions())
-    const [res, summary] = await Promise.all([listStreams(params), getStreamGmvSummary(params)])
-    rows.value = res.rows || []
-    total.value = res.total || 0
-    gmvSummary.value = summary.data || { overview: {}, hosts: [], operators: [], months: [], entries: [] }
-  } finally {
-    loading.value = false
-    summaryLoading.value = false
-  }
-}
+async function load() { loading.value = true; try { Object.assign(options, await getLiveOptions()); const res = await listStreams(listQueryParams()); rows.value = res.rows || []; total.value = res.total || 0 } finally { loading.value = false } }
 function reset() { dateRange.value = null; Object.assign(query, { employeeScope:'ALL', pageNum:1, keyword:'', employeeId:null, accountId:null, rateTypeId:null }); load() }
 function shortTime(value) { return String(value || '').slice(0,5) }
 function timeInMinutes(value) {
@@ -402,9 +282,6 @@ onActivated(async () => { Object.assign(options, await getLiveOptions()); await 
 .stream-rate-type-field { width: 100%; }
 .stream-rate-type-field small { display: block; margin-top: 6px; color: #9099aa; font-size: 12px; line-height: 1.45; }
 .stream-schedule-warning { margin: 0 0 16px; }
-.gmv-panel { margin-bottom: 20px; }
-.gmv-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 14px; }
-.gmv-toolbar .el-select { width: 180px; }
 </style>
 <style lang="scss">
 .stream-entry-dialog {
