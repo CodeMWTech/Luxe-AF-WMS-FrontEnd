@@ -201,7 +201,7 @@
               <el-switch v-model="form.ebayBestOfferEnabled" :active-text="t('platformListings.bestOffer')" :inactive-text="t('platformListings.bestOfferOff')" @change="handleBestOfferChange" />
               <div v-if="form.platform === 'EBAY' && form.ebayBestOfferEnabled" class="best-offer-ratio">
                 <label class="ebay-field-label">{{ t('platformListings.minOfferPercent') }}</label>
-                <el-input-number v-model="form.ebayMinOfferPercent" :min="96" :max="100" :precision="2" :step="1" style="width:220px" />
+                <el-input-number v-model="form.ebayMinOfferPercent" :min="1" :max="100" :precision="2" :step="1" style="width:220px" />
                 <div class="field-hint">{{ t('platformListings.minOfferPercentHint') }}</div>
                 <div v-if="form.listingType === 'AUCTION'" class="field-hint">{{ t('platformListings.minOfferAuctionHint') }}</div>
               </div>
@@ -1063,7 +1063,7 @@ function handleEdit(row) {
       ebayLocation: d.ebayLocation || 'Los Angeles, California', ebayPostalCode: d.ebayPostalCode || '90048', ebayDispatchTimeMax: d.ebayDispatchTimeMax || 3,
       ebayShippingService: d.ebayShippingService || 'USPSParcel', ebayShippingCost: d.ebayShippingCost ?? 0,
       ebayBestOfferEnabled: !!d.ebayBestOfferEnabled,
-      ebayMinOfferPercent: d.ebayMinOfferPercent ?? (d.ebayBestOfferEnabled ? 96 : null),
+      ebayMinOfferPercent: d.ebayMinOfferPercent ?? (d.ebayBestOfferEnabled ? 85 : null),
       ebayFulfillmentPolicyId: d.ebayFulfillmentPolicyId || '',
       ebayPaymentPolicyId: d.ebayPaymentPolicyId || '',
       ebayReturnPolicyId: d.ebayReturnPolicyId || '',
@@ -1281,16 +1281,16 @@ function optionalNumber(value) {
 }
 
 function handleBestOfferChange(enabled) {
-  if (enabled && (form.ebayMinOfferPercent == null || form.ebayMinOfferPercent === '')) form.ebayMinOfferPercent = 96
+  if (enabled && (form.ebayMinOfferPercent == null || form.ebayMinOfferPercent === '')) form.ebayMinOfferPercent = 85
   if (!enabled) form.ebayMinOfferPercent = null
 }
 
 function doSubmit(isEbay) {
   if (!validateLeafCategory()) return
   if (isEbay && form.ebayBestOfferEnabled) {
-    if (form.ebayMinOfferPercent == null || form.ebayMinOfferPercent === '') form.ebayMinOfferPercent = 96
+    if (form.ebayMinOfferPercent == null || form.ebayMinOfferPercent === '') form.ebayMinOfferPercent = 85
     const percent = Number(form.ebayMinOfferPercent)
-    if (!Number.isFinite(percent) || percent < 96 || percent > 100) {
+    if (!Number.isFinite(percent) || percent < 1 || percent > 100) {
       proxy.$modal.msgError(t('platformListings.minOfferPercentRange'))
       return
     }
