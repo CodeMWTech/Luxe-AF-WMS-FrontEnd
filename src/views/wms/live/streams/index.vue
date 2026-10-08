@@ -3,12 +3,12 @@
     <div class="live-hero"><div><h2>{{ tr('开播录入') }}</h2><p>{{ tr('记录开播数据并自动计算薪酬') }}</p></div><div class="live-actions"><el-button @click="exportRows">{{ tr('导出 Excel') }}</el-button><el-button type="primary" v-hasPermi="['wms:live:stream:edit']" @click="openDialog()">{{ tr('新增开播记录') }}</el-button></div></div>
     <div class="metric-grid"><el-card v-for="item in metrics" :key="item.label" class="metric-card" shadow="never"><div class="metric-label">{{ item.label }}</div><div class="metric-value">{{ item.value }}</div><div class="metric-hint">{{ tr('当前筛选页汇总') }}</div></el-card></div>
     <el-card class="live-filter" shadow="never"><el-form :inline="true"><el-form-item :label="tr('日期')"><el-date-picker v-model="dateRange" type="daterange" value-format="YYYY-MM-DD" :format="LIVE_DATE_FORMAT" /></el-form-item><el-form-item><el-input v-model="query.keyword" clearable :placeholder="tr('搜索录入人/备注')" /></el-form-item><el-form-item><LiveEmployeeSelect v-model="query.employeeId"   :placeholder="tr('全部主播')" :employees="options.employees" /></el-form-item><el-form-item><LiveAccountSelect v-model="query.accountId" clearable :placeholder="tr('全部直播平台')" :accounts="options.accounts" /></el-form-item><el-form-item><el-select v-model="query.rateTypeId" clearable :placeholder="tr('全部费率类型')"><el-option v-for="v in options.rateTypes" :key="v.id" :label="v.typeName" :value="v.id" /></el-select></el-form-item><el-form-item><el-button type="primary" @click="load">{{ tr('查询') }}</el-button><el-button @click="reset">{{ tr('重置') }}</el-button></el-form-item><el-form-item :label="tr('主播状态')"><el-select v-model="query.employeeScope" @change="query.pageNum = 1; load()"><el-option :label="tr('全部')" value="ALL" /><el-option :label="tr('在职/试用期')" value="ACTIVE" /><el-option :label="tr('已归档')" value="INACTIVE" /></el-select></el-form-item></el-form></el-card>
-    <el-card class="live-card" shadow="never"><el-table v-loading="loading" :data="rows" stripe><el-table-column prop="streamDate" :label="tr('日期')" :min-width="isEn ? 145 : 120"><template #default="s">{{ displayDate(s.row.streamDate) }}</template></el-table-column><el-table-column prop="accountLabel" :label="tr('直播平台')" min-width="180"><template #default="s"><LivePlatformTag :account="s.row" :accounts="options.accounts" /></template></el-table-column><el-table-column :label="tr('结算状态')" :min-width="isEn ? 145 : 110"><template #default="s"><el-tag :type="s.row.settlementStatus === 'SETTLED' ? 'success' : 'info'">{{ tr(settlementStatusLabel(s.row.settlementStatus)) }}</el-tag></template></el-table-column><el-table-column prop="employeeName" :label="tr('主播')" ><template #default="s"><LiveEmployeeName :name="s.row.employeeName" :status="s.row.employeeStatus" /></template></el-table-column><el-table-column :label="tr('时间')" :min-width="isEn ? 175 : 150"><template #default="s">{{ shortTime(s.row.startTime) }} - {{ shortTime(s.row.endTime) }}</template></el-table-column><el-table-column :label="tr('工时')"><template #default="s">{{ Number(s.row.durationHours || 0).toFixed(2) }}h</template></el-table-column><el-table-column prop="rateTypeName" :label="tr('费率类型')" min-width="180"><template #default="s"><el-tag class="type-tag">{{ s.row.rateTypeName }}</el-tag></template></el-table-column><el-table-column :label="tr('时薪')"><template #default="s">{{ money(s.row.hourlyRate) }}<sup v-if="s.row.manualRate">*</sup></template></el-table-column><el-table-column :label="tr('特殊')"><template #default="s"><span :class="Number(s.row.specialAmount) >= 0 ? 'positive' : 'negative'">{{ money(s.row.specialAmount) }}</span></template></el-table-column><el-table-column :label="tr('总金额')"><template #default="s"><strong>{{ money(s.row.totalAmount) }}</strong></template></el-table-column><el-table-column prop="operatorName" :label="tr('运营')" min-width="120" /><el-table-column :label="tr('本场 GMV')" min-width="120"><template #default="s">{{ s.row.gmv == null ? '—' : money(s.row.gmv) }}</template></el-table-column><el-table-column :label="tr('GMV/小时')" min-width="120"><template #default="s">{{ s.row.gmvPerHour == null ? '—' : money(s.row.gmvPerHour) }}</template></el-table-column><el-table-column prop="enteredBy" :label="tr('录入人')" /><el-table-column :label="tr('操作')" :min-width="isEn ? 155 : 130" fixed="right"><template #default="s"><el-button link type="primary" :disabled="s.row.settlementStatus !== 'OPEN'" @click="openDialog(s.row)">{{ tr('编辑') }}</el-button><el-button link type="danger" :disabled="s.row.settlementStatus !== 'OPEN'" @click="remove(s.row)">{{ tr('删除') }}</el-button></template></el-table-column></el-table><pagination v-show="total>0" class="stream-pagination" :total="total" v-model:page="query.pageNum" v-model:limit="query.pageSize" @pagination="load" /></el-card>
+    <el-card class="live-card" shadow="never"><el-table v-loading="loading" :data="rows" stripe><el-table-column prop="streamDate" :label="tr('日期')" :min-width="isEn ? 145 : 120"><template #default="s">{{ displayDate(s.row.streamDate) }}</template></el-table-column><el-table-column prop="accountLabel" :label="tr('直播平台')" min-width="180"><template #default="s"><LivePlatformTag :account="s.row" :accounts="options.accounts" /></template></el-table-column><el-table-column :label="tr('结算状态')" :min-width="isEn ? 145 : 110"><template #default="s"><el-tag :type="s.row.settlementStatus === 'SETTLED' ? 'success' : 'info'">{{ tr(settlementStatusLabel(s.row.settlementStatus)) }}</el-tag></template></el-table-column><el-table-column prop="employeeName" :label="tr('主播')" ><template #default="s"><LiveEmployeeName :name="s.row.employeeName" :status="s.row.employeeStatus" /></template></el-table-column><el-table-column :label="tr('时间')" :min-width="isEn ? 175 : 150"><template #default="s">{{ s.row.startTime && s.row.endTime ? `${shortTime(s.row.startTime)} - ${shortTime(s.row.endTime)}` : '—' }}</template></el-table-column><el-table-column :label="tr('实际直播时间')" min-width="150"><template #default="s">{{ actualDurationLabel(s.row.actualDurationMinutes) }}</template></el-table-column><el-table-column :label="tr('工时')"><template #default="s">{{ Number(s.row.durationHours || 0).toFixed(2) }}h</template></el-table-column><el-table-column prop="rateTypeName" :label="tr('费率类型')" min-width="180"><template #default="s"><el-tag class="type-tag">{{ s.row.rateTypeName }}</el-tag></template></el-table-column><el-table-column :label="tr('时薪')"><template #default="s">{{ money(s.row.hourlyRate) }}<sup v-if="s.row.manualRate">*</sup></template></el-table-column><el-table-column :label="tr('特殊')"><template #default="s"><span :class="Number(s.row.specialAmount) >= 0 ? 'positive' : 'negative'">{{ money(s.row.specialAmount) }}</span></template></el-table-column><el-table-column :label="tr('总金额')"><template #default="s"><strong>{{ money(s.row.totalAmount) }}</strong></template></el-table-column><el-table-column prop="operatorName" :label="tr('运营')" min-width="120" /><el-table-column :label="tr('本场 GMV')" min-width="120"><template #default="s">{{ s.row.gmv == null ? '—' : money(s.row.gmv) }}</template></el-table-column><el-table-column :label="tr('GMV/小时')" min-width="120"><template #default="s">{{ s.row.gmvPerHour == null ? '—' : money(s.row.gmvPerHour) }}</template></el-table-column><el-table-column prop="enteredBy" :label="tr('录入人')" /><el-table-column :label="tr('操作')" :min-width="isEn ? 155 : 130" fixed="right"><template #default="s"><el-button link type="primary" :disabled="s.row.settlementStatus !== 'OPEN'" @click="openDialog(s.row)">{{ tr('编辑') }}</el-button><el-button link type="danger" :disabled="s.row.settlementStatus !== 'OPEN'" @click="remove(s.row)">{{ tr('删除') }}</el-button></template></el-table-column></el-table><pagination v-show="total>0" class="stream-pagination" :total="total" v-model:page="query.pageNum" v-model:limit="query.pageSize" @pagination="load" /></el-card>
 
     <el-dialog data-runtime-i18n-ignore="true" v-model="dialog.open" class="stream-entry-dialog" :title="dialog.form.id ? tr('编辑开播记录') : tr('新增开播记录')" width="900px" append-to-body destroy-on-close>
       <el-form ref="formRef" :model="dialog.form" :rules="rules" label-position="top">
         <div class="stream-form-section">
-          <div class="stream-section-title"><span>1</span><div><strong>{{ tr('直播信息') }}</strong><small>{{ tr('选择日期和主播后，将按排班自动填写直播平台、费率类型和时间') }}</small></div></div>
+          <div class="stream-section-title"><span>1</span><div><strong>{{ tr('直播信息') }}</strong><small>{{ tr('选择日期和主播后，将按排班自动填写运营、直播平台、费率类型和计划时间') }}</small></div></div>
           <div class="dialog-grid stream-info-grid">
             <el-form-item :label="tr('日期')" prop="streamDate"><el-date-picker v-model="dialog.form.streamDate" type="date" value-format="YYYY-MM-DD" :format="LIVE_DATE_FORMAT" @change="handleStreamRateScopeChange" /></el-form-item>
             <el-form-item :label="tr('主播')" prop="employeeId"><LiveEmployeeSelect v-model="dialog.form.employeeId"  @change="handleStreamRateScopeChange" :employees="options.employees" /></el-form-item>
@@ -30,13 +30,30 @@
         </div>
 
         <div class="stream-form-section">
-          <div class="stream-section-title"><span>2</span><div><strong>{{ tr('直播时段与薪资') }}</strong><small>{{ tr('时间默认来自排班计划，工时由系统自动计算') }}</small></div></div>
-          <el-alert v-if="dialog.scheduleMissing" class="stream-schedule-warning" :title="tr('未找到该主播当天的匹配排班计划')" type="error" :closable="false" show-icon />
+          <div class="stream-section-title"><span>2</span><div><strong>{{ tr('直播时段与薪资') }}</strong><small>{{ tr('计划时间仅展示排班默认值，薪酬和 GMV/小时按实际直播时间计算') }}</small></div></div>
+          <el-alert v-if="dialog.scheduleMissing && !dialog.form.startTime" class="stream-schedule-warning" :title="tr('未找到匹配排班，允许无排班录入')" :description="tr('计划时间留空，请选择直播平台、费率类型和运营，并填写实际直播时间')" type="info" :closable="false" show-icon />
+          <el-form-item v-if="dialog.schedules.length" :label="tr('排班场次')">
+            <el-select v-model="dialog.form.scheduleId" :disabled="dialog.loadingSchedule || dialog.loadingRateTypes" :placeholder="tr('请选择对应排班场次')" @change="handleStreamScheduleChange">
+              <el-option v-if="dialog.originalSchedule && !dialog.schedules.some(s => String(s.id) === String(dialog.originalSchedule.id))" :label="tr('原记录计划时段')" :value="dialog.originalSchedule.id" />
+              <el-option v-for="schedule in dialog.schedules" :key="schedule.id" :label="scheduleOptionLabel(schedule)" :value="schedule.id" />
+            </el-select>
+          </el-form-item>
           <div class="dialog-grid stream-time-grid">
-            <el-form-item :label="tr('开始时间')" prop="startTime"><el-time-picker v-model="dialog.form.startTime" value-format="HH:mm:ss" format="HH:mm" @change="formRef?.validateField('endTime')" /></el-form-item>
-            <el-form-item :label="tr('结束时间')" prop="endTime"><el-time-picker v-model="dialog.form.endTime" value-format="HH:mm:ss" format="HH:mm" /></el-form-item>
-            <el-form-item :label="tr('工时')"><el-input :model-value="streamDurationText" disabled :title="tr('根据开始时间和结束时间自动计算')" /></el-form-item>
+            <el-form-item :label="tr('计划开始时间')"><el-input :model-value="shortTime(dialog.form.startTime) || '—'" readonly /></el-form-item>
+            <el-form-item :label="tr('计划结束时间')"><el-input :model-value="shortTime(dialog.form.endTime) || '—'" readonly /></el-form-item>
+            <el-form-item :label="tr('计划时长')"><el-input :model-value="plannedDurationText" readonly /></el-form-item>
           </div>
+          <el-form-item :label="tr('实际直播时间')" prop="actualDurationMinutes" required>
+            <div class="actual-duration-control">
+              <el-select v-model="dialog.form.actualHours" :placeholder="tr('小时')" @change="validateActualDuration">
+                <el-option v-for="hour in 25" :key="hour - 1" :label="String(hour - 1)" :value="hour - 1" />
+              </el-select><span>{{ tr('时') }}</span>
+              <el-select v-model="dialog.form.actualMinutes" :placeholder="tr('分钟')" @change="validateActualDuration">
+                <el-option v-for="minute in 60" :key="minute - 1" :label="String(minute - 1)" :value="minute - 1" :disabled="dialog.form.actualHours === 24 && minute > 1" />
+              </el-select><span>{{ tr('分') }}</span>
+            </div>
+          </el-form-item>
+          <el-form-item :label="tr('计薪工时')"><el-input :model-value="streamDurationText" readonly /></el-form-item>
           <div class="stream-pay-row">
             <div class="manual-rate-control">
               <div><strong>{{ tr('手工时薪') }}</strong><small>{{ tr('开启后可覆盖系统费率，仅影响本条记录') }}</small></div>
@@ -91,7 +108,7 @@ const { proxy } = getCurrentInstance()
 const loading = ref(false), rows = ref([]), total = ref(0), formRef = ref(), specialEditor = ref(), operators = ref([])
 const dateRange = ref(null), options = reactive({ employees: [], accounts: [], rateTypes: [], specialTypes: [] })
 const query = reactive({ employeeScope: 'ALL', pageNum: 1, pageSize: 20, keyword: '', employeeId: null, accountId: null, rateTypeId: null })
-const dialog = reactive({ open: false, form: {}, specials: [], rateTypes: [], schedules: [], loadingRateTypes: false, loadingSchedule: false, scheduleMissing: false, submitting: false })
+const dialog = reactive({ open: false, form: {}, originalSchedule: null, specials: [], rateTypes: [], schedules: [], loadingRateTypes: false, loadingSchedule: false, scheduleMissing: false, submitting: false })
 const STREAM_PREFERENCE_KEY = 'live-payroll:stream:last-selection'
 let rateTypeRequestSequence = 0
 let scheduleRequestSequence = 0
@@ -103,11 +120,24 @@ const rateTypePlaceholder = computed(() => {
   if (dialog.loadingRateTypes) return tr('正在加载费率类型')
   return tr(dialog.rateTypes.length ? '请选择费率类型' : '当前组合无已激活费率')
 })
-const validateEndTime = (_rule, value, callback) => { if (!value) return callback(new Error(tr('请选择结束时间'))); if (dialog.form.startTime === value) return callback(new Error(tr('结束时间不能等于开始时间'))); callback() }
 const validateGmv = (_rule, value, callback) => { if (value == null || value === '') return callback(new Error(tr('请填写本场 GMV'))); if (Number(value) < 0) return callback(new Error(tr('本场 GMV 不能小于 0'))); callback() }
-const rules = computed(() => ({ streamDate: [{ required: true, message: tr('请选择日期') }], employeeId: [{ required: true, message: tr('请选择主播') }], accountId: [{ required: true, message: tr('请选择直播平台') }], rateTypeId: [{ required: true, message: tr('请选择费率类型') }], startTime: [{ required: true, message: tr('请选择开始时间') }], endTime: [{ required: true, message: tr('请选择结束时间') }, { validator: validateEndTime, trigger: 'change' }], gmv: [{ required: true, validator: validateGmv, trigger: 'change' }] }))
+const actualDurationMinutes = computed(() => {
+  const hours = dialog.form.actualHours, minutes = dialog.form.actualMinutes
+  if (hours == null || minutes == null || !Number.isInteger(hours) || !Number.isInteger(minutes) || hours < 0 || hours > 24 || minutes < 0 || minutes > 59) return null
+  const total = hours * 60 + minutes
+  return total > 0 && total <= 1440 ? total : null
+})
+const validateActualTime = (_rule, _value, callback) => {
+  if (dialog.form.actualHours == null || dialog.form.actualMinutes == null) return callback(new Error(tr('请选择实际直播时间的小时和分钟')))
+  if (actualDurationMinutes.value == null) return callback(new Error(tr('实际直播时间必须大于0且不超过24小时')))
+  callback()
+}
+const rules = computed(() => ({ streamDate: [{ required: true, message: tr('请选择日期') }], employeeId: [{ required: true, message: tr('请选择主播') }], accountId: [{ required: true, message: tr('请选择直播平台') }], rateTypeId: [{ required: true, message: tr('请选择费率类型') }], actualDurationMinutes: [{ required: true, validator: validateActualTime, trigger: 'change' }], gmv: [{ required: true, validator: validateGmv, trigger: 'change' }] }))
+function validateActualDuration() { formRef.value?.validateField('actualDurationMinutes').catch(() => {}) }
+const streamDurationText = computed(() => actualDurationMinutes.value == null ? '—' : `${(actualDurationMinutes.value / 60).toFixed(2)}h`)
+function actualDurationLabel(minutes) { return minutes == null ? '—' : `${Math.floor(minutes / 60)}${tr('时')} ${minutes % 60}${tr('分')}` }
 const specialTotal = computed(() => sumSpecials(dialog.specials, options.specialTypes))
-const streamDurationText = computed(() => {
+const plannedDurationText = computed(() => {
   const startMinutes = timeInMinutes(dialog.form.startTime)
   const endMinutes = timeInMinutes(dialog.form.endTime)
   if (startMinutes == null || endMinutes == null || startMinutes === endMinutes) return '—'
@@ -124,12 +154,8 @@ const selectableOperators = computed(() => {
 })
 const sessionGmvPerHourText = computed(() => {
   const gmv = Number(dialog.form.gmv)
-  const startMinutes = timeInMinutes(dialog.form.startTime)
-  const endMinutes = timeInMinutes(dialog.form.endTime)
-  if (!Number.isFinite(gmv) || dialog.form.gmv == null || dialog.form.gmv === '' || startMinutes == null || endMinutes == null || startMinutes === endMinutes) return '—'
-  const durationMinutes = endMinutes > startMinutes ? endMinutes - startMinutes : endMinutes + 24 * 60 - startMinutes
-  if (durationMinutes <= 0) return '—'
-  return money(gmv / (durationMinutes / 60))
+  if (!Number.isFinite(gmv) || dialog.form.gmv == null || dialog.form.gmv === '' || actualDurationMinutes.value == null) return '—'
+  return money(gmv * 60 / actualDurationMinutes.value)
 })
 const metrics = computed(() => {
   const hours = rows.value.reduce((sum, row) => sum + Number(row.durationHours || 0), 0)
@@ -183,22 +209,41 @@ async function refreshStreamRateTypes() {
     if (requestSequence === rateTypeRequestSequence) dialog.loadingRateTypes = false
   }
 }
-function applyScheduledDefaults() {
-  const schedule = dialog.schedules[0]
-  if (!schedule) return
+function clearScheduledDefaults({ clearAccount = false } = {}) {
+  dialog.form.scheduleId = null
+  dialog.form.startTime = null
+  dialog.form.endTime = null
+  dialog.form.operatorEmployeeId = null
+  dialog.form.operatorName = ''
+  if (clearAccount) dialog.form.accountId = null
+}
+function applySchedule(schedule) {
+  if (dialog.originalSchedule && String(schedule.id) === String(dialog.originalSchedule.id)) schedule = dialog.originalSchedule
+  dialog.form.scheduleId = schedule.id
   dialog.form.accountId = schedule.accountId
   dialog.form.rateTypeId = schedule.rateTypeId
   dialog.form.startTime = schedule.startTime
   dialog.form.endTime = schedule.endTime
-  dialog.form.operatorEmployeeId = schedule.operatorEmployeeId || null
+  dialog.form.operatorEmployeeId = schedule.operatorEmployeeId ?? null
   dialog.form.operatorName = schedule.operatorName || ''
+  dialog.scheduleMissing = false
+}
+function applyScheduledDefaults() {
+  if (dialog.schedules[0]) applySchedule(dialog.schedules[0])
 }
 function applyScheduledTimesForRateType() {
-  const schedules = dialog.schedules.filter(item => String(item.accountId) === String(dialog.form.accountId))
-  const schedule = schedules.find(item => String(item.rateTypeId) === String(dialog.form.rateTypeId)) || schedules[0]
-  if (!schedule) return
-  dialog.form.startTime = schedule.startTime
-  dialog.form.endTime = schedule.endTime
+  const schedule = dialog.schedules.find(item => String(item.accountId) === String(dialog.form.accountId) && String(item.rateTypeId) === String(dialog.form.rateTypeId))
+  if (schedule) applySchedule(schedule)
+  else { clearScheduledDefaults(); dialog.scheduleMissing = hasStreamScheduleScope.value }
+}
+function scheduleOptionLabel(schedule) {
+  return `${shortTime(schedule.startTime)} - ${shortTime(schedule.endTime)} · ${schedule.accountLabel || accountLabel(options.accounts.find(a => String(a.id) === String(schedule.accountId)) || {})} · ${schedule.rateTypeName || options.rateTypes.find(r => String(r.id) === String(schedule.rateTypeId))?.typeName || ''} · ${schedule.operatorName || tr('待配运营')}`
+}
+async function handleStreamScheduleChange(id) {
+  ++streamScopeRequestSequence
+  const schedule = dialog.schedules.find(s => String(s.id) === String(id)) || dialog.originalSchedule
+  if (schedule) applySchedule(schedule)
+  await refreshStreamRateTypes()
 }
 async function refreshStreamSchedule(accountId) {
   const requestSequence = ++scheduleRequestSequence
@@ -223,24 +268,29 @@ async function refreshStreamDefaults({ preserveForm = false, filterByAccount = f
   dialog.loadingRateTypes = false
   if (!preserveForm) {
     dialog.form.rateTypeId = null
-    dialog.form.startTime = null
-    dialog.form.endTime = null
+    clearScheduledDefaults({ clearAccount: !filterByAccount })
   }
   await refreshStreamSchedule(filterByAccount ? dialog.form.accountId : undefined)
   if (requestSequence !== streamScopeRequestSequence) return
   if (!preserveForm) applyScheduledDefaults()
   await refreshStreamRateTypes()
 }
-function handleStreamRateScopeChange() { return refreshStreamDefaults() }
+function handleStreamRateScopeChange() {
+  dialog.form.actualHours = null
+  dialog.form.actualMinutes = null
+  dialog.originalSchedule = null
+  return refreshStreamDefaults()
+}
 function handleStreamAccountChange() { return refreshStreamDefaults({ filterByAccount: true }) }
-function handleStreamRateTypeChange() { if (!dialog.form.id) applyScheduledTimesForRateType() }
+function handleStreamRateTypeChange() { applyScheduledTimesForRateType() }
 async function openDialog(row = {}) {
   let specials=[]
   try { specials = JSON.parse(row.specialDetails || '[]') } catch (_) {}
   const preference = row.id ? {} : loadStreamPreference()
   const rememberedEmployee = options.employees.find(item => String(item.value) === String(preference.employeeId))?.value
   const rememberedAccount = options.accounts.find(item => String(item.id) === String(preference.accountId))?.id
-  dialog.form = { id:row.id, streamDate:row.streamDate || isoDate(), employeeId:row.employeeId || rememberedEmployee || null, operatorEmployeeId:row.operatorEmployeeId || null, operatorName:row.operatorName || '', accountId:row.accountId || rememberedAccount || null, rateTypeId:row.rateTypeId || preference.rateTypeId || null, startTime:row.startTime || null, endTime:row.endTime || null, manualRate:Boolean(row.manualRate), hourlyRate:Number(row.hourlyRate || 0), gmv:row.gmv == null || row.gmv === '' ? null : Number(row.gmv), remark:row.remark || '' }
+  dialog.form = { id:row.id, streamDate:row.streamDate || isoDate(), employeeId:row.employeeId || rememberedEmployee || null, operatorEmployeeId:row.operatorEmployeeId || null, operatorName:row.operatorName || '', accountId:row.accountId || rememberedAccount || null, rateTypeId:row.rateTypeId || preference.rateTypeId || null, scheduleId:row.scheduleId ?? null, startTime:row.startTime || null, endTime:row.endTime || null, actualHours:row.actualDurationMinutes == null ? null : Math.floor(row.actualDurationMinutes / 60), actualMinutes:row.actualDurationMinutes == null ? null : row.actualDurationMinutes % 60, manualRate:Boolean(row.manualRate), hourlyRate:Number(row.hourlyRate || 0), gmv:row.gmv == null || row.gmv === '' ? null : Number(row.gmv), remark:row.remark || '' }
+  dialog.originalSchedule = row.scheduleId == null ? null : { id: row.scheduleId, accountId: row.accountId, rateTypeId: row.rateTypeId, startTime: row.startTime, endTime: row.endTime, operatorEmployeeId: row.operatorEmployeeId, operatorName: row.operatorName }
   dialog.specials=specials.map(item => { const normalized = { ...item }; normalizeSpecialInput(normalized); return normalized })
   dialog.submitting = false
   dialog.open=true
@@ -248,10 +298,12 @@ async function openDialog(row = {}) {
 }
 function normalizeSpecialInput(item) { normalizeSpecial(item, options.specialTypes) }
 async function submit() {
+  if (dialog.loadingSchedule || dialog.loadingRateTypes || dialog.submitting) return
   const valid = await formRef.value.validate().catch(() => false)
   if (!valid) return
   if (!specialEditor.value.validate()) { proxy.$modal.msgWarning(tr('请填写特殊明细类型和金额，或删除该明细')); return }
-  const payload = { ...dialog.form, specialAmount: specialTotal.value, specialDetails: serializeSpecialDetails(dialog.specials, options.specialTypes) }
+  const { actualHours, actualMinutes, ...form } = dialog.form
+  const payload = { ...form, actualDurationMinutes: actualDurationMinutes.value, specialAmount: specialTotal.value, specialDetails: serializeSpecialDetails(dialog.specials, options.specialTypes) }
   dialog.submitting = true
   try {
     await (payload.id ? updateStream(payload) : addStream(payload))
@@ -282,6 +334,8 @@ onActivated(async () => { Object.assign(options, await getLiveOptions()); await 
 .stream-rate-type-field { width: 100%; }
 .stream-rate-type-field small { display: block; margin-top: 6px; color: #9099aa; font-size: 12px; line-height: 1.45; }
 .stream-schedule-warning { margin: 0 0 16px; }
+.actual-duration-control { display: flex; align-items: center; gap: 10px; width: min(100%, 360px); }
+.actual-duration-control .el-select { min-width: 0; flex: 1; }
 </style>
 <style lang="scss">
 .stream-entry-dialog {
