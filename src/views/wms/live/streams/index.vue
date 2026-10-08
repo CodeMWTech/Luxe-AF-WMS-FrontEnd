@@ -39,21 +39,23 @@
             </el-select>
           </el-form-item>
           <div class="dialog-grid stream-time-grid">
-            <el-form-item :label="tr('计划开始时间')"><el-input :model-value="shortTime(dialog.form.startTime) || '—'" readonly /></el-form-item>
-            <el-form-item :label="tr('计划结束时间')"><el-input :model-value="shortTime(dialog.form.endTime) || '—'" readonly /></el-form-item>
-            <el-form-item :label="tr('计划时长')"><el-input :model-value="plannedDurationText" readonly /></el-form-item>
+            <el-form-item :label="tr('计划开始时间')"><el-input :model-value="shortTime(dialog.form.startTime) || '—'" disabled /></el-form-item>
+            <el-form-item :label="tr('计划结束时间')"><el-input :model-value="shortTime(dialog.form.endTime) || '—'" disabled /></el-form-item>
+            <el-form-item :label="tr('计划时长')"><el-input :model-value="plannedDurationText" disabled /></el-form-item>
           </div>
-          <el-form-item :label="tr('实际直播时间')" prop="actualDurationMinutes" required>
-            <div class="actual-duration-control">
-              <el-select v-model="dialog.form.actualHours" :placeholder="tr('小时')" @change="validateActualDuration">
-                <el-option v-for="hour in 25" :key="hour - 1" :label="String(hour - 1)" :value="hour - 1" />
-              </el-select><span>{{ tr('时') }}</span>
-              <el-select v-model="dialog.form.actualMinutes" :placeholder="tr('分钟')" @change="validateActualDuration">
-                <el-option v-for="minute in 60" :key="minute - 1" :label="String(minute - 1)" :value="minute - 1" :disabled="dialog.form.actualHours === 24 && minute > 1" />
-              </el-select><span>{{ tr('分') }}</span>
-            </div>
-          </el-form-item>
-          <el-form-item :label="tr('计薪工时')"><el-input :model-value="streamDurationText" readonly /></el-form-item>
+          <div class="dialog-grid stream-duration-grid">
+            <el-form-item :label="tr('实际直播时间')" prop="actualDurationMinutes" required>
+              <div class="actual-duration-control">
+                <el-select v-model="dialog.form.actualHours" :placeholder="tr('小时')" @change="validateActualDuration">
+                  <el-option v-for="hour in 25" :key="hour - 1" :label="String(hour - 1)" :value="hour - 1" />
+                </el-select><span>{{ tr('时') }}</span>
+                <el-select v-model="dialog.form.actualMinutes" :placeholder="tr('分钟')" @change="validateActualDuration">
+                  <el-option v-for="minute in 60" :key="minute - 1" :label="String(minute - 1)" :value="minute - 1" :disabled="dialog.form.actualHours === 24 && minute > 1" />
+                </el-select><span>{{ tr('分') }}</span>
+              </div>
+            </el-form-item>
+            <el-form-item :label="tr('计薪工时')"><el-input :model-value="streamDurationText" disabled /></el-form-item>
+          </div>
           <div class="stream-pay-row">
             <div class="manual-rate-control">
               <div><strong>{{ tr('手工时薪') }}</strong><small>{{ tr('开启后可覆盖系统费率，仅影响本条记录') }}</small></div>
@@ -358,6 +360,7 @@ onActivated(async () => { Object.assign(options, await getLiveOptions()); await 
   .dialog-grid { display: grid; align-items: start; gap: 0 16px; }
   .stream-info-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 2px; }
   .stream-time-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .stream-duration-grid { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
   .el-form-item { min-width: 0; margin-bottom: 16px; }
   .el-form-item__label { height: auto; padding: 0 0 7px; color: var(--el-text-color-regular); font-size: 13px; font-weight: 600; line-height: 20px; white-space: nowrap; }
   .el-form-item__content { min-width: 0; }
@@ -386,6 +389,7 @@ onActivated(async () => { Object.assign(options, await getLiveOptions()); await 
     .stream-form-section { padding: 15px; }
     .stream-info-grid,
     .stream-time-grid,
+    .stream-duration-grid,
     .stream-pay-row { grid-template-columns: 1fr; }
     .special-total { margin-left: 0; }
   }
