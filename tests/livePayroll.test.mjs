@@ -12,7 +12,7 @@ const shared=await sourceModule('../src/views/wms/live/shared.js')
 const display=await sourceModule('../src/views/wms/live/settlements/settlementDisplay.js')
 const scheduleDisplay=await sourceModule('../src/views/wms/live/schedule/scheduleDisplay.js')
 async function setup(file, modules, props={}) {
-  modules={ './scheduleDisplay': scheduleDisplay, '@/utils/permission': {checkPermi:()=>true}, ...modules }
+  modules={ './scheduleDisplay': scheduleDisplay, '../schedule/scheduleDisplay': scheduleDisplay, '@/utils/permission': {checkPermi:()=>true}, ...modules }
   modules['@/api/wms/livePayroll']={listScheduleOperators:async()=>({data:[]}),listScheduleHosts:async()=>({data:[]}),...modules['@/api/wms/livePayroll']}
   modules={ '../useLiveI18n':{useLiveI18n:()=>({tr:(text,values=[])=>text.replace(/\{(\d+)\}/g,(_,i)=>values[i]),isEn:vue.ref(false),messageNode:text=>text})}, ...modules }
   const source=await readFile(new URL('../src/views/wms/live/'+file,import.meta.url),'utf8')
@@ -332,12 +332,14 @@ test('a failed automatic preview blocks confirmation until a date change succeed
 
 async function streamFixture(overrides = {}) {
   const schedules = [
-    { employeeId: '1', accountId: '10', rateTypeId: '20', startTime: '08:00:00', endTime: '10:00:00' },
-    { employeeId: '1', accountId: '11', rateTypeId: '21', startTime: '12:00:00', endTime: '14:00:00' },
-    { employeeId: '1', accountId: '10', rateTypeId: '21', startTime: '22:00:00', endTime: '01:00:00' }
+    { id: '50', operatorEmployeeId: '9', operatorName: 'Operator A', employeeId: '1', accountId: '10', rateTypeId: '20', startTime: '08:00:00', endTime: '10:00:00' },
+    { id: '51', operatorEmployeeId: '8', operatorName: 'Operator B', employeeId: '1', accountId: '11', rateTypeId: '21', startTime: '12:00:00', endTime: '14:00:00' },
+    { id: '52', operatorEmployeeId: '7', operatorName: 'Operator C', employeeId: '1', accountId: '10', rateTypeId: '21', startTime: '22:00:00', endTime: '01:00:00' }
   ]
   const calls = { schedules: [], rates: [] }
   const api = {
+    getLiveOptions: async () => ({ employees: [], accounts: [], rateTypes: [], specialTypes: [] }),
+    listStreams: async () => ({ rows: [], total: 0 }),
     listStreamScheduleOptions: async params => {
       calls.schedules.push(params)
       return { data: schedules.filter(row => row.employeeId === params.employeeId && (!params.accountId || row.accountId === params.accountId)) }
@@ -367,7 +369,7 @@ test('stream date and host alone fill platform, active rate type and times from 
   assert.equal(page.dialog.form.rateTypeId, '20')
   assert.equal(page.dialog.form.startTime, '08:00:00')
   assert.equal(page.dialog.form.endTime, '10:00:00')
-  assert.equal(page.streamDurationText.value, '2.00h')
+  assert.equal(page.plannedDurationText.value, '2.00h')
   assert.equal(page.dialog.scheduleMissing, false)
 })
 
@@ -378,7 +380,7 @@ test('stream rate changes use only the chosen platform and manual platform chang
   page.handleStreamRateTypeChange()
   assert.equal(page.dialog.form.startTime, '22:00:00')
   assert.equal(page.dialog.form.endTime, '01:00:00')
-  assert.equal(page.streamDurationText.value, '3.00h')
+  assert.equal(page.plannedDurationText.value, '3.00h')
   page.dialog.form.accountId = '11'
   await page.handleStreamAccountChange()
   assert.equal(calls.schedules.at(-1).accountId, '11')
@@ -481,4 +483,84 @@ test('changing the stream selection invalidates an in-flight rate request immedi
   assert.equal(page.dialog.form.rateTypeId, null)
   assert.equal(page.dialog.form.startTime, null)
   assert.equal(page.dialog.loadingRateTypes, false)
+})
+
+test('operator defaults follow the selected schedule and stale operators clear with the host', async () => {
+  const { page } = await streamFixture()
+  await page.handleStreamRateScopeChange()
+  assert.equal(page.dialog.form.operatorEmployeeId, '9')
+  assert.equal(page.dialog.form.scheduleId, '50')
+  page.dialog.form.rateTypeId = '21'
+  page.handleStreamRateTypeChange()
+  assert.equal(page.dialog.form.operatorEmployeeId, '7')
+  assert.equal(page.dialog.form.scheduleId, '52')
+  page.dialog.form.employeeId = '2'
+  await page.handleStreamRateScopeChange()
+  assert.equal(page.dialog.form.operatorEmployeeId, null)
+  assert.equal(page.dialog.form.accountId, null)
+})
+
+test('selecting another session with the same rate changes plan times and operator', async () => {
+  const { page, schedules } = await streamFixture()
+  schedules.push({ ...schedules[0], id: '53', startTime: '15:00:00', endTime: '17:00:00', operatorEmployeeId: '6' })
+  await page.handleStreamRateScopeChange()
+  await page.handleStreamScheduleChange('53')
+  assert.equal(page.dialog.form.startTime, '15:00:00')
+  assert.equal(page.dialog.form.operatorEmployeeId, '6')
+  assert.equal(page.dialog.form.scheduleId, '53')
+})
+
+test('unscheduled entries can select rates with plan times left empty', async () => {
+  const { page } = await streamFixture({ listStreamScheduleOptions: async () => ({ data: [] }) })
+  await page.handleStreamRateScopeChange()
+  page.dialog.form.accountId = '10'
+  await page.handleStreamAccountChange()
+  page.dialog.form.rateTypeId = '20'
+  page.handleStreamRateTypeChange()
+  assert.equal(page.dialog.form.accountId, '10')
+  assert.equal(page.dialog.form.rateTypeId, '20')
+  assert.equal(page.dialog.form.startTime, null)
+  assert.equal(page.dialog.form.endTime, null)
+  page.dialog.form.actualHours = 0
+  page.dialog.form.actualMinutes = 45
+  page.dialog.form.gmv = 900
+  assert.equal(page.actualDurationMinutes.value, 45)
+  assert.equal(page.streamDurationText.value, '0.75h')
+  assert.equal(page.sessionGmvPerHourText.value, shared.money(1200))
+})
+
+test('actual duration requires both parts and rejects zero or more than one day', async () => {
+  const { page } = await streamFixture()
+  const validate = page.rules.value.actualDurationMinutes[0].validator
+  for (const [hours, minutes, valid] of [[null, null, false], [1, null, false], [0, 0, false], [0, 1, true], [24, 0, true], [24, 1, false], [1, 60, false]]) {
+    Object.assign(page.dialog.form, { actualHours: hours, actualMinutes: minutes })
+    let error
+    validate({}, undefined, result => { error = result })
+    assert.equal(!error, valid, `${hours}:${minutes}`)
+  }
+})
+
+test('edit restores recorded actual minutes but never infers them from historical plan hours', async () => {
+  const { page } = await streamFixture()
+  const row = { id: '99', streamDate: '2026-09-12', employeeId: '1', accountId: '11', rateTypeId: '20', startTime: '15:00:00', endTime: '17:30:00', durationHours: 2.5 }
+  await page.openDialog(row)
+  assert.equal(page.dialog.form.actualHours, null)
+  assert.equal(page.dialog.form.actualMinutes, null)
+  await page.openDialog({ ...row, actualDurationMinutes: 95 })
+  assert.equal(page.dialog.form.actualHours, 1)
+  assert.equal(page.dialog.form.actualMinutes, 35)
+  assert.equal(page.actualDurationMinutes.value, 95)
+})
+
+test('stream submission sends actual minutes and excludes duration input fields', async () => {
+  let payload
+  const { page } = await streamFixture({ addStream: async value => { payload = value } })
+  Object.assign(page.dialog.form, { accountId: '10', rateTypeId: '20', actualHours: 1, actualMinutes: 35, gmv: 200 })
+  page.formRef.value = { validate: async () => true }
+  page.specialEditor.value = { validate: () => true }
+  page.query.pageSize = 20
+  await page.submit()
+  assert.equal(payload.actualDurationMinutes, 95)
+  assert.equal('actualHours' in payload, false)
+  assert.equal('actualMinutes' in payload, false)
 })
