@@ -158,18 +158,29 @@ service.interceptors.response.use(res => {
 // 通用下载方法（Excel：英文界面下自动翻译常见中文表头）
 export function download(url, params, filename, config = {}) {
   const userOnDownloadProgress = config?.onDownloadProgress
-  const progressLoading = createProgressLoading(config?.progressLabel || '正在导出文件')
+  const progressLoading = createProgressLoading(config?.progressLabel || '正在导出文件', {
+    elapsedLabel: config?.elapsedLabel
+  })
   const english = isEnglishUi()
   const langHeaders = getExportLanguageHeaders(english)
+  const useJsonBody = config?.jsonBody === true
   const mergedHeaders = {
-    'Content-Type': 'application/x-www-form-urlencoded',
+    'Content-Type': useJsonBody ? 'application/json' : 'application/x-www-form-urlencoded',
     ...langHeaders,
     ...(config.headers || {})
   }
-  const { headers: _ignoredHeaders, onDownloadProgress: _ignoredProgress, ...restConfig } = config
+  const {
+    headers: _ignoredHeaders,
+    onDownloadProgress: _ignoredProgress,
+    jsonBody: _ignoredJsonBody,
+    skipHeaderTranslate: _ignoredSkipHeaderTranslate,
+    progressLabel: _ignoredProgressLabel,
+    elapsedLabel: _ignoredElapsedLabel,
+    ...restConfig
+  } = config
 
   return service.post(url, params, {
-    transformRequest: [(params) => { return tansParams(params) }],
+    ...(useJsonBody ? {} : { transformRequest: [(params) => tansParams(params)] }),
     responseType: 'blob',
     ...restConfig,
     headers: mergedHeaders,
