@@ -238,6 +238,14 @@
         :closable="false"
         class="preview-alert"
       />
+      <el-alert
+        v-if="isStaleDraft"
+        :title="text(`该待结算单使用结算规则 v${settlementPreview.contractVersion || '-'}，当前规则为 v${settlementPreview.latestContractVersion || '-'}。为避免按过期规则结算，不能直接发起或确认；请重新生成结算明细。原待结算单不会被自动删除。`, `This pending settlement uses rule v${settlementPreview.contractVersion || '-'}, while the current rule is v${settlementPreview.latestContractVersion || '-'}. To prevent settlement with an outdated rule, it cannot be initiated or confirmed. Regenerate the settlement details instead; the original draft will not be deleted automatically.`)"
+        type="error"
+        show-icon
+        :closable="false"
+        class="preview-alert preview-stale-alert"
+      />
       <el-descriptions :column="4" border class="preview-summary">
         <el-descriptions-item :label="text('供货商', 'Supplier')">{{ supplierDisplayName(settlementPreview) || text('多个供货商', 'Multiple suppliers') }}</el-descriptions-item>
         <el-descriptions-item label="SKU">{{ settlementPreview.skuCount || 0 }}</el-descriptions-item>
@@ -398,7 +406,17 @@
       </div>
       <template #footer>
         <el-button @click="previewVisible = false">{{ text('关闭', 'Close') }}</el-button>
+        <el-button type="success" plain icon="Download" :disabled="!selectedPreviewLines.length" @click="exportPreviewExcel">
+          {{ text('导出 Excel', 'Export Excel') }}
+        </el-button>
         <el-button
+          v-if="isStaleDraft"
+          type="warning"
+          :loading="previewLoading"
+          @click="regenerateSettlementPreview"
+        >{{ text('重新生成结算明细', 'Regenerate details') }}</el-button>
+        <el-button
+          v-else
           type="warning"
           plain
           :loading="confirmLoading"
@@ -406,6 +424,7 @@
           @click="confirmSettlement('DRAFT')"
         >{{ text(`发起结算（${selectedPreviewLines.length}项）`, `Initiate (${selectedPreviewLines.length})`) }}</el-button>
         <el-button
+          v-if="!isStaleDraft"
           type="primary"
           :loading="confirmLoading"
           :disabled="!selectedPreviewLines.length"
@@ -503,6 +522,7 @@
 
 <script setup name="SupplierSettlement">
 import { computed, getCurrentInstance, nextTick, onMounted, reactive, ref } from 'vue'
+import { ElMessageBox } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { supplierDisplayName } from '@/utils/supplier'
 import { getCurrentSupplier, listSupplierNoPage } from '@/api/wms/supplier'
@@ -609,6 +629,10 @@ const summary = reactive({
 
 const isEnglish = computed(() => String(proxy?.$i18n?.locale || 'zh-cn').toLowerCase().startsWith('en'))
 const text = (zh, en) => isEnglish.value ? en : zh
+const isStaleDraft = computed(() =>
+  settlementPreview.value?.recordStatus === 'DRAFT'
+  && settlementPreview.value?.settlementCalculationCurrent === false
+)
 
 const statusOptions = computed(() => [
   { value: 'IN_TRANSIT', label: text('有在途中商品', 'In transit') },
@@ -1105,9 +1129,14 @@ function openSettlementPreview() {
 async function loadSettlementPreview() {
   const valid = await supplierSelectRef.value?.validate().catch(() => false)
   if (!valid) return
+  await generateSettlementPreview(settlementSelection.supplierId)
+  supplierSelectVisible.value = false
+}
+
+async function generateSettlementPreview(supplierId) {
   previewLoading.value = true
   try {
-    const response = await previewSupplierSettlement({ supplierId: settlementSelection.supplierId })
+    const response = await previewSupplierSettlement({ supplierId })
     const result = response.data || { lines: [] }
     preview.value = {
       ...result,
@@ -1120,13 +1149,20 @@ async function loadSettlementPreview() {
     }
     settlementTargetAmount.value = undefined
     previewSelectionCache.value = new Map()
-    supplierSelectVisible.value = false
     previewVisible.value = true
     await nextTick()
     await selectAllPreviewLines()
   } finally {
     previewLoading.value = false
   }
+}
+
+async function regenerateSettlementPreview() {
+  const supplierId = settlementPreview.value?.supplierId
+  if (!supplierId) return
+  await generateSettlementPreview(supplierId)
+  const { settlementDraftId: ignoredDraftId, ...query } = route.query
+  await router.replace({ path: route.path, query }).catch(() => {})
 }
 
 function settlementRequest(recordStatus) {
@@ -1186,6 +1222,51 @@ async function confirmSettlement(recordStatus = 'CONFIRMED') {
     await loadData()
   } finally {
     confirmLoading.value = false
+  }
+}
+
+async function exportPreviewExcel() {
+  const summary = settlementPreview.value
+  const supplier = String(supplierDisplayName(summary) || 'supplier').replace(/[\\/:*?"<>|]/g, '_')
+  const withImages = await chooseExportWithImages()
+  if (withImages === null) return
+  await proxy.download(
+    `wms/supplier-settlement/settlement/preview/export?includeImages=${withImages}`,
+    settlementRequest('DRAFT'),
+    `${text('智能结算明细', 'Smart_Settlement')}_${supplier}_${new Date().toISOString().slice(0, 10)}.xlsx`,
+    {
+      jsonBody: true,
+      skipHeaderTranslate: true,
+      timeout: 0,
+      progressLabel: withImages
+        ? text('正在生成含图片的 Excel，请勿关闭窗口', 'Generating Excel with images. Please keep this window open')
+        : text('正在生成 Excel，请勿关闭窗口', 'Generating Excel. Please keep this window open'),
+      elapsedLabel: withImages
+        ? text('正在生成含图片的 Excel，请勿关闭窗口 · 已用时', 'Generating Excel with images · Elapsed')
+        : text('正在生成 Excel，请勿关闭窗口 · 已用时', 'Generating Excel · Elapsed')
+    }
+  )
+}
+
+async function chooseExportWithImages() {
+  try {
+    await ElMessageBox.confirm(
+      text(
+        '快速导出不包含商品图片，速度更快；包含商品图片会下载并嵌入图片，导出时间会增加。',
+        'Fast export excludes product images and finishes sooner. Including images downloads and embeds them, which takes longer.'
+      ),
+      text('选择导出方式', 'Choose export type'),
+      {
+        confirmButtonText: text('包含商品图片（较慢）', 'Include images (slower)'),
+        cancelButtonText: text('快速导出（不含图片）', 'Fast export (no images)'),
+        distinguishCancelAndClose: true,
+        closeOnClickModal: false,
+        type: 'info'
+      }
+    )
+    return true
+  } catch (action) {
+    return action === 'cancel' ? false : null
   }
 }
 

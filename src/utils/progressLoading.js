@@ -1,20 +1,23 @@
 import { ElLoading } from 'element-plus'
 
 export function createProgressLoading(label, options = {}) {
-  const holdAt = options.holdAt ?? 72
-  const interval = options.interval ?? 120
   const finishDelay = options.finishDelay ?? 500
+  const elapsedLabel = options.elapsedLabel || label
   let progress = 0
-  let timer = null
+  let elapsedSeconds = 0
+  let hasMeasuredProgress = false
+  let elapsedTimer = null
   let closed = false
 
   const loadingInstance = ElLoading.service({
-    text: `${label} 0%`,
+    text: label,
     background: options.background || 'rgba(0, 0, 0, 0.7)'
   })
 
   const updateText = () => {
-    const text = `${label} ${progress}%`
+    const text = hasMeasuredProgress
+      ? `${label} ${progress}%`
+      : `${elapsedLabel} ${elapsedSeconds}s`
     if (loadingInstance?.setText) {
       loadingInstance.setText(text)
     } else if (loadingInstance) {
@@ -26,37 +29,35 @@ export function createProgressLoading(label, options = {}) {
     }
   }
 
-  const setProgress = (value, complete = false) => {
-    const max = complete ? 100 : holdAt
+  const setProgress = (value) => {
+    hasMeasuredProgress = true
+    const max = 100
     progress = Math.max(progress, Math.min(max, Math.floor(value)))
     updateText()
-  }
-
-  const stop = () => {
-    if (timer) {
-      window.clearInterval(timer)
-      timer = null
-    }
   }
 
   const close = () => {
     if (closed) return
     closed = true
-    stop()
+    if (elapsedTimer) {
+      window.clearInterval(elapsedTimer)
+      elapsedTimer = null
+    }
     loadingInstance.close()
   }
 
-  setProgress(1)
-
-  timer = window.setInterval(() => {
-    if (progress < holdAt) {
-      setProgress(progress + 1)
+  updateText()
+  elapsedTimer = window.setInterval(() => {
+    elapsedSeconds += 1
+    if (!hasMeasuredProgress) {
+      updateText()
     }
-  }, interval)
+  }, 1000)
 
   const finish = () => new Promise(resolve => {
-    stop()
-    setProgress(100, true)
+    if (hasMeasuredProgress) {
+      setProgress(100)
+    }
     window.setTimeout(() => {
       close()
       resolve()
@@ -67,6 +68,6 @@ export function createProgressLoading(label, options = {}) {
     finish,
     close,
     setProgress,
-    hold: () => setProgress(holdAt)
+    hold: () => undefined
   }
 }
