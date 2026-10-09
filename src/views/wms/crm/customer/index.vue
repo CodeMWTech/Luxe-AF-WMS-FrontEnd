@@ -1,5 +1,5 @@
 <template>
-  <div class="app-container crm-page">
+  <div class="app-container crm-page" :class="section === 'detail' ? 'is-detail' : 'is-analysis'">
     <section class="crm-main">
       <div class="crm-period">
         <label>
@@ -11,8 +11,8 @@
             :start-placeholder="tr('开始日期')"
             :end-placeholder="tr('结束日期')"
             range-separator="—"
-            :clearable="activeTab !== 'detail'"
-            :disabled="activeTab === 'detail' && !detailSource"
+            :clearable="section !== 'detail'"
+            :disabled="section === 'detail' && !detailSource"
             :disabled-date="disabledPeriodDate"
             @change="applyPeriod"
           />
@@ -20,23 +20,30 @@
         <p class="crm-range">{{ rangeText }}</p>
       </div>
       <el-tabs v-model="activeTab" class="crm-tabs">
-        <el-tab-pane :label="tr('数据分析')" name="analysis">
+        <el-tab-pane v-if="section !== 'detail'" :label="tr('数据分析')" name="analysis">
           <div v-loading="insightLoading" class="crm-analysis" :class="{ 'is-method-open': methodOpen }">
       <div class="crm-toolbar">
         <el-select
-          v-model="shopKey"
+          v-model="shopKeys"
+          multiple
           clearable
           filterable
+          collapse-tags
           class="crm-shop"
           :placeholder="tr('全部店铺')"
-          @change="loadInsights"
+          @change="onShopChange"
         >
-          <el-option-group v-for="group in shopGroups" :key="group.label" :label="group.label">
+          <el-option-group v-for="group in shopGroups" :key="group.platform" :label="group.label">
+            <el-option
+              v-if="group.shops.length > 1"
+              :label="group.platform === 'EBAY' ? tr('全部 eBay') : tr('全部 Whatnot')"
+              :value="platformValue(group.platform)"
+            />
             <el-option
               v-for="shop in group.shops"
               :key="shop.platform + shop.shopName"
               :label="shop.shopName"
-              :value="shop.platform + '\u0001' + shop.shopName"
+              :value="shopValue(shop)"
             />
           </el-option-group>
         </el-select>
@@ -199,11 +206,12 @@
       </div>
           </div>
         </el-tab-pane>
-        <el-tab-pane :label="tr('客户详情')" name="detail">
+        <el-tab-pane v-if="section === 'detail'" :label="tr('客户详情')" name="detail">
           <div v-loading="detailLoading" class="crm-pane crm-detail">
             <el-empty v-if="!detail" class="crm-empty" :description="tr('在左侧选择一位客户，这里展示联系方式和每一笔订单。')" />
             <template v-else>
               <header class="crm-profile">
+                <div class="crm-profile__body">
                 <div class="crm-profile__title">
                   <h2>{{ detail.displayName }}</h2>
                   <span class="crm-platform" :class="detail.platform === 'EBAY' ? 'is-ebay' : 'is-whatnot'">{{ detail.platformLabel }}</span>
@@ -219,6 +227,11 @@
                   <div><span>{{ tr('首单') }}</span><b>{{ detail.firstOrderTime || '—' }}</b></div>
                   <div><span>{{ tr('最近一单') }}</span><b>{{ detail.lastOrderTime || '—' }}</b></div>
                   <div><span>{{ tr('累计金额') }}</span><b>{{ moneyList(detail.amounts) }}</b></div>
+                </div>
+                </div>
+                <div v-if="showShopPie" class="crm-profile__pie">
+                  <span>{{ tr('店铺占比') }}</span>
+                  <div ref="shopPieEl" class="crm-profile__canvas" />
                 </div>
               </header>
               <p v-if="detailStory" class="crm-story">{{ detailStory }}</p>
@@ -280,7 +293,6 @@
                       </article>
                     </div>
                     <article class="crm-taste__band">
-                      <header>{{ tr('金额档') }}</header>
                       <div ref="tasteBandEl" class="crm-chart__canvas" />
                     </article>
                   </div>
@@ -355,7 +367,7 @@
             </template>
           </div>
         </el-tab-pane>
-        <el-tab-pane :label="tr('自定义分析')" name="custom">
+        <el-tab-pane v-if="section !== 'detail'" :label="tr('自定义分析')" name="custom">
           <div v-loading="customLoading" class="crm-custom">
             <section class="crm-guide">
               <h3>{{ tr('怎么看这张图') }}</h3>
@@ -387,13 +399,27 @@
               </label>
               <label>
                 <span>{{ tr('店铺') }}</span>
-                <el-select v-model="shopKey" clearable filterable :placeholder="tr('全部店铺')" @change="loadInsights">
-                  <el-option-group v-for="group in shopGroups" :key="'custom-' + group.label" :label="group.label">
+                <el-select
+                  v-model="shopKeys"
+                  multiple
+                  clearable
+                  filterable
+                  collapse-tags
+                  class="crm-shop"
+                  :placeholder="tr('全部店铺')"
+                  @change="onShopChange"
+                >
+                  <el-option-group v-for="group in shopGroups" :key="'custom-' + group.platform" :label="group.label">
+                    <el-option
+                      v-if="group.shops.length > 1"
+                      :label="group.platform === 'EBAY' ? tr('全部 eBay') : tr('全部 Whatnot')"
+                      :value="platformValue(group.platform)"
+                    />
                     <el-option
                       v-for="shop in group.shops"
                       :key="'custom-' + shop.platform + shop.shopName"
                       :label="shop.shopName"
-                      :value="shop.platform + '\u0001' + shop.shopName"
+                      :value="shopValue(shop)"
                     />
                   </el-option-group>
                 </el-select>
@@ -409,11 +435,11 @@
       </el-tabs>
     </section>
 
-    <aside class="crm-side">
+    <aside v-if="section === 'detail'" class="crm-side">
       <div class="crm-pane">
         <div class="crm-pane__head">
           <h2>{{ tr('客户') }}</h2>
-          <p class="crm-side__hint">{{ tr('点选客户后，到右侧客户详情查看联系方式和订单。') }}</p>
+          <p class="crm-side__hint">{{ tr('先点选一位客户，右侧才会显示联系方式、订单和这位客户的购买情况。') }}</p>
           <el-input
             v-model="query.keyword"
             clearable
@@ -506,6 +532,9 @@ import useSettingsStore from '@/store/modules/settings'
 import { translateByMap, translateExact } from '@/locales/runtime-map'
 import { getCrmCustom, getCrmCustomer, getCrmInsights, getCrmShops, listCrmCustomers } from '@/api/wms/crmCustomer'
 
+const props = defineProps({
+  section: { type: String, default: 'detail' }
+})
 const settingsStore = useSettingsStore()
 const router = useRouter()
 const tr = (text) => translateByMap(text, settingsStore.language || 'zh-cn')
@@ -560,13 +589,23 @@ const total = ref(0)
 const detail = ref(null)
 const insight = ref(null)
 const shops = ref([])
-const shopKey = ref('')
+const shopKeys = ref([])
+let appliedShopKeys = []
+const SHOP_COLORS = ['#409EFF', '#67C23A', '#E6A23C', '#13c2c2', '#F56C6C', '#909399']
 const dateRange = ref([])
 const detailRange = ref([])
 const detailBounds = ref([])
 const detailSource = ref(null)
 const activeKey = ref('')
-const activeTab = ref('analysis')
+const analysisTab = ref('analysis')
+const activeTab = computed({
+  get() {
+    return props.section === 'detail' ? 'detail' : analysisTab.value
+  },
+  set(value) {
+    if (props.section !== 'detail') analysisTab.value = value || 'analysis'
+  }
+})
 const focusId = ref('')
 const methodOpen = ref(false)
 const methodTab = ref('rule')
@@ -605,6 +644,7 @@ const tasteOpen = ref(false)
 const tasteBrandEl = ref(null)
 const tasteCategoryEl = ref(null)
 const tasteBandEl = ref(null)
+const shopPieEl = ref(null)
 const gapFrom = ref(1)
 const gapTo = ref(2)
 const extraOpen = ref(false)
@@ -776,6 +816,39 @@ const tasteLines = computed(() => {
     money: te('更多订单落在 {0}。', [view.bandName || '—'])
   }
 })
+const shopPreference = computed(() => {
+  const orders = detail.value?.orders || []
+  const buckets = new Map()
+  for (const order of orders) {
+    const name = String(order.shopName || '').trim() || '未填店铺'
+    let bucket = buckets.get(name)
+    if (!bucket) {
+      bucket = { name, count: 0 }
+      buckets.set(name, bucket)
+    }
+    bucket.count += 1
+  }
+  const rows = [...buckets.values()].sort((left, right) => right.count - left.count || left.name.localeCompare(right.name))
+  const total = rows.reduce((sum, row) => sum + row.count, 0)
+  const max = rows[0]?.count || 0
+  const parts = rows.map(row => {
+    const exact = total ? (row.count * 100) / total : 0
+    const base = Math.floor(exact)
+    return { ...row, base, frac: exact - base }
+  })
+  let left = total ? 100 - parts.reduce((sum, part) => sum + part.base, 0) : 0
+  ;[...parts].sort((leftPart, rightPart) => rightPart.frac - leftPart.frac).forEach(part => {
+    if (left <= 0) return
+    part.base += 1
+    left -= 1
+  })
+  return parts.map(row => ({
+    name: row.name,
+    count: row.count,
+    percent: row.base,
+    width: max ? Math.max(8, Math.round((row.count * 100) / max)) : 0
+  }))
+})
 const detailStory = computed(() => {
   const orders = detail.value?.orders || []
   if (!orders.length) return ''
@@ -791,10 +864,11 @@ const shopGroups = computed(() => {
   const ebay = shops.value.filter(shop => shop.platform === 'EBAY')
   const whatnot = shops.value.filter(shop => shop.platform !== 'EBAY')
   return [
-    ebay.length ? { label: 'eBay', shops: ebay } : null,
-    whatnot.length ? { label: 'Whatnot', shops: whatnot } : null
+    ebay.length ? { label: 'eBay', platform: 'EBAY', shops: ebay } : null,
+    whatnot.length ? { label: 'Whatnot', platform: 'SHOPIFY', shops: whatnot } : null
   ].filter(Boolean)
 })
+const showShopPie = computed(() => detail.value?.platform === 'EBAY' && shopPreference.value.length > 0)
 const sameBrandPercent = computed(() => {
   const totalBuyers = insight.value?.brandedRepeatBuyers
   if (!totalBuyers) return null
@@ -957,7 +1031,7 @@ function valuesOf(points) {
 }
 
 function axisStyle() {
-  return { color: '#98a2b3', fontSize: 11 }
+  return { color: '#909399', fontSize: 13 }
 }
 
 function fill(from, to, horizontal) {
@@ -972,7 +1046,7 @@ function verticalOption(categories, values, color, seriesName, compact) {
     tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
     grid: compact
       ? { left: 6, right: 6, top: 6, bottom: 6 }
-      : { left: 36, right: 8, top: 16, bottom: categories.length > 12 ? 22 : 28 },
+      : { left: 4, right: 10, top: 12, bottom: 4, containLabel: true },
     xAxis: {
       type: 'category',
       data: categories,
@@ -984,7 +1058,7 @@ function verticalOption(categories, values, color, seriesName, compact) {
     },
     yAxis: {
       type: 'value',
-      splitLine: { show: !compact, lineStyle: { color: '#f2f4f7' } },
+      splitLine: { show: !compact, lineStyle: { color: '#e4e7ed' } },
       axisLabel: compact ? { show: false } : axisStyle()
     },
     series: [{
@@ -1005,7 +1079,7 @@ function horizontalOption(categories, values, color, seriesName, compact) {
       : { left: 8, right: 16, top: 4, bottom: 4, containLabel: true },
     xAxis: {
       type: 'value',
-      splitLine: { show: !compact, lineStyle: { color: '#f2f4f7' } },
+      splitLine: { show: !compact, lineStyle: { color: '#e4e7ed' } },
       axisLabel: compact ? { show: false } : axisStyle()
     },
     yAxis: {
@@ -1014,7 +1088,7 @@ function horizontalOption(categories, values, color, seriesName, compact) {
       inverse: true,
       axisTick: { show: false },
       axisLine: { show: false },
-      axisLabel: compact ? { show: false } : { ...axisStyle(), width: 88, overflow: 'truncate' }
+      axisLabel: compact ? { show: false } : { ...axisStyle(), width: 128, overflow: 'truncate' }
     },
     series: [{
       name: seriesName || tr('订单数'),
@@ -1084,22 +1158,22 @@ function stackedOption(categories, fresh, repeats, horizontal, compact, mode, co
     axisTick: { show: false },
     axisLine: { show: !compact && !horizontal, lineStyle: { color: '#e7eaf0' } },
     axisLabel: compact ? { show: false } : (horizontal
-      ? { ...axisStyle(), width: 88, overflow: 'truncate' }
+      ? { ...axisStyle(), width: 128, overflow: 'truncate' }
       : { ...axisStyle(), interval: labelInterval != null ? labelInterval : (categories.length > 12 ? 2 : 0), rotate: 0, hideOverlap: labelInterval == null })
   }
   const valueAxis = {
     type: 'value',
-    splitLine: { show: !compact, lineStyle: { color: '#f2f4f7' } },
+    splitLine: { show: !compact, lineStyle: { color: '#e4e7ed' } },
     axisLabel: compact ? { show: false } : axisStyle()
   }
   return {
     tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, formatter: audienceTooltip },
-    legend: (!compact && stacked) ? { top: 0, right: 0, itemWidth: 10, itemHeight: 8, textStyle: { color: '#667085', fontSize: 11 } } : undefined,
+    legend: (!compact && stacked) ? { top: 0, right: 0, itemWidth: 10, itemHeight: 8, textStyle: { color: '#303133', fontSize: 13 } } : undefined,
     grid: compact
       ? { left: 6, right: 6, top: 6, bottom: 6 }
       : horizontal
         ? { left: 8, right: 16, top: stacked ? 22 : 8, bottom: 4, containLabel: true }
-        : { left: 36, right: 8, top: stacked ? 28 : 16, bottom: categories.length > 12 ? 22 : 28 },
+        : { left: 4, right: 12, top: stacked ? 28 : 12, bottom: 4, containLabel: true },
     xAxis: horizontal ? valueAxis : categoryAxis,
     yAxis: horizontal ? categoryAxis : valueAxis,
     series
@@ -1173,7 +1247,7 @@ function pieOption(rows) {
       itemGap: 10,
       data: rows.map(row => row.name),
       formatter: name => shares[name] == null ? name : `${name}  ${shares[name]}%`,
-      textStyle: { fontSize: 12, color: '#344054', width: 128, overflow: 'break' }
+      textStyle: { fontSize: 13, color: '#303133', width: 140, overflow: 'break' }
     },
     series: [{
       type: 'pie',
@@ -1246,8 +1320,8 @@ function renderCustom() {
       axisPointer: { type: 'shadow' },
       valueFormatter: percentMetric ? value => `${value}%` : undefined
     },
-    legend: series.length > 1 ? { top: 0, right: 8, itemWidth: 10, itemHeight: 8, textStyle: { color: '#667085', fontSize: 11 } } : undefined,
-    grid: { left: 48, right: 12, top: series.length > 1 ? 28 : 16, bottom: hourAxis ? 28 : (categories.length > 10 ? 42 : 28) },
+    legend: series.length > 1 ? { top: 0, right: 8, itemWidth: 10, itemHeight: 8, textStyle: { color: '#303133', fontSize: 13 } } : undefined,
+    grid: { left: 8, right: 12, top: series.length > 1 ? 28 : 16, bottom: 8, containLabel: true },
     xAxis: {
       type: 'category',
       data: categories,
@@ -1259,7 +1333,7 @@ function renderCustom() {
     },
     yAxis: {
       type: 'value',
-      splitLine: { lineStyle: { color: '#f2f4f7' } },
+      splitLine: { lineStyle: { color: '#e4e7ed' } },
       max: percentMetric ? 100 : undefined,
       axisLabel: { ...axisStyle(), formatter: percentMetric ? '{value}%' : undefined }
     },
@@ -1330,18 +1404,65 @@ function countNamed(orders, field, limit = 6) {
 function scheduleDetailCharts() {
   nextTick(() => {
     requestAnimationFrame(() => {
+      const paint = () => {
+        renderDetailCharts()
+        renderShopPie()
+        resizeCharts()
+      }
       const host = detailAmountEl.value
       if (detail.value?.repeatCustomer && activeTab.value === 'detail' && host && host.clientWidth === 0) {
-        requestAnimationFrame(() => {
-          renderDetailCharts()
-          resizeCharts()
-        })
+        requestAnimationFrame(paint)
         return
       }
-      renderDetailCharts()
-      resizeCharts()
+      paint()
     })
   })
+}
+
+function renderShopPie(retry = true) {
+  const el = shopPieEl.value
+  if (!showShopPie.value || !el) {
+    charts.shopPie?.dispose()
+    delete charts.shopPie
+    return
+  }
+  if (el.clientWidth === 0 && retry) {
+    requestAnimationFrame(() => renderShopPie(false))
+    return
+  }
+  const rows = shopPreference.value.map((row, index) => ({
+    name: row.name === '未填店铺' ? tr('未填店铺') : row.name,
+    value: row.count,
+    itemStyle: row.name === '未填店铺'
+      ? { color: '#d0d5dd' }
+      : { color: SHOP_COLORS[index % SHOP_COLORS.length] }
+  }))
+  const shares = percentMap(rows)
+  draw('shopPie', el, {
+    tooltip: {
+      trigger: 'item',
+      formatter: params => `${params.name}<br/>${formatCount(params.value)}（${shares[params.name] ?? 0}%）`
+    },
+    legend: {
+      type: 'scroll',
+      orient: 'vertical',
+      right: 0,
+      top: 'middle',
+      itemWidth: 10,
+      itemHeight: 10,
+      itemGap: 10,
+      formatter: name => `${name}  ${shares[name] ?? 0}%`,
+      textStyle: { fontSize: 13, color: '#303133' }
+    },
+    series: [{
+      type: 'pie',
+      radius: ['40%', '62%'],
+      center: ['26%', '52%'],
+      data: rows,
+      label: { show: false }
+    }]
+  })
+  bindTastePie(charts.shopPie, rows)
 }
 
 function visibleExtra(group) {
@@ -1496,8 +1617,8 @@ function renderDetailZoom(retry = true) {
       top: 0,
       style: {
         text: te('灰色是 0 天：相邻两笔在同一天内下单，共 {0} 段', [sameDay]),
-        fill: '#667085',
-        font: '12px sans-serif',
+        fill: '#606266',
+        font: '13px sans-serif',
         textAlign: 'right'
       }
     }]
@@ -1531,7 +1652,7 @@ function renderDetailZoom(retry = true) {
       handleSize: '70%',
       handleStyle: { color: '#fff', borderColor: tone.line, borderWidth: 1 },
       moveHandleStyle: { color: tone.line, opacity: 0.35 },
-      textStyle: { color: '#98a2b3', fontSize: 11 }
+      textStyle: { color: '#606266', fontSize: 13 }
     }]
     option.xAxis.axisLabel = { ...option.xAxis.axisLabel, interval: 0, hideOverlap: true, rotate: 28 }
   }
@@ -1589,9 +1710,17 @@ function renderTasteCharts() {
     fill('#ffd591', '#fa8c16', false),
     tr('订单数')
   )
-  option.grid = { left: 8, right: 16, top: 20, bottom: 8, containLabel: true }
-  option.xAxis.axisLabel = { color: '#344054', fontSize: 12, interval: 0, rotate: 0, hideOverlap: false }
-  option.yAxis.axisLabel = { color: '#344054', fontSize: 12, margin: 10 }
+  option.grid = { left: 4, right: 64, top: 28, bottom: 4, containLabel: true }
+  option.xAxis.name = tr('金额档')
+  option.xAxis.nameLocation = 'end'
+  option.xAxis.nameGap = 12
+  option.xAxis.nameTextStyle = { color: '#909399', fontSize: 13, fontWeight: 600 }
+  option.xAxis.axisLabel = { ...axisStyle(), interval: 0, rotate: 0, hideOverlap: false }
+  option.yAxis.name = tr('订单数')
+  option.yAxis.nameLocation = 'end'
+  option.yAxis.nameGap = 8
+  option.yAxis.nameTextStyle = { color: '#909399', fontSize: 13, fontWeight: 600, align: 'left', padding: [0, 0, 0, 4] }
+  option.yAxis.axisLabel = { ...axisStyle(), margin: 8 }
   draw('tasteBand', tasteBandEl.value, option)
 }
 
@@ -1759,16 +1888,55 @@ function periodParams() {
   return { beginDate: range[0], endDate: range[1] }
 }
 
-function insightParams() {
-  const value = shopKey.value
-  const split = value ? value.indexOf('\u0001') : -1
-  const period = periodParams()
-  if (split < 1) return period
-  return {
-    ...period,
-    platform: value.slice(0, split),
-    shop: value.slice(split + 1)
+function platformValue(platform) {
+  return `platform:${platform}`
+}
+
+function shopValue(shop) {
+  return `shop:${shop.platform}::${shop.shopName}`
+}
+
+function sameKeys(left, right) {
+  return left.length === right.length && left.every((item, index) => item === right[index])
+}
+
+function normalizeShopSelection(previous, values) {
+  const added = values.filter(item => !previous.includes(item))
+  let next = [...values]
+  for (const group of shopGroups.value) {
+    if (group.shops.length < 2) continue
+    const platformKey = platformValue(group.platform)
+    const members = group.shops.map(shop => shopValue(shop))
+    if (added.includes(platformKey)) {
+      next = next.filter(item => !members.includes(item))
+    } else if (added.some(item => members.includes(item))) {
+      next = next.filter(item => item !== platformKey)
+    }
+    if (members.length && members.every(item => next.includes(item))) {
+      next = [...next.filter(item => !members.includes(item)), platformKey]
+    }
   }
+  return next
+}
+
+function onShopChange(values) {
+  const incoming = Array.isArray(values) ? values : []
+  const next = normalizeShopSelection(appliedShopKeys, incoming)
+  const changed = !sameKeys(next, appliedShopKeys)
+  appliedShopKeys = next
+  if (!sameKeys(next, shopKeys.value)) shopKeys.value = next
+  if (changed) loadInsights()
+}
+
+function insightParams() {
+  const period = periodParams()
+  const scopes = shopKeys.value.map(value => {
+    if (value.startsWith('platform:')) return value.slice('platform:'.length)
+    if (value.startsWith('shop:')) return value.slice('shop:'.length)
+    return ''
+  }).filter(Boolean)
+  if (!scopes.length) return period
+  return { ...period, scopes }
 }
 
 async function loadShops() {
@@ -1840,8 +2008,15 @@ async function applyPeriod() {
     return
   }
   await loadShops()
-  if (shopKey.value && !shops.value.some(shop => `${shop.platform}\u0001${shop.shopName}` === shopKey.value)) {
-    shopKey.value = ''
+  const allowed = new Set()
+  shopGroups.value.forEach(group => {
+    if (group.shops.length > 1) allowed.add(platformValue(group.platform))
+    group.shops.forEach(shop => allowed.add(shopValue(shop)))
+  })
+  const next = shopKeys.value.filter(item => allowed.has(item))
+  if (!sameKeys(next, shopKeys.value)) {
+    shopKeys.value = next
+    appliedShopKeys = next
   }
   loadInsights()
 }
@@ -1883,7 +2058,7 @@ async function loadCustom() {
   }
 }
 
-async function openCustomer(item, options = {}) {
+async function openCustomer(item) {
   activeKey.value = `${item.platform}:${item.buyerKey}`
   detailLoading.value = true
   try {
@@ -1902,7 +2077,6 @@ async function openCustomer(item, options = {}) {
     detailBounds.value = begin && end ? [begin, end] : []
     detailRange.value = detailBounds.value.slice()
     applyDetailView()
-    if (!options.keepTab) activeTab.value = 'detail'
   } catch (error) {
     detail.value = null
     detailSource.value = null
@@ -1916,22 +2090,21 @@ async function openCustomer(item, options = {}) {
   }
 }
 
-function openInNewTab(to) {
-  const { href } = router.resolve(to)
-  window.open(href, '_blank', 'noopener,noreferrer')
+function openInPage(to) {
+  router.push(to).catch(() => {})
 }
 
 function openOrder(order) {
   if (!order?.platformOrderId) return
-  openInNewTab({
-    path: '/wms/platform/tiktok/orders',
+  openInPage({
+    name: 'PlatformOrders',
     query: { platformOrderId: order.platformOrderId }
   })
 }
 
 function openItem(product) {
   if (!product.linked || !product.skuCode) return
-  openInNewTab({ name: 'Item', query: { skuCode: product.skuCode } })
+  openInPage({ name: 'Item', query: { skuCode: product.skuCode } })
 }
 
 watch(() => settingsStore.language, () => {
@@ -1946,9 +2119,11 @@ watch(activeTab, () => nextTick(() => {
   resizeCharts()
 }))
 onMounted(() => {
-  loadList()
-  loadShops()
-  loadInsights()
+  if (props.section === 'detail') loadList()
+  else {
+    loadShops()
+    loadInsights()
+  }
   window.addEventListener('resize', resizeCharts)
 })
 onActivated(() => nextTick(() => {
@@ -1971,7 +2146,15 @@ onBeforeUnmount(() => {
   align-items: stretch;
   gap: 12px;
   overflow: hidden;
-  background: #f4f6fb;
+  background: transparent;
+  color: #303133;
+  font-size: 14px;
+}
+.crm-page.is-analysis {
+  grid-template-columns: minmax(0, 1fr);
+}
+.crm-page.is-detail .crm-tabs :deep(.el-tabs__header) {
+  display: none;
 }
 .crm-side {
   order: 1;
@@ -1984,11 +2167,17 @@ onBeforeUnmount(() => {
   height: 100%;
 }
 .crm-main,
-.crm-side,
 .crm-pane {
   background: #fff;
-  border: 1px solid #e7ebf3;
-  border-radius: 16px;
+  border: 1px solid #ebeef5;
+  border-radius: 4px;
+  box-shadow: 0 1px 4px rgba(0, 21, 41, 0.08);
+}
+.crm-side {
+  background: #fff;
+  border: 1px solid #ebeef5;
+  border-radius: 4px;
+  box-shadow: 0 1px 4px rgba(0, 21, 41, 0.08);
 }
 .crm-main {
   min-width: 0;
@@ -2010,8 +2199,8 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #667085;
-  font-size: 12px;
+  color: #606266;
+  font-size: 13px;
 }
 .crm-period :deep(.el-date-editor) {
   width: 260px;
@@ -2052,7 +2241,7 @@ onBeforeUnmount(() => {
   gap: 16px;
 }
 .crm-shop {
-  width: 280px;
+  width: 320px;
   flex: none;
 }
 .crm-stats {
@@ -2071,14 +2260,14 @@ onBeforeUnmount(() => {
   padding: 0;
   border: 0;
   background: transparent;
-  color: #344054;
-  font-size: 12px;
+  color: #303133;
+  font-size: 14px;
   font-weight: 700;
   line-height: 1.4;
   cursor: pointer;
 }
 .crm-method__toggle em {
-  color: #667085;
+  color: #606266;
   font-style: normal;
   font-weight: 600;
 }
@@ -2086,8 +2275,8 @@ onBeforeUnmount(() => {
   margin-top: 6px;
   padding: 8px 12px 10px;
   background: #fff;
-  border: 1px solid #e7ebf3;
-  border-radius: 12px;
+  border: 1px solid #ebeef5;
+  border-radius: 4px;
 }
 .crm-method__tabs {
   display: flex;
@@ -2099,9 +2288,9 @@ onBeforeUnmount(() => {
   padding: 3px 10px;
   border: 1px solid transparent;
   border-radius: 999px;
-  background: #f4f6fb;
-  color: #667085;
-  font-size: 12px;
+  background: #f5f7fa;
+  color: #606266;
+  font-size: 13px;
   line-height: 18px;
   cursor: pointer;
 }
@@ -2112,8 +2301,8 @@ onBeforeUnmount(() => {
   font-weight: 600;
 }
 .crm-method__body {
-  color: #667085;
-  font-size: 12px;
+  color: #606266;
+  font-size: 14px;
   line-height: 1.6;
 }
 .crm-method__body p {
@@ -2136,8 +2325,8 @@ onBeforeUnmount(() => {
 .crm-stat span,
 .crm-range,
 .muted {
-  color: #98a2b3;
-  font-size: 12px;
+  color: #606266;
+  font-size: 13px;
   font-style: normal;
 }
 .crm-stat strong {
@@ -2157,8 +2346,8 @@ onBeforeUnmount(() => {
 .crm-stat .is-money {
   display: block;
   margin-top: 2px;
-  color: #667085;
-  font-size: 12px;
+  color: #606266;
+  font-size: 13px;
   font-style: normal;
   font-weight: 500;
 }
@@ -2196,10 +2385,11 @@ onBeforeUnmount(() => {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: 8px 10px 4px;
-  background: #f8f9fc;
-  border: 1px solid transparent;
-  border-radius: 12px;
+  padding: 10px 12px 6px;
+  background: #fff;
+  border: 1px solid #ebeef5;
+  border-radius: 4px;
+  box-shadow: 0 1px 4px rgba(0, 21, 41, 0.08);
   cursor: pointer;
 }
 .crm-chart.is-focus {
@@ -2217,8 +2407,8 @@ onBeforeUnmount(() => {
   border: 0;
   border-radius: 0;
   background: transparent;
-  color: #667085;
-  font-size: 12px;
+  color: #606266;
+  font-size: 13px;
   font-weight: 700;
   line-height: 1.4;
   cursor: pointer;
@@ -2234,9 +2424,9 @@ onBeforeUnmount(() => {
   border: 1px solid #d0d5dd;
   border-radius: 999px;
   background: #fff;
-  color: #667085;
-  font-size: 12px;
-  line-height: 18px;
+  color: #606266;
+  font-size: 13px;
+  line-height: 20px;
   cursor: pointer;
 }
 .crm-split button.is-on {
@@ -2251,8 +2441,8 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
   gap: 8px;
   margin: 0 2px 8px;
-  color: #667085;
-  font-size: 13px;
+  color: #606266;
+  font-size: 14px;
 }
 .crm-gap-range :deep(.el-input-number) {
   width: 108px;
@@ -2270,8 +2460,8 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  color: #344054;
-  font-size: 13px;
+  color: #303133;
+  font-size: 14px;
   font-weight: 600;
 }
 .crm-chart header span {
@@ -2290,10 +2480,10 @@ onBeforeUnmount(() => {
   border: 0;
   border-radius: 0;
   background: transparent;
-  color: #667085;
-  font-size: 12px;
+  color: #606266;
+  font-size: 13px;
   font-style: normal;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1.4;
   white-space: nowrap;
 }
@@ -2314,15 +2504,34 @@ onBeforeUnmount(() => {
 }
 .crm-story {
   margin: 0 14px 10px;
-  color: #344054;
-  font-size: 13px;
-  line-height: 1.5;
+  color: #303133;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.crm-profile__body {
+  min-width: 0;
+}
+.crm-profile__pie {
+  width: 100%;
+  height: 200px;
+  display: flex;
+  flex-direction: column;
+}
+.crm-profile__pie > span {
+  flex: none;
+  color: #303133;
+  font-size: 14px;
+  font-weight: 600;
+}
+.crm-profile__canvas {
+  flex: 1;
+  min-height: 0;
 }
 .crm-detail-charts {
   display: grid;
   grid-template-columns: 1.3fr 1fr 1fr;
   gap: 10px;
-  height: 220px;
+  height: 256px;
   margin: 0 14px 12px;
   flex: none;
 }
@@ -2341,8 +2550,8 @@ onBeforeUnmount(() => {
   gap: 12px;
   width: 100%;
   padding: 12px 14px;
-  border: 1px solid #91caff;
-  border-radius: 12px;
+  border: 1px solid #d9ecff;
+  border-radius: 4px;
   background: #f0f7ff;
   box-shadow: inset 4px 0 0 #1677ff;
   color: #0958d9;
@@ -2378,7 +2587,7 @@ onBeforeUnmount(() => {
 .crm-taste__hint {
   display: none;
   color: #1677ff;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
 }
 .crm-taste__toggle:hover .crm-taste__hint {
@@ -2404,7 +2613,7 @@ onBeforeUnmount(() => {
   padding: 12px;
   border: 1px solid #91caff;
   border-top: 0;
-  border-radius: 0 0 12px 12px;
+  border-radius: 0 0 4px 4px;
   background: #fff;
   box-shadow: inset 4px 0 0 #1677ff;
 }
@@ -2416,20 +2625,22 @@ onBeforeUnmount(() => {
 .crm-taste__stats div {
   min-width: 0;
   padding: 10px 12px;
-  border-radius: 10px;
-  background: #f8fafc;
+  border: 1px solid #ebeef5;
+  border-radius: 4px;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 21, 41, 0.06);
 }
 .crm-taste__stats span {
   display: block;
   margin-bottom: 6px;
-  color: #667085;
-  font-size: 12px;
-  font-weight: 700;
+  color: #606266;
+  font-size: 13px;
+  font-weight: 600;
 }
 .crm-taste__stats strong {
   display: block;
   color: #1d2433;
-  font-size: 16px;
+  font-size: 18px;
   line-height: 1.35;
   overflow-wrap: anywhere;
 }
@@ -2443,9 +2654,9 @@ onBeforeUnmount(() => {
   display: flex;
   gap: 10px;
   margin: 0;
-  color: #344054;
-  font-size: 13px;
-  line-height: 1.55;
+  color: #303133;
+  font-size: 14px;
+  line-height: 1.6;
 }
 .crm-taste__notes em {
   flex: none;
@@ -2457,40 +2668,44 @@ onBeforeUnmount(() => {
 }
 .crm-taste__tip {
   margin: 0 0 10px;
-  color: #667085;
-  font-size: 12px;
+  color: #606266;
+  font-size: 13px;
   line-height: 1.5;
 }
 .crm-taste__charts {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
-  height: 320px;
-}
-.crm-taste__band {
-  display: flex;
-  flex-direction: column;
-  height: 240px;
-  margin-top: 14px;
-  min-height: 0;
-}
-.crm-taste__band header {
-  flex: none;
-  color: #344054;
-  font-size: 12px;
-  font-weight: 700;
+  height: 340px;
 }
 .crm-taste__charts article {
   display: flex;
   flex-direction: column;
   min-width: 0;
   min-height: 0;
+  padding: 10px 12px 8px;
+  background: #fff;
+  border: 1px solid #ebeef5;
+  border-radius: 4px;
+  box-shadow: 0 1px 4px rgba(0, 21, 41, 0.08);
+}
+.crm-taste__band {
+  display: flex;
+  flex-direction: column;
+  height: 300px;
+  margin-top: 14px;
+  min-height: 0;
+  padding: 10px 12px 8px;
+  background: #fff;
+  border: 1px solid #ebeef5;
+  border-radius: 4px;
+  box-shadow: 0 1px 4px rgba(0, 21, 41, 0.08);
 }
 .crm-taste__charts header {
   flex: none;
-  color: #344054;
-  font-size: 12px;
-  font-weight: 700;
+  color: #303133;
+  font-size: 14px;
+  font-weight: 600;
 }
 .crm-taste__charts .crm-chart__note {
   margin: auto 0;
@@ -2505,9 +2720,9 @@ onBeforeUnmount(() => {
   margin: 0;
   padding: 2px 8px;
   border-radius: 999px;
-  background: #f4f6fb;
-  color: #344054;
-  font-size: 12px;
+  background: #f5f7fa;
+  color: #303133;
+  font-size: 13px;
   font-style: normal;
   line-height: 1.5;
 }
@@ -2518,7 +2733,7 @@ onBeforeUnmount(() => {
 }
 .crm-extra section {
   display: grid;
-  grid-template-columns: 76px minmax(0, 1fr);
+  grid-template-columns: 92px minmax(0, 1fr);
   gap: 8px;
   align-items: start;
 }
@@ -2533,12 +2748,12 @@ onBeforeUnmount(() => {
 }
 .crm-zoom-stats span {
   display: block;
-  color: #98a2b3;
-  font-size: 12px;
+  color: #606266;
+  font-size: 13px;
 }
 .crm-zoom-stats strong {
-  color: #1d2433;
-  font-size: 14px;
+  color: #303133;
+  font-size: 16px;
 }
 .crm-zoom-chart {
   height: 380px;
@@ -2546,15 +2761,16 @@ onBeforeUnmount(() => {
 .crm-chart__note,
 .crm-chart__explain {
   margin: auto 0;
-  color: #98a2b3;
-  font-size: 12px;
+  color: #606266;
+  font-size: 13px;
   line-height: 1.5;
 }
 .crm-chart__explain {
   flex: none;
   margin: 0 2px 6px;
-  color: #667085;
-  line-height: 1.55;
+  color: #606266;
+  font-size: 14px;
+  line-height: 1.6;
 }
 .crm-custom {
   height: 100%;
@@ -2566,26 +2782,28 @@ onBeforeUnmount(() => {
 .crm-guide {
   flex: none;
   padding: 12px 14px;
-  background: #f8f9fc;
-  border-radius: 12px;
+  background: #fff;
+  border: 1px solid #ebeef5;
+  border-radius: 4px;
+  box-shadow: 0 1px 4px rgba(0, 21, 41, 0.08);
 }
 .crm-guide h3 {
   margin: 0 0 8px;
-  color: #1d2433;
-  font-size: 14px;
+  color: #303133;
+  font-size: 15px;
 }
 .crm-guide ol {
   margin: 0;
   padding-left: 18px;
-  color: #475467;
-  font-size: 13px;
+  color: #303133;
+  font-size: 14px;
   line-height: 1.6;
 }
 .crm-guide p,
 .crm-adjust {
   margin: 8px 0 0;
-  color: #98a2b3;
-  font-size: 12px;
+  color: #606266;
+  font-size: 13px;
   line-height: 1.6;
 }
 .crm-adjust {
@@ -2604,20 +2822,25 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 4px;
   min-width: 160px;
-  color: #667085;
-  font-size: 12px;
+  color: #606266;
+  font-size: 13px;
 }
 .crm-custom__bar :deep(.el-select) {
   width: 180px;
+}
+.crm-custom__bar :deep(.el-select.crm-shop) {
+  width: 320px;
 }
 .crm-custom__chart {
   flex: 1;
   min-height: 240px;
   display: flex;
   flex-direction: column;
-  padding: 8px 10px 4px;
-  background: #f8f9fc;
-  border-radius: 12px;
+  padding: 10px 12px 6px;
+  background: #fff;
+  border: 1px solid #ebeef5;
+  border-radius: 4px;
+  box-shadow: 0 1px 4px rgba(0, 21, 41, 0.08);
 }
 .crm-custom__chart .crm-chart__canvas {
   flex: 1;
@@ -2630,12 +2853,19 @@ onBeforeUnmount(() => {
   flex-direction: column;
   overflow: hidden;
 }
-.crm-side .crm-pane {
+.crm-side .crm-pane,
+.crm-main .crm-pane {
   flex: 1;
   height: auto;
   min-height: 0;
   border: 0;
   border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+}
+.crm-main .crm-pane.crm-detail {
+  height: 100%;
+  overflow: auto;
 }
 .crm-pane {
   min-height: 0;
@@ -2646,8 +2876,8 @@ onBeforeUnmount(() => {
 }
 .crm-side__hint {
   margin: -4px 0 10px;
-  color: #98a2b3;
-  font-size: 12px;
+  color: #606266;
+  font-size: 13px;
   line-height: 1.5;
 }
 .crm-pane__head,
@@ -2703,9 +2933,9 @@ onBeforeUnmount(() => {
 .crm-card {
   width: 100%;
   text-align: left;
-  border: 1px solid #eef1f6;
+  border: 1px solid #ebeef5;
   background: #fff;
-  border-radius: 10px;
+  border-radius: 4px;
   padding: 8px 10px;
   cursor: pointer;
 }
@@ -2732,14 +2962,14 @@ onBeforeUnmount(() => {
 }
 .crm-card__meta,
 .crm-card__time {
-  color: #98a2b3;
-  font-size: 12px;
+  color: #606266;
+  font-size: 13px;
   overflow-wrap: anywhere;
 }
 .crm-card__foot {
   margin-top: 8px;
-  font-size: 12px;
-  color: #667085;
+  font-size: 13px;
+  color: #606266;
 }
 .crm-card__time {
   margin-left: auto;
@@ -2770,6 +3000,10 @@ onBeforeUnmount(() => {
   background: #f2f4f7;
 }
 .crm-profile {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(460px, 500px) minmax(16px, 0.16fr);
+  align-items: center;
+  column-gap: 12px;
   border-bottom: 1px solid #eef1f6;
 }
 .crm-profile__title h2 {
@@ -2784,18 +3018,18 @@ onBeforeUnmount(() => {
 .crm-facts div,
 .crm-extra p {
   display: grid;
-  grid-template-columns: 76px minmax(0, 1fr);
+  grid-template-columns: 92px minmax(0, 1fr);
   gap: 8px;
   min-width: 0;
   margin: 0;
-  font-size: 13px;
-  line-height: 1.45;
+  font-size: 14px;
+  line-height: 1.5;
 }
 .crm-facts span,
 .crm-extra span,
 .crm-order__id span {
   flex: none;
-  color: #98a2b3;
+  color: #606266;
 }
 .crm-facts b {
   font-weight: 600;
@@ -2815,8 +3049,8 @@ onBeforeUnmount(() => {
 }
 .crm-orders h3 {
   margin: 0;
-  color: #1d2433;
-  font-size: 14px;
+  color: #303133;
+  font-size: 15px;
 }
 .crm-orders__bar {
   display: flex;
@@ -2825,8 +3059,8 @@ onBeforeUnmount(() => {
   gap: 12px;
 }
 .crm-orders__bar > span {
-  color: #667085;
-  font-size: 12px;
+  color: #606266;
+  font-size: 13px;
 }
 .crm-orders__tools {
   display: flex;
@@ -2847,8 +3081,8 @@ onBeforeUnmount(() => {
   cursor: pointer;
 }
 .crm-order {
-  border: 1px solid #eef1f6;
-  border-radius: 12px;
+  border: 1px solid #ebeef5;
+  border-radius: 4px;
   padding: 12px;
   background: #fff;
 }
@@ -2857,8 +3091,8 @@ onBeforeUnmount(() => {
   align-items: flex-start;
   flex-wrap: wrap;
   gap: 6px;
-  color: #475467;
-  font-size: 13px;
+  color: #303133;
+  font-size: 14px;
 }
 .crm-order__head > div {
   display: flex;
@@ -2869,7 +3103,7 @@ onBeforeUnmount(() => {
 }
 .crm-order__id {
   margin-top: 6px;
-  font-size: 13px;
+  font-size: 14px;
 }
 .crm-products {
   display: flex;
@@ -2884,8 +3118,8 @@ onBeforeUnmount(() => {
 .crm-thumb {
   width: 64px;
   height: 64px;
-  border-radius: 10px;
-  background: #f2f4f7;
+  border-radius: 4px;
+  background: #f5f7fa;
   flex: none;
 }
 .crm-thumb__empty {
@@ -2893,8 +3127,8 @@ onBeforeUnmount(() => {
   height: 64px;
   display: grid;
   place-items: center;
-  color: #98a2b3;
-  font-size: 12px;
+  color: #909399;
+  font-size: 13px;
 }
 .crm-product__body {
   min-width: 0;
@@ -2908,8 +3142,8 @@ onBeforeUnmount(() => {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  color: #667085;
-  font-size: 12px;
+  color: #606266;
+  font-size: 13px;
 }
 .crm-empty {
   margin: auto;
@@ -2942,6 +3176,9 @@ onBeforeUnmount(() => {
   .crm-main,
   .crm-pane {
     min-height: 640px;
+  }
+  .crm-profile {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 </style>
