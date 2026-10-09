@@ -235,7 +235,13 @@
             <div class="summary-cell sku-cell" :class="{ 'sku-cell-problem': hasSkuIssue(order, index), 'sku-cell-no-stock': hasNoStock(order, index), 'sku-cell-shipped': isShipmentCompleted(getDisplayOrder(order, index)) }">
               <span class="cell-label">{{ t('platformOrders.sku') }}</span>
               <div class="sku-row">
-                <span :class="['secondary-value', 'ellipsis', { 'sku-value-problem': hasSkuIssue(order, index), 'sku-value-no-stock': hasNoStock(order, index), 'sku-value-shipped': isShipmentCompleted(getDisplayOrder(order, index)) }]">{{ displayValue(getSkuText(getSummaryItem(order, index))) }}</span>
+                <router-link
+                  v-if="canOpenInventorySku(getSummaryItem(order, index))"
+                  :to="getInventorySkuRoute(getSummaryItem(order, index))"
+                  :class="['inventory-sku-link', 'secondary-value', 'ellipsis', { 'sku-value-no-stock': hasNoStock(order, index), 'sku-value-shipped': isShipmentCompleted(getDisplayOrder(order, index)) }]"
+                  @click.stop
+                >{{ displayValue(getSkuText(getSummaryItem(order, index))) }}</router-link>
+                <span v-else :class="['secondary-value', 'ellipsis', { 'sku-value-problem': hasSkuIssue(order, index), 'sku-value-no-stock': hasNoStock(order, index), 'sku-value-shipped': isShipmentCompleted(getDisplayOrder(order, index)) }]">{{ displayValue(getSkuText(getSummaryItem(order, index))) }}</span>
                 <el-tag v-if="isShipmentCompleted(getDisplayOrder(order, index))" type="success" effect="dark" size="small" class="sku-problem-tag">{{ t('platformOrders.skuShipped') }}</el-tag>
                 <el-tag v-else-if="isShipmentPending(getDisplayOrder(order, index))" type="info" size="small" class="sku-problem-tag">{{ t('platformOrders.skuShipmentCreated') }}</el-tag>
                 <el-tag v-if="hasSkuIssue(order, index) || hasNoStock(order, index)" :type="hasSkuIssue(order, index) ? 'danger' : 'warning'" effect="dark" size="small" class="sku-problem-tag">{{ getSkuStatusText(getSummaryItem(order, index)) }}</el-tag>
@@ -319,7 +325,10 @@
                     <InfoLine :label="t('platformOrders.itemProductName')" :value="item.productName" strong />
                     <InfoLine :label="t('platformOrders.itemSkuId')" :value="item.skuId" />
                     <InfoLine :label="t('platformOrders.itemSkuName')" :value="item.skuName" />
-                    <InfoLine :label="t('platformOrders.itemSellerSku')" :value="item.sellerSku" />
+                    <InfoLine :label="t('platformOrders.itemSellerSku')">
+                      <router-link v-if="canOpenInventorySku(item)" :to="getInventorySkuRoute(item)" class="inventory-sku-link" @click.stop>{{ displayValue(item.sellerSku) }}</router-link>
+                      <span v-else>{{ displayValue(item.sellerSku) }}</span>
+                    </InfoLine>
                     <InfoLine :label="t('platformOrders.itemSkuStatus')">
                       <span :class="{ 'sku-value-shipped': isShipmentCompleted(getDisplayOrder(order, index)) }">{{ getSkuStatusText(item, getDisplayOrder(order, index)) }}</span>
                     </InfoLine>
@@ -1425,6 +1434,19 @@ function getSummaryItem(order, index) {
 
 function getSkuText(item) {
   return item?.sellerSku || item?.skuName || item?.skuId
+}
+
+function canOpenInventorySku(item) {
+  return !!String(item?.sellerSku || '').trim()
+    && ['IN_STOCK', 'NO_STOCK'].includes(item?.skuStatus)
+    && !!proxy?.$auth?.hasPermi('wms:inventory:all')
+}
+
+function getInventorySkuRoute(item) {
+  return {
+    name: 'Inventory',
+    query: { skuCode: String(item.sellerSku).trim(), fromPlatformOrder: '1' }
+  }
 }
 
 function isBrushOrder(order) {
@@ -2706,6 +2728,17 @@ onActivated(() => {
 
 .sku-row > .secondary-value {
   max-width: 100%;
+}
+
+.inventory-sku-link {
+  color: var(--el-color-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.inventory-sku-link:hover {
+  opacity: 0.8;
 }
 
 .sku-cell-shipped {

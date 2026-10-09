@@ -857,7 +857,7 @@ const filterNonZero = ref(false)
 const batchMode = ref(false)
 const publishDialogRef = ref(null)
 const queryType = ref('item')
-const queryParams = ref({
+const createDefaultQueryParams = () => ({
   pageNum: 1,
   pageSize: 10,
   skuId: undefined,
@@ -886,6 +886,7 @@ const queryParams = ref({
   orderByColumn: DEFAULT_INVENTORY_SORT.prop,
   isAsc: DEFAULT_INVENTORY_SORT.order
 })
+const queryParams = ref(createDefaultQueryParams())
 
 // 与商品管理一致：同名品牌合并显示，保留不同分类下的全部品牌 ID。
 const brandGroups = computed(() => {
@@ -925,7 +926,25 @@ const appliedRouteFilterKey = ref('')
 function applyRouteSkuFilter() {
   const skuCode = String(route.query.skuCode || '').trim()
   const inStockOnly = String(route.query.inStock || '') === '1'
-  const filterKey = `${skuCode}|${inStockOnly}`
+  const fromPlatformOrder = String(route.query.fromPlatformOrder || '') === '1'
+  const filterKey = `${skuCode}|${inStockOnly}|${fromPlatformOrder}`
+  if (skuCode && fromPlatformOrder) {
+    const skuQuery = { ...createDefaultQueryParams(), skuCode, pageSize: queryParams.value.pageSize }
+    const hasOtherFilters = Object.keys(skuQuery).some(key =>
+      !['pageNum', 'pageSize', 'orderByColumn', 'isAsc'].includes(key)
+        && JSON.stringify(queryParams.value[key]) !== JSON.stringify(skuQuery[key]))
+    if (filterKey === appliedRouteFilterKey.value && !hasOtherFilters
+      && !filterable.value && !filterNonZero.value && queryType.value === 'item') return false
+    // 订单中的匹配商品可能已售罄；清除缓存筛选和历史快照，按当前 SKU 展示全部库存。
+    clearInventorySelection()
+    queryParams.value = skuQuery
+    filterable.value = false
+    filterNonZero.value = false
+    queryType.value = 'item'
+    rowSpanArray.value = ['itemGroupKey', 'skuGroupKey', 'skuWarehouseGroupKey']
+    appliedRouteFilterKey.value = filterKey
+    return true
+  }
   if (!skuCode || (filterKey === appliedRouteFilterKey.value && queryParams.value.skuCode === skuCode && (!inStockOnly || filterable.value))) return false
   queryParams.value.skuCode = skuCode
   if (inStockOnly) {
@@ -1336,6 +1355,9 @@ function formatTime(t) {
 
 const getCurrentQuery = () => {
   const query = { ...queryParams.value }
+  // 从平台订单定位时精确匹配 SKU；手动搜索其他 SKU 仍使用原有模糊查询。
+  query.skuCodeExact = String(route.query.fromPlatformOrder || '') === '1'
+    && String(route.query.skuCode || '').trim() === String(query.skuCode || '').trim() || undefined
   if (!canViewCostPrice.value) {
     delete query.costPriceMin
     delete query.costPriceMax
