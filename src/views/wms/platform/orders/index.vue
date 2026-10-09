@@ -229,18 +229,18 @@
 
             <div class="summary-cell product-cell">
               <span class="cell-label">{{ t('platformOrders.product') }}</span>
-              <span class="primary-value ellipsis">{{ displayValue(getFirstItem(order).productName) }}</span>
+              <span class="primary-value ellipsis">{{ displayValue(getSummaryItem(order, index).productName) }}</span>
             </div>
 
             <div class="summary-cell sku-cell" :class="{ 'sku-cell-problem': hasSkuIssue(order, index), 'sku-cell-no-stock': hasNoStock(order, index), 'sku-cell-shipped': isShipmentCompleted(getDisplayOrder(order, index)) }">
               <span class="cell-label">{{ t('platformOrders.sku') }}</span>
               <div class="sku-row">
-                <span :class="['secondary-value', 'ellipsis', { 'sku-value-problem': hasSkuIssue(order, index), 'sku-value-no-stock': hasNoStock(order, index), 'sku-value-shipped': isShipmentCompleted(getDisplayOrder(order, index)) }]">{{ displayValue(getSkuText(getFirstItem(order))) }}</span>
+                <span :class="['secondary-value', 'ellipsis', { 'sku-value-problem': hasSkuIssue(order, index), 'sku-value-no-stock': hasNoStock(order, index), 'sku-value-shipped': isShipmentCompleted(getDisplayOrder(order, index)) }]">{{ displayValue(getSkuText(getSummaryItem(order, index))) }}</span>
                 <el-tag v-if="isShipmentCompleted(getDisplayOrder(order, index))" type="success" effect="dark" size="small" class="sku-problem-tag">{{ t('platformOrders.skuShipped') }}</el-tag>
                 <el-tag v-else-if="isShipmentPending(getDisplayOrder(order, index))" type="info" size="small" class="sku-problem-tag">{{ t('platformOrders.skuShipmentCreated') }}</el-tag>
-                <el-tag v-if="hasSkuIssue(order, index) || hasNoStock(order, index)" :type="hasSkuIssue(order, index) ? 'danger' : 'warning'" effect="dark" size="small" class="sku-problem-tag">{{ getSkuStatusText(getFirstItem(getDisplayOrder(order, index))) }}</el-tag>
+                <el-tag v-if="hasSkuIssue(order, index) || hasNoStock(order, index)" :type="hasSkuIssue(order, index) ? 'danger' : 'warning'" effect="dark" size="small" class="sku-problem-tag">{{ getSkuStatusText(getSummaryItem(order, index)) }}</el-tag>
                 <el-tag v-if="isBrushOrder(getDisplayOrder(order, index))" type="info" size="small" class="sku-problem-tag">{{ t('platformOrders.skuIssueBrushOrder') }}</el-tag>
-                <el-button v-if="canEditSku(order, index)" link size="small" class="sku-edit-btn" :icon="Edit" @click.stop="startSkuEdit(order, index, getFirstItem(order))" v-hasPermi="['wms:platform:edit']">{{ t('platformOrders.labelEditSku') }}</el-button>
+                <el-button v-if="canEditSku(order, index)" link size="small" class="sku-edit-btn" :icon="Edit" @click.stop="startSkuEdit(order, index, getSummaryItem(order, index))" v-hasPermi="['wms:platform:edit']">{{ t('platformOrders.labelEditSku') }}</el-button>
               </div>
             </div>
 
@@ -1036,7 +1036,8 @@ async function ensureDetail(order, index) {
   }
   try {
     const res = await getPlatformOrder(orderId, order.platform, order.shopAuthId)
-    detailCache[key] = { ...order, ...(res.data || {}) }
+    // 保留当前商品行 ID，避免展开整单详情后编辑到第一条商品记录。
+    detailCache[key] = { ...order, ...(res.data || {}), id: order.id ?? res.data?.id }
   } catch {
     detailCache[key] = order
   }
@@ -1410,6 +1411,18 @@ function getFirstItem(order) {
   return getLineItems(order)[0] || {}
 }
 
+function getSummaryItem(order, index) {
+  const listItem = getFirstItem(order)
+  // 列表按商品行展示，详情可能包含整单商品；不能取详情第一行的 SKU 状态。
+  if (listItem.lineItemId === null || listItem.lineItemId === undefined || listItem.lineItemId === '') {
+    return listItem
+  }
+  const detailItem = getLineItems(getDisplayOrder(order, index)).find(item =>
+    item.lineItemId !== null && item.lineItemId !== undefined
+      && String(item.lineItemId) === String(listItem.lineItemId))
+  return detailItem ? { ...listItem, ...detailItem } : listItem
+}
+
 function getSkuText(item) {
   return item?.sellerSku || item?.skuName || item?.skuId
 }
@@ -1430,12 +1443,12 @@ function isShipmentPending(order) {
 
 function hasSkuIssue(order, index) {
   const displayOrder = getDisplayOrder(order, index)
-  return !isShipmentCompleted(displayOrder) && getFirstItem(displayOrder).skuStatus === 'UNMATCHED'
+  return !isShipmentCompleted(displayOrder) && getSummaryItem(order, index).skuStatus === 'UNMATCHED'
 }
 
 function hasNoStock(order, index) {
   const displayOrder = getDisplayOrder(order, index)
-  return !isShipmentCompleted(displayOrder) && getFirstItem(displayOrder).skuStatus === 'NO_STOCK'
+  return !isShipmentCompleted(displayOrder) && getSummaryItem(order, index).skuStatus === 'NO_STOCK'
 }
 
 function getSkuStatusText(item, order) {
