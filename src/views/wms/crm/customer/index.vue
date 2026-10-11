@@ -1,6 +1,19 @@
 <template>
-  <div class="app-container crm-page" :class="section === 'detail' ? 'is-detail' : 'is-analysis'">
-    <section class="crm-main">
+  <div class="app-container crm-page" :class="[section === 'detail' ? 'is-detail' : 'is-analysis', { 'is-denied': !canReadPlatformOrders }]">
+    <div v-if="!canReadPlatformOrders" class="crm-denied">
+      <div class="crm-denied__mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="26" height="26">
+          <path fill="currentColor" d="M17 9h-1V7a4 4 0 0 0-8 0v2H7a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2zm-7-2a2 2 0 1 1 4 0v2h-4V7zm2 6.2a1.3 1.3 0 0 1 .75 2.35V18h-1.5v-2.45A1.3 1.3 0 0 1 12 13.2z" />
+        </svg>
+      </div>
+      <h2>{{ tr('需要平台订单权限') }}</h2>
+      <p>{{ tr('这个界面的数据来自平台订单。当前账号没有平台订单权限，所以无法查看。请联系管理员分配平台订单权限。') }}</p>
+    </div>
+    <div v-if="canReadPlatformOrders" class="crm-fresh">
+      <p>{{ freshText }}</p>
+      <el-button size="small" :loading="refreshing" @click="refreshLatest()">{{ tr('更新到最新') }}</el-button>
+    </div>
+    <section v-if="canReadPlatformOrders" class="crm-main">
       <div class="crm-period">
         <label>
           <span>{{ tr('时间范围') }}</span>
@@ -435,7 +448,7 @@
       </el-tabs>
     </section>
 
-    <aside v-if="section === 'detail'" class="crm-side">
+    <aside v-if="section === 'detail' && canReadPlatformOrders" class="crm-side">
       <div class="crm-pane">
         <div class="crm-pane__head">
           <h2>{{ tr('客户') }}</h2>
@@ -526,16 +539,19 @@
 <script setup name="CrmCustomer">
 import { computed, nextTick, onActivated, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import auth from '@/plugins/auth'
 import * as echarts from 'echarts'
 import useSettingsStore from '@/store/modules/settings'
 import { translateByMap, translateExact } from '@/locales/runtime-map'
-import { getCrmCustom, getCrmCustomer, getCrmInsights, getCrmShops, listCrmCustomers } from '@/api/wms/crmCustomer'
+import { getCrmCustom, getCrmCustomer, getCrmInsights, getCrmShops, listCrmCustomers, recordCrmRefresh } from '@/api/wms/crmCustomer'
+import { formatLosAngelesTime } from '@/utils/laTime'
 
 const props = defineProps({
   section: { type: String, default: 'detail' }
 })
 const settingsStore = useSettingsStore()
+const canReadPlatformOrders = computed(() => auth.hasPermi('wms:platform:list'))
 const router = useRouter()
 const tr = (text) => translateByMap(text, settingsStore.language || 'zh-cn')
 const te = (text, values) => translateExact(text, settingsStore.language || 'zh-cn', values)
@@ -596,6 +612,16 @@ const dateRange = ref([])
 const detailRange = ref([])
 const detailBounds = ref([])
 const detailSource = ref(null)
+const listReadAt = ref('')
+const detailReadAt = ref('')
+const insightReadAt = ref('')
+const insightFromCache = ref(false)
+const refreshing = ref(false)
+const FRESH_MINUTES = 5
+const FRESH_MS = FRESH_MINUTES * 60 * 1000
+let freshTimer = 0
+let nextFreshAt = 0
+let freshAlive = true
 const activeKey = ref('')
 const analysisTab = ref('analysis')
 const activeTab = computed({
@@ -1860,8 +1886,63 @@ function reset() {
   search()
 }
 
-async function loadList() {
-  loading.value = true
+function stampNow() {
+  return new Date().toISOString()
+}
+
+function stampMillis(stamp) {
+  const text = String(stamp || '').trim()
+  if (!text) return NaN
+  const iso = text.includes('T') ? text : text.replace(' ', 'T').replace(' ', '')
+  return Date.parse(iso)
+}
+
+function displayStamp(stamp) {
+  const time = stampMillis(stamp)
+  if (Number.isNaN(time)) return String(stamp || '')
+  return formatLosAngelesTime(new Date(time))
+}
+
+const freshText = computed(() => {
+  const stamps = props.section === 'detail'
+    ? [listReadAt.value, detailReadAt.value]
+    : [insightReadAt.value]
+  const updatedAt = stamps.reduce((latest, stamp) => {
+    if (!stamp) return latest
+    if (!latest || stampMillis(stamp) >= stampMillis(latest)) return stamp
+    return latest
+  }, '')
+  if (!updatedAt) {
+    return te('每 {0} 分钟更新一次。正在更新。点右侧「更新到最新」会马上更新。', [FRESH_MINUTES])
+  }
+  return te('每 {0} 分钟更新一次。上次更新 {1}。点右侧「更新到最新」会马上更新。', [FRESH_MINUTES, displayStamp(updatedAt)])
+})
+
+function stampAge(stamp) {
+  const time = stampMillis(stamp)
+  if (Number.isNaN(time)) return 0
+  return Math.max(0, Date.now() - time)
+}
+
+function scheduleFresh(delay) {
+  window.clearTimeout(freshTimer)
+  const wait = Math.max(0, delay)
+  nextFreshAt = Date.now() + wait
+  freshTimer = window.setTimeout(runAutoFresh, wait)
+}
+
+function runAutoFresh() {
+  if (document.hidden) return
+  refreshLatest(true)
+}
+
+function onPageVisible() {
+  if (document.hidden || refreshing.value) return
+  if (nextFreshAt && Date.now() >= nextFreshAt) refreshLatest(true)
+}
+
+async function loadList(quiet = false) {
+  if (!quiet) loading.value = true
   try {
     const data = await listCrmCustomers({
       keyword: query.keyword?.trim() || undefined,
@@ -1873,12 +1954,43 @@ async function loadList() {
     })
     customers.value = data.rows || []
     total.value = data.total || 0
+    listReadAt.value = stampNow()
+    return true
   } catch (error) {
-    customers.value = []
-    total.value = 0
-    ElMessage.error(tr('加载客户失败'))
+    if (!quiet) {
+      customers.value = []
+      total.value = 0
+      ElMessage.error(tr('加载客户失败'))
+    }
+    return false
   } finally {
-    loading.value = false
+    if (!quiet) loading.value = false
+  }
+}
+
+async function finishManualRefresh() {
+  await recordCrmRefresh(props.section === 'detail' ? '客户详情' : '数据分析')
+  ElMessage.success(tr('已更新为当前平台订单'))
+}
+
+async function refreshLatest(silent = false) {
+  if (!canReadPlatformOrders.value || refreshing.value) return
+  const quiet = silent === true
+  refreshing.value = true
+  try {
+    if (props.section === 'detail') {
+      const source = detailSource.value
+      const ok = await loadList(quiet)
+      if (source?.platform && source?.buyerKey) await openCustomer(source, { keepView: true, quiet })
+      if (!quiet && ok && (detailSource.value || !source)) await finishManualRefresh()
+      return
+    }
+    await loadShops(true, quiet)
+    const ok = await loadInsights(true, quiet)
+    if (!quiet && ok) await finishManualRefresh()
+  } finally {
+    refreshing.value = false
+    if (freshAlive) scheduleFresh(FRESH_MS)
   }
 }
 
@@ -1939,12 +2051,14 @@ function insightParams() {
   return { ...period, scopes }
 }
 
-async function loadShops() {
+async function loadShops(force = false, quiet = false) {
   try {
-    const res = await getCrmShops(periodParams())
+    const params = { ...periodParams() }
+    if (force) params.refresh = true
+    const res = await getCrmShops(params)
     shops.value = res.data || []
   } catch (error) {
-    shops.value = []
+    if (!quiet) shops.value = []
   }
 }
 
@@ -2021,25 +2135,31 @@ async function applyPeriod() {
   loadInsights()
 }
 
-async function loadInsights() {
-  insightLoading.value = true
+async function loadInsights(force = false, quiet = false) {
+  if (!quiet) insightLoading.value = true
   try {
-    const res = await getCrmInsights(insightParams())
+    const params = { ...insightParams() }
+    if (force) params.refresh = true
+    const res = await getCrmInsights(params)
     insight.value = res.data || null
+    insightReadAt.value = res.data?.computedAt || stampNow()
+    insightFromCache.value = !!res.data?.fromCache
     await nextTick()
     renderCharts()
     resizeCharts()
-    loadCustom()
+    loadCustom(quiet)
+    return true
   } catch (error) {
-    ElMessage.error(tr('加载洞察失败'))
+    if (!quiet) ElMessage.error(tr('加载洞察失败'))
+    return false
   } finally {
-    insightLoading.value = false
+    if (!quiet) insightLoading.value = false
   }
 }
 
-async function loadCustom() {
+async function loadCustom(quiet = false) {
   if (customSeries.value === customX.value) customSeries.value = ''
-  customLoading.value = true
+  if (!quiet) customLoading.value = true
   try {
     const res = await getCrmCustom({
       ...insightParams(),
@@ -2052,15 +2172,21 @@ async function loadCustom() {
     renderCustom()
     resizeCharts()
   } catch (error) {
-    ElMessage.error(tr('加载自定义分析失败'))
+    if (!quiet) ElMessage.error(tr('加载自定义分析失败'))
   } finally {
-    customLoading.value = false
+    if (!quiet) customLoading.value = false
   }
 }
 
-async function openCustomer(item) {
+async function openCustomer(item, options = {}) {
+  const keepView = options.keepView === true
+  const quiet = options.quiet === true
+  const previousRange = Array.isArray(detailRange.value) ? detailRange.value.slice() : []
+  const coveredAll = previousRange[0] && previousRange[1]
+    && previousRange[0] === detailBounds.value[0]
+    && previousRange[1] === detailBounds.value[1]
   activeKey.value = `${item.platform}:${item.buyerKey}`
-  detailLoading.value = true
+  if (!quiet) detailLoading.value = true
   try {
     const res = await getCrmCustomer(item.platform, item.buyerKey)
     const next = res.data || {}
@@ -2068,24 +2194,30 @@ async function openCustomer(item) {
       ...order,
       products: (order.products || []).map(product => ({ ...product, open: false }))
     }))
-    extraOpen.value = false
-    tasteOpen.value = false
-    skuMatch.value = 'all'
+    if (!keepView) {
+      extraOpen.value = false
+      tasteOpen.value = false
+      skuMatch.value = 'all'
+    }
     detailSource.value = next
+    detailReadAt.value = stampNow()
     const begin = dayOf(next.orders[0]?.orderTime || next.firstOrderTime)
     const end = dayOf(next.orders[next.orders.length - 1]?.orderTime || next.lastOrderTime)
     detailBounds.value = begin && end ? [begin, end] : []
-    detailRange.value = detailBounds.value.slice()
+    if (!keepView || coveredAll || !previousRange[0]) detailRange.value = detailBounds.value.slice()
+    else detailRange.value = previousRange
     applyDetailView()
   } catch (error) {
+    if (quiet) return
     detail.value = null
     detailSource.value = null
+    detailReadAt.value = ''
     detailBounds.value = []
     detailRange.value = []
     const message = String(error?.message || '')
     if (!message.includes('客户不存在')) ElMessage.error(tr('加载客户详情失败'))
   } finally {
-    detailLoading.value = false
+    if (!quiet) detailLoading.value = false
     scheduleDetailCharts()
   }
 }
@@ -2094,8 +2226,20 @@ function openInPage(to) {
   router.push(to).catch(() => {})
 }
 
+function explainMissingPlatformOrderPermission() {
+  ElMessageBox.alert(
+    tr('这个界面的数据来自平台订单。当前账号没有平台订单权限，所以无法查看。请联系管理员分配平台订单权限。'),
+    tr('系统提示'),
+    { confirmButtonText: tr('确认') }
+  )
+}
+
 function openOrder(order) {
   if (!order?.platformOrderId) return
+  if (!auth.hasPermi('wms:platform:list')) {
+    explainMissingPlatformOrderPermission()
+    return
+  }
   openInPage({
     name: 'PlatformOrders',
     query: { platformOrderId: order.platformOrderId }
@@ -2118,20 +2262,30 @@ watch(activeTab, () => nextTick(() => {
   scheduleDetailCharts()
   resizeCharts()
 }))
-onMounted(() => {
-  if (props.section === 'detail') loadList()
-  else {
-    loadShops()
-    loadInsights()
-  }
+onMounted(async () => {
   window.addEventListener('resize', resizeCharts)
+  document.addEventListener('visibilitychange', onPageVisible)
+  if (!canReadPlatformOrders.value) return
+  if (props.section === 'detail') await loadList()
+  else {
+    await loadShops()
+    await loadInsights()
+  }
+  const age = props.section === 'detail' ? 0 : (insightFromCache.value ? stampAge(insightReadAt.value) : 0)
+  scheduleFresh(FRESH_MS - age)
 })
-onActivated(() => nextTick(() => {
-  renderCharts()
-  resizeCharts()
-}))
+onActivated(() => {
+  nextTick(() => {
+    renderCharts()
+    resizeCharts()
+  })
+  onPageVisible()
+})
 onBeforeUnmount(() => {
+  freshAlive = false
+  window.clearTimeout(freshTimer)
   window.removeEventListener('resize', resizeCharts)
+  document.removeEventListener('visibilitychange', onPageVisible)
   Object.values(charts).forEach(chart => chart?.dispose())
 })
 </script>
@@ -2142,13 +2296,77 @@ onBeforeUnmount(() => {
   box-sizing: border-box;
   display: grid;
   grid-template-columns: 360px minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   align-items: stretch;
   gap: 12px;
   overflow: hidden;
   background: transparent;
   color: #303133;
   font-size: 14px;
+}
+.crm-fresh {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  padding: 8px 10px;
+  background: #fff;
+  border: 1px solid #ebeef5;
+  border-radius: 4px;
+  box-shadow: 0 1px 4px rgba(0, 21, 41, 0.08);
+}
+.crm-fresh p {
+  flex: 1;
+  margin: 0;
+  color: #606266;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.crm-fresh :deep(.el-button) {
+  flex: none;
+}
+.crm-page.is-denied {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+.crm-denied {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  height: 100%;
+  padding: 48px 32px;
+  text-align: center;
+  background: #fff;
+  border: 1px solid #ebeef5;
+  border-radius: 4px;
+  box-shadow: 0 1px 4px rgba(0, 21, 41, 0.08);
+}
+.crm-denied__mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  color: #e6a23c;
+  background: #fdf6ec;
+  border-radius: 50%;
+}
+.crm-denied h2 {
+  margin: 16px 0 0;
+  color: #303133;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.crm-denied p {
+  max-width: 460px;
+  margin: 10px 0 0;
+  color: #606266;
+  font-size: 14px;
+  line-height: 1.75;
 }
 .crm-page.is-analysis {
   grid-template-columns: minmax(0, 1fr);
@@ -3164,6 +3382,11 @@ onBeforeUnmount(() => {
     height: auto;
     overflow: visible;
     grid-template-columns: 1fr;
+    grid-template-rows: auto;
+  }
+  .crm-denied {
+    min-height: 420px;
+    height: auto;
   }
   .crm-stage,
   .crm-stats {

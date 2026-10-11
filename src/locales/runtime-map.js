@@ -1688,6 +1688,12 @@ Object.assign(zhToEnMap, {
   '商品还没有对上库存品牌': 'No purchased item is matched to an inventory brand yet',
   '商品数': 'Items',
   '天数': 'Days',
+  '更新到最新': 'Update to latest',
+  '已更新为当前平台订单': 'Updated from current platform orders',
+  '需要平台订单权限': 'Platform order permission is required',
+  '这个界面的数据来自平台订单。当前账号没有平台订单权限，所以无法查看。请联系管理员分配平台订单权限。': 'This page reads platform orders. This account does not have platform order permission, so the data cannot be viewed. Ask an administrator to grant platform order permission.',
+  '每 {0} 分钟更新一次。正在更新。点右侧「更新到最新」会马上更新。': 'Updates every {0} minutes. Updating now. The button on the right updates immediately.',
+  '每 {0} 分钟更新一次。上次更新 {1}。点右侧「更新到最新」会马上更新。': 'Updates every {0} minutes. Last update {1}. The button on the right updates immediately.',
 })
 
 Object.assign(zhToEnMap, livePayrollMessages)

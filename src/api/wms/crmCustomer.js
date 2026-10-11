@@ -34,6 +34,14 @@ export function getCrmCustom(params) {
   })
 }
 
+export function recordCrmRefresh(section) {
+  const page = section === '客户详情' ? 'detail' : 'insights'
+  return request({
+    url: `/wms/crm/customers/refresh/${page}`,
+    method: 'post'
+  })
+}
+
 export function getCrmCustomer(platform, buyerKey, params) {
   return request({
     url: '/wms/crm/customers/detail',
