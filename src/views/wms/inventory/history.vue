@@ -26,11 +26,7 @@
           </el-radio-group>
         </el-form-item>
         <el-form-item class="filter-item" :label="tr('仓库')" prop="warehouseId">
-          <el-select style="width: 100%" v-model="queryParams.warehouseId" :placeholder="tr('请选择仓库')"
-                     filterable clearable>
-            <el-option v-for="item in useWmsStore().warehouseList" :key="item.id" :label="item.warehouseName"
-                       :value="item.id"/>
-          </el-select>
+          <WarehouseLocationSelect v-model="queryParams.warehouseId" clearable include-inactive />
         </el-form-item>
         <el-form-item class="filter-item" :label="tr('操作单号')" prop="orderNo">
           <el-input v-model="queryParams.orderNo" clearable :placeholder="tr('请输入操作单号')"></el-input>
@@ -121,7 +117,7 @@
         </el-table-column>
         <el-table-column :label="tr('仓库')" min-width="160" show-overflow-tooltip>
           <template #default="{ row }">
-            <div>{{ useWmsStore().warehouseMap.get(row.warehouseId)?.warehouseName }}</div>
+            <div>{{ row.locationName || useWmsStore().warehouseMap.get(row.warehouseId)?.warehouseName }}</div>
           </template>
         </el-table-column>
         <el-table-column :label="tr('操作前')" align="right" min-width="110">
@@ -172,6 +168,8 @@
 </template>
 
 <script setup name="InventoryHistory">
+import WarehouseLocationSelect from '@/components/WarehouseLocationSelect/index.vue'
+
 import { exportInventoryHistory, listInventoryHistory } from "@/api/wms/inventoryHistory";
 import {computed, getCurrentInstance, onMounted, reactive, ref} from "vue";
 import { useRouter } from 'vue-router'
@@ -324,13 +322,17 @@ function getOrderNo(row) {
 function canOpenOrderNoLink(row) {
   const orderNo = getOrderNo(row)
   const orderType = Number(row?.orderType)
-  return !!orderNo && (orderType === ORDER_TYPE_RECEIPT || orderType === ORDER_TYPE_SHIPMENT)
+  return !!orderNo && (orderType === ORDER_TYPE_RECEIPT || orderType === ORDER_TYPE_SHIPMENT || ([5,6].includes(orderType) && proxy?.$auth?.hasPermi('wms:roomTransfer:list')))
 }
 
 function openOrderNoLink(row) {
   if (!canOpenOrderNoLink(row)) return
   const orderNo = getOrderNo(row)
   const orderType = Number(row?.orderType)
+  if ([5,6].includes(orderType)) {
+    router.push({ path: '/inventory/room-transfer', query: { id: row.orderId } }).catch(() => {})
+    return
+  }
   if (orderType === ORDER_TYPE_RECEIPT) {
     router.push({ name: 'ReceiptOrder', query: { orderNo } }).catch(() => {})
     return

@@ -26,6 +26,8 @@ import Layout from '@/layout'
 
 // 公共路由
 export const constantRoutes = [
+  { path: '/inventory/room-transfer', component: Layout, hidden: true,
+    children: [{ path: '', name: 'RoomTransferScanner', component: () => import('@/views/wms/inventory/room-transfer/index.vue'), meta: { title: '扫码调货', titleEn: 'Room Transfer', noCache: true } }] },
   {
     path: '/redirect',
     component: Layout,

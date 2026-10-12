@@ -25,6 +25,7 @@ function setup() {
     $tab: { closeOpenPage: () => calls.push({ kind: 'close' }) }
   };
   const context = {
+    WarehouseLocationSelect: {},
     ...vue, console,
     getCurrentInstance: () => ({ proxy }), onMounted: () => {},
     useRoute: () => ({ query: {} }),

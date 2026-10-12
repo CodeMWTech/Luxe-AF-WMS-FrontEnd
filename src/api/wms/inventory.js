@@ -197,3 +197,10 @@ export function delInventory(id) {
     method: 'delete'
   })
 }
+
+// 库存模板导入：追加入库，文件整体成功或回滚。
+export function importInventoryFile(file) {
+  const data = new FormData()
+  data.append('file', file)
+  return request({ url: '/wms/inventory/importData', method: 'post', data, timeout: 120000 })
+}

@@ -12,20 +12,12 @@
             </el-col>
             <el-col :span="6">
               <el-form-item :label="tr('源仓库')" prop="sourceWarehouseId" :label-width="isEn ? '170px' : undefined">
-                <el-select v-model="form.sourceWarehouseId" :placeholder="sourceWarehousePlaceholder" @change="handleChangeSourceWarehouse"
-                           filterable>
-                  <el-option v-for="item in useWmsStore().warehouseList" :key="item.id" :label="item.warehouseName"
-                             :value="item.id"/>
-                </el-select>
+                <WarehouseLocationSelect v-model="form.sourceWarehouseId" @change="handleChangeSourceWarehouse" />
               </el-form-item>
             </el-col>
             <el-col :span="6">
               <el-form-item :label="tr('目标仓库')" prop="targetWarehouseId" :label-width="isEn ? '170px' : undefined">
-                <el-select v-model="form.targetWarehouseId" :placeholder="targetWarehousePlaceholder" @change="handleChangeTargetWarehouse"
-                           filterable style="width: 100%">
-                  <el-option v-for="item in useWmsStore().warehouseList" :key="item.id" :label="item.warehouseName"
-                             :value="item.id"/>
-                </el-select>
+                <WarehouseLocationSelect v-model="form.targetWarehouseId" @change="handleChangeTargetWarehouse" />
               </el-form-item>
             </el-col>
           </el-row>
@@ -177,6 +169,8 @@
 </template>
 
 <script setup name="MovementOrderEdit">
+import WarehouseLocationSelect from '@/components/WarehouseLocationSelect/index.vue'
+
 import {computed, getCurrentInstance, onMounted, reactive, ref, toRef, toRefs, watch} from "vue";
 import {addMovementOrder, getMovementOrder, updateMovementOrder, movement} from "@/api/wms/movementOrder";
 import {ElMessage, ElMessageBox} from "element-plus";

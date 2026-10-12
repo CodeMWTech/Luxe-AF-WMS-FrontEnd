@@ -12,11 +12,7 @@
             </el-col>
             <el-col :span="6">
               <el-form-item :label="tr('仓库')" prop="warehouseId">
-                <el-select v-model="form.warehouseId" :placeholder="selectPlaceholder('仓库')" @change="handleChangeWarehouse"
-                           filterable>
-                  <el-option v-for="item in useWmsStore().warehouseList" :key="item.id" :label="item.warehouseName"
-                             :value="item.id"/>
-                </el-select>
+                <WarehouseLocationSelect v-model="form.warehouseId" @change="handleChangeWarehouse" />
               </el-form-item>
             </el-col>
             <el-col :span="6">
@@ -196,6 +192,8 @@
 </template>
 
 <script setup name="ShipmentOrderEdit">
+import WarehouseLocationSelect from '@/components/WarehouseLocationSelect/index.vue'
+
 import {computed, getCurrentInstance, h, onMounted, reactive, ref, toRef, toRefs, watch} from "vue";
 import {addShipmentOrder, getShipmentOrder, updateShipmentOrder, shipment} from "@/api/wms/shipmentOrder";
 import {ElMessage, ElMessageBox} from "element-plus";

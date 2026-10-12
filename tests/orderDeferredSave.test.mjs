@@ -33,7 +33,7 @@ function setup(type) {
     getWarehouseAndSkuKey: row => `${row.warehouseId}:${row.skuId ?? row.itemSku?.id}`,
     getSourceWarehouseAndSkuKey: row => `${row.sourceWarehouseId}:${row.skuId ?? row.itemSku?.id}`,
     numSub: (a,b) => Number((a-b).toFixed(2)), generateNo: () => 'TEST',
-    SkuSelect: {}, InventorySelect: {},
+    SkuSelect: {}, InventorySelect: {}, WarehouseLocationSelect: {},
     ElMessage: Object.fromEntries(['success','warning','error'].map(level => [level, text => messages.push({level,text})])),
     ElMessageBox: { alert: () => Promise.resolve() },
     addReceiptOrder: response('add'), updateReceiptOrder: response('save'), warehousing: response('complete'),
