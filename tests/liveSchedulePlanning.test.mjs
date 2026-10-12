@@ -60,6 +60,40 @@ async function pageFixture(api = {}, editable = true, storage) {
   const create = new Function('modules', 'localStorage', compiled.replace(/^import \{([^}]+)\} from ['"]([^'"]+)['"];?$/gm, (_, bindings, name) => `const {${bindings.replace(/\bas\b/g, ':')}} = modules[${JSON.stringify(name)}]`).replace(/^import (\w+) from ['"]([^'"]+)['"];?$/gm, (_, binding, name) => `const ${binding} = modules[${JSON.stringify(name)}]`).replace('export default', 'return'))
   return create(modules, storage).setup({}, { expose() {}, emit() {} })
 }
+test('new and historical schedules submit minute precision with seconds fixed at zero', async () => {
+  const creates = [], updates = []
+  const page = await pageFixture({
+    addSchedule: async payload => { creates.push(payload) },
+    updateSchedule: async payload => { updates.push(payload) }
+  })
+  await page.load(); page.formRef.value = { validate: async () => true }
+  await page.openDialog()
+  assert.equal(page.dialog.form.startTime, '09:00')
+  assert.equal(page.dialog.form.endTime, '17:00')
+  Object.assign(page.dialog.form, { employeeId: '9007199254740993', startTime: '11:00', endTime: '15:00' })
+  await page.submit()
+  assert.equal(creates[0].startTime, '11:00:00')
+  assert.equal(creates[0].endTime, '15:00:00')
+
+  await page.openDialog(schedule({ startTime: '11:00:23', endTime: '15:00:49' }))
+  assert.equal(page.dialog.form.startTime, '11:00')
+  assert.equal(page.dialog.form.endTime, '15:00')
+  await page.submit()
+  assert.equal(updates[0].startTime, '11:00:00')
+  assert.equal(updates[0].endTime, '15:00:00')
+})
+
+test('historical shifts within the same minute cannot pass end-time validation', async () => {
+  const page = await pageFixture()
+  await page.load()
+  await page.openDialog(schedule({ startTime: '11:00:01', endTime: '11:00:59' }))
+  let error
+  page.validateEndTime({}, page.dialog.form.endTime, result => { error = result })
+  assert.equal(error.message, '结束时间必须晚于开始时间')
+  page.validateEndTime({}, null, result => { error = result })
+  assert.equal(error.message, '请选择结束时间')
+})
+
 test('failed color save keeps old configuration and supports retry with shared server result', async () => {
   let fail = true
   const page = await pageFixture({ updateScheduleOperatorColor: async (employeeId, color) => { if (fail) throw Error('offline'); return { data: { employeeId, color: color.toUpperCase() } } } })

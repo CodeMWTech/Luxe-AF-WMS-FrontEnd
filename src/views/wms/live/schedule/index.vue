@@ -62,8 +62,8 @@
               <small v-if="hasScheduleRateScope && !dialog.loadingRateTypes && !dialog.rateTypes.length">{{ tr('请先在费率配置中启用该主播、直播平台和日期对应的场次类型') }}</small>
             </div>
           </el-form-item>
-          <el-form-item :label="tr('开始时间')" prop="startTime"><el-time-picker v-model="dialog.form.startTime" value-format="HH:mm:ss" format="HH:mm" @change="formRef?.validateField('endTime')" /></el-form-item>
-          <el-form-item :label="tr('结束时间')" prop="endTime"><el-time-picker v-model="dialog.form.endTime" value-format="HH:mm:ss" format="HH:mm" /></el-form-item>
+          <el-form-item :label="tr('开始时间')" prop="startTime"><el-time-picker v-model="dialog.form.startTime" value-format="HH:mm" format="HH:mm" @change="formRef?.validateField('endTime')" /></el-form-item>
+          <el-form-item :label="tr('结束时间')" prop="endTime"><el-time-picker v-model="dialog.form.endTime" value-format="HH:mm" format="HH:mm" /></el-form-item>
           <el-form-item :label="tr('排班状态')"><el-select v-model="dialog.form.scheduleStatus"><el-option :label="tr('已确认')" value="CONFIRMED" /><el-option :label="tr('待确认')" value="PENDING" /><el-option :label="tr('已取消')" value="CANCELLED" /></el-select></el-form-item>
           <el-form-item :label="tr('运营')" prop="operatorId">
             <el-select v-model="dialog.form.operatorId" filterable clearable :placeholder="tr('请选择运营')">
@@ -268,7 +268,7 @@ async function handleAccountChange() {
 }
 async function openDialog(row = {}) {
   if (!row.id && !canEdit.value) return
-  dialog.form = { id: row.id, employeeName: row.employeeName || '', scheduleDate: row.scheduleDate || defaultScheduleDate(), employeeId: row.employeeId || null, accountId: row.accountId || null, rateTypeId: row.rateTypeId || null, startTime: row.startTime || '09:00:00', endTime: row.endTime || '17:00:00', remark: row.remark || '', scheduleStatus: row.scheduleStatus || 'CONFIRMED', operatorId: row.operatorEmployeeId ?? row.operatorId ?? null, operatorName: row.operatorName || '' }
+  dialog.form = { id: row.id, employeeName: row.employeeName || '', scheduleDate: row.scheduleDate || defaultScheduleDate(), employeeId: row.employeeId || null, accountId: row.accountId || null, rateTypeId: row.rateTypeId || null, startTime: row.startTime?.slice(0, 5) || '09:00', endTime: row.endTime?.slice(0, 5) || '17:00', remark: row.remark || '', scheduleStatus: row.scheduleStatus || 'CONFIRMED', operatorId: row.operatorEmployeeId ?? row.operatorId ?? null, operatorName: row.operatorName || '' }
   dialog.loaded = row.id ? { employeeId: dialog.form.employeeId, scheduleDate: dialog.form.scheduleDate, accountId: dialog.form.accountId } : null
   if (dialog.form.operatorId != null) dialog.form.operatorId = operators.value.find(o => idKey(o.employeeId) === idKey(dialog.form.operatorId))?.employeeId || dialog.form.operatorId
   dialog.open = true
@@ -281,6 +281,8 @@ async function submit() {
   const form = dialog.form
   if (!hostOptions.value.some(host => idKey(host.value) === idKey(form.employeeId))) return proxy.$modal.msgWarning(tr('请选择岗位为主播的人员'))
   const { operatorId, operatorName, ...payload } = form
+  payload.startTime = `${form.startTime.slice(0, 5)}:00`
+  payload.endTime = `${form.endTime.slice(0, 5)}:00`
   payload.operatorEmployeeId = operatorId || null
   dialog.saving = true
   try { await (form.id ? updateSchedule(payload) : addSchedule(payload)); proxy.$modal.msgSuccess(tr('保存成功')); dialog.open = false; await load() }
