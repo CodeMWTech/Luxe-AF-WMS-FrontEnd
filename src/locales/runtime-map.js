@@ -1,6 +1,8 @@
 import livePayrollMessages from './live-payroll'
 
 const zhToEnMap = {
+  '无法确认目标位置状态，请刷新单据后继续': 'Unable to check the destination. Refresh the order before continuing.',
+  '无法确认调货结果，请刷新单据后继续': 'Unable to confirm the transfer result. Refresh the order before continuing.',
   "一级仓库": "Warehouse",
   "房间": "Room",
   "请选择一级仓库": "Select warehouse",
