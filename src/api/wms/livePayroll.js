@@ -103,3 +103,7 @@ export const previewScheduleSms = data => request({ url: `${base}/schedule-sms/p
 export const sendScheduleSms = data => request({ url: `${base}/schedule-sms/send`, method: 'post', data, timeout: 30000 })
 export const listScheduleSmsRecords = params => request({ url: `${base}/schedule-sms/records`, method: 'get', params })
 export const refreshScheduleSmsStatus = id => request({ url: `${base}/schedule-sms/records/${id}/refresh`, method: 'post', timeout: 25000 })
+
+export const previewBulkSettlement = data => request({ url: `${base}/settlements/bulk/preview`, method: 'post', data })
+export const confirmBulkSettlement = data => request({ url: `${base}/settlements/bulk`, method: 'post', data })
+export const saveSettlementMemo = (id, memo) => request({ url: `${base}/settlements/${id}/memo`, method: 'put', data: { memo } })

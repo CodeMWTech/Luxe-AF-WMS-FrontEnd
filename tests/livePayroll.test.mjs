@@ -82,8 +82,8 @@ test('settlement sends no write before confirmation, keeps request identity afte
   const page=await setup('settlements/index.vue',{
     vue:vueModule,'../components/LiveEmployeeSelect.vue':{},'../shared':shared,'./settlementDisplay':display,
     '@/api/wms/livePayroll':{
-      getLiveOptions:async()=>({employees:[]}),listSettlementCandidates:async()=>({data:snapshot}),previewSettlement:async()=>({data:snapshot}),
-      confirmSettlement:async body=>{calls.push(body);if(states.fail)throw new Error('Network failure')},
+      getLiveOptions:async()=>({employees:[]}),listSettlementCandidates:async()=>({data:snapshot}),previewBulkSettlement:async()=>({data:snapshot}),
+      confirmBulkSettlement:async body=>{calls.push(body);if(states.fail)throw new Error('Network failure');return {data:[{id:'100'}]}},
       listSettlements:async()=>({rows:[],total:0})
     }
   })
@@ -97,14 +97,14 @@ test('settlement sends no write before confirmation, keeps request identity afte
   states.fail=false;await page.submit()
   assert.equal(calls.length,2);assert.equal(calls[0].requestKey,calls[1].requestKey)
   assert.equal(calls[0].token,'preview-token')
-  assert.deepEqual(calls[0].streamIds,['50']);assert.deepEqual(calls[0].commissionIds,[])
+  assert.deepEqual(calls[0].groups[0].streamIds,['50']);assert.deepEqual(calls[0].groups[0].commissionIds,[])
   assert.equal(page.review.open,false)
 })
 test('settled originals and unconfirmed adjustments cannot enter settlement confirmation',async()=>{
   let requests=0
   const page=await setup('settlements/index.vue',{
     vue:vueModule,'../components/LiveEmployeeSelect.vue':{},'../shared':shared,'./settlementDisplay':display,
-    '@/api/wms/livePayroll':{previewSettlement:async()=>{requests++;return{data:{}}}}
+    '@/api/wms/livePayroll':{previewBulkSettlement:async()=>{requests++;return{data:{}}}}
   })
   for (const row of [{type:'STREAM',id:'50',status:'SETTLED'}, {type:'ADJUSTMENT',id:'70',status:'PENDING'}, {type:'STREAM',id:'50',status:'CONFIRMED'}]) {
     page.selection.value=[row]
@@ -283,8 +283,8 @@ test('automatic settlement previews use the latest date when responses arrive ou
   const page=await setup('settlements/index.vue',{
     vue:vueModule,'./ManualAdjustmentDialog.vue':{},'../components/LiveEmployeeSelect.vue':{},'../shared':shared,'./settlementDisplay':display,
     '@/api/wms/livePayroll':{
-      previewSettlement:body=>new Promise(resolve=>requests.push({body,resolve})),
-      confirmSettlement:async body=>writes.push(body),
+      previewBulkSettlement:body=>new Promise(resolve=>requests.push({body,resolve})),
+      confirmBulkSettlement:async body=>{writes.push(body);return {data:[{id:'100'}]}},
       listSettlementCandidates:async()=>({data:{}}),listSettlements:async()=>({rows:[],total:0})
     }
   })
@@ -312,8 +312,8 @@ test('a failed automatic preview blocks confirmation until a date change succeed
   const page=await setup('settlements/index.vue',{
     vue:vueModule,'./ManualAdjustmentDialog.vue':{},'../components/LiveEmployeeSelect.vue':{},'../shared':shared,'./settlementDisplay':display,
     '@/api/wms/livePayroll':{
-      previewSettlement:async()=>{requests++;if(fail)throw new Error('Network failure');return {data:{token:'fresh'}}},
-      confirmSettlement:async()=>{writes++}
+      previewBulkSettlement:async()=>{requests++;if(fail)throw new Error('Network failure');return {data:{token:'fresh'}}},
+      confirmBulkSettlement:async()=>{writes++}
     }
   })
   page.review.command={employeeId:'1'};page.review.remark='已核对';page.review.preview={token:'old'}
@@ -563,4 +563,94 @@ test('stream submission sends actual minutes and excludes duration input fields'
   assert.equal(payload.actualDurationMinutes, 95)
   assert.equal('actualHours' in payload, false)
   assert.equal('actualMinutes' in payload, false)
+})
+
+test('80 selected items group by eight host IDs, preserving large IDs and deriving each period',()=>{
+  const rows=Array.from({length:80},(_,i)=>({
+    type:i%4===0?'STREAM':i%4===1?'COMMISSION':i%4===2?'ADJUSTMENT':'MANUAL',
+    id:String(BigInt('2090000000000000000')+BigInt(i)),
+    employeeId:String(BigInt('2090000000000000100')+BigInt(i%8)), employeeName:'Same name',
+    businessDate:'2026-07-01',postingDate:i%2?'2026-08-31':'2026-08-01'
+  }))
+  const groups=display.selectedSettlementGroups(rows)
+  assert.equal(groups.length,8)
+  for (const group of groups) {
+    const ids=[...group.streamIds,...group.commissionIds,...group.adjustmentIds,...group.manualAdjustmentIds]
+    assert.equal(ids.length,10)
+    assert.ok(ids.every(id=>rows.some(row=>row.id===id && row.employeeId===group.employeeId)))
+    assert.equal(group.startDate,Number(BigInt(group.employeeId)%2n)?'2026-08-31':'2026-08-01')
+  }
+  const filtered=display.selectedSettlementGroups(rows,['2026-08-01','2026-08-31'])
+  assert.ok(filtered.every(group=>group.startDate==='2026-08-01' && group.endDate==='2026-08-31'))
+  assert.throws(()=>display.selectedSettlementGroups([{employeeId:null}]),/缺少主播/)
+})
+
+test('host and date sorting preserves selection, sums and input rows and can be cancelled',async()=>{
+  const rows=[
+    {key:'1',employeeName:'zoe',businessDate:'2026-12-01',postingDate:'2027-01-01',amount:7},
+    {key:'2',employeeName:'Alice',businessDate:'2026-01-01',postingDate:'2026-12-31',amount:-2},
+    {key:'3',employeeName:'bob',businessDate:'2026-02-01',postingDate:'2026-11-01',amount:3},
+    {key:'4',employeeName:'',businessDate:null,postingDate:null,amount:0}
+  ]
+  assert.deepEqual(display.sortSettlementCandidates(rows,{prop:'employeeName',order:'ascending'}).map(row=>row.key),['2','3','1','4'])
+  assert.deepEqual(display.sortSettlementCandidates(rows,{prop:'employeeName',order:'descending'}).map(row=>row.key),['1','3','2','4'])
+  assert.deepEqual(display.sortSettlementCandidates(rows,{prop:'businessDate',order:'ascending'}).map(row=>row.key),['2','3','1','4'])
+  assert.deepEqual(display.sortSettlementCandidates(rows,{prop:'postingDate',order:'descending'}).map(row=>row.key),['1','2','3','4'])
+  assert.equal(display.sortSettlementCandidates(rows,{prop:'postingDate',order:null}),rows)
+  assert.deepEqual(rows.map(row=>row.key),['1','2','3','4'])
+  const model=await setup('settlements/index.vue',{
+    vue:vueModule,'../shared':shared,'./settlementDisplay':display,
+    '@/api/wms/livePayroll':{listSettlementCandidates:async()=>({data:{streams:[]}})}
+  })
+  model.selection.value=[rows[0],rows[1]]
+  model.sortCandidates({prop:'employeeName',order:'ascending'})
+  assert.deepEqual(model.selection.value.map(row=>row.key),['1','2'])
+  assert.equal(model.selectedAmount.value,5)
+  let cleared=0
+  model.candidateTable.value={clearSelection(){cleared++}}
+  await model.loadCandidates()
+  assert.equal(cleared,1);assert.equal(model.selection.value.length,0)
+})
+
+test('multi-host confirmation sends one batch request with exact per-host IDs',async()=>{
+  const requests=[],writes=[]
+  const model=await setup('settlements/index.vue',{
+    vue:vueModule,'../shared':shared,'./settlementDisplay':display,
+    '@/api/wms/livePayroll':{
+      previewBulkSettlement:async body=>{requests.push(body);return {data:{groups:body.groups.map(group=>({...group,preview:{}})),token:'bulk-token'}}},
+      confirmBulkSettlement:async body=>{writes.push(body);return {data:[{id:'1'},{id:'2'}]}},
+      listSettlementCandidates:async()=>({data:{}}),listSettlements:async()=>({rows:[],total:0})
+    }
+  })
+  model.selection.value=[
+    {type:'STREAM',id:'1',employeeId:'10',businessDate:'2026-08-01',status:'OPEN'},
+    {type:'MANUAL',id:'2',employeeId:'11',businessDate:'2026-07-01',postingDate:'2026-08-02',status:'OPEN'}
+  ]
+  await model.prepare()
+  assert.equal(requests.length,1);assert.equal(requests[0].groups.length,2);assert.equal(writes.length,0)
+  model.review.remark='checked'
+  await model.submit()
+  assert.equal(writes.length,1);assert.equal(writes[0].token,'bulk-token')
+  assert.deepEqual(writes[0].groups.map(group=>[group.employeeId,group.streamIds,group.manualAdjustmentIds]),[['10',['1'],[]],['11',[],['2']]])
+})
+
+test('Memo preloads historical text, allows repeated edits and clearing, and keeps paid unchanged',async()=>{
+  const writes=[],prompts=[],values=['new memo','']
+  const row={id:'5',paid:true,paymentReference:'old reference'}
+  const model=await setup('settlements/index.vue',{
+    vue:{...vueModule,getCurrentInstance:()=>({proxy:{$modal:{msgSuccess(){}},$prompt:async(message,title,options)=>{
+      prompts.push({message,title,options});return {value:values.shift()}
+    }}})},
+    '../shared':shared,'./settlementDisplay':display,
+    '@/api/wms/livePayroll':{saveSettlementMemo:async(id,memo)=>writes.push([id,memo]),listSettlements:async()=>({rows:[],total:0})}
+  })
+  model.detail.batch=row
+  await model.editMemo(row)
+  assert.equal(prompts[0].title,'备注');assert.equal(prompts[0].options.inputValue,'old reference')
+  assert.equal(prompts[0].options.inputValidator(''),true)
+  assert.equal(prompts[0].options.inputValidator('a'.repeat(1000)),true)
+  assert.notEqual(prompts[0].options.inputValidator('a'.repeat(1001)),true)
+  assert.equal(model.detail.batch.memo,'new memo');assert.equal(row.paid,true)
+  await model.editMemo(row)
+  assert.deepEqual(writes,[['5','new memo'],['5','']]);assert.equal(model.detail.batch.memo,'')
 })

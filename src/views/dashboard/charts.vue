@@ -524,19 +524,19 @@ function openAllBrandDialog() {
   allBrandDialogVisible.value = true
 }
 
-const TURNOVER_LABELS = ['1-7', '8-15', '15+']
-const TURNOVER_ORDER = { '1-7': 0, '8-15': 1, '15+': 2 }
+const TURNOVER_LABELS = ['1-45', '46-90', '90+']
+const TURNOVER_ORDER = { '1-45': 0, '46-90': 1, '90+': 2 }
 
 function turnoverLabel(apiLabel) {
-  if (apiLabel === '15+') return tr('15天以上')
-  if (apiLabel === '1-7') return tr('1-7天')
-  if (apiLabel === '8-15') return tr('8-15天')
+  if (apiLabel === '90+') return tr('90天以上')
+  if (apiLabel === '1-45') return tr('1-45天')
+  if (apiLabel === '46-90') return tr('46-90天')
   return apiLabel
 }
 
 function turnoverMeta(apiLabel) {
-  if (apiLabel === '15+') return { tag: tr('预警'), tagType: 'danger', color: '#ef5454' }
-  if (apiLabel === '8-15') return { tag: tr('提醒'), tagType: 'warning', color: '#f5ac2e' }
+  if (apiLabel === '90+') return { tag: tr('预警'), tagType: 'danger', color: '#ef5454' }
+  if (apiLabel === '46-90') return { tag: tr('提醒'), tagType: 'warning', color: '#f5ac2e' }
   return { tag: tr('健康'), tagType: 'success', color: '#24c08a' }
 }
 
@@ -617,30 +617,30 @@ const profitSummary = computed(() => {
 
 const slowMovingInsight = computed(() => {
   const rows = turnoverRows.value
-  const slow = rows.find((r) => r.label === tr('15天以上'))
+  const slow = rows.find((r) => r.label === tr('90天以上'))
   if (!slow) return { type: 'success', text: '' }
   const rate = Number(slow.rate)
   if (rate < 25) {
     return {
       type: 'success',
       text: isEn.value
-        ? `Inventory turnover is healthy overall. 15+ day inventory is ${formatNumber(slow.value)} pcs, ${slow.rate}% of total inventory. Keep the current replenishment pace and monitor slow-moving SKUs.`
-        : `目前库存周转整体健康，15天以上库存为${formatNumber(slow.value)}件，占总库存${slow.rate}%，建议保持当前补货节奏并持续关注低动销SKU。`
+        ? `Inventory turnover is healthy overall. Inventory older than 90 days is ${formatNumber(slow.value)} pcs, ${slow.rate}% of total inventory. Keep the current replenishment pace and monitor slow-moving SKUs.`
+        : `目前库存周转整体健康，90天以上库存为${formatNumber(slow.value)}件，占总库存${slow.rate}%，建议保持当前补货节奏并持续关注低动销SKU。`
     }
   }
   if (rate < 50) {
     return {
       type: 'warning',
       text: isEn.value
-        ? `Warning: 15+ day inventory has reached ${slow.rate}%. Review slow-moving SKUs and reduce buildup with promotions, transfers, or paused replenishment.`
-        : `提醒：15天以上库存占比达到${slow.rate}%，建议复核滞销SKU，结合促销、调拨或补货暂停策略降低积压。`
+        ? `Warning: inventory older than 90 days has reached ${slow.rate}%. Review slow-moving SKUs and reduce buildup with promotions, transfers, or paused replenishment.`
+        : `提醒：90天以上库存占比达到${slow.rate}%，建议复核滞销SKU，结合促销、调拨或补货暂停策略降低积压。`
     }
   }
   return {
     type: 'danger',
     text: isEn.value
-      ? `Alert: 15+ day inventory has reached ${slow.rate}%. Prioritize slow-moving SKUs to reduce low-turnover stock; current 15+ day inventory is ${formatNumber(slow.value)} pcs.`
-      : `预警：15天以上库存占比已达到${slow.rate}%，建议优先处理滞销SKU，减少低动销库存积压；当前15天以上库存为${formatNumber(slow.value)}件。`
+      ? `Alert: inventory older than 90 days has reached ${slow.rate}%. Prioritize slow-moving SKUs to reduce low-turnover stock; current inventory older than 90 days is ${formatNumber(slow.value)} pcs.`
+      : `预警：90天以上库存占比已达到${slow.rate}%，建议优先处理滞销SKU，减少低动销库存积压；当前90天以上库存为${formatNumber(slow.value)}件。`
   }
 })
 

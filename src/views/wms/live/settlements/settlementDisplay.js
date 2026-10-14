@@ -33,3 +33,27 @@ function manualDescription(row, tr) {
 }
 
 function defaultText(text, values = []) { return text.replace(/\{(\d+)\}/g, (match, index) => values[index] == null ? match : String(values[index])) }
+
+// IDs remain strings to preserve bigint employee/source identity.
+export function selectedSettlementGroups(rows, dateRange) {
+  const groups = new Map()
+  for (const row of rows) {
+    if (row.employeeId == null) throw new Error('所选明细缺少主播，请重新查询')
+    const key = String(row.employeeId)
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key).push(row)
+  }
+  return [...groups.values()].map(items => ({ ...selectedSettlementScope(items, dateRange), ...selectedSettlementIds(items) }))
+}
+
+const hostCollator = new Intl.Collator('en', { sensitivity: 'base', numeric: false })
+export function sortSettlementCandidates(rows, { prop, order } = {}) {
+  if (!order || !['employeeName', 'businessDate', 'postingDate'].includes(prop)) return rows
+  const direction = order === 'descending' ? -1 : 1
+  return [...rows].sort((a, b) => {
+    const left = String(a[prop] || ''), right = String(b[prop] || '')
+    if (!left || !right) return left ? -1 : right ? 1 : 0
+    const comparison = prop === 'employeeName' ? hostCollator.compare(left, right) : left.localeCompare(right)
+    return direction * comparison
+  })
+}

@@ -1,5 +1,12 @@
 // 主播薪酬业务文案；参数只插值，不翻译姓名、备注等业务数据。
 export default {
+  "所选明细缺少主播，请重新查询": "Selected items are missing a host. Please refresh the list",
+  "将按主播生成 {0} 张结算单": "Create {0} settlement statements grouped by host",
+  "已生成 {0} 张结算单，原记录已锁定": "Created {0} settlement statements. Source records are locked",
+  "条明细": "items",
+  "填写备注，可修改或清空，最多 1000 字。": "Enter a memo. You can edit or clear it, up to 1000 characters.",
+  "备注不能超过 1000 字": "Memo cannot exceed 1000 characters",
+  "备注已保存": "Memo saved",
   "短信记录": "SMS records",
   "发送排班短信": "Send schedule SMS",
   "排班短信记录": "Schedule SMS records",

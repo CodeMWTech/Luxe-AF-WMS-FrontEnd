@@ -180,3 +180,14 @@ test('settings render saved names and descriptions verbatim even when they match
   assert.equal(model.rateTypes.value[0].description, '未结算')
   assert.equal(model.specialTypes.value[0].typeName, '奖金')
 })
+
+test('Memo label follows the page language and editable text stays verbatim',async()=>{
+  const context=languageContext('zh-cn')
+  const model=await page('settlements/index.vue',context)
+  model.detail.batch={memo:'用户备注 memo 保留',snapshotJson:'{}'}
+  assert.equal(model.memoLabel.value,'备注')
+  context.settings.language='en'
+  assert.equal(model.memoLabel.value,'Memo')
+  assert.equal(model.detail.batch.memo,'用户备注 memo 保留')
+  assert.equal(model.tr('将按主播生成 {0} 张结算单',[8]),'Create 8 settlement statements grouped by host')
+})
