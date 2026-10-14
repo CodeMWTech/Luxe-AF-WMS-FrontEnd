@@ -97,6 +97,13 @@ export function employeeStatusLabel(value) {
 export function settlementStatusLabel(value) {
   return ({ OPEN: '未结算', SETTLED: '已结算' })[value] || '未知状态'
 }
+// Payment progress is specific to stream entries; other settlement labels keep their existing meaning.
+export function streamSettlementDisplay(row, english = false) {
+  if (row.settlementStatus === 'OPEN') return { label: '未结算', type: 'info' }
+  if (row.settlementStatus !== 'SETTLED' || row.settlementId == null || typeof row.settlementPaid !== 'boolean') return { label: '未知状态', type: 'info' }
+  if (row.settlementPaid) return { label: '已结算', type: 'success' }
+  return { label: english ? 'Pending payment' : '待结算', type: 'warning' }
+}
 export function adjustmentStatusLabel(value) {
   return ({ PENDING: '待确认', CONFIRMED: '待结算', SETTLED: '已结算', VOID: '已作废', APPLIED: '已重算' })[value] || value
 }

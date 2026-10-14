@@ -82,8 +82,8 @@ test('settlement sends no write before confirmation, keeps request identity afte
   const page=await setup('settlements/index.vue',{
     vue:vueModule,'../components/LiveEmployeeSelect.vue':{},'../shared':shared,'./settlementDisplay':display,
     '@/api/wms/livePayroll':{
-      getLiveOptions:async()=>({employees:[]}),listSettlementCandidates:async()=>({data:snapshot}),previewSettlement:async()=>({data:snapshot}),
-      confirmSettlement:async body=>{calls.push(body);if(states.fail)throw new Error('Network failure')},
+      getLiveOptions:async()=>({employees:[]}),listSettlementCandidates:async()=>({data:snapshot}),previewBulkSettlement:async()=>({data:snapshot}),
+      confirmBulkSettlement:async body=>{calls.push(body);if(states.fail)throw new Error('Network failure');return {data:[{id:'100'}]}},
       listSettlements:async()=>({rows:[],total:0})
     }
   })
@@ -97,14 +97,14 @@ test('settlement sends no write before confirmation, keeps request identity afte
   states.fail=false;await page.submit()
   assert.equal(calls.length,2);assert.equal(calls[0].requestKey,calls[1].requestKey)
   assert.equal(calls[0].token,'preview-token')
-  assert.deepEqual(calls[0].streamIds,['50']);assert.deepEqual(calls[0].commissionIds,[])
+  assert.deepEqual(calls[0].groups[0].streamIds,['50']);assert.deepEqual(calls[0].groups[0].commissionIds,[])
   assert.equal(page.review.open,false)
 })
 test('settled originals and unconfirmed adjustments cannot enter settlement confirmation',async()=>{
   let requests=0
   const page=await setup('settlements/index.vue',{
     vue:vueModule,'../components/LiveEmployeeSelect.vue':{},'../shared':shared,'./settlementDisplay':display,
-    '@/api/wms/livePayroll':{previewSettlement:async()=>{requests++;return{data:{}}}}
+    '@/api/wms/livePayroll':{previewBulkSettlement:async()=>{requests++;return{data:{}}}}
   })
   for (const row of [{type:'STREAM',id:'50',status:'SETTLED'}, {type:'ADJUSTMENT',id:'70',status:'PENDING'}, {type:'STREAM',id:'50',status:'CONFIRMED'}]) {
     page.selection.value=[row]
@@ -283,8 +283,8 @@ test('automatic settlement previews use the latest date when responses arrive ou
   const page=await setup('settlements/index.vue',{
     vue:vueModule,'./ManualAdjustmentDialog.vue':{},'../components/LiveEmployeeSelect.vue':{},'../shared':shared,'./settlementDisplay':display,
     '@/api/wms/livePayroll':{
-      previewSettlement:body=>new Promise(resolve=>requests.push({body,resolve})),
-      confirmSettlement:async body=>writes.push(body),
+      previewBulkSettlement:body=>new Promise(resolve=>requests.push({body,resolve})),
+      confirmBulkSettlement:async body=>{writes.push(body);return {data:[{id:'100'}]}},
       listSettlementCandidates:async()=>({data:{}}),listSettlements:async()=>({rows:[],total:0})
     }
   })
@@ -312,8 +312,8 @@ test('a failed automatic preview blocks confirmation until a date change succeed
   const page=await setup('settlements/index.vue',{
     vue:vueModule,'./ManualAdjustmentDialog.vue':{},'../components/LiveEmployeeSelect.vue':{},'../shared':shared,'./settlementDisplay':display,
     '@/api/wms/livePayroll':{
-      previewSettlement:async()=>{requests++;if(fail)throw new Error('Network failure');return {data:{token:'fresh'}}},
-      confirmSettlement:async()=>{writes++}
+      previewBulkSettlement:async()=>{requests++;if(fail)throw new Error('Network failure');return {data:{token:'fresh'}}},
+      confirmBulkSettlement:async()=>{writes++}
     }
   })
   page.review.command={employeeId:'1'};page.review.remark='已核对';page.review.preview={token:'old'}
@@ -563,4 +563,222 @@ test('stream submission sends actual minutes and excludes duration input fields'
   assert.equal(payload.actualDurationMinutes, 95)
   assert.equal('actualHours' in payload, false)
   assert.equal('actualMinutes' in payload, false)
+})
+
+test('80 selected items group by eight host IDs, preserving large IDs and deriving each period',()=>{
+  const rows=Array.from({length:80},(_,i)=>({
+    type:i%4===0?'STREAM':i%4===1?'COMMISSION':i%4===2?'ADJUSTMENT':'MANUAL',
+    id:String(BigInt('2090000000000000000')+BigInt(i)),
+    employeeId:String(BigInt('2090000000000000100')+BigInt(i%8)), employeeName:'Same name',
+    businessDate:'2026-07-01',postingDate:i%2?'2026-08-31':'2026-08-01'
+  }))
+  const groups=display.selectedSettlementGroups(rows)
+  assert.equal(groups.length,8)
+  for (const group of groups) {
+    const ids=[...group.streamIds,...group.commissionIds,...group.adjustmentIds,...group.manualAdjustmentIds]
+    assert.equal(ids.length,10)
+    assert.ok(ids.every(id=>rows.some(row=>row.id===id && row.employeeId===group.employeeId)))
+    assert.equal(group.startDate,Number(BigInt(group.employeeId)%2n)?'2026-08-31':'2026-08-01')
+  }
+  const filtered=display.selectedSettlementGroups(rows,['2026-08-01','2026-08-31'])
+  assert.ok(filtered.every(group=>group.startDate==='2026-08-01' && group.endDate==='2026-08-31'))
+  assert.throws(()=>display.selectedSettlementGroups([{employeeId:null}]),/缺少主播/)
+})
+
+test('host and date sorting preserves selection, sums and input rows and can be cancelled',async()=>{
+  const rows=[
+    {key:'1',employeeName:'zoe',businessDate:'2026-12-01',postingDate:'2027-01-01',amount:7},
+    {key:'2',employeeName:'Alice',businessDate:'2026-01-01',postingDate:'2026-12-31',amount:-2},
+    {key:'3',employeeName:'bob',businessDate:'2026-02-01',postingDate:'2026-11-01',amount:3},
+    {key:'4',employeeName:'',businessDate:null,postingDate:null,amount:0}
+  ]
+  assert.deepEqual(display.sortSettlementCandidates(rows,{prop:'employeeName',order:'ascending'}).map(row=>row.key),['2','3','1','4'])
+  assert.deepEqual(display.sortSettlementCandidates(rows,{prop:'employeeName',order:'descending'}).map(row=>row.key),['1','3','2','4'])
+  assert.deepEqual(display.sortSettlementCandidates(rows,{prop:'businessDate',order:'ascending'}).map(row=>row.key),['2','3','1','4'])
+  assert.deepEqual(display.sortSettlementCandidates(rows,{prop:'postingDate',order:'descending'}).map(row=>row.key),['1','2','3','4'])
+  assert.equal(display.sortSettlementCandidates(rows,{prop:'postingDate',order:null}),rows)
+  assert.deepEqual(rows.map(row=>row.key),['1','2','3','4'])
+  const model=await setup('settlements/index.vue',{
+    vue:vueModule,'../shared':shared,'./settlementDisplay':display,
+    '@/api/wms/livePayroll':{listSettlementCandidates:async()=>({data:{streams:[]}})}
+  })
+  model.selection.value=[rows[0],rows[1]]
+  model.sortCandidates({prop:'employeeName',order:'ascending'})
+  assert.deepEqual(model.selection.value.map(row=>row.key),['1','2'])
+  assert.equal(model.selectedAmount.value,5)
+  let cleared=0
+  model.candidateTable.value={clearSelection(){cleared++}}
+  await model.loadCandidates()
+  assert.equal(cleared,1);assert.equal(model.selection.value.length,0)
+})
+
+test('multi-host confirmation sends one batch request with exact per-host IDs',async()=>{
+  const requests=[],writes=[]
+  const model=await setup('settlements/index.vue',{
+    vue:vueModule,'../shared':shared,'./settlementDisplay':display,
+    '@/api/wms/livePayroll':{
+      previewBulkSettlement:async body=>{requests.push(body);return {data:{groups:body.groups.map(group=>({...group,preview:{}})),token:'bulk-token'}}},
+      confirmBulkSettlement:async body=>{writes.push(body);return {data:[{id:'1'},{id:'2'}]}},
+      listSettlementCandidates:async()=>({data:{}}),listSettlements:async()=>({rows:[],total:0})
+    }
+  })
+  model.selection.value=[
+    {type:'STREAM',id:'1',employeeId:'10',businessDate:'2026-08-01',status:'OPEN'},
+    {type:'MANUAL',id:'2',employeeId:'11',businessDate:'2026-07-01',postingDate:'2026-08-02',status:'OPEN'}
+  ]
+  await model.prepare()
+  assert.equal(requests.length,1);assert.equal(requests[0].groups.length,2);assert.equal(writes.length,0)
+  model.review.remark='checked'
+  await model.submit()
+  assert.equal(writes.length,1);assert.equal(writes[0].token,'bulk-token')
+  assert.deepEqual(writes[0].groups.map(group=>[group.employeeId,group.streamIds,group.manualAdjustmentIds]),[['10',['1'],[]],['11',[],['2']]])
+})
+
+test('Memo preloads historical text, allows repeated edits and clearing, and keeps paid unchanged',async()=>{
+  const writes=[],prompts=[],values=['new memo','']
+  const row={id:'5',paid:true,paymentReference:'old reference'}
+  const model=await setup('settlements/index.vue',{
+    vue:{...vueModule,getCurrentInstance:()=>({proxy:{$modal:{msgSuccess(){}},$prompt:async(message,title,options)=>{
+      prompts.push({message,title,options});return {value:values.shift()}
+    }}})},
+    '../shared':shared,'./settlementDisplay':display,
+    '@/api/wms/livePayroll':{saveSettlementMemo:async(id,memo)=>writes.push([id,memo]),listSettlements:async()=>({rows:[],total:0})}
+  })
+  model.detail.batch=row
+  await model.editMemo(row)
+  assert.equal(prompts[0].title,'备注');assert.equal(prompts[0].options.inputValue,'old reference')
+  assert.equal(prompts[0].options.inputValidator(''),true)
+  assert.equal(prompts[0].options.inputValidator('a'.repeat(1000)),true)
+  assert.notEqual(prompts[0].options.inputValidator('a'.repeat(1001)),true)
+  assert.equal(model.detail.batch.memo,'new memo');assert.equal(row.paid,true)
+  await model.editMemo(row)
+  assert.deepEqual(writes,[['5','new memo'],['5','']]);assert.equal(model.detail.batch.memo,'')
+})
+
+
+test('stream payment display separates locking from payment and leaves other labels unchanged',()=>{
+  assert.deepEqual(shared.streamSettlementDisplay({settlementStatus:'OPEN'}),{label:'未结算',type:'info'})
+  const row={settlementStatus:'SETTLED',settlementId:'2090000000000000123',settlementPaid:false}
+  assert.deepEqual(shared.streamSettlementDisplay(row),{label:'待结算',type:'warning'})
+  assert.deepEqual(shared.streamSettlementDisplay(row,true),{label:'Pending payment',type:'warning'})
+  assert.deepEqual(shared.streamSettlementDisplay({...row,settlementPaid:true}),{label:'已结算',type:'success'})
+  for(const broken of [{...row,settlementPaid:null},{...row,settlementId:null},{...row,settlementPaid:undefined},{settlementStatus:'INVALID'}]) {
+    assert.deepEqual(shared.streamSettlementDisplay(broken),{label:'未知状态',type:'info'})
+  }
+  assert.equal(shared.settlementStatusLabel('SETTLED'),'已结算')
+  assert.equal(shared.adjustmentStatusLabel('CONFIRMED'),'待结算')
+  assert.equal(row.settlementStatus,'SETTLED')
+})
+
+async function paymentPage(confirm, api = {}, hooks = {}) {
+  return setup('settlements/index.vue',{
+    vue:{...vueModule,...hooks,getCurrentInstance:()=>({proxy:{$modal:{confirm,msgSuccess(){}}}})},
+    '../shared':shared,'./settlementDisplay':display,
+    '@/api/wms/livePayroll':{listSettlements:async()=>({rows:[],total:0}),...api}
+  })
+}
+
+test('payment confirmation shows host batch and amount, refreshes details and preserves filters',async()=>{
+  const prompts=[],writes=[],queries=[]
+  const row={id:'2090000000000000123',settlementNo:'LP-1',employeeName:'Host A',totalAmount:'200.00',paid:false,memo:'keep memo',snapshotJson:'{}'}
+  const model=await paymentPage(async message=>prompts.push(message),{
+    confirmSettlementPayment:async id=>writes.push(id),
+    listSettlements:async query=>{queries.push(query);return {rows:[{...row,paid:true}],total:21}},
+    getSettlement:async()=>({data:{...row,paid:true,paidBy:'tester',paidAt:'2026-10-14T12:30:00'}})
+  })
+  model.query.employeeId='10';model.batchQuery.pageNum=2;model.detail.batch=row
+  assert.equal(model.paymentButtonLabel(row),'确认已付款')
+  await model.confirmPayment(row)
+  assert.equal(prompts.length,1)
+  for(const value of ['Host A','LP-1','200.00','已向该主播支付','不可撤销']) assert.ok(prompts[0].includes(value))
+  assert.deepEqual(writes,[row.id]);assert.equal(queries[0].pageNum,2);assert.equal(queries[0].employeeId,'10')
+  assert.equal(model.batches.value[0].paid,true);assert.equal(model.detail.batch.paid,true)
+  assert.equal(model.detail.batch.memo,'keep memo');assert.equal(model.detail.batch.snapshotJson,'{}')
+  assert.equal(model.detail.batch.paidBy,'tester');assert.equal(model.paymentLoadingId.value,null)
+  await model.confirmPayment(model.detail.batch);assert.equal(writes.length,1)
+})
+
+test('payment confirmation cancellation does not submit and concurrent clicks wait for the dialog and request',async()=>{
+  let writes=0,resolveDialog,resolveRequest
+  const row={id:'1',employeeName:'A',settlementNo:'LP-1',totalAmount:10,paid:false}
+  const cancelled=await paymentPage(async()=>{throw 'cancel'},{confirmSettlementPayment:async()=>writes++})
+  await cancelled.confirmPayment(row);assert.equal(writes,0);assert.equal(cancelled.paymentLoadingId.value,null)
+  const model=await paymentPage(()=>new Promise(resolve=>{resolveDialog=resolve}),{
+    confirmSettlementPayment:()=>{writes++;return new Promise(resolve=>{resolveRequest=resolve})}
+  })
+  const pending=model.confirmPayment(row)
+  assert.equal(model.paymentLoadingId.value,'1');await model.confirmPayment(row);assert.equal(writes,0)
+  resolveDialog();await Promise.resolve();assert.equal(writes,1)
+  await model.confirmPayment(row);assert.equal(writes,1)
+  resolveRequest();await pending;assert.equal(model.paymentLoadingId.value,null)
+})
+
+test('payment request failure leaves the batch pending and allows retry',async()=>{
+  let fail=true,writes=0
+  const row={id:'1',totalAmount:10,paid:false}
+  const model=await paymentPage(async()=>{}, {confirmSettlementPayment:async()=>{writes++;if(fail)throw new Error('Payment network failure')}})
+  await assert.rejects(model.confirmPayment(row),/Payment network failure/)
+  assert.equal(row.paid,false);assert.equal(model.paymentLoadingId.value,null)
+  fail=false;await model.confirmPayment(row);assert.equal(writes,2)
+})
+
+test('zero and negative payment dialogs explicitly confirm no payment or completed deduction',async()=>{
+  for(const [amount,expected] of [[0,'无需付款'],[-30,'完成本批次扣减']]) {
+    const prompts=[],writes=[]
+    const model=await paymentPage(async message=>prompts.push(message),{confirmSettlementPayment:async id=>writes.push(id)})
+    const row={id:'1',totalAmount:amount,paid:false}
+    assert.equal(model.paymentButtonLabel(row),'确认完成')
+    await model.confirmPayment(row)
+    assert.ok(prompts[0].includes(expected));assert.deepEqual(writes,['1'])
+  }
+})
+
+test('reactivated settlement page refreshes payment state while retaining filters and pagination',async()=>{
+  const hooks=[],calls=[]
+  const model=await paymentPage(async()=>{}, {
+    getLiveOptions:async()=>({employees:[]}),
+    listSettlementCandidates:async query=>{calls.push(['candidates',query]);return {data:{}}},
+    listSettlements:async query=>{calls.push(['batches',query]);return {rows:[{id:'1',paid:true}],total:30}}
+  },{onActivated:callback=>hooks.push(callback)})
+  model.query.employeeId='7';model.dateRange.value=['2026-08-01','2026-08-31'];model.batchQuery.pageNum=2
+  await hooks[0]();assert.equal(calls.length,0)
+  await hooks[0]();assert.equal(calls.length,2)
+  assert.equal(calls.find(([type])=>type==='candidates')[1].startDate,'2026-08-01')
+  assert.equal(calls.find(([type])=>type==='batches')[1].pageNum,2)
+  assert.equal(model.query.employeeId,'7');assert.equal(model.batches.value[0].paid,true)
+})
+
+test('reactivated stream page reloads payment state without resetting its current query',async()=>{
+  const hooks=[],queries=[]
+  const model=await setup('streams/index.vue',{
+    vue:{...vueModule,onActivated:callback=>hooks.push(callback)},'../shared':shared,
+    '../components/specialDetails':specialsModule,
+    '@/store/modules/user':()=>({}),
+    '@/api/wms/livePayroll':{
+      getLiveOptions:async()=>({employees:[],accounts:[],rateTypes:[]}),
+      listStreams:async query=>{queries.push(query);return {rows:[{id:'1',settlementStatus:'SETTLED',settlementId:'2',settlementPaid:true}],total:30}}
+    }
+  })
+  model.query.employeeId='7';model.query.pageNum=2;model.dateRange.value=['2026-08-01','2026-08-31']
+  await hooks[0]();assert.equal(queries.length,0)
+  await hooks[0]();assert.equal(queries.length,1)
+  assert.equal(queries[0].employeeId,'7');assert.equal(queries[0].pageNum,2);assert.equal(queries[0].startDate,'2026-08-01')
+  assert.equal(model.rows.value[0].settlementPaid,true)
+})
+
+
+test('payment detail refresh does not overwrite another batch opened while the response is pending',async()=>{
+  let resolveDetail
+  const row={id:'1',paid:false,totalAmount:10}
+  const model=await paymentPage(async()=>{}, {
+    confirmSettlementPayment:async()=>{},
+    getSettlement:()=>new Promise(resolve=>{resolveDetail=resolve})
+  })
+  model.detail.batch=row
+  const pending=model.confirmPayment(row)
+  while(!resolveDetail) await Promise.resolve()
+  model.detail.batch={id:'2',paid:false}
+  resolveDetail({data:{...row,paid:true}})
+  await pending
+  assert.equal(model.detail.batch.id,'2');assert.equal(model.detail.batch.paid,false)
 })

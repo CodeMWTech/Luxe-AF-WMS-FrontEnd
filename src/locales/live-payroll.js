@@ -1,5 +1,12 @@
 // 主播薪酬业务文案；参数只插值，不翻译姓名、备注等业务数据。
 export default {
+  "所选明细缺少主播，请重新查询": "Selected items are missing a host. Please refresh the list",
+  "将按主播生成 {0} 张结算单": "Create {0} settlement statements grouped by host",
+  "已生成 {0} 张结算单，原记录已锁定": "Created {0} settlement statements. Source records are locked",
+  "条明细": "items",
+  "填写备注，可修改或清空，最多 1000 字。": "Enter a memo. You can edit or clear it, up to 1000 characters.",
+  "备注不能超过 1000 字": "Memo cannot exceed 1000 characters",
+  "备注已保存": "Memo saved",
   "短信记录": "SMS records",
   "发送排班短信": "Send schedule SMS",
   "排班短信记录": "Schedule SMS records",
@@ -264,12 +271,12 @@ export default {
   "按明确选择的开播、佣金及已确认调整结算，原单和快照永久保留；支持仅特殊金额的薪酬调整": "Settle selected streams, commissions, and confirmed adjustments. Original entries and snapshots are retained. Special-amount payroll adjustments are also supported.",
   "业务/调整入账日期": "Business / adjustment posting date",
   "查询待结算明细": "Find unsettled items",
-  "结算所选明细": "Settle selected items",
+  "审核结算明细": "Review settlement details",
   "薪酬调整（仅特殊金额）": "Payroll adjustment (special amounts only)",
   "已选": "Selected",
   "条 ·": "items ·",
   "平台/订单": "Platform / order",
-  "已确认结算批次": "Confirmed settlement batches",
+  "确认结算明细": "Confirm settlement details",
   "结算日期": "Settlement date",
   "支付登记": "Payment reference",
   "未登记": "Not recorded",
@@ -348,5 +355,14 @@ export default {
   "所选排班与日期、主播、直播平台或费率类型不匹配": "The schedule does not match the date, host, platform, or rate type",
   "排班时间不完整，请先完善排班计划": "The planned times are incomplete. Update the schedule first",
   "实际直播时间不能为空": "Actual stream duration is required",
-  "，请选择其他排班场次或检查已有开播记录": ", select another scheduled session or review the existing stream entry"
+  "，请选择其他排班场次或检查已有开播记录": ", select another scheduled session or review the existing stream entry",
+  "确认已付款": "Confirm paid",
+  "确认完成": "Confirm completion",
+  "完成确认人：": "Completion confirmed by: ",
+  "完成确认时间：": "Completion confirmed at: ",
+  "请确认已向该主播支付本批次款项。": "Confirm that this batch has been paid to the host. ",
+  "请确认已完成本批次扣减。": "Confirm that the deduction for this batch has been completed. ",
+  "本批次无需付款，请确认已处理完成。": "No payment is required for this batch. Confirm it has been completed. ",
+  "主播：{0}；批次：{1}；金额：{2}。{3}确认后关联开播记录将显示为已结算，此操作不可撤销。": "Host: {0}; batch: {1}; amount: {2}. {3}Linked stream entries will be shown as settled. This action cannot be undone.",
+  "已确认完成": "Completion confirmed"
 }

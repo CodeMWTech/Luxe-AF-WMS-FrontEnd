@@ -397,7 +397,7 @@
         <el-table-column :label="tr('鉴定机构')" prop="authAgency" min-width="120" align="center" show-overflow-tooltip>
           <template #default="{ row }">{{ cellText(row.authAgency) }}</template>
         </el-table-column>
-        <el-table-column :label="tr('寄售信息')" prop="consignInfo" min-width="120" align="center" show-overflow-tooltip>
+        <el-table-column :label="tr('采购人')" prop="consignInfo" min-width="120" align="center" show-overflow-tooltip>
           <template #default="{ row }">{{ cellText(row.consignInfo) }}</template>
         </el-table-column>
         <el-table-column :label="tr('默认数量')" prop="defaultQty" width="100" align="center">
@@ -655,7 +655,7 @@ function buildUnstockedPdfColumns() {
     { key: 'accessories', label: tr('配件'), render: row => escapeHtml(row.accessories || '--') },
     { key: 'cared', label: tr('护理'), render: row => escapeHtml(formatPdfCared(row.cared)) },
     { key: 'authAgency', label: tr('鉴定机构'), render: row => escapeHtml(row.authAgency || '--') },
-    { key: 'consignInfo', label: tr('寄售信息'), render: row => escapeHtml(row.consignInfo || '--') },
+    { key: 'consignInfo', label: tr('采购人'), render: row => escapeHtml(row.consignInfo || '--') },
     { key: 'defaultQty', label: tr('默认数量'), className: 'number-cell', render: row => row.defaultQty != null ? escapeHtml(row.defaultQty) : '--' },
     { key: 'remark', label: tr('备注'), render: row => escapeHtml(row.remark || '--') },
     { key: 'createBy', label: tr('创建人'), render: row => escapeHtml(row.createBy || '--') },

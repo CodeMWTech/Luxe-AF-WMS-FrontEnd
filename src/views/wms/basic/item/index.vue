@@ -832,7 +832,7 @@ const data = reactive({
     cared: undefined,           // 是否已护理
     defaultQty: undefined,      // 默认数量
     authAgency: [],             // 列表筛选：鉴定机构多选
-    consignInfo: undefined,     // 寄售信息
+    consignInfo: undefined,     // 采购人
     createTimeRange: [],        // 创建时间区间 [开始, 结束]
     sellingPriceMin: undefined, // 销售价下限(元)
     sellingPriceMax: undefined, // 销售价上限(元)
@@ -905,7 +905,7 @@ const formRules = computed(() => ({
   bagDepth: [requiredNumber(isEn.value ? 'Bag Depth cannot be empty' : '宽不能为空')],
   bagHeight: [requiredNumber(isEn.value ? 'Bag Height cannot be empty' : '高不能为空')],
   accessories: [{ required: true, message: tr('配件不能为空'), trigger: [] }],
-  consignInfo: [{ required: true, message: tr('寄售信息不能为空'), trigger: [] }]
+  consignInfo: [{ required: true, message: tr('采购人不能为空'), trigger: [] }]
 }))
 const appliedRouteSkuCode = ref('')
 
