@@ -116,16 +116,24 @@ async function init() {
     }
     if (route.query.id && (canList.value || canOperate.value)) {
       order.value=(await api.getTransfer(route.query.id)).data; remark.value=order.value.remark || ''
-      // 历史单可查看，停用的草稿只能查看和取消。
-      if (order.value.orderStatus === 0 && canOperate.value) {
-        const { historicalLocations }=await import('@/api/wms/warehouse')
-        const nodes=(await historicalLocations()).data || [], node=nodes.find(n=>String(n.id) === String(order.value.targetWarehouseId))
-        const root=node?.warehouseLevel === 2 ? nodes.find(n=>String(n.id) === String(node.parentId)) : node
-        if (!node || node.status !== 0 || node.delFlag !== 0 || !root || root.status !== 0 || root.delFlag !== 0) invalid.value=tr('目标位置已停用或删除，草稿只能查看或取消')
-      }
+      await validateDestination()
     }
     await loadList()
   })
+}
+// 每次重新读取单据都检查位置，避免刷新后仍显示已经失效的操作入口。
+async function validateDestination() {
+  invalid.value=''
+  if (order.value?.orderStatus !== 0 || !canOperate.value) return
+  try {
+    const { historicalLocations }=await import('@/api/wms/warehouse')
+    const nodes=(await historicalLocations()).data || [], node=nodes.find(n=>String(n.id) === String(order.value.targetWarehouseId))
+    const root=node?.warehouseLevel === 2 ? nodes.find(n=>String(n.id) === String(node.parentId)) : node
+    if (!node || node.status !== 0 || node.delFlag !== 0 || !root || root.status !== 0 || root.delFlag !== 0) invalid.value=tr('目标位置已停用或删除，草稿只能查看或取消')
+  } catch (error) {
+    invalid.value=tr('无法确认目标位置状态，请刷新单据后继续')
+    throw error
+  }
 }
 async function open(id) { await router.push({path:route.path,query:{id:String(id)}}) }
 async function create() { await run(async()=>{ const draft=(await api.createTransfer({token:route.query.token})).data; await router.replace({path:route.path,query:{token:route.query.token,id:String(draft.id)}}); order.value=draft }) }
@@ -141,18 +149,31 @@ async function scan(inventoryId) {
     if (result.added) ElMessage.success(tr(result.message)); else ElMessage.warning(tr(result.message))
   })
 }
-async function choose(row) { await scan(row.id); candidateVisible.value=false; focus() }
+async function choose(row) {
+  if (busy.value) return
+  await scan(row.id); candidateVisible.value=false; focus()
+}
 async function persist(ids) { order.value=(await api.saveTransfer(order.value.id,{version:order.value.version,remark:remark.value,detailIds:ids || order.value.details.map(d=>d.id)})).data }
 async function save() { await run(async()=>{ await persist(); ElMessage.success(tr('草稿已暂存')); await loadList() }) }
 async function remove(row) { await run(async()=>{ await persist(order.value.details.filter(d=>String(d.id)!==String(row.id)).map(d=>d.id)); conflicts.value=conflicts.value.filter(c=>String(c.detailId)!==String(row.id)) }) }
-async function reload() { await run(async()=>{ order.value=(await api.getTransfer(order.value.id)).data; remark.value=order.value.remark || ''; conflicts.value=[] }) }
+async function reload() { await run(async()=>{ order.value=(await api.getTransfer(order.value.id)).data; remark.value=order.value.remark || ''; conflicts.value=[]; await validateDestination() }) }
 async function complete() {
   await ElMessageBox.confirm(tr('确认完成整单调货？完成后只能生成反向调货单。'))
   await run(async()=>{
     await persist()
-    const result=(await api.completeTransfer(order.value.id,{version:order.value.version})).data
-    order.value=result.order; conflicts.value=result.conflicts || []
-    if (result.completed) ElMessage.success(tr(result.message)); else ElMessage.warning(tr(result.message))
+    try {
+      const result=(await api.completeTransfer(order.value.id,{version:order.value.version})).data
+      order.value=result.order; conflicts.value=result.conflicts || []
+      if (result.completed) ElMessage.success(tr(result.message)); else ElMessage.warning(tr(result.message))
+    } catch (error) {
+      // 请求失败也可能已提交，先读取服务端状态，不能把完成或失败单继续显示为可编辑草稿。
+      try {
+        order.value=(await api.getTransfer(order.value.id)).data
+        await validateDestination()
+        await loadList()
+      } catch { invalid.value=tr('无法确认调货结果，请刷新单据后继续') }
+      throw error
+    }
     await loadList()
   })
 }
