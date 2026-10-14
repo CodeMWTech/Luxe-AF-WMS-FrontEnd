@@ -10,7 +10,7 @@
     </el-card>
     <el-card shadow="never" class="live-card">
       <div class="live-actions">
-        <el-button v-hasPermi="['wms:live:settlement:confirm']" :disabled="!selection.length" @click="prepare">{{ tr('结算所选明细') }}</el-button>
+        <el-button v-hasPermi="['wms:live:settlement:confirm']" :disabled="!selection.length" @click="prepare">{{ tr('审核结算明细') }}</el-button>
         <el-button v-hasPermi="['wms:live:settlement:confirm']" @click="manualDialog.open({}, query.employeeId)">{{ tr('薪酬调整（仅特殊金额）') }}</el-button>
         <span>{{ tr('已选') }} {{ selection.length }} {{ tr('条 ·') }} {{ money(selectedAmount) }}</span>
       </div>
@@ -28,14 +28,15 @@
       </el-table>
     </el-card>
     <el-card class="live-card" shadow="never" style="margin-top:20px">
-      <div class="live-actions"><h3>{{ tr('已确认结算批次') }}</h3><el-button @click="loadBatches">{{ tr('刷新') }}</el-button></div>
+      <div class="live-actions"><h3>{{ tr('确认结算明细') }}</h3><el-button @click="loadBatches">{{ tr('刷新') }}</el-button></div>
       <el-table :data="batches" v-loading="batchLoading">
         <el-table-column prop="employeeName" :label="tr('主播')" min-width="120" />
         <el-table-column :label="tr('结算日期')" :min-width="isEn ? 150 : 125"><template #default="s">{{ displayDate(s.row.settlementDate) }}</template></el-table-column>
         <el-table-column :label="tr('金额')" :min-width="isEn ? 145 : 120"><template #default="s">{{ money(s.row.totalAmount) }}</template></el-table-column>
+        <el-table-column :label="tr('结算状态')" :min-width="isEn ? 160 : 110"><template #default="s"><el-tag :type="s.row.paid === true ? 'success' : 'warning'">{{ paymentStatusLabel(s.row) }}</el-tag></template></el-table-column>
         <el-table-column prop="memo" :label="memoLabel" min-width="220" show-overflow-tooltip><template #default="s">{{ s.row.memo ?? s.row.paymentReference ?? '' }}</template></el-table-column>
         <el-table-column prop="confirmedBy" :label="tr('确认人')" :min-width="isEn ? 145 : 110" />
-        <el-table-column :label="tr('操作')" min-width="310"><template #default="s"><el-button link type="primary" @click="showBatch(s.row.id)">{{ tr('明细/导出') }}</el-button><el-button v-hasPermi="['wms:live:settlement:list']" link type="primary" :loading="invoiceLoadingId === String(s.row.id)" :disabled="invoiceLoadingId !== null" @click="exportInvoice(s.row)">{{ tr('发票打印') }}</el-button><el-button v-hasPermi="['wms:live:settlement:confirm']" link @click="editMemo(s.row)">{{ memoLabel }}</el-button></template></el-table-column>
+        <el-table-column :label="tr('操作')" min-width="430"><template #default="s"><el-button v-if="s.row.paid !== true" v-hasPermi="['wms:live:settlement:confirm']" link type="warning" :loading="paymentLoadingId === String(s.row.id)" :disabled="paymentLoadingId !== null" @click="confirmPayment(s.row)">{{ paymentButtonLabel(s.row) }}</el-button><el-button link type="primary" @click="showBatch(s.row.id)">{{ tr('明细/导出') }}</el-button><el-button v-hasPermi="['wms:live:settlement:list']" link type="primary" :loading="invoiceLoadingId === String(s.row.id)" :disabled="invoiceLoadingId !== null" @click="exportInvoice(s.row)">{{ tr('发票打印') }}</el-button><el-button v-hasPermi="['wms:live:settlement:confirm']" link @click="editMemo(s.row)">{{ memoLabel }}</el-button></template></el-table-column>
       </el-table>
       <pagination v-show="batchTotal > 0" :total="batchTotal" v-model:page="batchQuery.pageNum" v-model:limit="batchQuery.pageSize" @pagination="loadBatches" />
     </el-card>
@@ -64,6 +65,7 @@
     <el-dialog data-runtime-i18n-ignore="true" v-model="detail.open" :title="tr('结算快照')" width="1100px">
       <template v-if="detail.batch">
         <p>{{ detail.batch.settlementNo }} · {{ detail.batch.employeeName }} · {{ displayDate(detail.batch.settlementDate) }} · {{ money(detail.batch.totalAmount) }}</p>
+        <p><el-tag :type="detail.batch.paid === true ? 'success' : 'warning'">{{ paymentStatusLabel(detail.batch) }}</el-tag><template v-if="detail.batch.paid === true"> · {{ tr('完成确认人：') }}{{ detail.batch.paidBy || '—' }} · {{ tr('完成确认时间：') }}{{ String(detail.batch.paidAt || '—').replace('T', ' ') }}</template></p>
         <p>{{ tr('确认人：') }}{{ detail.batch.confirmedBy }}{{ tr('；说明：') }}{{ detail.batch.remark }}；{{ memoLabel }}：{{ detail.batch.memo ?? detail.batch.paymentReference ?? '' }}</p>
         <el-table :data="detailRows" max-height="480"><el-table-column prop="typeLabel" :label="tr('来源')" :min-width="isEn ? 145 : 90" /><el-table-column prop="id" :label="tr('原记录编号')" min-width="180" /><el-table-column :label="tr('业务日期')" :min-width="isEn ? 150 : 125"><template #default="s">{{ displayDate(s.row.businessDate) }}</template></el-table-column><el-table-column :label="tr('入账日期')" :min-width="isEn ? 150 : 125"><template #default="s">{{ displayDate(s.row.postingDate) }}</template></el-table-column><el-table-column prop="accountLabel" :label="tr('平台')"><template #default="s"><LivePlatformTag :account="s.row" :accounts="options.accounts" /></template></el-table-column><el-table-column prop="description" :label="tr('说明')" /><el-table-column :label="tr('金额')"><template #default="s">{{ money(s.row.amount) }}</template></el-table-column></el-table>
       </template>
@@ -75,7 +77,7 @@
 import LivePlatformTag from '../components/LivePlatformTag.vue'
 import { useLiveI18n } from '../useLiveI18n'
 import { computed, getCurrentInstance, onMounted, onActivated, reactive, ref } from 'vue'
-import { getLiveOptions, listSettlementCandidates, previewBulkSettlement, confirmBulkSettlement, listSettlements, getSettlement, saveSettlementMemo, deleteManualAdjustment } from '@/api/wms/livePayroll'
+import { getLiveOptions, listSettlementCandidates, previewBulkSettlement, confirmBulkSettlement, listSettlements, getSettlement, confirmSettlementPayment, saveSettlementMemo, deleteManualAdjustment } from '@/api/wms/livePayroll'
 import ManualAdjustmentDialog from './ManualAdjustmentDialog.vue'
 import LiveEmployeeSelect from '../components/LiveEmployeeSelect.vue'
 import { money, displayDate, isoDate, LIVE_DATE_FORMAT, settlementStatusLabel, adjustmentStatusLabel, downloadCsv } from '../shared'
@@ -91,6 +93,7 @@ const manualDialog = ref()
 const candidateTable = ref()
 const detail = reactive({ open: false, batch: null })
 const invoiceLoadingId = ref(null)
+const paymentLoadingId = ref(null)
 const selectedAmount = computed(() => selection.value.reduce((total, row) => total + Number(row.amount), 0))
 const flatten = data => flattenSettlement(data, tr)
 const candidateSort = reactive({ prop: null, order: null })
@@ -146,6 +149,25 @@ async function removeManual(row) {
   await loadCandidates()
 }
 async function showBatch(id) { const { data }=await getSettlement(id); detail.batch=data; detail.open=true }
+function paymentStatusLabel(row) { return row.paid === true ? tr('已结算') : (isEn.value ? 'Pending payment' : tr('待结算')) }
+function paymentButtonLabel(row) { return tr(Number(row.totalAmount) > 0 ? '确认已付款' : '确认完成') }
+async function confirmPayment(row) {
+  if (row.paid === true || paymentLoadingId.value !== null) return
+  paymentLoadingId.value = String(row.id)
+  try {
+    const amount = Number(row.totalAmount)
+    const action = amount > 0 ? tr('请确认已向该主播支付本批次款项。') : amount < 0 ? tr('请确认已完成本批次扣减。') : tr('本批次无需付款，请确认已处理完成。')
+    const message = tr('主播：{0}；批次：{1}；金额：{2}。{3}确认后关联开播记录将显示为已结算，此操作不可撤销。', [row.employeeName, row.settlementNo, money(row.totalAmount), action])
+    try { await proxy.$modal.confirm(messageNode(message)) } catch { return }
+    await confirmSettlementPayment(row.id)
+    proxy.$modal.msgSuccess(tr('已确认完成'))
+    await Promise.all([
+      loadBatches(),
+      detail.batch && String(detail.batch.id) === String(row.id)
+        ? getSettlement(row.id).then(({ data }) => { if (detail.batch && String(detail.batch.id) === String(row.id)) detail.batch = data }) : Promise.resolve()
+    ])
+  } finally { paymentLoadingId.value = null }
+}
 async function editMemo(row) {
   const { value } = await proxy.$prompt(tr('填写备注，可修改或清空，最多 1000 字。'), memoLabel.value, {
     inputType: 'textarea', inputValue: row.memo ?? row.paymentReference ?? '',
@@ -174,7 +196,11 @@ function exportBatch() {
   ], detailRows.value.map(row => ({...row,settlementNo:detail.batch.settlementNo,employeeName:detail.batch.employeeName})))
 }
 onMounted(()=>Promise.all([loadOptions(), loadCandidates(), loadBatches()]))
-onActivated(loadOptions)
+let firstActivation = true
+onActivated(() => {
+  if (firstActivation) { firstActivation = false; return }
+  return Promise.all([loadOptions(), loadCandidates(), loadBatches()])
+})
 </script>
 <style scoped lang="scss">
 @import '../live.scss';

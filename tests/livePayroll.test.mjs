@@ -654,3 +654,131 @@ test('Memo preloads historical text, allows repeated edits and clearing, and kee
   await model.editMemo(row)
   assert.deepEqual(writes,[['5','new memo'],['5','']]);assert.equal(model.detail.batch.memo,'')
 })
+
+
+test('stream payment display separates locking from payment and leaves other labels unchanged',()=>{
+  assert.deepEqual(shared.streamSettlementDisplay({settlementStatus:'OPEN'}),{label:'未结算',type:'info'})
+  const row={settlementStatus:'SETTLED',settlementId:'2090000000000000123',settlementPaid:false}
+  assert.deepEqual(shared.streamSettlementDisplay(row),{label:'待结算',type:'warning'})
+  assert.deepEqual(shared.streamSettlementDisplay(row,true),{label:'Pending payment',type:'warning'})
+  assert.deepEqual(shared.streamSettlementDisplay({...row,settlementPaid:true}),{label:'已结算',type:'success'})
+  for(const broken of [{...row,settlementPaid:null},{...row,settlementId:null},{...row,settlementPaid:undefined},{settlementStatus:'INVALID'}]) {
+    assert.deepEqual(shared.streamSettlementDisplay(broken),{label:'未知状态',type:'info'})
+  }
+  assert.equal(shared.settlementStatusLabel('SETTLED'),'已结算')
+  assert.equal(shared.adjustmentStatusLabel('CONFIRMED'),'待结算')
+  assert.equal(row.settlementStatus,'SETTLED')
+})
+
+async function paymentPage(confirm, api = {}, hooks = {}) {
+  return setup('settlements/index.vue',{
+    vue:{...vueModule,...hooks,getCurrentInstance:()=>({proxy:{$modal:{confirm,msgSuccess(){}}}})},
+    '../shared':shared,'./settlementDisplay':display,
+    '@/api/wms/livePayroll':{listSettlements:async()=>({rows:[],total:0}),...api}
+  })
+}
+
+test('payment confirmation shows host batch and amount, refreshes details and preserves filters',async()=>{
+  const prompts=[],writes=[],queries=[]
+  const row={id:'2090000000000000123',settlementNo:'LP-1',employeeName:'Host A',totalAmount:'200.00',paid:false,memo:'keep memo',snapshotJson:'{}'}
+  const model=await paymentPage(async message=>prompts.push(message),{
+    confirmSettlementPayment:async id=>writes.push(id),
+    listSettlements:async query=>{queries.push(query);return {rows:[{...row,paid:true}],total:21}},
+    getSettlement:async()=>({data:{...row,paid:true,paidBy:'tester',paidAt:'2026-10-14T12:30:00'}})
+  })
+  model.query.employeeId='10';model.batchQuery.pageNum=2;model.detail.batch=row
+  assert.equal(model.paymentButtonLabel(row),'确认已付款')
+  await model.confirmPayment(row)
+  assert.equal(prompts.length,1)
+  for(const value of ['Host A','LP-1','200.00','已向该主播支付','不可撤销']) assert.ok(prompts[0].includes(value))
+  assert.deepEqual(writes,[row.id]);assert.equal(queries[0].pageNum,2);assert.equal(queries[0].employeeId,'10')
+  assert.equal(model.batches.value[0].paid,true);assert.equal(model.detail.batch.paid,true)
+  assert.equal(model.detail.batch.memo,'keep memo');assert.equal(model.detail.batch.snapshotJson,'{}')
+  assert.equal(model.detail.batch.paidBy,'tester');assert.equal(model.paymentLoadingId.value,null)
+  await model.confirmPayment(model.detail.batch);assert.equal(writes.length,1)
+})
+
+test('payment confirmation cancellation does not submit and concurrent clicks wait for the dialog and request',async()=>{
+  let writes=0,resolveDialog,resolveRequest
+  const row={id:'1',employeeName:'A',settlementNo:'LP-1',totalAmount:10,paid:false}
+  const cancelled=await paymentPage(async()=>{throw 'cancel'},{confirmSettlementPayment:async()=>writes++})
+  await cancelled.confirmPayment(row);assert.equal(writes,0);assert.equal(cancelled.paymentLoadingId.value,null)
+  const model=await paymentPage(()=>new Promise(resolve=>{resolveDialog=resolve}),{
+    confirmSettlementPayment:()=>{writes++;return new Promise(resolve=>{resolveRequest=resolve})}
+  })
+  const pending=model.confirmPayment(row)
+  assert.equal(model.paymentLoadingId.value,'1');await model.confirmPayment(row);assert.equal(writes,0)
+  resolveDialog();await Promise.resolve();assert.equal(writes,1)
+  await model.confirmPayment(row);assert.equal(writes,1)
+  resolveRequest();await pending;assert.equal(model.paymentLoadingId.value,null)
+})
+
+test('payment request failure leaves the batch pending and allows retry',async()=>{
+  let fail=true,writes=0
+  const row={id:'1',totalAmount:10,paid:false}
+  const model=await paymentPage(async()=>{}, {confirmSettlementPayment:async()=>{writes++;if(fail)throw new Error('Payment network failure')}})
+  await assert.rejects(model.confirmPayment(row),/Payment network failure/)
+  assert.equal(row.paid,false);assert.equal(model.paymentLoadingId.value,null)
+  fail=false;await model.confirmPayment(row);assert.equal(writes,2)
+})
+
+test('zero and negative payment dialogs explicitly confirm no payment or completed deduction',async()=>{
+  for(const [amount,expected] of [[0,'无需付款'],[-30,'完成本批次扣减']]) {
+    const prompts=[],writes=[]
+    const model=await paymentPage(async message=>prompts.push(message),{confirmSettlementPayment:async id=>writes.push(id)})
+    const row={id:'1',totalAmount:amount,paid:false}
+    assert.equal(model.paymentButtonLabel(row),'确认完成')
+    await model.confirmPayment(row)
+    assert.ok(prompts[0].includes(expected));assert.deepEqual(writes,['1'])
+  }
+})
+
+test('reactivated settlement page refreshes payment state while retaining filters and pagination',async()=>{
+  const hooks=[],calls=[]
+  const model=await paymentPage(async()=>{}, {
+    getLiveOptions:async()=>({employees:[]}),
+    listSettlementCandidates:async query=>{calls.push(['candidates',query]);return {data:{}}},
+    listSettlements:async query=>{calls.push(['batches',query]);return {rows:[{id:'1',paid:true}],total:30}}
+  },{onActivated:callback=>hooks.push(callback)})
+  model.query.employeeId='7';model.dateRange.value=['2026-08-01','2026-08-31'];model.batchQuery.pageNum=2
+  await hooks[0]();assert.equal(calls.length,0)
+  await hooks[0]();assert.equal(calls.length,2)
+  assert.equal(calls.find(([type])=>type==='candidates')[1].startDate,'2026-08-01')
+  assert.equal(calls.find(([type])=>type==='batches')[1].pageNum,2)
+  assert.equal(model.query.employeeId,'7');assert.equal(model.batches.value[0].paid,true)
+})
+
+test('reactivated stream page reloads payment state without resetting its current query',async()=>{
+  const hooks=[],queries=[]
+  const model=await setup('streams/index.vue',{
+    vue:{...vueModule,onActivated:callback=>hooks.push(callback)},'../shared':shared,
+    '../components/specialDetails':specialsModule,
+    '@/store/modules/user':()=>({}),
+    '@/api/wms/livePayroll':{
+      getLiveOptions:async()=>({employees:[],accounts:[],rateTypes:[]}),
+      listStreams:async query=>{queries.push(query);return {rows:[{id:'1',settlementStatus:'SETTLED',settlementId:'2',settlementPaid:true}],total:30}}
+    }
+  })
+  model.query.employeeId='7';model.query.pageNum=2;model.dateRange.value=['2026-08-01','2026-08-31']
+  await hooks[0]();assert.equal(queries.length,0)
+  await hooks[0]();assert.equal(queries.length,1)
+  assert.equal(queries[0].employeeId,'7');assert.equal(queries[0].pageNum,2);assert.equal(queries[0].startDate,'2026-08-01')
+  assert.equal(model.rows.value[0].settlementPaid,true)
+})
+
+
+test('payment detail refresh does not overwrite another batch opened while the response is pending',async()=>{
+  let resolveDetail
+  const row={id:'1',paid:false,totalAmount:10}
+  const model=await paymentPage(async()=>{}, {
+    confirmSettlementPayment:async()=>{},
+    getSettlement:()=>new Promise(resolve=>{resolveDetail=resolve})
+  })
+  model.detail.batch=row
+  const pending=model.confirmPayment(row)
+  while(!resolveDetail) await Promise.resolve()
+  model.detail.batch={id:'2',paid:false}
+  resolveDetail({data:{...row,paid:true}})
+  await pending
+  assert.equal(model.detail.batch.id,'2');assert.equal(model.detail.batch.paid,false)
+})

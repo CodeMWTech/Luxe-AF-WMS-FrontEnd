@@ -82,6 +82,7 @@ export const previewSettlement = data => request({ url: `${base}/settlements/pre
 export const confirmSettlement = data => request({ url: `${base}/settlements`, method: 'post', data })
 export const listSettlements = params => request({ url: `${base}/settlements/list`, method: 'get', params })
 export const getSettlement = id => request({ url: `${base}/settlements/${id}`, method: 'get' })
+export const confirmSettlementPayment = id => request({ url: `${base}/settlements/${id}/confirm-payment`, method: 'post' })
 export const markSettlementPaid = (id, reference) => request({ url: `${base}/settlements/${id}/paid`, method: 'post', data: { reference } })
 export const listPayrollAdjustments = params => request({ url: `${base}/adjustments/list`, method: 'get', params })
 export const exportPayrollAdjustments = params => request({ url: `${base}/adjustments/export`, method: 'get', params })
