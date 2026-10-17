@@ -149,7 +149,7 @@ import { watch, onActivated, computed, nextTick, onBeforeUnmount, onMounted, rea
 import { useRouter } from 'vue-router'
 import * as echarts from 'echarts'
 import { getDashboard, getLiveOptions, getStreamGmvSummary, importAttendance } from '@/api/wms/livePayroll'
-import { displayTime, accountLabel, displayDate, downloadCsv, LIVE_DATE_FORMAT, money, monthRange } from '../shared'
+import { displayTime, accountLabel, displayDate, downloadCsv, LIVE_DATE_FORMAT, money, monthRange, isoDate } from '../shared'
 const { tr, isEn, messageNode } = useLiveI18n()
 const router = useRouter()
 
@@ -163,7 +163,7 @@ const gmvQuery = reactive({ scope: 'ALL', personId: '', basis: 'MONTH', month: '
 const overview = computed(() => data.overview || {})
 const attendanceUploadRef = ref()
 const attendanceImporting = ref(false)
-const checklistDate = ref('')
+const checklistDate = ref(isoDate())
 const checklistOnlyAbnormal = ref(false)
 const checklistStatus = ref('')
 const checklistStatuses = ['已录', '时间不符', '未录', '多录']

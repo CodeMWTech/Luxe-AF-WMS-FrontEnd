@@ -1,3 +1,4 @@
+export const isDeletedSchedule = row => String(row?.delFlag) === '1'
 export const idKey = value => value == null ? '' : String(value)
 export { displayTime as timeLabel } from '../shared'
 export const isActiveOperator = employee => employee.visible !== false && employee.employeeStatus != null && [0, 1].includes(Number(employee.employeeStatus)) &&
@@ -46,7 +47,7 @@ export function scheduleGroups(rows, view, operators = [], accounts = [], employ
 }
 
 export function conflictingSchedules(rows) {
-  const duties = rows.filter(row => row.scheduleStatus !== 'CANCELLED').flatMap(row => [
+  const duties = rows.filter(row => !isDeletedSchedule(row)).flatMap(row => [
     { scheduleId: idKey(row.id), date: row.scheduleDate, employeeId: idKey(row.employeeId), start: row.startTime, end: row.endTime },
     ...assignments(row).map(a => ({ scheduleId: idKey(row.id), date: row.scheduleDate, employeeId: idKey(a.employeeId), start: a.startTime, end: a.endTime }))
   ])

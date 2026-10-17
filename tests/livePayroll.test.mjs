@@ -654,8 +654,8 @@ test('multi-host confirmation sends one batch request with exact per-host IDs',a
   assert.deepEqual(writes[0].groups.map(group=>[group.employeeId,group.streamIds,group.manualAdjustmentIds]),[['10',['1'],[]],['11',[],['2']]])
 })
 
-test('Memo preloads historical text, allows repeated edits and clearing, and keeps paid unchanged',async()=>{
-  const writes=[],prompts=[],values=['new memo','']
+test('Memo defaults empty text to ck, preserves existing text, allows clearing, and keeps paid unchanged',async()=>{
+  const writes=[],prompts=[],values=['new memo','','ck','ck']
   const row={id:'5',paid:true,paymentReference:'old reference'}
   const model=await setup('settlements/index.vue',{
     vue:{...vueModule,getCurrentInstance:()=>({proxy:{$modal:{msgSuccess(){}},$prompt:async(message,title,options)=>{
@@ -673,6 +673,12 @@ test('Memo preloads historical text, allows repeated edits and clearing, and kee
   assert.equal(model.detail.batch.memo,'new memo');assert.equal(row.paid,true)
   await model.editMemo(row)
   assert.deepEqual(writes,[['5','new memo'],['5','']]);assert.equal(model.detail.batch.memo,'')
+  assert.equal(prompts[1].options.inputValue,'new memo')
+  await model.editMemo(row)
+  assert.equal(prompts[2].options.inputValue,'ck');assert.equal(model.detail.batch.memo,'ck')
+  await model.editMemo({id:'6',paid:false})
+  assert.equal(prompts[3].options.inputValue,'ck')
+  assert.deepEqual(writes,[['5','new memo'],['5',''],['5','ck'],['6','ck']]);assert.equal(row.paid,true)
 })
 
 
