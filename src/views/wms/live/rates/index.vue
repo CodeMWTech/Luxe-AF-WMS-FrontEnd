@@ -157,7 +157,7 @@
         <el-table-column prop="streamDate" :label="tr('开播日期')" :min-width="isEn ? 145 : 120"><template #default="s">{{ displayDate(s.row.streamDate) }}</template></el-table-column>
         <el-table-column prop="accountLabel" :label="tr('直播平台')" min-width="170" show-overflow-tooltip><template #default="s"><LiveAccountLabel :account="s.row" :accounts="options.accounts" /></template></el-table-column>
         <el-table-column prop="rateTypeName" :label="tr('费率类型')" :min-width="isEn ? 145 : 110"><template #default="s">{{ s.row.rateTypeName }}</template></el-table-column>
-        <el-table-column :label="tr('时段')" :min-width="isEn ? 145 : 116"><template #default="s">{{ timeRange(s.row) }}</template></el-table-column>
+        <el-table-column :label="tr('时段')" min-width="200"><template #default="s">{{ timeRange(s.row) }}</template></el-table-column>
         <el-table-column :label="tr('时薪变化')" min-width="150"><template #default="s"><div class="amount-change"><span>{{ money(s.row.oldHourlyRate) }}/h</span><b>→</b><strong>{{ money(s.row.newHourlyRate) }}/h</strong></div></template></el-table-column>
         <el-table-column :label="tr('基础工资')" min-width="150"><template #default="s"><div class="amount-change"><span>{{ money(s.row.oldBaseAmount) }}</span><b>→</b><strong>{{ money(s.row.newBaseAmount) }}</strong></div></template></el-table-column>
         <el-table-column :label="tr('总工资')" min-width="150"><template #default="s"><div class="amount-change"><span>{{ money(s.row.oldTotalAmount) }}</span><b>→</b><strong>{{ money(s.row.newTotalAmount) }}</strong></div></template></el-table-column>
@@ -205,7 +205,7 @@ import { useLiveI18n } from '../useLiveI18n'
 import { onActivated, computed, getCurrentInstance, onMounted, reactive, ref } from 'vue'
 import { ArrowDown, ArrowRight, Connection, Delete, Edit, Search, WarningFilled } from '@element-plus/icons-vue'
 import { previewRateSync, previewDeparture, markDeparture, addRate, deleteRate, deleteRateAccountGroup, getLiveOptions, getRateAccountGroupUsage, getRateUsage, listRateAccountGroups, listRates, previewRateSave, syncRateAccountGroup, updateAllRateAccountGroupStatuses, updateRate, updateRateAccountGroupStatus } from '@/api/wms/livePayroll'
-import { employeeStatusLabel, settlementStatusLabel, accountLabel, displayDate, downloadCsv, isoDate, liveEmployeeOptionLabel, matchLiveEmployee, LIVE_DATE_FORMAT, money } from '../shared'
+import { displayTime, employeeStatusLabel, settlementStatusLabel, accountLabel, displayDate, downloadCsv, isoDate, liveEmployeeOptionLabel, matchLiveEmployee, LIVE_DATE_FORMAT, money } from '../shared'
 import UsageConflictDialog from '../components/UsageConflictDialog.vue'
 import RateRecordsTable from '../components/RateRecordsTable.vue'
 import { rateStatusLabel } from './rateDisplay'
@@ -254,7 +254,7 @@ function hasAccountGroup(accountId) { return groupLinks.value.some(v => v.accoun
 function isGroupEnabled(accountId) { return groupLinks.value.find(v => v.accountId === accountId)?.status === 0 }
 function canConfigure(account) { return account.status === 0 && isGroupEnabled(account.id) }
 function toggleExpanded(accountId) { const next = new Set(expandedAccounts.value); next.has(accountId) ? next.delete(accountId) : next.add(accountId); expandedAccounts.value = next }
-function timeRange(row) { return `${String(row.startTime || '').slice(0, 5)}–${String(row.endTime || '').slice(0, 5)}` }
+function timeRange(row) { return `${displayTime(row.startTime)}–${displayTime(row.endTime)}` }
 
 async function loadRates() { const res = await listRates({}); rows.value = res.rows || [] }
 async function loadGroups() { if (!selectedEmployeeId.value) { groupLinks.value = []; return } groupLoading.value = true; try { const res = await listRateAccountGroups(selectedEmployeeId.value); groupLinks.value = res.data || [] } finally { groupLoading.value = false } }

@@ -3,16 +3,21 @@ import test from 'node:test'
 import { readFile } from 'node:fs/promises'
 import { parse, compileScript } from '@vue/compiler-sfc'
 import * as vue from 'vue'
+import zhCn from 'element-plus/lib/locale/lang/zh-cn.js'
+import en from 'element-plus/lib/locale/lang/en.js'
+import 'element-plus/es/components/time-picker/src/time-picker.mjs'
+import { formatter, parseDate } from 'element-plus/es/components/time-picker/src/utils.mjs'
 
+const sharedUrl = 'data:text/javascript;base64,' + Buffer.from(await readFile(new URL('../src/views/wms/live/shared.js', import.meta.url), 'utf8')).toString('base64')
 async function sourceModule(path) {
   const source=await readFile(new URL(path,import.meta.url),'utf8')
-  return import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'))
+  return import('data:text/javascript;base64,'+Buffer.from(source.replace(/from '..\/shared'/g, 'from ' + JSON.stringify(sharedUrl))).toString('base64'))
 }
 const shared=await sourceModule('../src/views/wms/live/shared.js')
 const display=await sourceModule('../src/views/wms/live/settlements/settlementDisplay.js')
 const scheduleDisplay=await sourceModule('../src/views/wms/live/schedule/scheduleDisplay.js')
 async function setup(file, modules, props={}) {
-  modules={ './scheduleDisplay': scheduleDisplay, '../schedule/scheduleDisplay': scheduleDisplay, '@/utils/permission': {checkPermi:()=>true}, ...modules }
+  modules={ 'element-plus/lib/locale/lang/en': en.default || en, 'element-plus/lib/locale/lang/zh-cn': zhCn.default || zhCn, './scheduleDisplay': scheduleDisplay, '../schedule/scheduleDisplay': scheduleDisplay, '@/utils/permission': {checkPermi:()=>true}, ...modules }
   modules['@/api/wms/livePayroll']={listScheduleOperators:async()=>({data:[]}),listScheduleHosts:async()=>({data:[]}),...modules['@/api/wms/livePayroll']}
   modules={ '../useLiveI18n':{useLiveI18n:()=>({tr:(text,values=[])=>text.replace(/\{(\d+)\}/g,(_,i)=>values[i]),isEn:vue.ref(false),messageNode:text=>text})}, ...modules }
   const source=await readFile(new URL('../src/views/wms/live/'+file,import.meta.url),'utf8')
@@ -38,10 +43,21 @@ test('calendar fetch and export both use the visible seven days without an emplo
   const page=await setup('schedule/index.vue',{
     vue:vueModule,
     '../components/LiveEmployeeSelect.vue':{},'../components/LiveEmployeeName.vue':{},
-    '@/api/wms/livePayroll':{getLiveOptions:async()=>({employees:[],accounts:[],rateTypes:[]}),listScheduleCalendar:async q=>{calls.query=q;return{data:[{scheduleDate:'2026-09-07',employeeName:'A'},{scheduleDate:'2026-09-13',employeeName:'B'}]}}},
+    '@/api/wms/livePayroll':{getLiveOptions:async()=>({employees:[],accounts:[],rateTypes:[]}),listScheduleCalendar:async q=>{calls.query=q;return{data:[{scheduleDate:'2026-09-07',employeeName:'A',startTime:'09:30:00',endTime:'17:30:00'},{scheduleDate:'2026-09-13',employeeName:'B'}]}}},
     '@/store/modules/settings':()=>({language:'zh-cn'}),'@/locales/runtime-map':{translateByMap:t=>t},
     '../shared':{...shared,downloadCsv:(...args)=>{calls.export=args}}
   })
+  const pickerLocale = page.timePickerLocale.value
+  assert.equal(pickerLocale.el.datepicker.confirm, '确定')
+  for (const [value, label] of [['00:00:00', '12:00 am'], ['09:30:00', '09:30 am'], ['12:00:00', '12:00 pm'], ['17:30:00', '05:30 pm']]) {
+    const parsed = parseDate(value, 'HH:mm:ss', pickerLocale.name)
+    assert.equal(formatter(parsed, shared.LIVE_TIME_FORMAT, pickerLocale.name), label)
+    assert.equal(formatter(parseDate(label, shared.LIVE_TIME_FORMAT, pickerLocale.name), 'HH:mm:ss', pickerLocale.name), value)
+  }
+  page.isEn.value = true
+  assert.equal(page.timePickerLocale.value.el.datepicker.confirm, 'OK')
+  assert.equal(page.timePickerLocale.value.name, 'en')
+  page.isEn.value = false
   page.selectedWeek.value='2026-09-08'
   await page.load()
   assert.equal(page.calendarWeeks.value.length,1)
@@ -50,6 +66,10 @@ test('calendar fetch and export both use the visible seven days without an emplo
   assert.equal('employeeScope' in calls.query,false)
   page.exportRows()
   assert.equal(calls.export[2].length,2)
+  assert.equal(calls.export[2][0].startTime, '09:30 am')
+  assert.equal(calls.export[2][0].endTime, '05:30 pm')
+  assert.equal(page.rows.value[0].startTime, '09:30:00')
+  assert.equal(page.rows.value[0].endTime, '17:30:00')
   assert.ok(calls.export[0].includes('2026-09-13'))
   assert.ok(calls.export[1].every(column => !['hostStartTime', 'hostEndTime'].includes(column.key)))
 })

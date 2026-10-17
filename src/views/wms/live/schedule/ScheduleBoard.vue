@@ -55,14 +55,14 @@ const colorStyle = entry => operatorColorStyle(entry.operator && people.value.ge
 <style scoped lang="scss">
 .schedule-board h3 { margin: 20px 0 12px; font-size: 15px; }
 .board-scroll { overflow-x: auto; border: 1px solid var(--el-border-color-lighter); border-radius: 8px; }
-.board-table { width: 100%; min-width: 1160px; table-layout: fixed; border-collapse: collapse; color: var(--el-text-color-primary); }
+.board-table { width: 100%; min-width: 1600px; table-layout: fixed; border-collapse: collapse; color: var(--el-text-color-primary); }
 .board-table th, .board-table td { padding: 8px; border-bottom: 1px solid var(--el-border-color-lighter); border-right: 1px solid var(--el-border-color-lighter); vertical-align: top; text-align: left; }
 .board-table thead th { text-align: center; background: var(--el-fill-color-light); padding: 12px 8px; }
 .board-table th:first-child { width: 160px; }
 .board-table th span, .board-table th small { display: block; margin-top: 4px; color: var(--el-text-color-secondary); font-size: 12px; overflow-wrap: anywhere; }
 .board-table tbody th { padding-top: 14px; background: var(--el-bg-color); }
 .shift-card { display: flex; flex-direction: column; gap: 4px; width: 100%; margin-bottom: 7px; padding: 10px; border: 1px solid transparent; border-left: 4px solid var(--operator-color); border-radius: 6px; background: var(--operator-fill); color: var(--el-text-color-primary); font: inherit; font-size: 12px; text-align: left; cursor: pointer; overflow-wrap: anywhere; }
-.shift-card strong { font-variant-numeric: tabular-nums; }
+.shift-card strong { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .shift-card .host-name { font-weight: 600; font-size: 13px; }
 .shift-card.pending { border-top-style: dashed; border-right-style: dashed; border-bottom-style: dashed; border-top-color: var(--el-border-color-dark); border-right-color: var(--el-border-color-dark); border-bottom-color: var(--el-border-color-dark); }
 .shift-card.cancelled strong, .shift-card.cancelled .host-name { text-decoration: line-through; }

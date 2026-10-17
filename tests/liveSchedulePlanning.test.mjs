@@ -3,7 +3,8 @@ import test from 'node:test'
 import { readFile } from 'node:fs/promises'
 import { parse, compileScript } from '@vue/compiler-sfc'
 import * as vue from 'vue'
-async function sourceModule(path) { return import('data:text/javascript;base64,' + Buffer.from(await readFile(new URL(path, import.meta.url), 'utf8')).toString('base64')) }
+const sharedUrl = 'data:text/javascript;base64,' + Buffer.from(await readFile(new URL('../src/views/wms/live/shared.js', import.meta.url), 'utf8')).toString('base64')
+async function sourceModule(path) { return import('data:text/javascript;base64,' + Buffer.from((await readFile(new URL(path, import.meta.url), 'utf8')).replace(/from '..\/shared'/g, 'from ' + JSON.stringify(sharedUrl))).toString('base64')) }
 const display = await sourceModule('../src/views/wms/live/schedule/scheduleDisplay.js')
 const shared = await sourceModule('../src/views/wms/live/shared.js')
 const operator = (id, name = 'Same name', color = '#D9959C') => ({ employeeId: id, name, color, employeeNo: 'EMP2069209589015789569', employeeStatus: 0, positions: ['主播', '直播运营'] })
