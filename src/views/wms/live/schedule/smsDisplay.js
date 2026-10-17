@@ -3,7 +3,7 @@ import { displayDateTime } from '../shared'
 const issues = {
   DISABLED: '短信发送开关未启用，可预览但不能发送', NOT_CONFIGURED: 'Twilio 配置不完整，可预览但不能发送',
   TEST_RECIPIENT_INVALID: '请配置一个带国家码的有效测试接收号码',
-  NO_SCHEDULE: '无已确认排班，跳过发送',
+  NO_SCHEDULE: '无有效排班，跳过发送',
   INVALID_PHONE: '请在员工档案填写带国家码的有效手机号', INVALID_SCHEDULE: '排班时间或直播间异常，请核对',
   TOO_LONG: '短信超过长度或段数上限，请联系管理员', OPTED_OUT: '该号码已退订，禁止发送',
   NOT_IN_TEST_ALLOWLIST: '号码不在测试白名单中', ALREADY_SENT: '相同内容已提交，勿重复发送',

@@ -170,7 +170,7 @@ async function confirmPayment(row) {
 }
 async function editMemo(row) {
   const { value } = await proxy.$prompt(tr('填写备注，可修改或清空，最多 1000 字。'), memoLabel.value, {
-    inputType: 'textarea', inputValue: row.memo ?? row.paymentReference ?? '',
+    inputType: 'textarea', inputValue: (row.memo ?? row.paymentReference ?? '') || 'ck',
     inputValidator: value => String(value || '').length <= 1000 || tr('备注不能超过 1000 字')
   })
   const memo = String(value || '').trim()
