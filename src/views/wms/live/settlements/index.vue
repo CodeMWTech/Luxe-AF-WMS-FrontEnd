@@ -65,7 +65,7 @@
     <el-dialog data-runtime-i18n-ignore="true" v-model="detail.open" :title="tr('结算快照')" width="1100px">
       <template v-if="detail.batch">
         <p>{{ detail.batch.settlementNo }} · {{ detail.batch.employeeName }} · {{ displayDate(detail.batch.settlementDate) }} · {{ money(detail.batch.totalAmount) }}</p>
-        <p><el-tag :type="detail.batch.paid === true ? 'success' : 'warning'">{{ paymentStatusLabel(detail.batch) }}</el-tag><template v-if="detail.batch.paid === true"> · {{ tr('完成确认人：') }}{{ detail.batch.paidBy || '—' }} · {{ tr('完成确认时间：') }}{{ String(detail.batch.paidAt || '—').replace('T', ' ') }}</template></p>
+        <p><el-tag :type="detail.batch.paid === true ? 'success' : 'warning'">{{ paymentStatusLabel(detail.batch) }}</el-tag><template v-if="detail.batch.paid === true"> · {{ tr('完成确认人：') }}{{ detail.batch.paidBy || '—' }} · {{ tr('完成确认时间：') }}{{ displayDateTime(detail.batch.paidAt) || '—' }}</template></p>
         <p>{{ tr('确认人：') }}{{ detail.batch.confirmedBy }}{{ tr('；说明：') }}{{ detail.batch.remark }}；{{ memoLabel }}：{{ detail.batch.memo ?? detail.batch.paymentReference ?? '' }}</p>
         <el-table :data="detailRows" max-height="480"><el-table-column prop="typeLabel" :label="tr('来源')" :min-width="isEn ? 145 : 90" /><el-table-column prop="id" :label="tr('原记录编号')" min-width="180" /><el-table-column :label="tr('业务日期')" :min-width="isEn ? 150 : 125"><template #default="s">{{ displayDate(s.row.businessDate) }}</template></el-table-column><el-table-column :label="tr('入账日期')" :min-width="isEn ? 150 : 125"><template #default="s">{{ displayDate(s.row.postingDate) }}</template></el-table-column><el-table-column prop="accountLabel" :label="tr('平台')"><template #default="s"><LivePlatformTag :account="s.row" :accounts="options.accounts" /></template></el-table-column><el-table-column prop="description" :label="tr('说明')" /><el-table-column :label="tr('金额')"><template #default="s">{{ money(s.row.amount) }}</template></el-table-column></el-table>
       </template>
@@ -80,7 +80,7 @@ import { computed, getCurrentInstance, onMounted, onActivated, reactive, ref } f
 import { getLiveOptions, listSettlementCandidates, previewBulkSettlement, confirmBulkSettlement, listSettlements, getSettlement, confirmSettlementPayment, saveSettlementMemo, deleteManualAdjustment } from '@/api/wms/livePayroll'
 import ManualAdjustmentDialog from './ManualAdjustmentDialog.vue'
 import LiveEmployeeSelect from '../components/LiveEmployeeSelect.vue'
-import { money, displayDate, isoDate, LIVE_DATE_FORMAT, settlementStatusLabel, adjustmentStatusLabel, downloadCsv } from '../shared'
+import { displayDateTime, money, displayDate, isoDate, LIVE_DATE_FORMAT, settlementStatusLabel, adjustmentStatusLabel, downloadCsv } from '../shared'
 import { flattenSettlement, selectedSettlementGroups, sortSettlementCandidates } from './settlementDisplay'
 const { tr, isEn, messageNode } = useLiveI18n()
 const memoLabel = computed(() => isEn.value ? 'Memo' : '备注')

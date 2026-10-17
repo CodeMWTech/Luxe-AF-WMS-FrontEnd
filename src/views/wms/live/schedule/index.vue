@@ -62,8 +62,8 @@
               <small v-if="hasScheduleRateScope && !dialog.loadingRateTypes && !dialog.rateTypes.length">{{ tr('请先在费率配置中启用该主播、直播平台和日期对应的场次类型') }}</small>
             </div>
           </el-form-item>
-          <el-form-item :label="tr('开始时间')" prop="startTime"><el-time-picker v-model="dialog.form.startTime" value-format="HH:mm:ss" format="HH:mm" @change="formRef?.validateField('endTime')" /></el-form-item>
-          <el-form-item :label="tr('结束时间')" prop="endTime"><el-time-picker v-model="dialog.form.endTime" value-format="HH:mm:ss" format="HH:mm" /></el-form-item>
+          <el-form-item :label="tr('开始时间')" prop="startTime"><el-config-provider :locale="timePickerLocale"><el-time-picker v-model="dialog.form.startTime" value-format="HH:mm:ss" :format="LIVE_TIME_FORMAT" @change="formRef?.validateField('endTime')" /></el-config-provider></el-form-item>
+          <el-form-item :label="tr('结束时间')" prop="endTime"><el-config-provider :locale="timePickerLocale"><el-time-picker v-model="dialog.form.endTime" value-format="HH:mm:ss" :format="LIVE_TIME_FORMAT" /></el-config-provider></el-form-item>
           <el-form-item :label="tr('排班状态')"><el-select v-model="dialog.form.scheduleStatus"><el-option :label="tr('已确认')" value="CONFIRMED" /><el-option :label="tr('待确认')" value="PENDING" /><el-option :label="tr('已取消')" value="CANCELLED" /></el-select></el-form-item>
           <el-form-item :label="tr('运营')" prop="operatorId">
             <el-select v-model="dialog.form.operatorId" filterable clearable :placeholder="tr('请选择运营')">
@@ -86,6 +86,8 @@
 </template>
 
 <script setup>
+import en from 'element-plus/lib/locale/lang/en'
+import zhCn from 'element-plus/lib/locale/lang/zh-cn'
 import ScheduleBoard from './ScheduleBoard.vue'
 import WeekNavigation from './WeekNavigation.vue'
 import LiveScheduleSmsDialog from './LiveScheduleSmsDialog.vue'
@@ -97,8 +99,10 @@ import { useLiveI18n } from '../useLiveI18n'
 import LiveEmployeeSelect from '../components/LiveEmployeeSelect.vue'
 import { onActivated, computed, getCurrentInstance, onMounted, reactive, ref } from 'vue'
 import { addSchedule, deleteSchedule, getLiveOptions, listScheduleCalendar, listScheduleRateAccounts, listScheduleRateTypes, updateSchedule, listScheduleOperators, updateScheduleOperatorColor, listScheduleHosts } from '@/api/wms/livePayroll'
-import { displayDate, downloadCsv, isoDate, LIVE_DATE_FORMAT, weekRange, selectedWeekRange, liveEmployeeOptionLabel } from '../shared'
+import { displayTime, LIVE_TIME_FORMAT, displayDate, downloadCsv, isoDate, LIVE_DATE_FORMAT, weekRange, selectedWeekRange, liveEmployeeOptionLabel } from '../shared'
 const { tr, isEn, messageNode } = useLiveI18n()
+// Keep translated picker buttons, while Day.js always formats the period as am/pm.
+const timePickerLocale = computed(() => ({ ...(isEn.value ? en : zhCn), name: 'en' }))
 const { proxy } = getCurrentInstance()
 const smsRef = ref(), smsRecordsRef = ref()
 function handleSmsSent(week) { if (checkPermi(['wms:live:schedule:sms:list'])) smsRecordsRef.value.show(week) }
@@ -287,7 +291,7 @@ async function submit() {
   finally { dialog.saving = false }
 }
 async function remove(row) { if (!canEdit.value) return; await proxy.$modal.confirm(messageNode(tr('确认删除 {0} 的排班？', [row.employeeName]))); await deleteSchedule(row.id); proxy.$modal.msgSuccess(tr('删除成功')); dialog.open = false; load() }
-function exportRows() { downloadCsv(tr('主播排班-{0}-{1}.csv', [weekDateRange.value[0], weekDateRange.value[1]]), [{ key: 'scheduleDate', label: tr('日期') }, { key: 'employeeName', label: tr('主播') }, { key: 'accountLabel', label: tr('直播平台') }, { key: 'startTime', label: tr('开始时间') }, { key: 'endTime', label: tr('结束时间') }, { key: 'rateTypeName', label: tr('场次类型') }, { key: 'operators', label: tr('运营') }, { key: 'scheduleStatus', label: tr('排班状态') }, { key: 'remark', label: tr('备注') }], rows.value.map(row => ({ ...row, operators: assignmentSummary(row), scheduleDate: displayDate(row.scheduleDate) }))) }
+function exportRows() { downloadCsv(tr('主播排班-{0}-{1}.csv', [weekDateRange.value[0], weekDateRange.value[1]]), [{ key: 'scheduleDate', label: tr('日期') }, { key: 'employeeName', label: tr('主播') }, { key: 'accountLabel', label: tr('直播平台') }, { key: 'startTime', label: tr('开始时间') }, { key: 'endTime', label: tr('结束时间') }, { key: 'rateTypeName', label: tr('场次类型') }, { key: 'operators', label: tr('运营') }, { key: 'scheduleStatus', label: tr('排班状态') }, { key: 'remark', label: tr('备注') }], rows.value.map(row => ({ ...row, startTime: displayTime(row.startTime), endTime: displayTime(row.endTime), operators: assignmentSummary(row), scheduleDate: displayDate(row.scheduleDate) }))) }
 let mounted = false
 onMounted(() => { load(); mounted = true })
 onActivated(() => { if (mounted && !loading.value) load() })

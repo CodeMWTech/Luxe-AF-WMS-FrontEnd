@@ -1,5 +1,5 @@
 export const idKey = value => value == null ? '' : String(value)
-export const timeLabel = value => String(value || '').slice(0, 5)
+export { displayTime as timeLabel } from '../shared'
 export const isActiveOperator = employee => employee.visible !== false && employee.employeeStatus != null && [0, 1].includes(Number(employee.employeeStatus)) &&
   Array.isArray(employee.positions) && employee.positions.some(position => ['运营', '直播运营'].includes(position))
 

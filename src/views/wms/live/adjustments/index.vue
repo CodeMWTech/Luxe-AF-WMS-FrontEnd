@@ -44,7 +44,7 @@
         <el-descriptions-item :label="tr('调价批次')">{{ detail.changeBatchNo }}</el-descriptions-item><el-descriptions-item :label="tr('被抵消的调整编号')">{{ detail.reversesId || tr('无') }}</el-descriptions-item>
         <el-descriptions-item :label="tr('工时')">{{ detail.durationHours }}</el-descriptions-item><el-descriptions-item :label="tr('原计薪/重算时薪')">{{ money(detail.oldHourlyRate) }} → {{ money(detail.newHourlyRate) }}</el-descriptions-item>
         <el-descriptions-item :label="tr('原因')">{{ detail.reason }}</el-descriptions-item><el-descriptions-item :label="tr('审核说明')">{{ detail.reviewRemark || tr('待审核') }}</el-descriptions-item>
-        <el-descriptions-item :label="tr('审核人')">{{ detail.reviewedBy }}</el-descriptions-item><el-descriptions-item :label="tr('创建时间')">{{ detail.createdAt }}</el-descriptions-item>
+        <el-descriptions-item :label="tr('审核人')">{{ detail.reviewedBy }}</el-descriptions-item><el-descriptions-item :label="tr('创建时间')">{{ displayDateTime(detail.createdAt) }}</el-descriptions-item>
       </el-descriptions>
     </el-dialog>
   </div>
@@ -55,7 +55,7 @@ import { useLiveI18n } from '../useLiveI18n'
 import { computed, getCurrentInstance, onMounted, onActivated, reactive, ref } from 'vue'
 import { getLiveOptions, listPayrollAdjustments, exportPayrollAdjustments, reviewPayrollAdjustment } from '@/api/wms/livePayroll'
 import LiveEmployeeSelect from '../components/LiveEmployeeSelect.vue'
-import { adjustmentStatusLabel, displayDate, money, isoDate, LIVE_DATE_FORMAT, downloadCsv } from '../shared'
+import { displayDateTime, adjustmentStatusLabel, displayDate, money, isoDate, LIVE_DATE_FORMAT, downloadCsv } from '../shared'
 const { tr, isEn } = useLiveI18n()
 const { proxy }=getCurrentInstance()
 const query=reactive({ employeeId:null, status:null, kind:null, pageNum:1, pageSize:20 })

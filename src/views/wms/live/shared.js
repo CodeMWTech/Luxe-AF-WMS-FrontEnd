@@ -1,5 +1,35 @@
 export const LIVE_DATE_FORMAT = 'MM/DD/YYYY'
 export const LIVE_MONTH_FORMAT = 'MM/YYYY'
+export const LIVE_TIME_FORMAT = 'hh:mm a'
+
+// Format wall-clock business times without involving the browser time zone.
+export function displayTime(value, seconds = false) {
+  if (!value) return ''
+  const match = String(value).match(/^(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?$/)
+  if (!match || Number(match[1]) > 23 || Number(match[2]) > 59 || Number(match[3] || 0) > 59) return String(value)
+  const hour = Number(match[1])
+  return `${String(hour % 12 || 12).padStart(2, '0')}:${match[2]}${seconds && match[3] != null ? ':' + match[3] : ''} ${hour < 12 ? 'am' : 'pm'}`
+}
+
+// Naive operation timestamps retain their existing wall clock. SMS timestamps
+// are UTC and explicitly opt in to the existing Los Angeles conversion.
+export function displayDateTime(value, { utc = false, seconds = true } = {}) {
+  if (!value) return ''
+  const text = String(value)
+  if (utc) {
+    const zoned = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(text)
+    const date = new Date(text.replace(' ', 'T') + (zoned ? '' : 'Z'))
+    if (Number.isNaN(date.getTime())) return text
+    const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
+      timeZone: LIVE_TIME_ZONE, year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', ...(seconds ? { second: '2-digit' } : {}), hourCycle: 'h23'
+    }).formatToParts(date).map(part => [part.type, part.value]))
+    return `${parts.month}/${parts.day}/${parts.year} ${displayTime(parts.hour + ':' + parts.minute + (seconds ? ':' + parts.second : ''), seconds)}`
+  }
+  const match = text.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)$/)
+  return match ? `${match[2]}/${match[3]}/${match[1]} ${displayTime(match[4], seconds)}` : text
+}
+
 export const LIVE_TIME_ZONE = 'America/Los_Angeles'
 
 function losAngelesDate() {

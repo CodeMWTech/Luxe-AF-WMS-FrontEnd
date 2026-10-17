@@ -1,3 +1,5 @@
+import { displayDateTime } from '../shared'
+
 const issues = {
   DISABLED: '短信发送开关未启用，可预览但不能发送', NOT_CONFIGURED: 'Twilio 配置不完整，可预览但不能发送',
   TEST_RECIPIENT_INVALID: '请配置一个带国家码的有效测试接收号码',
@@ -15,9 +17,7 @@ export const issueText = (code, tr) => !code ? tr('可发送') : issues[code] ? 
 export const statusText = (code, tr) => tr(states[code] || code)
 export const statusType = code => code === 'DELIVERED' ? 'success' : ['FAILED', 'UNDELIVERED', 'BLOCKED'].includes(code) ? 'danger' : ['UNKNOWN', 'STALE'].includes(code) ? 'warning' : 'info'
 export function displayTimestamp(value) {
-  if (!value) return '-'
-  const date = new Date(String(value).replace(' ', 'T') + 'Z')
-  return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(date)
+  return displayDateTime(value, { utc: true, seconds: false }) || '-'
 }
 export function newRequestId() {
   const bytes = crypto.getRandomValues(new Uint8Array(16))

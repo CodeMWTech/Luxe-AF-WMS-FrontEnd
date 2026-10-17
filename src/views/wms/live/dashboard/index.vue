@@ -117,8 +117,8 @@
         <el-table-column :label="tr('直播平台')" min-width="220">
           <template #default="s"><LivePlatformTag :account="s.row" :accounts="options.accounts" /></template>
         </el-table-column>
-        <el-table-column :label="tr('计划时间')" :min-width="isEn ? 155 : 130"><template #default="s">{{ timeRange(s.row.plannedStartTime, s.row.plannedEndTime) }}</template></el-table-column>
-        <el-table-column :label="tr('实际时间')" :min-width="isEn ? 155 : 130"><template #default="s">{{ timeRange(s.row.actualStartTime, s.row.actualEndTime) }}</template></el-table-column>
+        <el-table-column :label="tr('计划时间')" min-width="210"><template #default="s">{{ timeRange(s.row.plannedStartTime, s.row.plannedEndTime) }}</template></el-table-column>
+        <el-table-column :label="tr('实际时间')" min-width="210"><template #default="s">{{ timeRange(s.row.actualStartTime, s.row.actualEndTime) }}</template></el-table-column>
         <el-table-column :label="tr('是否打卡')" :min-width="isEn ? 145 : 100" align="center">
           <template #default="s"><el-tag :type="s.row.clocked ? 'success' : 'danger'" effect="light">{{ s.row.clocked ? tr('是') : tr('否') }}</el-tag></template>
         </el-table-column>
@@ -149,7 +149,7 @@ import { watch, onActivated, computed, nextTick, onBeforeUnmount, onMounted, rea
 import { useRouter } from 'vue-router'
 import * as echarts from 'echarts'
 import { getDashboard, getLiveOptions, getStreamGmvSummary, importAttendance } from '@/api/wms/livePayroll'
-import { accountLabel, displayDate, downloadCsv, LIVE_DATE_FORMAT, money, monthRange } from '../shared'
+import { displayTime, accountLabel, displayDate, downloadCsv, LIVE_DATE_FORMAT, money, monthRange } from '../shared'
 const { tr, isEn, messageNode } = useLiveI18n()
 const router = useRouter()
 
@@ -314,7 +314,7 @@ async function handleAttendanceFile(uploadFile) {
 }
 function timeRange(start, end) {
   if (!start && !end) return '—'
-  const display = value => value ? String(value).slice(0, 5) : '—'
+  const display = value => displayTime(value) || '—'
   return `${display(start)}-${display(end)}`
 }
 function statusTagType(status) {
