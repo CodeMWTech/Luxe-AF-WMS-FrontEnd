@@ -370,15 +370,15 @@
                 </el-form-item>
               </el-col>
             </el-row>
-            <!-- 寄售信息 -->
+            <!-- 采购人 -->
             <el-row :gutter="24">
               <el-col :span="24">
-                <el-form-item :label="tr('寄售信息')" prop="consignInfo">
+                <el-form-item :label="tr('采购人')" prop="consignInfo">
                   <el-input
                     v-model="form.consignInfo"
                     type="textarea"
                     :rows="2"
-                    :placeholder="tr('请输入寄售信息（如寄售渠道、周期、分成等）')"
+                    :placeholder="tr('请输入采购人')"
                   />
                 </el-form-item>
               </el-col>

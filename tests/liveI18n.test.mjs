@@ -180,3 +180,31 @@ test('settings render saved names and descriptions verbatim even when they match
   assert.equal(model.rateTypes.value[0].description, '未结算')
   assert.equal(model.specialTypes.value[0].typeName, '奖金')
 })
+
+test('Memo label follows the page language and editable text stays verbatim',async()=>{
+  const context=languageContext('zh-cn')
+  const model=await page('settlements/index.vue',context)
+  model.detail.batch={memo:'用户备注 memo 保留',snapshotJson:'{}'}
+  assert.equal(model.memoLabel.value,'备注')
+  context.settings.language='en'
+  assert.equal(model.memoLabel.value,'Memo')
+  assert.equal(model.detail.batch.memo,'用户备注 memo 保留')
+  assert.equal(model.tr('将按主播生成 {0} 张结算单',[8]),'Create 8 settlement statements grouped by host')
+})
+
+
+test('payment progress uses Pending payment only in stream and batch payment displays',async()=>{
+  const context=languageContext('zh-cn')
+  const model=await page('settlements/index.vue',context)
+  const row={paid:false,totalAmount:20,settlementStatus:'SETTLED',settlementId:'1',settlementPaid:false}
+  assert.equal(model.paymentStatusLabel(row),'待结算');assert.equal(model.paymentButtonLabel(row),'确认已付款')
+  context.settings.language='en'
+  assert.equal(model.paymentStatusLabel(row),'Pending payment');assert.equal(model.paymentButtonLabel(row),'Confirm paid')
+  assert.equal(shared.streamSettlementDisplay(row,true).label,'Pending payment')
+  assert.equal(model.tr(shared.settlementStatusLabel('SETTLED')),'Settled')
+  assert.equal(model.tr(shared.adjustmentStatusLabel('CONFIRMED')),'Ready to settle')
+  assert.equal(model.paymentButtonLabel({totalAmount:0}),'Confirm completion')
+  assert.equal(model.paymentStatusLabel({paid:true}),'Settled')
+  const message=model.tr('主播：{0}；批次：{1}；金额：{2}。{3}确认后关联开播记录将显示为已结算，此操作不可撤销。',['用户主播','LP-1','20.00',model.tr('请确认已向该主播支付本批次款项。')])
+  assert.ok(message.includes('用户主播'));assert.ok(message.includes('cannot be undone'));assert.ok(message.includes('paid to the host'))
+})

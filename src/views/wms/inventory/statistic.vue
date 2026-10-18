@@ -147,7 +147,7 @@
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="12" :md="6" :lg="6">
-            <el-form-item :label="tr('寄售信息')" prop="consignInfo">
+            <el-form-item :label="tr('采购人')" prop="consignInfo">
               <el-input v-model="queryParams.consignInfo" clearable :placeholder="tr('请输入')" @keyup.enter="handleQuery" />
             </el-form-item>
           </el-col>
@@ -845,7 +845,7 @@ const detailFieldList = computed(() => {
     { label: tr('数量'), value: displayValue(item.defaultQty) },
     { label: tr('是否已护理'), value: formatCared(item.cared) },
     { label: tr('鉴定机构'), value: displayValue(item.authAgency) },
-    { label: tr('寄售信息'), value: displayValue(item.consignInfo), wide: true },
+    { label: tr('采购人'), value: displayValue(item.consignInfo), wide: true },
     { label: tr('瑕疵'), value: displayValue(item.defect), wide: true },
     { label: tr('配件'), value: accessoryList.value.length ? '' : '--', type: 'accessories', wide: true },
     { label: tr('备注'), value: displayValue(item.remark), wide: true }

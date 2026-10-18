@@ -1,7 +1,7 @@
 <template>
   <el-dialog data-runtime-i18n-ignore="true" v-model="open" class="sms-dialog" :title="tr('发送排班短信')" width="min(1100px, 95vw)" append-to-body :close-on-click-modal="false" :close-on-press-escape="!sending" :show-close="!sending">
     <div class="sms-period">{{ displayDate(week) }} - {{ displayDate(preview.weekEnd) }} · America/Los_Angeles</div>
-    <el-alert :title="tr('仅发送已确认排班，包含所选主播全部直播间；待确认、已取消和无排班日期不进入短信。')" type="info" :closable="false" show-icon />
+    <el-alert :title="tr('发送未删除的有效排班，包含所选主播全部直播间；已删除排班和无排班日期不进入短信。')" type="info" :closable="false" show-icon />
     <el-alert v-if="preview.unavailableReason" :title="issueText(preview.unavailableReason, tr)" type="warning" :closable="false" show-icon />
     <el-alert v-else-if="!preview.production" :title="tr('测试转发模式：所有主播短信均发往指定测试号码，不发送给主播本人。')" type="warning" :closable="false" />
     <div class="sms-grid" v-loading="loading">
@@ -14,7 +14,7 @@
         <el-table-column prop="segments" :label="tr('预计段数')" width="80" />
         <el-table-column :label="tr('检查结果')" min-width="150"><template #default="{ row }">
           <span :class="{ 'sms-issue': row.issue }">{{ issueText(row.issue, tr) }}</span>
-          <small v-if="row.pendingCount" class="pending-note">{{ tr('另有 {0} 场待确认，未计入', [row.pendingCount]) }}</small>
+
         </template></el-table-column>
       </el-table>
       <section class="sms-preview">
@@ -95,8 +95,7 @@ defineExpose({ show })
 .sms-grid { display: grid; grid-template-columns: minmax(0, 1.8fr) minmax(280px, 1fr); gap: 18px; margin-top: 18px; }
 .sms-preview { border: 1px solid var(--el-border-color); border-radius: 8px; padding: 16px; min-width: 0; }
 .sms-preview pre { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.65; max-height: 360px; overflow: auto; margin-bottom: 0; }
-.sms-encoding, .pending-note { color: var(--el-text-color-secondary); font-size: 12px; margin-top: 6px; }
-.pending-note { display: block; }
+.sms-encoding { color: var(--el-text-color-secondary); font-size: 12px; margin-top: 6px; }
 .sms-issue { color: var(--el-color-warning-dark-2); }
 .sms-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 @media (max-width: 850px) { .sms-grid { grid-template-columns: 1fr; } }

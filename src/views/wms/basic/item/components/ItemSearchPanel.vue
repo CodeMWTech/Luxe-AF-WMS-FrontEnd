@@ -76,8 +76,8 @@
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="24" :md="12" :lg="12">
-            <el-form-item label="寄售信息" prop="consignInfo">
-              <el-input v-model="queryParams.consignInfo" placeholder="请输入寄售信息关键字" clearable @keyup.enter="emit('search')" style="width: 100%"/>
+            <el-form-item label="采购人" prop="consignInfo">
+              <el-input v-model="queryParams.consignInfo" placeholder="请输入采购人关键字" clearable @keyup.enter="emit('search')" style="width: 100%"/>
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="24" :md="12" :lg="12" v-if="!isSupplierUser">
