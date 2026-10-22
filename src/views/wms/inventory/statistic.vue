@@ -542,18 +542,33 @@
           </template>
         </el-table-column>
 
-        <!-- ========== 新增列：平均成本价 ========== -->
-        <el-table-column v-if="canViewCostPrice" :label="tr('平均成本价')" prop="avgReceiptCost" :width="isEn ? 165 : 135" align="center" sortable="custom">
+        <!-- ========== 商品成本价 ========== -->
+        <el-table-column v-if="canViewCostPrice" :label="tr('成本价')" prop="costPrice" :width="isEn ? 165 : 135" align="center" sortable="custom">
+          <template #header="{ column }">
+            <span class="inventory-price-header">
+              {{ column.label }}
+              <el-tooltip :content="tr('该成本价是商品管理页面中的成本价')" placement="top" effect="dark">
+                <el-icon class="inventory-price-info" tabindex="0" :aria-label="tr('该成本价是商品管理页面中的成本价')" @click.stop @keydown.stop><InfoFilled /></el-icon>
+              </el-tooltip>
+            </span>
+          </template>
           <template #default="{ row }">
-            {{ formatMoney(row.avgReceiptCost) }}
+            {{ formatMoney(row.costPrice) }}
           </template>
         </el-table-column>
 
-        <!-- ========== 新增列：平均销售价 ========== -->
-        <el-table-column v-if="canViewSellingPrice" :label="tr('平均销售价')" prop="avgShipmentPrice" :width="isEn ? 178 : 135" align="center" sortable="custom">
+        <!-- ========== 商品销售价 ========== -->
+        <el-table-column v-if="canViewSellingPrice" :label="tr('销售价')" prop="sellingPrice" :width="isEn ? 178 : 135" align="center" sortable="custom">
+          <template #header="{ column }">
+            <span class="inventory-price-header">
+              {{ column.label }}
+              <el-tooltip :content="tr('该销售价是商品管理页面中的销售价')" placement="top" effect="dark">
+                <el-icon class="inventory-price-info" tabindex="0" :aria-label="tr('该销售价是商品管理页面中的销售价')" @click.stop @keydown.stop><InfoFilled /></el-icon>
+              </el-tooltip>
+            </span>
+          </template>
           <template #default="{ row }">
-            <!-- 有出库历史但库存未清零时 avgShipmentPrice 正常显示；无出库时为 null，显示 -- -->
-            {{ formatMoney(row.avgShipmentPrice) }}
+            {{ formatMoney(row.sellingPrice) }}
           </template>
         </el-table-column>
 
@@ -2409,6 +2424,17 @@ onActivated(() => {
 
 </script>
 <style scoped lang="scss">
+.inventory-price-header {
+  display: inline-flex;
+  align-items: center;
+}
+
+.inventory-price-info {
+  margin-left: 4px;
+  color: var(--el-text-color-placeholder, #a8abb2);
+  font-size: 14px;
+  cursor: help;
+}
 .page-title {
   font-size: large;
 }
