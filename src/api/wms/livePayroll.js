@@ -1,4 +1,4 @@
-import request from '@/utils/request'
+import request, { download } from '@/utils/request'
 
 const base = '/wms/live'
 
@@ -108,3 +108,8 @@ export const refreshScheduleSmsStatus = id => request({ url: `${base}/schedule-s
 export const previewBulkSettlement = data => request({ url: `${base}/settlements/bulk/preview`, method: 'post', data })
 export const confirmBulkSettlement = data => request({ url: `${base}/settlements/bulk`, method: 'post', data })
 export const saveSettlementMemo = (id, memo) => request({ url: `${base}/settlements/${id}/memo`, method: 'put', data: { memo } })
+
+// 运营记录使用独立权限；导出仅携带已应用筛选，不传分页。
+export const listOperationRecords = params => request({ url: `${base}/operation-records/list`, method: 'get', params })
+export const getOperationRecordOptions = () => request({ url: `${base}/operation-records/options`, method: 'get' })
+export const exportOperationRecords = (params, filename) => download(`${base}/operation-records/export`, params, filename, { skipHeaderTranslate: true })

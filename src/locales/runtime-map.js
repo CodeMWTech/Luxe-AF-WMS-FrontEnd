@@ -1,6 +1,11 @@
 import livePayrollMessages from './live-payroll'
 
 const zhToEnMap = {
+  '运营记录': 'Operation Records',
+  '运营记录导出': 'Export Operation Records',
+  '未指定运营': 'Unassigned operator',
+  '本场实际直播时间': 'Actual Stream Duration',
+  '按场次查看开播录入中的运营、实际直播时间和 GMV': 'View operators, actual stream duration and GMV from stream entries by session',
   '联系人加载失败，请重试': 'Failed to load contacts. Please retry.',
   '请先选择关联角色': 'Select an associated role first',
   '该角色下暂无用户': 'No users in this role',
