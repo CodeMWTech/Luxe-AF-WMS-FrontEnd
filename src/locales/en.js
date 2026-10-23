@@ -299,6 +299,7 @@ export default {
       liveRates: 'Pick host and live platform|Set hourly rates and dates|Save and sync rates',
       liveSettings: 'Maintain rate types|Maintain subsidy or deduction types|Use in schedule and streams',
       liveSettlements: 'Pick host and posting dates|Select open items|Confirm settlement and keep snapshot',
+      liveOperations: 'Filter operator, dates and platform|Review session duration and GMV|Export all matching records',
       liveAdjustments: 'Filter host and type|Review differences or recalcs|Approve into later settlement',
     },
     moduleSummaries: {
@@ -341,6 +342,7 @@ export default {
       liveRates: 'Hourly rates by host and live platform',
       liveSettings: 'Rate types and special amount types',
       liveSettlements: 'Settle streams, commissions, and confirmed adjustments',
+      liveOperations: 'Review stream entries, actual duration and GMV by operator',
       liveAdjustments: 'Make-up and deduction lines for later settlement',
     },
   },

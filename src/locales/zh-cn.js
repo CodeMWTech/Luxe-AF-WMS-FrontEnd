@@ -299,6 +299,7 @@ export default {
       liveRates: '选择主播与直播平台|配置时薪与生效日期|保存并同步费率',
       liveSettings: '维护费率类型|维护补贴或扣款类型|保存供排班与开播使用',
       liveSettlements: '选择主播与入账日期|勾选待结算明细|确认结算并保留快照',
+      liveOperations: '筛选运营日期与平台|查看每场时长与 GMV|导出全部筛选记录',
       liveAdjustments: '按主播与类型筛选|核对差额或历史重算|审核后进入结算',
     },
     moduleSummaries: {
@@ -341,6 +342,7 @@ export default {
       liveRates: '按主播与直播平台配置时薪规则',
       liveSettings: '配置费率类型与特殊金额类型',
       liveSettlements: '按开播、佣金及已确认调整结算',
+      liveOperations: '按运营查看开播记录、实际直播时间与 GMV',
       liveAdjustments: '补发与扣减进入后续结算批次',
     },
   },
