@@ -66,6 +66,10 @@ function isDesktopEntryPath(path = '') {
  * 登录成功后的跳转路径
  */
 export function resolvePostLoginRedirect(redirectQuery) {
+  const roomPath = normalizeRedirectPath(redirectQuery)
+  if (roomPath === '/inventory/room-transfer' && typeof redirectQuery === 'string') {
+    try { return decodeURIComponent(redirectQuery) } catch { return redirectQuery }
+  }
   if (shouldUseMobileExperience()) {
     const pathOnly = normalizeRedirectPath(redirectQuery)
     if (pathOnly && isSkuLookupPath(pathOnly) && typeof redirectQuery === 'string' && redirectQuery.trim()) {
@@ -124,6 +128,7 @@ export function isSkuLookupInternalNavigation(path = '', fromPath = '') {
  * @param fromPath 来源路径（用于放行 SKU 搜索 <-> 详情 的内部跳转）
  */
 export function getViewportMismatchRedirect(path = '', fromPath = '') {
+  if (path === '/inventory/room-transfer') return null
   const mobile = shouldUseMobileExperience()
 
   // SKU 流程内部跳转（搜索页 <-> 商品详情）一律放行
@@ -155,6 +160,7 @@ export function getSkuLoginRedirect(fullPath) {
 
 /** 未登录时，根据视口生成登录页地址 */
 export function getLoginRedirectForPath(fullPath = '/') {
+  if (fullPath.split('?')[0] === '/inventory/room-transfer') return `/login?redirect=${encodeURIComponent(fullPath)}`
   if (shouldUseMobileExperience() && !isSkuLookupPath(fullPath)) {
     return getSkuLoginRedirect('/sku-search')
   }

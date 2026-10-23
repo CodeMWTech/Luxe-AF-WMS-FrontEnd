@@ -3,11 +3,7 @@
     <el-card :header="isEn ? 'Select warehouse to start stocktake' : '选择仓库后开始盘库'" >
       <el-form>
         <el-form-item :label="tr('仓库')" prop="warehouseId">
-          <el-select v-model="form.warehouseId" :placeholder="tr('请选择仓库')" :disabled="checking"
-                     filterable>
-            <el-option v-for="item in useWmsStore().warehouseList" :key="item.id" :label="item.warehouseName"
-                       :value="item.id"/>
-          </el-select>
+          <WarehouseLocationSelect v-model="form.warehouseId" @change="() => {}" />
         </el-form-item>
         <el-form-item>
           <el-button type="primary" plain="plain" size="default" @click="startCheck" class="action-btn" style="width: 100%!important;">{{ isEn ? 'Start Stocktake' : '开始盘库' }}</el-button>
@@ -28,11 +24,7 @@
             </el-col>
             <el-col :span="6">
               <el-form-item :label="tr('仓库')" prop="warehouseId">
-                <el-select v-model="form.warehouseId" :placeholder="tr('请选择仓库')" :disabled="checking"
-                           filterable>
-                  <el-option v-for="item in useWmsStore().warehouseList" :key="item.id" :label="item.warehouseName"
-                             :value="item.id"/>
-                </el-select>
+                <WarehouseLocationSelect v-model="form.warehouseId" @change="() => {}" />
               </el-form-item>
             </el-col>
           </el-row>
@@ -147,6 +139,8 @@
 </template>
 
 <script setup name="CheckOrderEdit">
+import WarehouseLocationSelect from '@/components/WarehouseLocationSelect/index.vue'
+
 import {computed, getCurrentInstance, onMounted, reactive, ref, toRefs} from "vue";
 const skuSelectRef = ref(null)
 import {addCheckOrder, getCheckOrder, updateCheckOrder, check} from "@/api/wms/checkOrder";

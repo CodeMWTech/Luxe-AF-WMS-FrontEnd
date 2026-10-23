@@ -159,6 +159,7 @@ const markLoadedItems = (rows = []) => {
 const getList = () => {
   const data = {
     ...query,
+    exactLocation: true,
     pageNum: pageReq.page,
     pageSize: pageReq.size
   }
@@ -210,6 +211,7 @@ async function handleSkuEnter() {
       itemName: undefined,
       skuCode,
       skuCodeExact: true,
+      exactLocation: true,
       minQuantity: query.minQuantity,
       areaId: query.areaId,
       warehouseId: query.warehouseId,
@@ -219,6 +221,11 @@ async function handleSkuEnter() {
     const rows = res.rows || []
     if (!rows.length) {
       ElMessage.warning(tr('未找到该SKU'))
+      return
+    }
+    if (Number(res.total ?? rows.length) > 1) {
+      list.value = markLoadedItems(rows); total.value = res.total || rows.length
+      ElMessage.warning(tr('同一SKU存在多个库存位置，请选择实际来源'))
       return
     }
     const pickedRow = rows[0]

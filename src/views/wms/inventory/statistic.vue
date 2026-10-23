@@ -47,11 +47,7 @@
         <el-row :gutter="16">
           <el-col :xs="24" :sm="12" :md="6" :lg="6">
             <el-form-item :label="tr('仓库')" prop="warehouseId">
-              <el-select style="width: 100%" v-model="queryParams.warehouseId" :placeholder="tr('请选择仓库')"
-                         filterable clearable>
-                <el-option v-for="item in useWmsStore().warehouseList" :key="item.id" :label="item.warehouseName"
-                           :value="item.id"/>
-              </el-select>
+              <WarehouseLocationSelect v-model="queryParams.warehouseId" clearable include-inactive />
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="12" :md="6" :lg="6">
@@ -250,6 +246,7 @@
           >
             {{ tr('导出Excel') }}
           </el-button>
+          <el-button v-if="canImportInventory" @click="inventoryImportVisible=true">{{ tr('导入库存') }}</el-button>
           <el-button
             @click="openExportTaskDialog"
           >
@@ -357,8 +354,8 @@
           <el-table-column :label="tr('仓库')" prop="warehouseGroupKey" min-width="240" align="center" show-overflow-tooltip>
             <template #default="{ row }">
               <div>{{ getWarehouseName(row) }}</div>
-              <div>{{ tr('仓库商品总数') }}：{{ getWarehouseSummaryQuantity(row) }}</div>
-              <div v-if="canViewCostPrice">{{ tr('仓库商品总价') }}：{{ formatMoney(getWarehouseSummaryAmount(row)) }}</div>
+              <div>{{ tr('一级仓库商品总数') }}：{{ getWarehouseSummaryQuantity(row) }}</div>
+              <div v-if="canViewCostPrice">{{ tr('一级仓库商品总价') }}：{{ formatMoney(getWarehouseSummaryAmount(row)) }}</div>
             </template>
           </el-table-column>
           <el-table-column :label="tr('商品名称')" prop="warehouseItemGroupKey" min-width="480" align="center" show-overflow-tooltip>
@@ -682,6 +679,13 @@
       </div>
     </el-drawer>
 
+    <el-dialog v-model="inventoryImportVisible" :title="tr('导入库存')" width="600px" :close-on-click-modal="false">
+      <el-alert :title="tr('导入按新增入库处理，不覆盖现有库存；房间留空时入库到一级仓库。')" type="info" :closable="false" />
+      <el-button class="mt10" @click="proxy.download('wms/inventory/importTemplate',{},'inventory_import.xlsx')">{{ tr('下载库存模板') }}</el-button>
+      <el-upload :http-request="uploadInventory" accept=".xlsx,.xls" :show-file-list="false" :disabled="inventoryImportBusy" class="mt10">
+        <el-button type="primary" :loading="inventoryImportBusy">{{ tr('选择文件并导入') }}</el-button>
+      </el-upload>
+    </el-dialog>
     <el-dialog v-model="exportTaskDialogVisible" :title="tr('导出记录')" width="860px">
       <el-table :data="exportTaskList" v-loading="exportTaskListLoading" border>
         <el-table-column prop="fileName" :label="tr('文件名')" min-width="250">
@@ -731,7 +735,10 @@
 </template>
 
 <script setup name="Inventory">
+import WarehouseLocationSelect from '@/components/WarehouseLocationSelect/index.vue'
+
 import {
+  importInventoryFile,
   deleteInventoryExportTask,
   downloadInventoryExportTask,
   getInventoryExportTask,
@@ -774,6 +781,19 @@ const AUTH_AGENCY_OPTIONS = ['Entrupy', 'Real Authentication', 'Legitmark', 'Che
 const ITEM_CONDITION_OPTIONS = ['S', 'A', 'B', 'C', 'D']
 const defaultTime = [new Date(2000, 0, 1, 0, 0, 0), new Date(2000, 0, 1, 23, 59, 59)]
 
+const canImportInventory = computed(() => proxy?.$auth?.hasPermi('wms:inventory:all') && proxy?.$auth?.hasPermi('wms:receipt:all'))
+const inventoryImportVisible = ref(false), inventoryImportBusy = ref(false)
+async function uploadInventory({ file }) {
+  if (inventoryImportBusy.value) return
+  await proxy.$modal.confirm(tr('确认按模板数量新增入库？重复导入会增加库存。'))
+  inventoryImportBusy.value = true
+  try {
+    const result = await importInventoryFile(file)
+    proxy.$modal.msgSuccess(tr('库存导入成功') + ' / ' + (result.data || []).length + tr('张入库单'))
+    inventoryImportVisible.value = false
+    handleQuery()
+  } finally { inventoryImportBusy.value = false }
+}
 const inventoryList = ref([])
 const loading = ref(true)
 const exportLoading = ref(false)
@@ -1296,8 +1316,9 @@ function buildWarehouseSummaryMap(items = []) {
 }
 
 function getWarehouseSummaryEntry(row) {
-  if (row?.warehouseId != null && row.warehouseId !== '') {
-    const byId = warehouseSummaryMap.value.get(String(row.warehouseId))
+  const rootId = row?.rootWarehouseId ?? row?.warehouseId
+  if (rootId != null && rootId !== '') {
+    const byId = warehouseSummaryMap.value.get(String(rootId))
     if (byId) return byId
   }
   const name = String(row?.warehouseName ?? '')

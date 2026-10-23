@@ -83,3 +83,8 @@ export function updateOrderNum (data) {
 };
 
 
+
+export const warehouseTree = params => request({ url: '/wms/warehouse/tree', params })
+export const warehouseOptions = params => request({ url: '/wms/warehouse/options', params })
+export const historicalLocations = () => request({ url: '/wms/warehouse/locations' })
+export const roomQr = id => request({ url: `/wms/warehouse/${id}/qr` })
