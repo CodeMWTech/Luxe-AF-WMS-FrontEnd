@@ -464,6 +464,8 @@ const zhToEnMap = {
   平均成本价: 'Avg Cost Price',
   平均销售价: 'Avg Selling Price',
   成本价: 'Cost Price',
+  '该成本价是商品管理页面中的成本价': 'This cost price comes from the Product Management page.',
+  '该销售价是商品管理页面中的销售价': 'This selling price comes from the Product Management page.',
   '成本价：': 'Cost Price: ',
   '销售价：': 'Selling Price: ',
   '价格(元)': 'Price',

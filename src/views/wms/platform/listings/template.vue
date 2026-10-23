@@ -365,7 +365,7 @@
                       <div class="tiktok-tip">{{ t('platformListings.tiktokPriceRangeHint') + '；' + t('platformListings.priceDefaultHint') }}</div>
                     </div>
                     <div v-if="form.listingType === 'AUCTION'" class="tiktok-price-field">
-                      <label class="tiktok-required-label">{{ t('platformListings.startPrice') }}</label>
+                      <label class="tiktok-required-label">{{ t('platformListings.tiktokAuctionStartPrice') }}</label>
                       <el-input-number v-model="form.buyItNowPrice" :min="TIKTOK_AUCTION_MIN_PRICE" :max="TIKTOK_PRICE_MAX" :precision="2" :step="10" :placeholder="t('platformListings.tiktokAuctionStartPricePlaceholder')" style="width:100%" />
                       <div class="tiktok-tip">{{ t('platformListings.tiktokAuctionStartPriceHint') }}</div>
                     </div>

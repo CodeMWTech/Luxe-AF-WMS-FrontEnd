@@ -147,6 +147,7 @@
         style="margin-bottom:12px"
       />
       <el-alert v-if="isWhatnotPublish" :title="t('platformListings.whatnotSubmittedHint')" :description="t('platformListings.whatnotPriceDeltaHint')" type="info" show-icon :closable="false" style="margin-bottom:12px" />
+      <el-alert v-if="isTiktokPublish && isAuctionPublish" :title="t('platformListings.tiktokAuction')" :description="t('platformListings.tiktokAuctionSalesHint')" type="info" show-icon :closable="false" style="margin-bottom:12px" />
       <el-alert v-if="hasWhatnotPreviewErrors" :title="t('platformListings.whatnotPreviewInvalid')" type="error" show-icon :closable="false" style="margin-bottom:12px" />
       <div v-if="previewList.length" class="channel-preview" :class="isWhatnotPublish ? 'whatnot-preview' : (chosenPlatform === 'EBAY' ? 'ebay-preview' : 'tiktok-preview')">
         <div class="preview-media">
@@ -185,7 +186,7 @@
       </div>
       <el-table :data="previewList" v-loading="previewLoading" border stripe max-height="320">
         <el-table-column :label="t('platformListings.sku')" prop="skuCode" width="110" />
-        <el-table-column v-if="!isWhatnotPublish" :label="t('platformListings.format')" width="100" align="center">
+        <el-table-column v-if="!isWhatnotPublish" :label="t('platformListings.format')" :width="isTiktokPublish && isAuctionPublish ? 230 : 100" align="center">
           <template #default="{ row }">
             <el-tag size="small" :type="isAuctionRow(row) ? 'warning' : 'success'">
               {{ getListingTypeLabel(row) }}
@@ -484,7 +485,7 @@ const previewPrimaryPriceLabel = computed(() => {
 })
 const previewSecondaryPriceLabel = computed(() => (
   isWhatnotPublish.value ? t('platformListings.whatnotAuctionPrice') : isTiktokPublish.value
-    ? t('platformListings.startPrice')
+    ? t('platformListings.tiktokAuctionStartPrice')
     : t('platformListings.buyItNowPrice')
 ))
 const ebayTitleTooLongRows = computed(() => isEbayPublish.value
@@ -596,9 +597,8 @@ function isAuctionRow(row) {
 
 function getListingTypeLabel(row) {
   if (isWhatnotPublish.value) return t(isAuctionRow(row) ? 'platformListings.whatnotAuction' : 'platformListings.whatnotBin')
-  return isAuctionRow(row)
-    ? t('platformListings.tiktokAuction')
-    : t('platformListings.tiktokFixedPrice')
+  if (isTiktokPublish.value) return t(isAuctionRow(row) ? 'platformListings.tiktokAuction' : 'platformListings.tiktokFixedPrice')
+  return t(isAuctionRow(row) ? 'platformListings.ebayAuction' : 'platformListings.ebayFixedPrice')
 }
 
 function getSecondaryPreviewPrice(row) {
@@ -930,7 +930,7 @@ defineExpose({ open, openWithSkus })
 .channel-preview .preview-media :deep(img) { max-width: 100%; max-height: 100%; object-fit: contain; }
 .empty-media { height: 100%; display: flex; align-items: center; justify-content: center; color: #909399; }
 .preview-content { min-width: 0; }
-.preview-platform-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.preview-platform-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 6px; }
 .preview-platform { font-size: 12px; font-weight: 700; text-transform: uppercase; color: #606266; }
 .preview-title { font-size: 18px; font-weight: 700; line-height: 1.35; color: #111827; }
 .preview-price-list { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
