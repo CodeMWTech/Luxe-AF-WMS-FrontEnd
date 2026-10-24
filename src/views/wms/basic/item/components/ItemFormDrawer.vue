@@ -370,7 +370,7 @@
                 </el-form-item>
               </el-col>
             </el-row>
-            <!-- 采购人 -->
+            <!-- 采购人：可手填，也可点下方气泡写入。已有内容保留，点气泡只追加。 -->
             <el-row :gutter="24">
               <el-col :span="24">
                 <el-form-item :label="tr('采购人')" prop="consignInfo">
@@ -378,8 +378,20 @@
                     v-model="form.consignInfo"
                     type="textarea"
                     :rows="2"
-                    :placeholder="tr('请输入采购人')"
+                    :placeholder="tr('请输入采购人，或点击下方标签快速填入')"
                   />
+                  <div class="purchaser-tags mt8">
+                    <el-tag
+                      v-for="item in PURCHASER_OPTIONS"
+                      :key="item"
+                      class="accessory-tag"
+                      type="info"
+                      effect="plain"
+                      @click="appendPurchaserTag(item)"
+                    >
+                      {{ item }}
+                    </el-tag>
+                  </div>
                 </el-form-item>
               </el-col>
             </el-row>
@@ -515,6 +527,7 @@
 <script setup>
 import { ref, watch } from 'vue'
 import { Check, Plus, Ticket } from '@element-plus/icons-vue'
+import { PURCHASER_OPTIONS } from '@/utils/itemPurchaser'
 
 const props = defineProps({
   dialog: { type: Object, required: true },
@@ -582,6 +595,13 @@ const emit = defineEmits([
   'submit',
   'cancel'
 ])
+
+function appendPurchaserTag(tag) {
+  const val = props.form.consignInfo || ''
+  const parts = String(val).split(/[,，、\n]+/).map(s => s.trim()).filter(Boolean)
+  if (parts.includes(tag)) return
+  props.form.consignInfo = parts.length ? parts.concat(tag).join(', ') : tag
+}
 
 const itemFormRef = ref(null)
 const itemImageUploadRef = ref(null)
@@ -660,7 +680,8 @@ defineExpose({
 .exterior-material-select :deep(.el-select__selection) {
   flex-wrap: wrap;
 }
-.accessory-tags {
+.accessory-tags,
+.purchaser-tags {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
