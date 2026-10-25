@@ -20,7 +20,7 @@
         </el-row>
         <el-row :gutter="16">
           <el-col :xs="24" :sm="12" :md="6" :lg="6">
-            <el-form-item label="商品品牌" prop="itemBrand">
+            <el-form-item v-if="fieldVisible('brand')" label="商品品牌" prop="itemBrand">
               <el-select
                 v-model="selectedBrandGroups"
                 multiple
@@ -39,19 +39,19 @@
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="12" :md="6" :lg="6">
-            <el-form-item label="成色" prop="itemCondition">
+            <el-form-item v-if="fieldVisible('condition')" label="成色" prop="itemCondition">
               <el-select v-model="queryParams.itemCondition" placeholder="请选择成色" clearable style="width: 100%">
                 <el-option v-for="item in ITEM_CONDITION_OPTIONS" :key="item" :label="item" :value="item"/>
               </el-select>
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="12" :md="6" :lg="6">
-            <el-form-item label="年份" prop="year">
+            <el-form-item v-if="fieldVisible('year')" label="年份" prop="year">
               <el-input-number v-model="queryParams.year" :min="0" :max="9999" :controls="false" style="width: 100%" @keyup.enter.native="emit('search')"/>
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="12" :md="6" :lg="6">
-            <el-form-item label="鉴定机构" prop="authAgency">
+            <el-form-item v-if="fieldVisible('authAgency')" label="鉴定机构" prop="authAgency">
               <el-select
                 v-model="queryParams.authAgency"
                 multiple
@@ -66,21 +66,21 @@
         </el-row>
         <el-row :gutter="16">
           <el-col :xs="24" :sm="12" :md="6" :lg="6">
-            <el-form-item label="数量" prop="defaultQty">
+            <el-form-item v-if="fieldVisible('quantity')" label="数量" prop="defaultQty">
               <el-input-number v-model="queryParams.defaultQty" :min="0" :controls="false" style="width: 100%" @keyup.enter.native="emit('search')"/>
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="12" :md="6" :lg="6">
-            <el-form-item label="已护理" prop="cared">
+            <el-form-item v-if="fieldVisible('cared')" label="已护理" prop="cared">
               <el-switch v-model="queryParams.cared" active-text="Yes" inactive-text="No" :active-value="true" :inactive-value="false"/>
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="24" :md="12" :lg="12">
-            <el-form-item label="采购人" prop="consignInfo">
+            <el-form-item v-if="fieldVisible('purchaser')" label="采购人" prop="consignInfo">
               <el-input v-model="queryParams.consignInfo" placeholder="请输入采购人关键字" clearable @keyup.enter="emit('search')" style="width: 100%"/>
             </el-form-item>
           </el-col>
-          <el-col :xs="24" :sm="24" :md="12" :lg="12" v-if="!isSupplierUser">
+          <el-col :xs="24" :sm="24" :md="12" :lg="12" v-if="fieldVisible('supplier') && !isSupplierUser">
             <el-form-item label="供应商" prop="supplierId">
               <el-select v-model="queryParams.supplierId" placeholder="请选择供应商" clearable style="width: 100%">
                 <el-option :label="tr('Luxeaf 自有')" :value="-1" />
@@ -139,6 +139,7 @@ const props = defineProps({
   isSupplierUser: { type: Boolean, default: false },
   defaultTime: { type: Array, required: true },
   canViewSellingPrice: { type: Boolean, default: false },
+  fieldVisible: { type: Function, default: () => true },
   ITEM_CONDITION_OPTIONS: { type: Array, default: () => [] },
   AUTH_AGENCY_OPTIONS: { type: Array, default: () => [] },
   tr: { type: Function, required: true }

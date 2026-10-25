@@ -1593,6 +1593,23 @@ Object.assign(zhToEnMap, {
   '的这条费率？': "'s rate?",
   '将按当前费率重新计算所有非手工时薪的开播记录，是否继续？': 'Recalculate all stream records that do not use a manual hourly rate with the current rates. Continue?',
   '至': 'to',
+  入库信息: 'Inbound Info',
+  库存统计展示: 'Inventory Display',
+  设置库存统计展示: 'Inventory display settings',
+  '确定后会默认勾选商品查询、可看销售价和可看成本价。之后只取消其中一个，库存统计仍保留；两个都取消后，商品查询会取消，库存统计也会一起取消。': 'This also checks Item Query, View Selling Price, and View Cost Price. Unchecking one of the price permissions keeps Inventory Statistics. Unchecking both clears Item Query and Inventory Statistics.',
+  '勾选商品查询、可看销售价和可看成本价': 'Check Item Query, View Selling Price, and View Cost Price',
+  '默认全部显示。取消勾选后，库存统计和商品管理里都不再显示该项；商品详细信息里仍保留这一项，内容显示为 --。销售价和成本价要先在商品管理里勾选可看权限；勾选之后，库存统计是否显示，以这里的勾选为准。': 'Everything is visible by default. Unchecked product details are hidden in both Inventory Statistics and Item Management, and show -- in the item detail. Cost and selling price also require the Item Management view permissions. After those are granted, Inventory Statistics follows the checkboxes here.',
+  成本价系数: 'Cost coefficient',
+  '这个账号看到的成本价 = 真实成本价 × 系数。商品管理里的成本价也按这个系数显示。': 'The cost this account sees is the real cost multiplied by the coefficient. Item Management uses the same coefficient.',
+  默认全部显示: 'Show all',
+  下一步: 'Next',
+  上一步: 'Back',
+  '请先勾选商品查询、可看销售价和可看成本价': 'Check Item Query, View Selling Price, and View Cost Price first',
+  '没有找到商品查询、可看销售价或可看成本价': 'Item Query, View Selling Price, or View Cost Price was not found',
+  '请输入大于 0 的成本价系数': 'Enter a cost coefficient greater than 0',
+  '商品查询已取消，库存统计已一并取消': 'Item Query was unchecked, so Inventory Statistics was unchecked too',
+  '当前账号只能查看商品，不能修改': 'This account can view items only',
+  当前账号不能查看商品图片: 'This account cannot view item images',
 })
 
 Object.assign(zhToEnMap, livePayrollMessages)
