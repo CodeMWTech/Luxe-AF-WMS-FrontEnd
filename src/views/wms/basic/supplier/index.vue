@@ -94,8 +94,9 @@
         <el-form-item :label="tr('供应商编码')" prop="supplierCode">
           <el-input v-model="form.supplierCode" :placeholder="tr('请输入') + tr('供应商编码')" />
         </el-form-item>
-        <el-form-item :label="tr('关联角色')" prop="roleId">
-          <el-select v-model="form.roleId" :placeholder="tr('请选择') + tr('关联角色')" style="width: 100%" filterable @change="handleRoleChange">
+        <el-form-item :label="tr('关联角色')" prop="roleIds">
+          <el-select v-model="form.roleIds" multiple collapse-tags collapse-tags-tooltip
+            :placeholder="tr('可多选')" style="width: 100%" filterable>
             <el-option
               v-for="role in roleOptions"
               :key="role.roleId"
@@ -107,7 +108,7 @@
         <el-form-item :label="tr('联系人')" prop="contactUserId">
           <el-select v-model="form.contactUserId" :placeholder="tr('请选择') + tr('联系人')"
             filterable clearable style="width: 100%" :loading="contactsLoading"
-            :disabled="!form.roleId || contactsLoading || contactsError" :no-data-text="contactEmptyText">
+            :disabled="!selectedRoleIds.length || contactsLoading || contactsError" :no-data-text="contactEmptyText">
             <el-option v-for="user in roleContacts" :key="user.userId"
               :label="contactOptionLabel(user)" :value="user.userId" />
           </el-select>
@@ -119,7 +120,7 @@
         <el-form-item :label="tr('联系电话')">
           <el-select v-model="contactPhoneUserId" :placeholder="phonePlaceholder"
             filterable clearable style="width: 100%" :loading="contactsLoading"
-            :disabled="!form.roleId || contactsLoading || contactsError"
+            :disabled="!selectedRoleIds.length || contactsLoading || contactsError"
             :no-data-text="roleContacts.length ? tr('该角色用户均未填写联系电话') : contactEmptyText">
             <el-option v-for="user in phoneContacts" :key="user.userId"
               :label="user.contactPhone + ' (' + contactOptionLabel(user) + ')'" :value="user.userId" />
@@ -183,8 +184,8 @@ const data = reactive({
     supplierName: [
       { required: true, message: () => tr('供应商名称不能为空'), trigger: "blur" }
     ],
-    roleId: [
-      { required: true, message: () => tr('关联角色不能为空'), trigger: "change" }
+    roleIds: [
+      { type: 'array', required: true, min: 1, message: () => tr('关联角色不能为空'), trigger: "change" }
     ],
   }
 });
@@ -202,7 +203,8 @@ const contactPhoneUserId = computed({
   get: () => selectedContact.value?.contactPhone?.trim() ? selectedContact.value.userId : undefined,
   set: value => { form.value.contactUserId = value || null }
 })
-const contactEmptyText = computed(() => !form.value.roleId ? tr('请先选择关联角色') : tr('该角色下暂无用户'))
+const selectedRoleIds = computed(() => Array.isArray(form.value.roleIds) ? form.value.roleIds.filter(id => id != null && id !== '') : [])
+const contactEmptyText = computed(() => !selectedRoleIds.value.length ? tr('请先选择关联角色') : tr('该角色下暂无用户'))
 const phonePlaceholder = computed(() => selectedContact.value && !selectedContact.value.contactPhone?.trim()
   ? tr('未填写') : tr('请选择') + tr('联系电话'))
 
@@ -213,21 +215,20 @@ function contactOptionLabel(user) {
   return name + account + (String(user.status) === '0' ? ' (' + tr('停用') + ')' : '')
 }
 
-function handleRoleChange() {
-  form.value.contactUserId = null
-}
-
 // Invalidate in-flight requests on role changes, drawer close and reopen.
-watch(() => [open.value, form.value.roleId, contactsReload.value, form.value.id], async ([opened, roleId], previous, onCleanup) => {
+watch(() => [open.value, selectedRoleIds.value.join(','), contactsReload.value, form.value.id], async ([opened, roleKey], previous, onCleanup) => {
   let stale = false;
   onCleanup(() => { stale = true; });
   roleContacts.value = [];
   contactsError.value = false;
   contactsLoading.value = false;
-  if (!opened || roleId == null || roleId === '') return;
+  if (!opened || !roleKey) {
+    if (opened) form.value.contactUserId = null
+    return
+  }
   contactsLoading.value = true;
   try {
-    const response = await getSupplierRoleContacts(roleId);
+    const response = await getSupplierRoleContacts(selectedRoleIds.value);
     if (!stale) {
       roleContacts.value = (response.data || []).map(user => ({ ...user, userId: String(user.userId) }));
       if (!roleContacts.value.some(user => user.userId === form.value.contactUserId)) {
@@ -269,6 +270,7 @@ function reset() {
   form.value = {
     id: null,
     roleId: null,
+    roleIds: [],
     supplierName: null,
     supplierShortName: '',
     supplierCode: null,
@@ -318,6 +320,8 @@ function handleUpdate(row) {
   const _id = row.id || ids.value
   getSupplier(_id).then(response => {
     form.value = response.data;
+    const loadedRoleIds = Array.isArray(response.data?.roleIds) ? response.data.roleIds.filter(id => id != null && id !== '') : []
+    form.value.roleIds = loadedRoleIds.length ? loadedRoleIds : (response.data?.roleId != null ? [response.data.roleId] : [])
     form.value.contactUserId = form.value.contactUserId == null ? null : String(form.value.contactUserId);
     form.value.status = Number(form.value.status ?? 0);
     open.value = true;
@@ -332,8 +336,9 @@ function submitForm() {
       if (buttonLoading.value || contactsLoading.value || contactsError.value) return;
       buttonLoading.value = true;
       // Persist only the selected identity; names, phones and emails stay in User Management.
-      const { id, roleId, supplierName, supplierShortName, supplierCode, status, remark } = form.value;
-      const payload = { id, roleId, supplierName, supplierShortName: supplierShortName?.trim() || '', supplierCode, contactUserId: form.value.contactUserId || null, status, remark };
+      const { id, supplierName, supplierShortName, supplierCode, status, remark } = form.value;
+      const roleIds = selectedRoleIds.value
+      const payload = { id, roleIds, roleId: roleIds[0], supplierName, supplierShortName: supplierShortName?.trim() || '', supplierCode, contactUserId: form.value.contactUserId || null, status, remark };
       if (form.value.id != null) {
         updateSupplier(payload).then(() => {
           proxy.$modal.msgSuccess(tr("修改成功"));
