@@ -1,20 +1,31 @@
 import useSettingsStore from '@/store/modules/settings'
 
-/** 新增、修改和筛选共用的采购人。已有商品上的旧文本不在这里改写。 */
+/** 新增、修改和筛选共用的采购人。已有商品上的旧文本不在这里改写。选项本身保持字符串，和 main 一致。 */
 export const PURCHASER_OPTIONS = [
-  { value: 'TK1 - Nana' },
-  { value: 'TK2 - Maggie' },
-  { value: 'TK3 - Yuki' },
-  { value: 'Ebay 1' },
-  { value: 'Ebay 2 - Dee' },
-  { value: 'Ebay 3 - Sally' },
-  { value: 'Whole Company', zh: '全公司' },
-  { value: 'Others', zh: '其他' }
+  'TK1 - Nana',
+  'TK2 - Maggie',
+  'TK3 - Yuki',
+  'Ebay 1',
+  'Ebay 2 - Dee',
+  'Ebay 3 - Sally',
+  'Whole Company',
+  'Others'
 ]
 
-export function purchaserLabel(item, isEn) {
-  if (!item?.zh || isEn) return item?.value || ''
-  return `${item.zh} ${item.value}`
+const PURCHASER_ZH = {
+  'Whole Company': '全公司',
+  Others: '其他'
+}
+
+export function purchaserLabel(value, isEn) {
+  const zh = PURCHASER_ZH[value]
+  if (!zh || isEn) return value || ''
+  return `${zh} ${value}`
+}
+
+export function purchaserAliases(value) {
+  const zh = PURCHASER_ZH[value]
+  return zh ? [value, zh] : [value]
 }
 
 function purchaserIsEn() {
@@ -28,9 +39,9 @@ export function suggestPurchasers(queryString, callback) {
     PURCHASER_OPTIONS
       .filter(item => {
         if (!query) return true
-        const texts = [item.value, item.zh, purchaserLabel(item, isEn)]
-        return texts.some(text => String(text || '').toLowerCase().includes(query))
+        return purchaserAliases(item).concat(purchaserLabel(item, isEn))
+          .some(text => String(text || '').toLowerCase().includes(query))
       })
-      .map(item => ({ value: item.value, label: purchaserLabel(item, isEn) }))
+      .map(value => ({ value, label: purchaserLabel(value, isEn) }))
   )
 }
