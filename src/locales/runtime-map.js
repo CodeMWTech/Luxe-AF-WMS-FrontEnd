@@ -668,6 +668,8 @@ const zhToEnMap = {
   未护理: 'Not Cared',
   护理: 'Care',
   采购人: 'Purchaser',
+  全公司: 'Whole Company',
+  其他: 'Others',
   请输入SKU编码: 'Please enter SKU code',
   请选择成色: 'Select condition',
   '请选择鉴定机构（可多选）': 'Select agency (multiple)',

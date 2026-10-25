@@ -383,13 +383,13 @@
                   <div class="purchaser-tags mt8">
                     <el-tag
                       v-for="item in PURCHASER_OPTIONS"
-                      :key="item"
+                      :key="item.value"
                       class="accessory-tag"
                       type="info"
                       effect="plain"
                       @click="appendPurchaserTag(item)"
                     >
-                      {{ item }}
+                      {{ purchaserLabel(item, isEn) }}
                     </el-tag>
                   </div>
                 </el-form-item>
@@ -527,7 +527,7 @@
 <script setup>
 import { ref, watch } from 'vue'
 import { Check, Plus, Ticket } from '@element-plus/icons-vue'
-import { PURCHASER_OPTIONS } from '@/utils/itemPurchaser'
+import { PURCHASER_OPTIONS, purchaserLabel } from '@/utils/itemPurchaser'
 
 const props = defineProps({
   dialog: { type: Object, required: true },
@@ -596,11 +596,12 @@ const emit = defineEmits([
   'cancel'
 ])
 
-function appendPurchaserTag(tag) {
+function appendPurchaserTag(item) {
   const val = props.form.consignInfo || ''
   const parts = String(val).split(/[,，、\n]+/).map(s => s.trim()).filter(Boolean)
-  if (parts.includes(tag)) return
-  props.form.consignInfo = parts.length ? parts.concat(tag).join(', ') : tag
+  const tokens = [item.value, item.zh].filter(Boolean)
+  if (parts.some(part => tokens.includes(part))) return
+  props.form.consignInfo = parts.length ? parts.concat(item.value).join(', ') : item.value
 }
 
 const itemFormRef = ref(null)
