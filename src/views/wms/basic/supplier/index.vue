@@ -95,7 +95,7 @@
           <el-input v-model="form.supplierCode" :placeholder="tr('请输入') + tr('供应商编码')" />
         </el-form-item>
         <el-form-item :label="tr('关联角色')" prop="roleIds">
-          <el-select v-model="form.roleIds" multiple collapse-tags collapse-tags-tooltip
+          <el-select v-model="form.roleIds" multiple
             :placeholder="tr('可多选')" style="width: 100%" filterable>
             <el-option
               v-for="role in roleOptions"
