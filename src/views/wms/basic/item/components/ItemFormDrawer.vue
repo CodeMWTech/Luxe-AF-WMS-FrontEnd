@@ -389,7 +389,7 @@
                       effect="plain"
                       @click="appendPurchaserTag(item)"
                     >
-                      {{ purchaserLabel(item, isEn) }}
+                      {{ item }}
                     </el-tag>
                   </div>
                 </el-form-item>
@@ -527,7 +527,7 @@
 <script setup>
 import { ref, watch } from 'vue'
 import { Check, Plus, Ticket } from '@element-plus/icons-vue'
-import { PURCHASER_OPTIONS, purchaserAliases, purchaserLabel } from '@/utils/itemPurchaser'
+import { PURCHASER_OPTIONS } from '@/utils/itemPurchaser'
 
 const props = defineProps({
   dialog: { type: Object, required: true },
@@ -599,7 +599,7 @@ const emit = defineEmits([
 function appendPurchaserTag(tag) {
   const val = props.form.consignInfo || ''
   const parts = String(val).split(/[,，、\n]+/).map(s => s.trim()).filter(Boolean)
-  if (parts.some(part => purchaserAliases(tag).includes(part))) return
+  if (parts.includes(tag)) return
   props.form.consignInfo = parts.length ? parts.concat(tag).join(', ') : tag
 }
 

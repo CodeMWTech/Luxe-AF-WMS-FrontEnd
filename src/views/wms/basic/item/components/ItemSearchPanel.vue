@@ -86,9 +86,7 @@
                 :placeholder="tr('请输入采购人')"
                 style="width: 100%"
                 @keyup.enter="emit('search')"
-              >
-                <template #default="{ item }">{{ item.label }}</template>
-              </el-autocomplete>
+              />
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="24" :md="12" :lg="12" v-if="!isSupplierUser">

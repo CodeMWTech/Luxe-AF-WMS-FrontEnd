@@ -157,9 +157,7 @@
                 :placeholder="tr('请输入采购人')"
                 style="width: 100%"
                 @keyup.enter="handleQuery"
-              >
-                <template #default="{ item }">{{ item.label }}</template>
-              </el-autocomplete>
+              />
             </el-form-item>
           </el-col>
         </el-row>
