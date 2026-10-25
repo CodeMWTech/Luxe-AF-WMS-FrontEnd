@@ -5,7 +5,9 @@ export const PURCHASER_OPTIONS = [
   'TK3 - Yuki',
   'Ebay 1',
   'Ebay 2 - Dee',
-  'Ebay 3 - Sally'
+  'Ebay 3 - Sally',
+  'Whole Company',
+  'Others'
 ]
 
 export function suggestPurchasers(queryString, callback) {
