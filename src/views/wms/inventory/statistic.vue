@@ -147,8 +147,17 @@
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="12" :md="6" :lg="6">
-            <el-form-item v-if="showField('purchaser')" :label="tr('采购人')" prop="consignInfo">
-              <el-input v-model="queryParams.consignInfo" clearable :placeholder="tr('请输入')" @keyup.enter="handleQuery" />
+            <el-form-item :label="tr('采购人')" prop="consignInfo">
+              <el-autocomplete
+                v-model="queryParams.consignInfo"
+                class="purchaser-search"
+                clearable
+                trigger-on-focus
+                :fetch-suggestions="suggestPurchasers"
+                :placeholder="tr('请输入采购人')"
+                style="width: 100%"
+                @keyup.enter="handleQuery"
+              />
             </el-form-item>
           </el-col>
         </el-row>
@@ -761,6 +770,7 @@ import { useInventoryView } from '@/utils/inventoryView'
 import { blobValidate } from '@/utils/ruoyi'
 import { formatDateForQuery, formatDateTimeForQuery } from '@/utils/laTime'
 import { formatBrandNames, parseBrandIdList } from '@/utils/itemBrand'
+import { suggestPurchasers } from '@/utils/itemPurchaser'
 import { itemDimensionFields } from '@/utils/itemDetailFields'
 import PublishDialog from '@/views/wms/platform/listings/components/PublishDialog.vue'
 const route = useRoute()
@@ -2487,6 +2497,13 @@ onActivated(() => {
 
 .statistic-query-form :deep(.el-form-item) {
   margin-bottom: 18px;
+}
+.statistic-query-form :deep(.purchaser-search) {
+  width: 100%;
+}
+.statistic-query-form :deep(.purchaser-search .el-input__inner),
+.statistic-query-form :deep(.purchaser-search .el-input__wrapper) {
+  cursor: text;
 }
 
 .inventory-statistic-page.is-en .statistic-query-form :deep(.el-form-item__label) {

@@ -609,7 +609,8 @@ const EXTERIOR_MATERIAL_OPTIONS = [
   { value: 'Satin', zh: '缎面' },
   { value: 'Suede', zh: '麂皮' },
   { value: 'Velvet', zh: '天鹅绒' },
-  { value: 'Wicker', zh: '藤编' }
+  { value: 'Wicker', zh: '藤编' },
+  { value: 'Other', zh: '其他' }
 ]
 const COUNTRY_OF_ORIGIN_OPTIONS = [
   { value: 'France', zh: '法国' },

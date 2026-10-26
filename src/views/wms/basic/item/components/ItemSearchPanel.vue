@@ -76,8 +76,17 @@
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="24" :md="12" :lg="12">
-            <el-form-item v-if="fieldVisible('purchaser')" label="采购人" prop="consignInfo">
-              <el-input v-model="queryParams.consignInfo" placeholder="请输入采购人关键字" clearable @keyup.enter="emit('search')" style="width: 100%"/>
+            <el-form-item label="采购人" prop="consignInfo">
+              <el-autocomplete
+                v-model="queryParams.consignInfo"
+                class="purchaser-search"
+                clearable
+                trigger-on-focus
+                :fetch-suggestions="suggestPurchasers"
+                :placeholder="tr('请输入采购人')"
+                style="width: 100%"
+                @keyup.enter="emit('search')"
+              />
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="24" :md="12" :lg="12" v-if="fieldVisible('supplier') && !isSupplierUser">
@@ -132,6 +141,7 @@ import { computed, ref } from 'vue'
 import { Ticket } from '@element-plus/icons-vue'
 import { useWmsStore } from '@/store/modules/wms'
 import { parseBrandIdList } from '@/utils/itemBrand'
+import { suggestPurchasers } from '@/utils/itemPurchaser'
 
 const props = defineProps({
   queryParams: { type: Object, required: true },
@@ -186,3 +196,13 @@ defineExpose({
   resetFields: () => queryFormRef.value?.resetFields?.()
 })
 </script>
+
+<style scoped>
+.purchaser-search {
+  width: 100%;
+}
+.purchaser-search :deep(.el-input__inner),
+.purchaser-search :deep(.el-input__wrapper) {
+  cursor: text;
+}
+</style>
