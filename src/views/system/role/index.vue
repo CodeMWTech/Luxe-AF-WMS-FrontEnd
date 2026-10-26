@@ -182,7 +182,9 @@
                   :check-strictly="!form.menuCheckStrictly"
                   empty-text="加载中，请稍候"
                   :props="{ label: 'label', children: 'children' }"
+                  @check="handleMenuCheck"
                ></el-tree>
+               <el-button v-if="inventoryMenuChecked" link type="primary" @click="openInventoryViewSettings">{{ tr('设置库存统计展示') }}</el-button>
             </el-form-item>
             <el-form-item label="备注">
                <el-input v-model="form.remark" type="textarea" placeholder="请输入内容"></el-input>
@@ -239,6 +241,52 @@
             </div>
          </template>
       </el-dialog>
+
+      <el-dialog
+        v-model="inventoryDialog.visible"
+        :title="tr('库存统计展示')"
+        width="720px"
+        append-to-body
+        :close-on-click-modal="false"
+        :before-close="beforeInventoryDialogClose"
+      >
+        <template v-if="inventoryDialog.step === 1">
+          <el-alert
+            type="warning"
+            :closable="false"
+            :title="tr('确定后会默认勾选商品查询、可看销售价和可看成本价。之后只取消其中一个，库存统计仍保留；两个都取消后，商品查询会取消，库存统计也会一起取消。')"
+          />
+          <el-checkbox v-model="inventoryDialog.browseChecked" class="inventory-view-browse">
+            {{ tr('勾选商品查询、可看销售价和可看成本价') }}
+          </el-checkbox>
+        </template>
+        <template v-else>
+          <p class="inventory-view-tip">{{ tr('默认全部显示。取消勾选后，库存统计和商品管理里都不再显示该项；商品详细信息里仍保留这一项，内容显示为 --。销售价是否显示，以这里的「销售价」勾选为准。') }}</p>
+          <el-checkbox-group v-model="inventoryDialog.visibleKeys" class="inventory-view-fields">
+            <el-checkbox v-for="field in inventoryViewFields" :key="field.key" :label="field.key">
+              {{ tr(field.label) }}
+            </el-checkbox>
+          </el-checkbox-group>
+          <div class="inventory-view-cost">
+            <span>{{ tr('成本价系数') }}</span>
+            <el-input-number
+              v-model="inventoryDialog.costFactor"
+              :min="0.01"
+              :max="100"
+              :precision="2"
+              :step="0.1"
+              :disabled="!inventoryDialog.visibleKeys.includes('cost')"
+            />
+            <span class="inventory-view-cost-hint">{{ tr('这个账号看到的成本价 = 真实成本价 × 系数。商品管理里的成本价也按这个系数显示。') }}</span>
+          </div>
+        </template>
+        <template #footer>
+          <el-button v-if="inventoryDialog.step === 2" @click="inventoryDialog.step = 1">{{ tr('上一步') }}</el-button>
+          <el-button v-if="inventoryDialog.step === 2" @click="resetInventoryViewFields">{{ tr('默认全部显示') }}</el-button>
+          <el-button @click="cancelInventoryDialog">{{ tr('取消') }}</el-button>
+          <el-button type="primary" @click="confirmInventoryDialog">{{ inventoryDialog.step === 1 ? tr('下一步') : tr('确定') }}</el-button>
+        </template>
+      </el-dialog>
    </div>
 </template>
 
@@ -246,6 +294,7 @@
 import { addRole, changeRoleStatus, dataScope, delRole, getRole, listRole, updateRole, deptTreeSelect } from "@/api/system/role";
 import { listMenu, roleMenuTreeselect, treeselect as menuTreeselect } from "@/api/system/menu";
 import { buildHiddenMenuIdSet, filterTreeselectMenuTree } from "@/utils/hiddenMenus";
+import { deleteRoleInventoryView, getRoleInventoryView, saveRoleInventoryView } from "@/api/wms/roleInventoryView";
 import { computed } from "vue";
 import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
@@ -277,6 +326,94 @@ const deptOptions = ref([]);
 const openDataScope = ref(false);
 const menuRef = ref(null);
 const deptRef = ref(null);
+const menuRecords = ref([]);
+const inventoryMenuChecked = ref(false);
+const inventoryViewFields = [
+  { key: 'image', label: '商品图片' },
+  { key: 'category', label: '商品分类' },
+  { key: 'brand', label: '商品品牌' },
+  { key: 'year', label: '年份' },
+  { key: 'condition', label: '成色' },
+  { key: 'model', label: '包型' },
+  { key: 'material', label: '材质' },
+  { key: 'exteriorMaterial', label: '外观材质' },
+  { key: 'origin', label: '产地' },
+  { key: 'size', label: '尺寸' },
+  { key: 'dimensions', label: '长宽高' },
+  { key: 'cared', label: '是否已护理' },
+  { key: 'defect', label: '瑕疵' },
+  { key: 'accessories', label: '配件' },
+  { key: 'authAgency', label: '鉴定机构' },
+  { key: 'purchaser', label: '采购人' },
+  { key: 'remark', label: '备注' },
+  { key: 'supplier', label: '供应商' },
+  { key: 'quantity', label: '数量' },
+  { key: 'stockQuantity', label: '库存数量' },
+  { key: 'receipt', label: '入库信息' },
+  { key: 'shipment', label: '出库时间' },
+  { key: 'outboundPlatform', label: '出库平台' },
+  { key: 'turnoverDays', label: '周转天数' },
+  { key: 'selling', label: '销售价' },
+  { key: 'profit', label: '利润' },
+  { key: 'cost', label: '成本价' }
+];
+const inventoryView = ref(emptyInventoryView());
+const inventoryDialog = ref({
+  visible: false,
+  step: 1,
+  browseChecked: false,
+  visibleKeys: inventoryViewFields.map(field => field.key),
+  costFactor: 1.2,
+  openedFromCheck: false,
+  confirmed: false
+});
+let suppressMenuCheck = false;
+
+function emptyInventoryView() {
+  return { configured: false, costFactor: 1.2, hiddenFields: [] };
+}
+function rememberMenus(list) {
+  menuRecords.value = Array.isArray(list) ? list : [];
+}
+function findMenu(menuName, perms) {
+  return menuRecords.value.find(item => item.menuName === menuName && item.perms === perms);
+}
+function findMenuByPerm(perms) {
+  return menuRecords.value.find(item => item.perms === perms);
+}
+function inventoryMenu() {
+  return findMenu('库存统计', 'wms:inventory:all');
+}
+function isInventoryNode(data) {
+  const menu = inventoryMenu();
+  return !!menu && String(data?.id) === String(menu.menuId);
+}
+function isInventoryChecked() {
+  const menu = inventoryMenu();
+  if (!menu || !menuRef.value) return false;
+  return menuRef.value.getCheckedKeys().map(String).includes(String(menu.menuId));
+}
+function isItemBrowseChecked() {
+  const browse = findMenu('商品查询', 'wms:item:list');
+  if (!browse || !menuRef.value) return false;
+  const id = String(browse.menuId);
+  const checked = menuRef.value.getCheckedKeys().map(String);
+  const halfChecked = menuRef.value.getHalfCheckedKeys().map(String);
+  return checked.includes(id) || halfChecked.includes(id);
+}
+function uncheckInventoryMenu() {
+  const menu = inventoryMenu();
+  if (menu && menuRef.value) {
+    suppressMenuCheck = true;
+    menuRef.value.setChecked(menu.menuId, false, false);
+    suppressMenuCheck = false;
+  }
+  inventoryView.value = emptyInventoryView();
+  refreshInventoryMenuChecked();
+}
+function refreshInventoryMenuChecked() {
+  inventoryMenuChecked.value = isInventoryChecked();
+}
 
 /** 数据范围选项*/
 const dataScopeOptions = ref([
@@ -379,6 +516,7 @@ function handleAuthUser(row) {
 /** 查询菜单树结构 */
 function getMenuTreeselect() {
   Promise.all([listMenu(), menuTreeselect()]).then(([listRes, treeRes]) => {
+    rememberMenus(listRes.data);
     const { hiddenIds, menuTypeById } = buildHiddenMenuIdSet(listRes.data);
     menuOptions.value = filterTreeselectMenuTree(treeRes.data, hiddenIds, menuTypeById);
   });
@@ -413,6 +551,8 @@ function reset() {
     deptCheckStrictly: true,
     remark: undefined
   };
+  inventoryView.value = emptyInventoryView();
+  inventoryMenuChecked.value = false;
   proxy.resetForm("roleRef");
 }
 /** 添加角色 */
@@ -431,13 +571,28 @@ function handleUpdate(row) {
     form.value = response.data;
     form.value.roleSort = Number(form.value.roleSort);
     open.value = true;
+    getRoleInventoryView(roleId).then(viewRes => {
+      const data = viewRes.data || {};
+      inventoryView.value = {
+        configured: Boolean(data.configured),
+        costFactor: data.costFactor ?? 1.2,
+        hiddenFields: data.hiddenFields || []
+      };
+    }).catch(() => {
+      inventoryView.value = emptyInventoryView();
+    });
     nextTick(() => {
       roleMenu.then((res) => {
         let checkedKeys = res.data.checkedKeys;
+        suppressMenuCheck = true;
         checkedKeys.forEach((v) => {
           nextTick(() => {
             menuRef.value.setChecked(v, true, false);
           });
+        });
+        nextTick(() => {
+          suppressMenuCheck = false;
+          refreshInventoryMenuChecked();
         });
       });
     });
@@ -447,6 +602,7 @@ function handleUpdate(row) {
 /** 根据角色ID查询菜单树结构 */
 function getRoleMenuTreeselect(roleId) {
   return Promise.all([listMenu(), roleMenuTreeselect(roleId)]).then(([listRes, response]) => {
+    rememberMenus(listRes.data);
     const { hiddenIds, menuTypeById } = buildHiddenMenuIdSet(listRes.data);
     menuOptions.value = filterTreeselectMenuTree(response.data.menus, hiddenIds, menuTypeById);
     const checkedKeys = (response.data.checkedKeys || []).filter(id => !hiddenIds.has(id));
@@ -505,24 +661,127 @@ function getMenuAllCheckedKeys() {
 /** 提交按钮 */
 function submitForm() {
   proxy.$refs["roleRef"].validate(valid => {
-    if (valid) {
-      if (form.value.roleId != undefined) {
-        form.value.menuIds = getMenuAllCheckedKeys();
-        updateRole(form.value).then(response => {
-          proxy.$modal.msgSuccess("修改成功");
-          open.value = false;
-          getList();
-        });
-      } else {
-        form.value.menuIds = getMenuAllCheckedKeys();
-        addRole(form.value).then(response => {
-          proxy.$modal.msgSuccess("新增成功");
-          open.value = false;
-          getList();
-        });
-      }
-    }
+    if (!valid) return;
+    form.value.menuIds = getMenuAllCheckedKeys();
+    const request = form.value.roleId != undefined ? updateRole(form.value) : addRole(form.value);
+    request.then(response => {
+      const roleId = form.value.roleId != undefined ? form.value.roleId : response.data;
+      return persistInventoryView(roleId);
+    }).then(() => {
+      proxy.$modal.msgSuccess(form.value.roleId != undefined ? "修改成功" : "新增成功");
+      open.value = false;
+      getList();
+    });
   });
+}
+function persistInventoryView(roleId) {
+  if (!roleId) return Promise.resolve();
+  if (isInventoryChecked() && inventoryView.value.configured) {
+    return saveRoleInventoryView({
+      roleId,
+      costFactor: inventoryView.value.costFactor,
+      hiddenFields: inventoryView.value.hiddenFields
+    });
+  }
+  if (!isInventoryChecked()) {
+    return deleteRoleInventoryView(roleId);
+  }
+  return Promise.resolve();
+}
+function handleMenuCheck(data) {
+  if (suppressMenuCheck) return;
+  refreshInventoryMenuChecked();
+  if (isInventoryNode(data)) {
+    if (!isInventoryChecked()) {
+      inventoryView.value = emptyInventoryView();
+      return;
+    }
+    openInventoryDialog(true);
+    return;
+  }
+  if (isInventoryChecked() && !isItemBrowseChecked()) {
+    uncheckInventoryMenu();
+    proxy.$modal.msgWarning(tr('商品查询已取消，库存统计已一并取消'));
+  }
+}
+function openInventoryViewSettings() {
+  openInventoryDialog(false);
+}
+function openInventoryDialog(fromCheck) {
+  const browseChecked = isItemBrowseChecked();
+  const hidden = new Set(inventoryView.value.hiddenFields || []);
+  inventoryDialog.value.openedFromCheck = fromCheck;
+  inventoryDialog.value.confirmed = false;
+  inventoryDialog.value.browseChecked = browseChecked;
+  inventoryDialog.value.costFactor = Number(inventoryView.value.costFactor || 1.2);
+  inventoryDialog.value.visibleKeys = inventoryViewFields.map(field => field.key).filter(key => !hidden.has(key));
+  inventoryDialog.value.step = !fromCheck && browseChecked ? 2 : 1;
+  inventoryDialog.value.visible = true;
+}
+function resetInventoryViewFields() {
+  inventoryDialog.value.visibleKeys = inventoryViewFields.map(field => field.key);
+  inventoryDialog.value.costFactor = 1.2;
+}
+function confirmInventoryDialog() {
+  if (inventoryDialog.value.step === 1) {
+    if (!inventoryDialog.value.browseChecked) {
+      proxy.$modal.msgWarning(tr('请先勾选商品查询、可看销售价和可看成本价'));
+      return;
+    }
+    const browse = findMenu('商品查询', 'wms:item:list');
+    const parent = findMenu('商品管理', 'wms:item:list');
+    const selling = findMenuByPerm('wms:itemSellingPrice:view');
+    const cost = findMenuByPerm('wms:itemCostPrice:view');
+    if (!browse || !selling || !cost) {
+      proxy.$modal.msgError(tr('没有找到商品查询、可看销售价或可看成本价'));
+      return;
+    }
+    suppressMenuCheck = true;
+    if (parent) menuRef.value.setChecked(parent.menuId, true, false);
+    menuRef.value.setChecked(browse.menuId, true, false);
+    menuRef.value.setChecked(selling.menuId, true, false);
+    menuRef.value.setChecked(cost.menuId, true, false);
+    suppressMenuCheck = false;
+    inventoryDialog.value.step = 2;
+    return;
+  }
+  const factor = Number(inventoryDialog.value.costFactor);
+  if (!factor || factor <= 0) {
+    proxy.$modal.msgWarning(tr('请输入大于 0 的成本价系数'));
+    return;
+  }
+  inventoryView.value = {
+    configured: true,
+    costFactor: factor,
+    hiddenFields: inventoryViewFields
+      .map(field => field.key)
+      .filter(key => !inventoryDialog.value.visibleKeys.includes(key))
+  };
+  inventoryDialog.value.confirmed = true;
+  inventoryDialog.value.visible = false;
+  refreshInventoryMenuChecked();
+}
+function finishInventoryDialog() {
+  if (!inventoryDialog.value.confirmed && inventoryDialog.value.openedFromCheck) {
+    const menu = inventoryMenu();
+    if (menu && menuRef.value) {
+      suppressMenuCheck = true;
+      menuRef.value.setChecked(menu.menuId, false, false);
+      suppressMenuCheck = false;
+    }
+    inventoryView.value = emptyInventoryView();
+  }
+  inventoryDialog.value.confirmed = false;
+  inventoryDialog.value.openedFromCheck = false;
+  refreshInventoryMenuChecked();
+}
+function beforeInventoryDialogClose(done) {
+  finishInventoryDialog();
+  done();
+}
+function cancelInventoryDialog() {
+  finishInventoryDialog();
+  inventoryDialog.value.visible = false;
 }
 /** 取消按钮 */
 function cancel() {
@@ -577,4 +836,9 @@ getList();
 .role-page.is-en .el-form-item__label { white-space: nowrap; }
 .role-page .action-btn { min-width: 96px; }
 .role-page.is-en .action-btn { min-width: 110px; }
+.inventory-view-browse { margin-top: 16px; }
+.inventory-view-tip { margin: 0 0 12px; line-height: 1.6; }
+.inventory-view-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.inventory-view-cost { display: flex; align-items: center; gap: 12px; margin-top: 16px; flex-wrap: wrap; }
+.inventory-view-cost-hint { color: var(--el-text-color-secondary); }
 </style>
