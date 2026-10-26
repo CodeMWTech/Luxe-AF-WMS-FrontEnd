@@ -32,6 +32,7 @@
           @layout-change="layoutItemTable"
         />
         <ItemTablePanel
+          v-if="inventoryView.state.loaded"
           ref="itemTableRef"
           :collapsed="isCategoryPanelCollapsed"
           :item-list="itemList"

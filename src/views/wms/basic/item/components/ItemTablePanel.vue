@@ -1,5 +1,5 @@
 <template>
-        <div class="item-list-panel">
+        <div class="item-list-panel" v-loading="loading">
           <div class="item-list-panel__header">
             <div class="item-list-title-wrap">
               <el-tooltip v-if="collapsed" :content="tr('展开商品分类')" placement="top">
@@ -10,53 +10,53 @@
               <span class="item-list-title">{{ tr('商品列表') }}</span>
             </div>
             <div class="item-toolbar-actions">
-              <el-button type="primary" plain icon="Download" @click="emit('export')" class="mb10" v-hasPermi="['wms:item:list']">{{ tr('导出Excel') }}</el-button>
-              <el-button v-if="!viewRestricted" type="primary" plain icon="Upload" @click="emit('import')" class="mb10" v-hasPermi="['wms:item:import']">{{ tr('导入Excel') }}</el-button>
-              <el-button v-if="!viewRestricted" plain icon="Tickets" @click="emit('import-log')" class="mb10" v-hasPermi="['wms:item:import']">{{ tr('上传日志') }}</el-button>
-              <el-button v-if="!viewRestricted" type="primary" plain icon="Plus" @click="emit('add')" class="mb10" v-hasPermi="['wms:item:edit']">{{ tr('新增商品') }}</el-button>
+              <el-button v-if="showExport" type="primary" plain icon="Download" @click="emit('export')" class="mb10">{{ tr('导出Excel') }}</el-button>
+              <el-button v-if="showImport" type="primary" plain icon="Upload" @click="emit('import')" class="mb10">{{ tr('导入Excel') }}</el-button>
+              <el-button v-if="showImport" plain icon="Tickets" @click="emit('import-log')" class="mb10">{{ tr('上传日志') }}</el-button>
+              <el-button v-if="showEdit" type="primary" plain icon="Plus" @click="emit('add')" class="mb10">{{ tr('新增商品') }}</el-button>
             </div>
           </div>
-          <el-table ref="itemTableRef" :data="itemList" :row-key="getItemRowKey" :span-method="spanMethod" border :empty-text="tr('暂无商品')" v-loading="loading" cell-class-name="my-cell">
+          <el-table ref="itemTableRef" :data="itemList" :row-key="getItemRowKey" :span-method="spanMethod" border :empty-text="tr('暂无商品')" cell-class-name="my-cell">
             <el-table-column :label="tr('商品信息')" prop="itemId">
               <template #default="{ row }">
-                <div>{{ row.item.itemName }}</div>
-                <div v-if="fieldVisible('brand') && (row.item.itemBrandIds || row.item.itemBrand)">
+                <div>{{ row.item?.itemName }}</div>
+                <div v-if="fieldVisible('brand') && (row.item?.itemBrandIds || row.item?.itemBrand)">
                   {{ fieldLabel('品牌') }}{{ formatItemBrandNames(row.item) }}
                 </div>
-                <div v-if="fieldVisible('category') && row.item.itemCategory">
-                  {{ row.item.itemCategory ? (fieldLabel('分类') + useWmsStore().itemCategoryMap.get(row.item.itemCategory)?.categoryName) : '' }}
+                <div v-if="fieldVisible('category') && row.item?.itemCategory">
+                  {{ fieldLabel('分类') }}{{ useWmsStore().itemCategoryMap.get(row.item.itemCategory)?.categoryName }}
                 </div>
-                <div v-if="fieldVisible('condition') && row.item.itemCondition">
+                <div v-if="fieldVisible('condition') && row.item?.itemCondition">
                   {{ fieldLabel('成色') }}{{ row.item.itemCondition }}
                 </div>
-                <div v-if="fieldVisible('year') && (row.item.year || row.item.year === 0)">
+                <div v-if="fieldVisible('year') && (row.item?.year || row.item?.year === 0)">
                   {{ fieldLabel('年份') }}{{ row.item.year }}
                 </div>
-                <div v-if="fieldVisible('material') && (row.item.materialName || row.item.material)">
+                <div v-if="fieldVisible('material') && (row.item?.materialName || row.item?.material)">
                   {{ fieldLabel('材质') }}{{ row.item.materialName || row.item.material }}
                 </div>
-                <div v-if="fieldVisible('model') && row.item.modelName">
+                <div v-if="fieldVisible('model') && row.item?.modelName">
                   {{ fieldLabel('包型') }}{{ row.item.modelName }}
                 </div>
-                <div v-if="fieldVisible('size') && row.item.size">
+                <div v-if="fieldVisible('size') && row.item?.size">
                   {{ fieldLabel('尺寸') }}{{ formatItemSizeLabel(row.item.size) }}
                 </div>
                 <div v-if="fieldVisible('dimensions') && formatBagDimensions(row.item)">
                   {{ fieldLabel('长宽高') }}{{ formatBagDimensions(row.item) }}
                 </div>
-                <div v-if="fieldVisible('cared') && row.item.cared !== null && row.item.cared !== undefined">
+                <div v-if="fieldVisible('cared') && row.item?.cared !== null && row.item?.cared !== undefined">
                   {{ fieldLabel('护理') }}{{ row.item.cared ? tr('已护理') : tr('未护理') }}
                 </div>
               </template>
             </el-table-column>
             <el-table-column v-if="fieldVisible('supplier')" :label="tr('供应商')" prop="item.supplierName" align="center" width="140">
               <template #default="{ row }">
-                <span>{{ row.item.supplierName || tr('Luxeaf 自有') }}</span>
+                <span>{{ row.item?.supplierName || tr('Luxeaf 自有') }}</span>
               </template>
             </el-table-column>
             <el-table-column :label="tr('SKU编码')" prop="skuName" align="left">
               <template #default="{ row }">
-                <div v-if="row.itemSku.skuCode">{{ fieldLabel('SKU编码') }}{{ row.itemSku.skuCode }}</div>
+                <div v-if="row.itemSku?.skuCode">{{ fieldLabel('SKU编码') }}{{ row.itemSku.skuCode }}</div>
               </template>
             </el-table-column>
             <el-table-column v-if="fieldVisible('image')" :label="tr('商品图片')" width="110" align="center">
@@ -74,20 +74,20 @@
             </el-table-column>
             <el-table-column v-if="canViewCostPrice || canViewSellingPrice" :label="amountColumnLabel" width="160" align="left">
               <template #default="{ row }">
-                <div v-if="canViewCostPrice && (row.itemSku.costPrice || row.itemSku.costPrice === 0)" class="flex-space-between">
+                <div v-if="canViewCostPrice && (row.itemSku?.costPrice || row.itemSku?.costPrice === 0)" class="flex-space-between">
                   <span>{{ tr('成本价：') }}</span>
-                  <div>{{ (row.itemSku.costPrice || row.itemSku.costPrice === 0) ? row.itemSku.costPrice : '' }}</div>
+                  <div>{{ row.itemSku.costPrice }}</div>
                 </div>
-                <div v-if="canViewSellingPrice && (row.itemSku.sellingPrice || row.itemSku.sellingPrice === 0)" class="flex-space-between">
+                <div v-if="canViewSellingPrice && (row.itemSku?.sellingPrice || row.itemSku?.sellingPrice === 0)" class="flex-space-between">
                   <span>{{ tr('销售价：') }}</span>
-                  <div>{{ (row.itemSku.sellingPrice || row.itemSku.sellingPrice === 0) ? row.itemSku.sellingPrice : '' }}</div>
+                  <div>{{ row.itemSku.sellingPrice }}</div>
                 </div>
               </template>
             </el-table-column>
-            <el-table-column v-if="!viewRestricted" v-hasPermi="['wms:item:edit']" :label="tr('操作')" align="right" header-align="left" prop="itemId" width="200">
+            <el-table-column v-if="showEdit" :label="tr('操作')" align="right" header-align="left" width="200">
               <template #default="scope">
-                <el-button link type="primary" @click="emit('delete', scope.row)" icon="Delete" v-hasPermi="['wms:item:edit']">{{ tr('删除') }}</el-button>
-                <el-button link type="primary" @click="emit('update', scope.row)" icon="Edit" v-hasPermi="['wms:item:edit']">{{ tr('修改') }}</el-button>
+                <el-button link type="primary" @click="emit('delete', scope.row)" icon="Delete">{{ tr('删除') }}</el-button>
+                <el-button link type="primary" @click="emit('update', scope.row)" icon="Edit">{{ tr('修改') }}</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -97,7 +97,8 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
+import auth from '@/plugins/auth'
 import { Expand } from '@element-plus/icons-vue'
 import { useWmsStore } from '@/store/modules/wms'
 import { formatBrandNames } from '@/utils/itemBrand'
@@ -120,6 +121,10 @@ const props = defineProps({
   formatItemSizeLabel: { type: Function, default: (size) => size },
   tr: { type: Function, required: true }
 })
+
+const showExport = computed(() => auth.hasPermi('wms:item:list'))
+const showImport = computed(() => !props.viewRestricted && auth.hasPermi('wms:item:import'))
+const showEdit = computed(() => !props.viewRestricted && auth.hasPermi('wms:item:edit'))
 
 const emit = defineEmits([
   'toggle-category',
