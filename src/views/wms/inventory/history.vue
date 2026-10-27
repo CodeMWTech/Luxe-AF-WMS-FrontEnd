@@ -26,7 +26,7 @@
           </el-radio-group>
         </el-form-item>
         <el-form-item class="filter-item" :label="tr('仓库')" prop="warehouseId">
-          <WarehouseLocationSelect v-model="queryParams.warehouseId" clearable include-inactive />
+          <WarehouseLocationSelect v-model="queryParams.warehouseId" clearable include-inactive filter-mode />
         </el-form-item>
         <el-form-item class="filter-item" :label="tr('操作单号')" prop="orderNo">
           <el-input v-model="queryParams.orderNo" clearable :placeholder="tr('请输入操作单号')"></el-input>

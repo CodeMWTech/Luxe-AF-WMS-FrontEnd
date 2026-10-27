@@ -47,7 +47,7 @@
         <el-row :gutter="16">
           <el-col :xs="24" :sm="12" :md="6" :lg="6">
             <el-form-item :label="tr('仓库')" prop="warehouseId">
-              <WarehouseLocationSelect v-model="queryParams.warehouseId" clearable include-inactive />
+              <WarehouseLocationSelect v-model="queryParams.warehouseId" clearable include-inactive filter-mode />
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="12" :md="6" :lg="6">
