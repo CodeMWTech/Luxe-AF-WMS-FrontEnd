@@ -1,10 +1,12 @@
 <template>
   <el-config-provider :locale="elementLocale">
     <router-view />
+    <LiveShowReminder />
   </el-config-provider>
 </template>
 
 <script setup>
+import LiveShowReminder from '@/components/LiveShowReminder/index.vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import zhCn from 'element-plus/lib/locale/lang/zh-cn'

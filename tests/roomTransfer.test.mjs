@@ -15,7 +15,7 @@ function setup(permissions=['wms:roomTransfer:operate','wms:roomTransfer:list'])
   const draft={id:'80',targetWarehouseId:'12',version:1,orderStatus:0,details:[{id:'81',skuCodeSnapshot:'A',quantity:1}],remark:''}
   const api=new Proxy({}, {get:(_,name)=>(...args)=>{calls.push({name,args});return Promise.resolve(handlers[name]?.(...args) ?? {data:{...draft},rows:[],total:0})}})
   const route={fullPath:'/inventory/room-transfer?token=abc',path:'/inventory/room-transfer',query:{token:'abc'}}
-  const context={...vue,console,Object,Promise,setTimeout,api,warehouseApi:{historicalLocations:async()=>({data:nodes})},useRoute:()=>route,useRouter:()=>({push:value=>{calls.push({name:'navigate',args:[value]});return Promise.resolve()},replace:value=>Promise.resolve()}),useUserStore:()=>({permissions,roles:[]}),useSettingsStore:()=>({language:'zh-cn'}),translateByMap:t=>t,getCurrentInstance:()=>({proxy:{download:()=>{}}}),onMounted:callback=>{hooks.mounted=callback},watch:(_,callback)=>{hooks.routeChanged=callback},ElMessage:Object.fromEntries(['success','warning'].map(name=>[name,text=>messages.push({name,text})])),ElMessageBox:{confirm:()=>Promise.resolve()}}
+  const context={...vue,console,Object,Promise,setTimeout,api,warehouseApi:{historicalLocations:async()=>({data:nodes})},useRoute:()=>route,useRouter:()=>({push:value=>{calls.push({name:'navigate',args:[value]});return Promise.resolve()},replace:value=>Promise.resolve()}),useUserStore:()=>({permissions,roles:[]}),useSettingsStore:()=>({language:'zh-cn'}),translateByMap:t=>t,getCurrentInstance:()=>({proxy:{download:()=>{}}}),onBeforeUnmount:()=>{},onMounted:callback=>{hooks.mounted=callback},watch:(_,callback)=>{hooks.routeChanged=callback},ElMessage:Object.fromEntries(['success','warning'].map(name=>[name,text=>messages.push({name,text})])),ElMessageBox:{confirm:()=>Promise.resolve()}}
   vm.createContext(context);vm.runInContext(script,context)
   const state=context.component.setup({}, {expose:()=>{}});state.order.value={...draft};state.sku.value='A'
   return {state,calls,messages,handlers,route,draft,hooks,nodes,warehouseApi:context.warehouseApi}
@@ -116,4 +116,52 @@ test('unknown completion result keeps details but blocks further writes until re
 test('destination lookup failure blocks writes until a successful refresh',async()=>{
   const s=setup();s.warehouseApi.historicalLocations=()=>{throw new Error('Network Error')}
   await assert.rejects(s.state.reload(),/Network Error/);assert.equal(s.state.editable.value,false);assert.ok(s.state.invalid.value.includes('刷新'))
+})
+
+test('live-room scan opens operation choice while ordinary rooms preserve the original flow',async()=>{
+  const s=setup();s.handlers.resolveRoom=()=>({data:{id:'12',isLiveRoom:true}})
+  await s.state.init();assert.equal(s.state.operationVisible.value,true);assert.equal(s.state.operationType.value,1)
+  s.state.operationType.value=1;await s.state.chooseOperation();assert.equal(s.state.operationVisible.value,false);assert.equal(s.calls.filter(c=>c.name==='createTransfer').length,0)
+  s.handlers.resolveRoom=()=>({data:{id:'12',isLiveRoom:false}});await s.state.init();assert.equal(s.state.operationVisible.value,false)
+})
+test('show creation explicitly sends type 3 and opens scanner modal',async()=>{
+  const s=setup();s.state.operationType.value=3;s.handlers.createTransfer=()=>({data:{...s.draft,movementType:3}})
+  await s.state.chooseOperation();assert.equal(s.calls.find(c=>c.name==='createTransfer').args[0].movementType,3);assert.equal(s.state.showVisible.value,true)
+})
+test('cancelling show entry cancels the persisted draft and hides its modal',async()=>{
+  const s=setup();s.state.order.value={...s.draft,movementType:3};s.state.showVisible.value=true
+  s.handlers.cancelTransfer=()=>({data:{...s.draft,movementType:3,orderStatus:-1}})
+  await s.state.closeShow();assert.equal(s.state.showVisible.value,false);assert.equal(s.calls.find(c=>c.name==='cancelTransfer').args[1].version,1)
+})
+test('confirm show closes entry only after successful completion and retains conflicts',async()=>{
+  const s=setup();s.state.order.value={...s.draft,movementType:3};s.state.showVisible.value=true
+  s.handlers.saveTransfer=()=>({data:{...s.draft,movementType:3,version:2}})
+  s.handlers.completeTransfer=()=>({data:{completed:false,order:{...s.draft,movementType:3,version:3},conflicts:[]}})
+  await s.state.confirmShow();assert.equal(s.state.showVisible.value,true)
+  s.handlers.completeTransfer=()=>({data:{completed:true,message:'调货完成',order:{...s.draft,movementType:3,orderStatus:1,showStatus:'PENDING',version:4}}})
+  await s.state.confirmShow();assert.equal(s.state.showVisible.value,false)
+})
+
+test('viewing the same show order reopens its modal without requiring navigation',async()=>{
+  const s=setup();s.route.query={id:'80'};s.state.showVisible.value=false;s.handlers.getTransfer=()=>({data:{...s.draft,movementType:3,orderStatus:1}})
+  await s.state.open('80');assert.equal(s.state.showVisible.value,true);assert.equal(s.calls.some(c=>c.name==='navigate'),false)
+})
+test('scanning the same live-room code reopens operation selection',async()=>{
+  const s=setup();s.state.roomCode.value='abc';s.handlers.resolveRoom=()=>({data:{id:'12',isLiveRoom:true}})
+  await s.state.enterRoom();assert.equal(s.state.operationVisible.value,true)
+})
+
+test('recovery permission enables failed-order copying without an admin role',async()=>{
+  const s=setup(['wms:roomTransfer:list','wms:roomTransfer:recover'])
+  s.state.order.value={...s.draft,orderStatus:2};s.handlers.copyFailedTransfer=()=>({data:{...s.draft,id:'90'}})
+  assert.equal(s.state.canRecover.value,true);await s.state.copyFailed()
+  assert.equal(s.calls.find(c=>c.name==='copyFailedTransfer').args[0],'80')
+  assert.equal(s.calls.find(c=>c.name==='navigate').args[0].query.id,'90')
+})
+test('missing recovery permission and nonfailed states cannot invoke recovery',async()=>{
+  const denied=setup(['wms:roomTransfer:list','wms:roomTransfer:operate']);denied.state.order.value={...denied.draft,orderStatus:2}
+  assert.equal(denied.state.canRecover.value,false);await denied.state.copyFailed();assert.equal(denied.calls.length,0)
+  const s=setup(['wms:roomTransfer:recover'])
+  for(const status of [0,1,-1]) {s.state.order.value={...s.draft,orderStatus:status};assert.equal(s.state.canRecover.value,false);await s.state.copyFailed()}
+  assert.equal(s.calls.length,0)
 })
