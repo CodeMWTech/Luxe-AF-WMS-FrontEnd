@@ -334,13 +334,23 @@
         <el-table-column v-if="!isSupplierUser" :label="text('平台已售中订单编号', 'Platform sold order numbers')" prop="platformSoldOrderNumbers" min-width="230">
           <template #default="{ row }">
             <template v-if="orderNumberLinks(row).length">
-              <el-link
-                v-for="orderNo in orderNumberLinks(row)"
-                :key="orderNo"
-                type="primary"
-                class="order-number-link"
-                @click="openPlatformOrder(orderNo)"
-              >{{ orderNo }}</el-link>
+              <span v-for="orderNo in orderNumberLinks(row)" :key="orderNo" class="order-number-link">
+                <el-tooltip v-if="canOpenPlatformOrders" :content="platformOrderLinkHint(row, orderNo)" :disabled="platformOrderLinkState(row, orderNo).status === 'ready'">
+                  <el-link
+                    type="primary"
+                    :href="platformOrderLinkState(row, orderNo).url || undefined"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    :disabled="platformOrderLinkState(row, orderNo).status === 'loading'"
+                    @click="handlePlatformOrderLinkClick($event, row, orderNo)"
+                  >
+                    {{ orderNo }}
+                    <span v-if="platformOrderLinkState(row, orderNo).status === 'loading'"> · {{ text('加载中…', 'Loading…') }}</span>
+                    <span v-else-if="platformOrderLinkState(row, orderNo).status === 'error'"> · {{ text('重试', 'Retry') }}</span>
+                  </el-link>
+                </el-tooltip>
+                <span v-else>{{ orderNo }}</span>
+              </span>
             </template>
             <span v-else>-</span>
           </template>
@@ -521,10 +531,13 @@
 </template>
 
 <script setup name="SupplierSettlement">
-import { computed, getCurrentInstance, nextTick, onMounted, reactive, ref } from 'vue'
+import { computed, getCurrentInstance, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessageBox } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { supplierDisplayName } from '@/utils/supplier'
+import { listPlatformOrders } from '@/api/wms/platformOrder'
+import { listAllPlatformShops } from '@/api/wms/platformShop'
+import { createOrderLinkLoader, orderLinkKey } from './platformOrderLinks'
 import { getCurrentSupplier, listSupplierNoPage } from '@/api/wms/supplier'
 import {
   confirmSupplierSettlement,
@@ -980,20 +993,51 @@ async function addForcedSkuLines() {
 }
 
 function orderNumberLinks(row) {
-  return String(row?.platformSoldOrderNumbers || '')
+  return [...new Set(String(row?.platformSoldOrderNumbers || '')
     .split(',')
     .map(value => value.trim())
-    .filter(Boolean)
+    .filter(Boolean))]
 }
 
-function openPlatformOrder(orderNo) {
-  const platformOrderId = String(orderNo || '').trim()
-  if (isSupplierUser.value || !platformOrderId || !proxy?.$auth?.hasPermi('wms:platform:list')) return
-  const { href } = router.resolve({
-    name: 'PlatformOrders',
-    query: { platformOrderId }
-  })
-  window.open(href, '_blank', 'noopener,noreferrer')
+const canOpenPlatformOrders = computed(() => identityResolved.value && !isSupplierUser.value
+  && !!proxy?.$auth?.hasPermi('wms:platform:list'))
+const platformOrderLinkStates = reactive(new Map())
+const platformOrderLinkLoader = createOrderLinkLoader({
+  listOrders: listPlatformOrders, listShops: listAllPlatformShops, states: platformOrderLinkStates
+})
+watch([previewVisible, previewPageLines, canOpenPlatformOrders], ([visible, lines, allowed]) => {
+  if (!visible || !allowed) return
+  for (const row of lines) {
+    for (const orderNo of orderNumberLinks(row)) platformOrderLinkLoader.load(row.skuCode, orderNo)
+  }
+}, { immediate: true })
+
+function platformOrderLinkState(row, orderNo) {
+  return platformOrderLinkStates.get(orderLinkKey(row.skuCode, orderNo)) || { status: 'loading' }
+}
+
+function platformOrderLinkHint(row, orderNo) {
+  const state = platformOrderLinkState(row, orderNo)
+  if (state.status === 'ready') return ''
+  if (state.status === 'loading') return text('正在加载外部订单链接', 'Loading external order link')
+  const reasons = {
+    NOT_FOUND: text('未找到关联订单', 'Linked order not found'),
+    AMBIGUOUS: text('匹配到多个不同订单，无法确定跳转目标', 'Multiple different orders matched; the destination is ambiguous'),
+    MISSING: text('缺少平台或店铺跳转信息', 'Platform or shop link information is missing'),
+    QUERY_FAILED: text('外部订单链接加载失败', 'Could not load the external order link')
+  }
+  return (reasons[state.reason] || reasons.QUERY_FAILED) + text('；点击重试', '; click to retry')
+}
+
+async function handlePlatformOrderLinkClick(event, row, orderNo) {
+  if (!canOpenPlatformOrders.value) { event.preventDefault(); return }
+  const state = platformOrderLinkState(row, orderNo)
+  if (state.status === 'ready') return
+  event.preventDefault()
+  if (state.status === 'loading') return
+  const result = await platformOrderLinkLoader.load(row.skuCode, orderNo)
+  if (result.status === 'error') proxy.$modal.msgWarning(platformOrderLinkHint(row, orderNo))
+  else proxy.$modal.msgSuccess(text('链接已准备好，请点击订单号打开', 'Link ready. Click the order number to open it.'))
 }
 
 function removeForcedLine(row) {

@@ -95,7 +95,7 @@ const detail = reactive({ open: false, batch: null })
 const invoiceLoadingId = ref(null)
 const paymentLoadingId = ref(null)
 const selectedAmount = computed(() => selection.value.reduce((total, row) => total + Number(row.amount), 0))
-const flatten = data => flattenSettlement(data, tr)
+const flatten = data => flattenSettlement(data, tr, { isEnglish: isEn.value })
 const candidateSort = reactive({ prop: null, order: null })
 const candidates = computed(() => sortSettlementCandidates(flatten(candidateData.value), candidateSort))
 function sortCandidates({ prop, order }) { Object.assign(candidateSort, { prop, order }) }

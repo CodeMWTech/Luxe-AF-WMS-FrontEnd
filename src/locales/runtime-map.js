@@ -1,6 +1,21 @@
 import livePayrollMessages from './live-payroll'
 
 const zhToEnMap = {
+  "仓库与房间": "Warehouses and Rooms",
+  "新增一级仓库": "Add Warehouse",
+  "新增房间": "Add Room",
+  "层级": "Level",
+  "所属一级仓库": "Parent Warehouse",
+  "直播间": "Live room",
+  "二维码": "QR Code",
+  "修改位置": "Edit Location",
+  "名称不能为空": "Name is required",
+  "房间固定二维码": "Room QR Code",
+  "扫描后登录系统并进入此房间调货": "Scan to sign in and transfer inventory to this room",
+  "确认停用此位置？": "Disable this location?",
+  "确认启用此位置？": "Enable this location?",
+  "确认软删除此位置？历史单据仍保留。": "Delete this location? Historical records will be retained.",
+  "请允许弹出打印窗口": "Allow pop-ups to print the QR code",
   "Show代处理": "Process Show on behalf of owner",
   "代处理原因": "Reason for processing on behalf of owner",
   "正在代处理他人的Show，请填写原因并确认结果": "You are processing another user’s Show. Enter a reason and confirm all outcomes.",
