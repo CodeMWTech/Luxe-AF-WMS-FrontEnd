@@ -208,3 +208,31 @@ test('payment progress uses Pending payment only in stream and batch payment dis
   const message=model.tr('主播：{0}；批次：{1}；金额：{2}。{3}确认后关联开播记录将显示为已结算，此操作不可撤销。',['用户主播','LP-1','20.00',model.tr('请确认已向该主播支付本批次款项。')])
   assert.ok(message.includes('用户主播'));assert.ok(message.includes('cannot be undone'));assert.ok(message.includes('paid to the host'))
 })
+
+test('Other special amount type displays as lowercase others in lists, review, snapshots and CSV only in English', async () => {
+  const context = languageContext('en'), exports = []
+  const original = { manualAdjustments: [{ id: '1', employeeId: '2', businessDate: '2026-10-28', postingDate: '2026-10-28', amount: 500,
+    specialDetails: '[{"typeName":"其他","amount":500,"remark":"其他 social media fee"},{"typeName":"自定义其他","amount":0,"remark":"保留中文"}]', remark: '其他备注原文' }] }
+  const snapshotJson = JSON.stringify(original)
+  const model = await page('settlements/index.vue', context, {
+    listSettlementCandidates: async () => ({ data: original }),
+    getSettlement: async () => ({ data: { settlementNo: 'LP-1', snapshotJson } })
+  }, { '../shared': { ...shared, downloadCsv: (...args) => exports.push(args) } })
+  await model.loadCandidates(); await model.showBatch('1')
+  for (const row of [model.candidates.value[0], model.flatten(original)[0], model.detailRows.value[0]]) {
+    assert.match(row.description, /^others 500.00/)
+    assert.match(row.description, /其他 social media fee/)
+    assert.match(row.description, /自定义其他.*保留中文.*其他备注原文/)
+    assert.equal(row.amount, 500)
+  }
+  model.exportBatch()
+  assert.match(exports[0][2][0].description, /^others 500.00/)
+  context.settings.language = 'zh-cn'
+  assert.match(model.candidates.value[0].description, /^其他 500.00/)
+  assert.match(model.flatten(original)[0].description, /^其他 500.00/)
+  assert.match(model.detailRows.value[0].description, /^其他 500.00/)
+  model.exportBatch()
+  assert.match(exports[1][2][0].description, /^其他 500.00/)
+  assert.equal(JSON.stringify(original), snapshotJson)
+  assert.equal(model.detail.batch.snapshotJson, snapshotJson)
+})
