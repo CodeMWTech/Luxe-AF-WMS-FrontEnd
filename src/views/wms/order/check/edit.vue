@@ -3,11 +3,7 @@
     <el-card :header="isEn ? 'Select warehouse to start stocktake' : '选择仓库后开始盘库'" >
       <el-form>
         <el-form-item :label="tr('仓库')" prop="warehouseId">
-          <el-select v-model="form.warehouseId" :placeholder="tr('请选择仓库')" :disabled="checking"
-                     filterable>
-            <el-option v-for="item in useWmsStore().warehouseList" :key="item.id" :label="item.warehouseName"
-                       :value="item.id"/>
-          </el-select>
+          <WarehouseLocationSelect v-model="form.warehouseId" @change="() => {}" />
         </el-form-item>
         <el-form-item>
           <el-button type="primary" plain="plain" size="default" @click="startCheck" class="action-btn" style="width: 100%!important;">{{ isEn ? 'Start Stocktake' : '开始盘库' }}</el-button>
@@ -28,11 +24,7 @@
             </el-col>
             <el-col :span="6">
               <el-form-item :label="tr('仓库')" prop="warehouseId">
-                <el-select v-model="form.warehouseId" :placeholder="tr('请选择仓库')" :disabled="checking"
-                           filterable>
-                  <el-option v-for="item in useWmsStore().warehouseList" :key="item.id" :label="item.warehouseName"
-                             :value="item.id"/>
-                </el-select>
+                <WarehouseLocationSelect v-model="form.warehouseId" @change="() => {}" />
               </el-form-item>
             </el-col>
           </el-row>
@@ -147,10 +139,11 @@
 </template>
 
 <script setup name="CheckOrderEdit">
+import WarehouseLocationSelect from '@/components/WarehouseLocationSelect/index.vue'
+
 import {computed, getCurrentInstance, onMounted, reactive, ref, toRefs} from "vue";
 const skuSelectRef = ref(null)
 import {addCheckOrder, getCheckOrder, updateCheckOrder, check} from "@/api/wms/checkOrder";
-import {delCheckOrderDetail} from "@/api/wms/checkOrderDetail";
 import {ElMessage} from "element-plus";
 import {useRoute} from "vue-router";
 import {useWmsStore} from '@/store/modules/wms'
@@ -224,16 +217,10 @@ const normalizeDetailRow = (detail = {}) => {
     skuId,
     warehouseId: detail.warehouseId ?? form.value.warehouseId,
     quantity: detail.actualQuantity ?? detail.quantity,
-    checkQuantity: detail.countedQuantity ?? detail.checkQuantity ?? 1,
+    checkQuantity: detail.countedQuantity ?? detail.checkQuantity ?? null,
     itemSku,
     item
   }
-}
-const getDetailCheckQuantity = (detail = {}) => {
-  return Number(detail.countedQuantity ?? detail.checkQuantity ?? 0)
-}
-const isCountedDetail = (detail = {}) => {
-  return getDetailCheckQuantity(detail) > 0
 }
 // 盘库中标识
 const checking = ref(false)
@@ -304,10 +291,11 @@ const save = async () => {
   doSave()
 }
 const getParams = (orderStatus) => {
+  handleChangeQuantity()
   let details = []
   if (form.value.details?.length) {
     // 构建参数
-    details = form.value.details.filter(isCountedDetail).map(it => {
+    details = form.value.details.map(it => {
       return {
         id: it.id,
         orderId: form.value.id,
@@ -319,6 +307,7 @@ const getParams = (orderStatus) => {
   }
   return  {
     id: form.value.id,
+    editToken: form.value.editToken,
     orderNo: form.value.orderNo,
     orderStatus,
     remark: form.value.remark,
@@ -408,6 +397,9 @@ const { markAllowLeave } = useOrderEditLeaveGuard({
 })
 
 const updateToInvalid = async () => {
+  if (isFormDirty()) {
+    return ElMessage.warning('请先暂存修改，或取消编辑后再作废单据')
+  }
   await proxy?.$modal.confirm('确认作废盘库单吗？');
   doSave(-1)
 }
@@ -459,7 +451,7 @@ const loadDetail = (id) => {
   loading.value = true
   getCheckOrder(id).then((response) => {
     const detailRows = Array.isArray(response?.data?.details)
-      ? response.data.details.filter(isCountedDetail).map((it) => normalizeDetailRow(it))
+      ? response.data.details.map((it) => normalizeDetailRow(it))
       : []
     if (detailRows.length) {
       detailRows.forEach(detail => {
@@ -485,21 +477,11 @@ const loadDetail = (id) => {
 }
 
 const handleDeleteDetail = (row, index) => {
-  if (row.id) {
-    proxy.$modal.confirm('确认删除本条商品明细吗？如确认会立即执行！').then(function () {
-      return delCheckOrderDetail(row.id);
-    }).then(() => {
-      form.value.details.splice(index, 1)
-      proxy.$modal.msgSuccess("删除成功");
-    })
-  } else {
-    form.value.details.splice(index, 1)
-  }
-  const rowSkuId = row.skuId ?? row.itemSku?.id
-  const indexOfSelected = selectedSku.value.findIndex(it => String(rowSkuId) === String(it.id))
-  if (indexOfSelected !== -1) {
-    selectedSku.value.splice(indexOfSelected, 1)
-  }
+  // 删除只改变本次编辑；暂存或完成后才写入数据库。
+  form.value.details.splice(index, 1)
+  const skuId = row.skuId ?? row.itemSku?.id
+  const selectedIndex = selectedSku.value.findIndex(it => String(it.id) === String(skuId))
+  if (selectedIndex !== -1) selectedSku.value.splice(selectedIndex, 1)
   handleChangeQuantity()
 }
 

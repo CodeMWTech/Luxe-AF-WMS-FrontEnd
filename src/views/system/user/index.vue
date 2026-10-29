@@ -32,16 +32,15 @@
                <el-form-item label="用户名" prop="userName">
                   <el-input
                      v-model="queryParams.userName"
-                     placeholder="请输入用户名"
+                     :placeholder="tr('搜索用户信息、用户名、手机、邮箱、部门、岗位等')"
                      clearable
-                     style="width: 240px"
+                     style="width: 360px"
                      @keyup.enter="handleQuery"
                   />
                </el-form-item>
                <el-form-item label="手机号码" prop="phonenumber">
                   <el-input
                      v-model="queryParams.phonenumber"
-                     placeholder="请输入手机号码"
                      clearable
                      style="width: 240px"
                      @keyup.enter="handleQuery"
@@ -521,10 +520,20 @@ function getDeptTree() {
     deptOptions.value = response.data;
   });
 };
+/** 构建列表/导出查询参数（用户名框走 keyword 多字段匹配） */
+function buildListQueryParams() {
+  const params = proxy.addDateRange({ ...queryParams.value }, dateRange.value);
+  if (params.userName) {
+    params.keyword = params.userName;
+    delete params.userName;
+  }
+  return params;
+}
+
 /** 查询用户列表 */
 function getList() {
   loading.value = true;
-  listUser(proxy.addDateRange(queryParams.value, dateRange.value)).then(res => {
+  listUser(buildListQueryParams()).then(res => {
     loading.value = false;
     userList.value = res.rows;
     total.value = res.total;
@@ -605,9 +614,7 @@ function handleDelete(row) {
 };
 /** 导出按钮操作 */
 function handleExport() {
-  proxy.download("system/user/export", {
-    ...queryParams.value,
-  },`user_${new Date().getTime()}.xlsx`);
+  proxy.download("system/user/export", buildListQueryParams(), `user_${new Date().getTime()}.xlsx`);
 };
 /** 用户状态修改  */
 function handleStatusChange(row) {

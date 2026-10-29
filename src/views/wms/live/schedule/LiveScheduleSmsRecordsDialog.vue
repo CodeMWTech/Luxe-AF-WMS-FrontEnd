@@ -9,7 +9,7 @@
       <el-table-column :label="tr('预计 / 实际段数')" width="135"><template #default="{ row }">{{ row.segments }} / {{ row.actualSegments || '-' }}</template></el-table-column>
       <el-table-column :label="tr('结果说明')" min-width="165"><template #default="{ row }">{{ row.errorCode ? issueText(row.errorCode, tr) : '-' }}</template></el-table-column>
       <el-table-column prop="createBy" :label="tr('操作人')" width="95" />
-      <el-table-column :label="tr('提交时间')" width="190"><template #default="{ row }">{{ displayTimestamp(row.createTime) }}</template></el-table-column>
+      <el-table-column :label="tr('提交时间')" width="215"><template #default="{ row }">{{ displayTimestamp(row.createTime) }}</template></el-table-column>
       <el-table-column :label="tr('操作')" width="240" align="center" fixed="right"><template #default="{ row }"><div class="record-actions"><el-button link type="primary" size="small" icon="View" @click.stop="showBody(row)">{{ tr('查看正文') }}</el-button><el-button v-if="canSend && row.messageSid" link type="primary" size="small" icon="Refresh" :disabled="refreshing === row.id" @click.stop="refreshStatus(row)">{{ tr('同步状态') }}</el-button></div></template></el-table-column>
     </el-table>
     <el-pagination v-model:current-page="pageNum" :page-size="pageSize" :total="total" layout="total, prev, pager, next" @current-change="load" />

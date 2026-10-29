@@ -1,4 +1,4 @@
-import { listWarehouseNoPage } from '@/api/wms/warehouse';
+import { warehouseOptions, historicalLocations } from '@/api/wms/warehouse';
 import { listMerchantNoPage } from "@/api/wms/merchant";
 import { listItemCategory, treeSelectItemCategory } from "@/api/wms/itemCategory";
 import { listItemBrand } from "@/api/wms/itemBrand";
@@ -19,11 +19,12 @@ export const useWmsStore = defineStore('wms', () => {
   const warehouseMap = ref(new Map());
 
   const getWarehouseList = () => {
-    return listWarehouseNoPage({}).then((res) => {
-      warehouseList.value = res.data;
+    return Promise.all([warehouseOptions({}), historicalLocations()]).then(([active, history]) => {
+      warehouseList.value = (active.data || []).map(node => ({ ...node, warehouseName: node.locationName || node.warehouseName }));
       const map = new Map();
-      warehouseList.value.forEach((supplier) => {
-        map.set(supplier.id, supplier);
+      (history.data || []).forEach(node => {
+        const value = { ...node, warehouseName: node.locationName || node.warehouseName };
+        map.set(node.id, value); map.set(String(node.id), value);
       });
       warehouseMap.value = map;
     });

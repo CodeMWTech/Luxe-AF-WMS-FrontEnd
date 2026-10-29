@@ -1,4 +1,4 @@
-import request from '@/utils/request'
+import request, { download } from '@/utils/request'
 
 const base = '/wms/live'
 
@@ -33,6 +33,7 @@ export const updateSchedule = data => request({ url: `${base}/schedules`, method
 export const deleteSchedule = id => request({ url: `${base}/schedules/${id}`, method: 'delete' })
 
 export const listStreams = params => request({ url: `${base}/streams/list`, method: 'get', params })
+export const getStreamGmvSummary = params => request({ url: `${base}/streams/gmv-summary`, method: 'get', params })
 export const listStreamScheduleOptions = params => request({ url: `${base}/streams/schedule-options`, method: 'get', params })
 export const listStreamRateTypes = params => request({ url: `${base}/streams/rate-types`, method: 'get', params })
 export const addStream = data => request({ url: `${base}/streams`, method: 'post', data, silentError: true })
@@ -81,6 +82,7 @@ export const previewSettlement = data => request({ url: `${base}/settlements/pre
 export const confirmSettlement = data => request({ url: `${base}/settlements`, method: 'post', data })
 export const listSettlements = params => request({ url: `${base}/settlements/list`, method: 'get', params })
 export const getSettlement = id => request({ url: `${base}/settlements/${id}`, method: 'get' })
+export const confirmSettlementPayment = id => request({ url: `${base}/settlements/${id}/confirm-payment`, method: 'post' })
 export const markSettlementPaid = (id, reference) => request({ url: `${base}/settlements/${id}/paid`, method: 'post', data: { reference } })
 export const listPayrollAdjustments = params => request({ url: `${base}/adjustments/list`, method: 'get', params })
 export const exportPayrollAdjustments = params => request({ url: `${base}/adjustments/export`, method: 'get', params })
@@ -102,3 +104,12 @@ export const previewScheduleSms = data => request({ url: `${base}/schedule-sms/p
 export const sendScheduleSms = data => request({ url: `${base}/schedule-sms/send`, method: 'post', data, timeout: 30000 })
 export const listScheduleSmsRecords = params => request({ url: `${base}/schedule-sms/records`, method: 'get', params })
 export const refreshScheduleSmsStatus = id => request({ url: `${base}/schedule-sms/records/${id}/refresh`, method: 'post', timeout: 25000 })
+
+export const previewBulkSettlement = data => request({ url: `${base}/settlements/bulk/preview`, method: 'post', data })
+export const confirmBulkSettlement = data => request({ url: `${base}/settlements/bulk`, method: 'post', data })
+export const saveSettlementMemo = (id, memo) => request({ url: `${base}/settlements/${id}/memo`, method: 'put', data: { memo } })
+
+// 运营记录使用独立权限；导出仅携带已应用筛选，不传分页。
+export const listOperationRecords = params => request({ url: `${base}/operation-records/list`, method: 'get', params })
+export const getOperationRecordOptions = () => request({ url: `${base}/operation-records/options`, method: 'get' })
+export const exportOperationRecords = (params, filename) => download(`${base}/operation-records/export`, params, filename, { skipHeaderTranslate: true })

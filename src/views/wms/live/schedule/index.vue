@@ -5,19 +5,14 @@
       <div class="live-actions"><el-button v-hasPermi="['wms:live:schedule:sms:list']" @click="smsRecordsRef.show(weekDateRange[0])">{{ tr('短信记录') }}</el-button><el-button type="primary" v-hasPermi="['wms:live:schedule:sms:send']" @click="smsRef.show(weekDateRange[0], query.employeeId)">{{ tr('发送排班短信') }}</el-button><el-button @click="exportRows">{{ tr('导出 CSV') }}</el-button><el-button type="primary" v-hasPermi="['wms:live:schedule:edit']" @click="openDialog()">{{ tr('新增排班') }}</el-button></div>
     </div>
     <el-card class="live-filter schedule-filter" shadow="never">
+      <WeekNavigation class="schedule-week-row" :range="weekDateRange" @today="goToCurrentWeek" @previous="shiftWeek(-1)" @next="shiftWeek(1)" @select="handleWeekChange" />
       <div class="schedule-filter-bar">
         <el-form class="schedule-filter-form" :inline="true">
-          <el-form-item class="week-filter-item" :label="tr('周次')">
-            <div class="week-picker-field">
-              <el-date-picker class="week-picker-input" v-model="selectedWeek" type="date" value-format="YYYY-MM-DD" format="MM/DD/YYYY" placeholder="MM/DD/YYYY" popper-class="schedule-week-picker-popper" :cell-class-name="weekCellClassName" :editable="true" :clearable="false" @change="handleWeekChange" />
-            </div>
-          </el-form-item>
           <el-form-item :label="tr('主播')"><LiveEmployeeSelect v-model="query.employeeId"   :placeholder="tr('全部主播')" :employees="options.employees" /></el-form-item>
           <el-form-item :label="tr('直播平台')"><LiveAccountSelect v-model="query.accountId" clearable :placeholder="tr('全部直播平台')" :accounts="options.accounts" /></el-form-item>
           <el-form-item :label="tr('场次')"><el-select v-model="query.rateTypeId" clearable :placeholder="tr('全部场次')"><el-option v-for="v in options.rateTypes" :key="v.id" :label="v.typeName" :value="v.id" /></el-select></el-form-item>
           <el-form-item class="query-action"><el-button type="primary" @click="load">{{ tr('查询') }}</el-button></el-form-item>
-        <el-form-item :label="tr('主播状态')"><el-select v-model="query.employeeScope" @change="query.pageNum = 1; load()"><el-option :label="tr('全部')" value="ALL" /><el-option :label="tr('在职/试用期')" value="ACTIVE" /><el-option :label="tr('已归档')" value="INACTIVE" /></el-select></el-form-item></el-form>
-
+        </el-form>
       </div>
     </el-card>
     <el-card class="operator-color-panel" shadow="never" :aria-label="tr('运营颜色')">
@@ -48,8 +43,21 @@
       <el-alert v-if="colorDialog.error" :title="tr('颜色保存失败，原颜色已保留，请重试')" type="error" :closable="false" show-icon />
       <template #footer><el-button :disabled="colorDialog.saving" @click="colorDialog.open = false">{{ tr('取消') }}</el-button><el-button type="primary" :loading="colorDialog.saving" :disabled="!validColor" @click="saveColor">{{ tr(colorDialog.error ? '重试' : '保存') }}</el-button></template>
     </el-dialog>
-    <el-dialog data-runtime-i18n-ignore="true" v-model="dialog.open" class="schedule-dialog" :title="dialog.form.id ? tr(canEdit ? '编辑排班' : '排班详情') : tr('新增排班')" width="820px" append-to-body>
-      <el-form ref="formRef" :model="dialog.form" :rules="rules" :disabled="!canEdit" :label-width="isEn ? '128px' : '92px'">
+    <el-dialog data-runtime-i18n-ignore="true" v-model="dialog.open" class="schedule-dialog" :title="dialog.form.id ? tr(canEdit && !isDeletedSchedule(dialog.form) ? '编辑排班' : '排班详情') : tr('新增排班')" width="820px" append-to-body :close-on-click-modal="!dialog.deleting && !dialog.saving" :close-on-press-escape="!dialog.deleting && !dialog.saving" :show-close="!dialog.deleting && !dialog.saving">
+      <el-descriptions v-if="isDeletedSchedule(dialog.form) || (!canEdit && dialog.form.id)" :column="2" border>
+        <el-descriptions-item :label="tr('记录状态')">{{ tr(isDeletedSchedule(dialog.form) ? '已删除' : '有效') }}</el-descriptions-item>
+        <el-descriptions-item :label="tr('日期')">{{ displayDate(dialog.form.scheduleDate) }}</el-descriptions-item>
+        <el-descriptions-item :label="tr('主播')">{{ dialog.form.employeeName }}</el-descriptions-item>
+        <el-descriptions-item :label="tr('直播平台')">{{ dialog.form.accountLabel }}</el-descriptions-item>
+        <el-descriptions-item :label="tr('场次类型')">{{ dialog.form.rateTypeName }}</el-descriptions-item>
+        <el-descriptions-item :label="tr('运营')">{{ dialog.form.operatorName || tr('待配运营') }}</el-descriptions-item>
+        <el-descriptions-item :label="tr('开始时间')">{{ displayTime(dialog.form.startTime) }}</el-descriptions-item>
+        <el-descriptions-item :label="tr('结束时间')">{{ displayTime(dialog.form.endTime) }}</el-descriptions-item>
+        <el-descriptions-item v-if="isDeletedSchedule(dialog.form)" :label="tr('删除人')">{{ dialog.form.deletedBy }}</el-descriptions-item>
+        <el-descriptions-item v-if="isDeletedSchedule(dialog.form)" :label="tr('删除时间')">{{ displayDateTime(dialog.form.deletedTime) }}</el-descriptions-item>
+        <el-descriptions-item :label="tr('备注')" :span="2">{{ dialog.form.remark || '—' }}</el-descriptions-item>
+      </el-descriptions>
+      <el-form v-else ref="formRef" :model="dialog.form" :rules="rules" :disabled="!canEdit" :label-width="isEn ? '128px' : '92px'">
         <div class="dialog-grid">
           <el-form-item :label="tr('日期')" prop="scheduleDate"><el-date-picker v-model="dialog.form.scheduleDate" type="date" value-format="YYYY-MM-DD" :format="LIVE_DATE_FORMAT" @change="handleHostOrDateChange" /></el-form-item>
           <el-form-item :label="tr('主播')" prop="employeeId"><LiveEmployeeSelect v-model="dialog.form.employeeId"  @change="handleHostOrDateChange" :employees="hostOptions" /></el-form-item>
@@ -67,12 +75,11 @@
               <small v-if="hasScheduleRateScope && !dialog.loadingRateTypes && !dialog.rateTypes.length">{{ tr('请先在费率配置中启用该主播、直播平台和日期对应的场次类型') }}</small>
             </div>
           </el-form-item>
-          <el-form-item :label="tr('开始时间')" prop="startTime"><el-time-picker v-model="dialog.form.startTime" value-format="HH:mm:ss" format="HH:mm" @change="formRef?.validateField('endTime')" /></el-form-item>
-          <el-form-item :label="tr('结束时间')" prop="endTime"><el-time-picker v-model="dialog.form.endTime" value-format="HH:mm:ss" format="HH:mm" /></el-form-item>
-          <el-form-item :label="tr('排班状态')"><el-select v-model="dialog.form.scheduleStatus"><el-option :label="tr('已确认')" value="CONFIRMED" /><el-option :label="tr('待确认')" value="PENDING" /><el-option :label="tr('已取消')" value="CANCELLED" /></el-select></el-form-item>
+          <el-form-item :label="tr('开始时间')" prop="startTime"><el-config-provider :locale="timePickerLocale"><el-time-picker v-model="dialog.form.startTime" value-format="HH:mm:ss" :format="LIVE_TIME_FORMAT" @change="formRef?.validateField('endTime')" /></el-config-provider></el-form-item>
+          <el-form-item :label="tr('结束时间')" prop="endTime"><el-config-provider :locale="timePickerLocale"><el-time-picker v-model="dialog.form.endTime" value-format="HH:mm:ss" :format="LIVE_TIME_FORMAT" /></el-config-provider></el-form-item>
           <el-form-item :label="tr('运营')" prop="operatorId">
             <el-select v-model="dialog.form.operatorId" filterable clearable :placeholder="tr('请选择运营')">
-              <el-option v-for="operator in selectableOperators" :key="operator.employeeId" :value="operator.employeeId" :label="operator.name" :disabled="!isActiveOperator(operator)" />
+              <el-option v-for="operator in selectableOperators" :key="operator.employeeId" :value="operator.employeeId" :label="liveEmployeeOptionLabel({ ...operator, label: operator.name }, tr)" :disabled="!isActiveOperator(operator)" />
             </el-select>
           </el-form-item>
           <el-form-item class="wide" :label="tr('备注')"><el-input v-model="dialog.form.remark" type="textarea" :rows="2" /></el-form-item>
@@ -80,8 +87,8 @@
       </el-form>
       <template #footer>
         <div class="schedule-dialog-footer">
-          <el-button v-if="dialog.form.id && canEdit" type="danger" plain @click="remove(dialog.form)">{{ tr('删除排班') }}</el-button>
-          <div class="schedule-dialog-actions"><el-button @click="dialog.open=false">{{ tr('取消') }}</el-button><el-button v-if="canEdit" type="primary" :loading="dialog.saving" :disabled="dialog.loadingRateTypes" @click="submit">{{ tr('保存') }}</el-button></div>
+          <el-button v-if="dialog.form.id && canRemove && !isDeletedSchedule(dialog.form)" :loading="dialog.deleting" :disabled="dialog.saving" type="danger" plain @click="remove(dialog.form)">{{ tr('删除排班') }}</el-button>
+          <div class="schedule-dialog-actions"><el-button :disabled="dialog.deleting || dialog.saving" @click="dialog.open=false">{{ tr('取消') }}</el-button><el-button v-if="canEdit && !isDeletedSchedule(dialog.form)" type="primary" :loading="dialog.saving" :disabled="dialog.loadingRateTypes || dialog.deleting" @click="submit">{{ tr('保存') }}</el-button></div>
         </div>
       </template>
     </el-dialog>
@@ -91,24 +98,30 @@
 </template>
 
 <script setup>
+import en from 'element-plus/lib/locale/lang/en'
+import zhCn from 'element-plus/lib/locale/lang/zh-cn'
 import ScheduleBoard from './ScheduleBoard.vue'
+import WeekNavigation from './WeekNavigation.vue'
 import LiveScheduleSmsDialog from './LiveScheduleSmsDialog.vue'
 import LiveScheduleSmsRecordsDialog from './LiveScheduleSmsRecordsDialog.vue'
-import { idKey, isActiveOperator, assignmentSummary } from './scheduleDisplay'
+import { idKey, isActiveOperator, isDeletedSchedule, assignmentSummary } from './scheduleDisplay'
 import { checkPermi } from '@/utils/permission'
 import LiveAccountSelect from '../components/LiveAccountSelect.vue'
 import { useLiveI18n } from '../useLiveI18n'
 import LiveEmployeeSelect from '../components/LiveEmployeeSelect.vue'
 import { onActivated, computed, getCurrentInstance, onMounted, reactive, ref } from 'vue'
 import { addSchedule, deleteSchedule, getLiveOptions, listScheduleCalendar, listScheduleRateAccounts, listScheduleRateTypes, updateSchedule, listScheduleOperators, updateScheduleOperatorColor, listScheduleHosts } from '@/api/wms/livePayroll'
-import { displayDate, downloadCsv, isoDate, LIVE_DATE_FORMAT, weekRange, selectedWeekRange } from '../shared'
+import { displayTime, displayDateTime, LIVE_TIME_FORMAT, displayDate, downloadCsv, isoDate, LIVE_DATE_FORMAT, weekRange, selectedWeekRange, liveEmployeeOptionLabel } from '../shared'
 const { tr, isEn, messageNode } = useLiveI18n()
+// Keep translated picker buttons, while Day.js always formats the period as am/pm.
+const timePickerLocale = computed(() => ({ ...(isEn.value ? en : zhCn), name: 'en' }))
 const { proxy } = getCurrentInstance()
 const smsRef = ref(), smsRecordsRef = ref()
 function handleSmsSent(week) { if (checkPermi(['wms:live:schedule:sms:list'])) smsRecordsRef.value.show(week) }
 
 const loading = ref(false), view = ref('channel'), formRef = ref()
 const canEdit = computed(() => checkPermi(['wms:live:schedule:edit']))
+const canRemove = computed(() => checkPermi(['wms:live:schedule:remove']))
 const operators = ref([])
 let colorSaveSequence = 0
 const savedColors = new Map()
@@ -138,9 +151,17 @@ const selectableOperators = computed(() => {
   }
   return result
 })
-const selectedWeek = ref(weekRange()[0]), query = reactive({ employeeScope: 'ALL', employeeId: null, accountId: null, rateTypeId: null })
+const SCHEDULE_WEEK_STORAGE_KEY = 'live-payroll:schedule:selected-week'
+function loadSelectedWeek() {
+  try {
+    const saved = localStorage.getItem(SCHEDULE_WEEK_STORAGE_KEY)
+    if (/^\d{4}-\d{2}-\d{2}$/.test(saved) && isoDate(parseLocalDate(saved)) === saved) return selectedWeekRange(saved)[0]
+  } catch (_) {}
+  return weekRange()[0]
+}
+const selectedWeek = ref(loadSelectedWeek()), query = reactive({ employeeId: null, accountId: null, rateTypeId: null })
 const options = reactive({ employees: [], accounts: [], rateTypes: [] }), rows = ref([])
-const dialog = reactive({ open: false, form: {}, loaded: null, rateTypes: [], rateAccountIds: [], loadingRateTypes: false, loadingRateAccounts: false, saving: false })
+const dialog = reactive({ open: false, form: {}, loaded: null, rateTypes: [], rateAccountIds: [], loadingRateTypes: false, loadingRateAccounts: false, saving: false, deleting: false })
 let rateTypeRequestSequence = 0
 let rateAccountRequestSequence = 0
 const hasScheduleRateScope = computed(() => Boolean(dialog.form.scheduleDate && dialog.form.employeeId && dialog.form.accountId))
@@ -171,24 +192,27 @@ const validateEndTime = (_rule, value, callback) => {
 const rules = computed(() => ({ scheduleDate: [{ required: true, message: tr('请选择日期') }], employeeId: [{ required: true, message: tr('请选择主播') }], accountId: [{ required: true, message: tr('请选择直播平台') }], rateTypeId: [{ required: true, message: tr('请选择场次类型') }], startTime: [{ required: true, message: tr('请选择开始时间') }], endTime: [{ validator: validateEndTime, trigger: 'change' }] }))
 const weekDateRange = computed(() => selectedWeekRange(selectedWeek.value))
 const days = computed(() => {
-  const sunday = parseLocalDate(weekDateRange.value[0])
+  const monday = parseLocalDate(weekDateRange.value[0])
   return Array.from({ length: 7 }, (_, index) => {
-    const current = new Date(sunday)
-    current.setDate(sunday.getDate() + index)
+    const current = new Date(monday)
+    current.setDate(monday.getDate() + index)
     const date = isoDate(current)
     return { key: date, date, month: current.getMonth() + 1, day: current.getDate(), today: date === isoDate() }
   })
 })
 const calendarWeeks = computed(() => [days.value])
 function parseLocalDate(value) { const [year, month, day] = String(value).split('-').map(Number); return new Date(year, month - 1, day) }
-function weekCellClassName(date) {
-  const value = isoDate(date)
-  if (value < weekDateRange.value[0] || value > weekDateRange.value[1]) return ''
-  if (value === weekDateRange.value[0]) return 'schedule-week-cell schedule-week-start'
-  if (value === weekDateRange.value[1]) return 'schedule-week-cell schedule-week-end'
-  return 'schedule-week-cell'
+async function handleWeekChange(date) {
+  selectedWeek.value = selectedWeekRange(date || selectedWeek.value)[0]
+  try { localStorage.setItem(SCHEDULE_WEEK_STORAGE_KEY, selectedWeek.value) } catch (_) {}
+  await load()
 }
-async function handleWeekChange() { selectedWeek.value = weekDateRange.value[0]; await load() }
+async function shiftWeek(offset) {
+  const monday = parseLocalDate(weekDateRange.value[0])
+  monday.setDate(monday.getDate() + offset * 7)
+  await handleWeekChange(isoDate(monday))
+}
+async function goToCurrentWeek() { await handleWeekChange(isoDate()) }
 let loadSequence = 0
 async function load() {
   const sequence = ++loadSequence
@@ -208,6 +232,7 @@ async function load() {
 }
 function defaultScheduleDate() { const today = isoDate(); return today >= weekDateRange.value[0] && today <= weekDateRange.value[1] ? today : weekDateRange.value[0] }
 async function refreshScheduleRateAccounts() {
+  if (isDeletedSchedule(dialog.form) || !canEdit.value) return
   const requestSequence = ++rateAccountRequestSequence
   const employeeId = dialog.form.employeeId
   const scheduleDate = dialog.form.scheduleDate
@@ -237,6 +262,7 @@ async function refreshScheduleRateAccounts() {
   }
 }
 async function refreshScheduleRateTypes() {
+  if (isDeletedSchedule(dialog.form) || !canEdit.value) return
   const requestSequence = ++rateTypeRequestSequence
   dialog.rateTypes = []
   if (!hasScheduleRateScope.value) { dialog.form.rateTypeId = null; dialog.loadingRateTypes = false; return }
@@ -260,27 +286,41 @@ async function handleAccountChange() {
   await refreshScheduleRateTypes()
 }
 async function openDialog(row = {}) {
-  if (!row.id && !canEdit.value) return
-  dialog.form = { id: row.id, employeeName: row.employeeName || '', scheduleDate: row.scheduleDate || defaultScheduleDate(), employeeId: row.employeeId || null, accountId: row.accountId || null, rateTypeId: row.rateTypeId || null, startTime: row.startTime || '09:00:00', endTime: row.endTime || '17:00:00', remark: row.remark || '', scheduleStatus: row.scheduleStatus || 'CONFIRMED', operatorId: row.operatorEmployeeId ?? row.operatorId ?? null, operatorName: row.operatorName || '' }
+  if (dialog.deleting || dialog.saving || (!row.id && !canEdit.value)) return
+  ++rateAccountRequestSequence; ++rateTypeRequestSequence
+  dialog.loadingRateAccounts = false; dialog.loadingRateTypes = false
+  dialog.form = { delFlag: row.delFlag || '0', deletedBy: row.deletedBy, deletedTime: row.deletedTime, accountLabel: row.accountLabel, rateTypeName: row.rateTypeName, id: row.id, employeeName: row.employeeName || '', scheduleDate: row.scheduleDate || defaultScheduleDate(), employeeId: row.employeeId || null, accountId: row.accountId || null, rateTypeId: row.rateTypeId || null, startTime: row.startTime || '09:00:00', endTime: row.endTime || '17:00:00', remark: row.remark || '', operatorId: row.operatorEmployeeId ?? row.operatorId ?? null, operatorName: row.operatorName || '' }
   dialog.loaded = row.id ? { employeeId: dialog.form.employeeId, scheduleDate: dialog.form.scheduleDate, accountId: dialog.form.accountId } : null
   if (dialog.form.operatorId != null) dialog.form.operatorId = operators.value.find(o => idKey(o.employeeId) === idKey(dialog.form.operatorId))?.employeeId || dialog.form.operatorId
   dialog.open = true
+  dialog.rateTypes = row.rateTypeId ? [{ id: row.rateTypeId, typeName: row.rateTypeName || '-' }] : []
+  if (isDeletedSchedule(row) || !canEdit.value) return
   await refreshScheduleRateAccounts()
   await refreshScheduleRateTypes()
 }
 async function submit() {
-  if (!canEdit.value || dialog.saving) return
+  if (!canEdit.value || isDeletedSchedule(dialog.form) || dialog.saving || dialog.deleting) return
   await formRef.value.validate()
   const form = dialog.form
   if (!hostOptions.value.some(host => idKey(host.value) === idKey(form.employeeId))) return proxy.$modal.msgWarning(tr('请选择岗位为主播的人员'))
-  const { operatorId, operatorName, ...payload } = form
+  const { operatorId, operatorName, delFlag, deletedBy, deletedTime, accountLabel, rateTypeName, ...payload } = form
   payload.operatorEmployeeId = operatorId || null
   dialog.saving = true
   try { await (form.id ? updateSchedule(payload) : addSchedule(payload)); proxy.$modal.msgSuccess(tr('保存成功')); dialog.open = false; await load() }
   finally { dialog.saving = false }
 }
-async function remove(row) { if (!canEdit.value) return; await proxy.$modal.confirm(messageNode(tr('确认删除 {0} 的排班？', [row.employeeName]))); await deleteSchedule(row.id); proxy.$modal.msgSuccess(tr('删除成功')); dialog.open = false; load() }
-function exportRows() { downloadCsv(tr('主播排班-{0}-{1}.csv', [weekDateRange.value[0], weekDateRange.value[1]]), [{ key: 'scheduleDate', label: tr('日期') }, { key: 'employeeName', label: tr('主播') }, { key: 'accountLabel', label: tr('直播平台') }, { key: 'startTime', label: tr('开始时间') }, { key: 'endTime', label: tr('结束时间') }, { key: 'rateTypeName', label: tr('场次类型') }, { key: 'operators', label: tr('运营') }, { key: 'scheduleStatus', label: tr('排班状态') }, { key: 'remark', label: tr('备注') }], rows.value.map(row => ({ ...row, operators: assignmentSummary(row), scheduleDate: displayDate(row.scheduleDate) }))) }
+async function remove(row) {
+  if (!canRemove.value || !row.id || isDeletedSchedule(row) || dialog.deleting || dialog.saving) return
+  dialog.deleting = true
+  try {
+    await proxy.$modal.confirm(messageNode(tr('确认删除 {0} 的排班？删除后保留记录，且不再占用该时间段。', [row.employeeName])))
+    await deleteSchedule(row.id)
+    proxy.$modal.msgSuccess(tr('删除成功'))
+    dialog.open = false
+    await load()
+  } finally { dialog.deleting = false }
+}
+function exportRows() { downloadCsv(tr('主播排班-{0}-{1}.csv', [weekDateRange.value[0], weekDateRange.value[1]]), [{ key: 'scheduleDate', label: tr('日期') }, { key: 'employeeName', label: tr('主播') }, { key: 'accountLabel', label: tr('直播平台') }, { key: 'startTime', label: tr('开始时间') }, { key: 'endTime', label: tr('结束时间') }, { key: 'rateTypeName', label: tr('场次类型') }, { key: 'operators', label: tr('运营') }, { key: 'recordStatus', label: tr('记录状态') }, { key: 'deletedBy', label: tr('删除人') }, { key: 'deletedTime', label: tr('删除时间') }, { key: 'remark', label: tr('备注') }], rows.value.map(row => ({ ...row, deletedTime: displayDateTime(row.deletedTime), recordStatus: tr(isDeletedSchedule(row) ? '已删除' : '有效'), startTime: displayTime(row.startTime), endTime: displayTime(row.endTime), operators: assignmentSummary(row), scheduleDate: displayDate(row.scheduleDate) }))) }
 let mounted = false
 onMounted(() => { load(); mounted = true })
 onActivated(() => { if (mounted && !loading.value) load() })
@@ -298,13 +338,10 @@ button.operator-swatch { cursor: pointer; }
 .schedule-board-toolbar { justify-content: space-between; }
 .color-value { margin-left: 16px; }
 .schedule-filter :deep(.el-card__body) { padding: 16px; }
+.schedule-week-row { margin-bottom: 20px; }
 .schedule-filter-bar { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; }
 .schedule-filter-form { display: flex; flex: 1; align-items: flex-end; flex-wrap: wrap; gap: 12px; min-width: 0; }
 .schedule-filter-form :deep(.el-form-item) { margin-right: 0; margin-bottom: 0; }
-.week-filter-item { flex: 0 0 auto; }
-.week-filter-item :deep(.el-form-item__content) { flex: 0 0 170px; width: 170px; min-width: 170px; }
-.week-picker-field { flex: 0 0 170px; width: 170px; max-width: 170px; }
-.schedule-filter-form :deep(.week-picker-input.el-date-editor) { width: 170px !important; max-width: 170px; }
 .query-action { flex: 0 0 auto; }
 .view-switch { flex: 0 0 auto; }
 .week-calendar-wrap { overflow-x: auto; }
@@ -327,23 +364,9 @@ button.operator-swatch { cursor: pointer; }
   .schedule-filter-form :deep(.el-form-item__content),
   .schedule-filter-form :deep(.el-select),
   .schedule-filter-form :deep(.el-date-editor) { width: 100%; }
-  .week-filter-item :deep(.el-form-item__content),
-  .week-picker-field,
-  .schedule-filter-form :deep(.week-picker-input.el-date-editor) { flex-basis: auto; width: 100% !important; max-width: none; min-width: 0; }
 }
 </style>
 <style lang="scss">
-.schedule-week-picker-popper {
-  .el-date-table__row:hover .el-date-table-cell,
-  td.schedule-week-cell .el-date-table-cell { background-color: var(--el-datepicker-inrange-bg-color); }
-  .el-date-table__row:hover td.available:hover { color: var(--el-datepicker-text-color); }
-  .el-date-table__row:hover td:first-child .el-date-table-cell,
-  td.schedule-week-start .el-date-table-cell { margin-left: 5px; border-radius: 15px 0 0 15px; }
-  .el-date-table__row:hover td:last-child .el-date-table-cell,
-  td.schedule-week-end .el-date-table-cell { margin-right: 5px; border-radius: 0 15px 15px 0; }
-  td.schedule-week-end .el-date-table-cell__text { color: #fff; background-color: var(--el-datepicker-active-color); }
-}
-
 .schedule-dialog {
   width: min(820px, calc(100vw - 32px)) !important;
 

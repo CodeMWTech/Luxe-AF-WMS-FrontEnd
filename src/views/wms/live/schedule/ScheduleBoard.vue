@@ -10,15 +10,16 @@
               <th scope="row"><strong>{{ group.id === 'unassigned' ? tr(group.label) : group.label }}</strong><small v-if="group.secondary">{{ group.secondary }}</small></th>
               <td v-for="day in week" :key="day.date">
                 <button v-for="entry in entries(group, day.date)" :key="entry.key" type="button" class="shift-card"
-                  :class="{ pending: entry.row.scheduleStatus === 'PENDING', cancelled: entry.row.scheduleStatus === 'CANCELLED' }"
+                  :class="{ deleted: isDeletedSchedule(entry.row) }"
                   :style="colorStyle(entry)" @click="$emit('open', entry.row)">
                   <strong>{{ timeLabel(entry.startTime) }}–{{ timeLabel(entry.endTime) }}</strong>
                   <span v-if="view !== 'host'" class="host-name">{{ entry.row.employeeName }}</span>
                   <span v-if="view !== 'channel'">{{ entry.row.accountLabel }}</span>
                   <span>{{ tr('运营') }} · {{ operatorName(entry) }}</span>
                   <small v-if="entry.row.rateTypeName">{{ entry.row.rateTypeName }}</small>
-                  <span v-if="entry.row.scheduleStatus === 'CANCELLED'" class="state">{{ tr('已取消') }}</span>
-                  <span v-else-if="entry.row.scheduleStatus === 'PENDING'" class="state">{{ tr('待确认') }}</span>
+                  <span v-if="isDeletedSchedule(entry.row)" class="state">{{ tr('已删除') }}</span>
+
+
                   <span v-if="conflicts.has(idKey(entry.row.id))" class="conflict">! {{ tr('人员冲突') }}</span>
                   <small v-if="entry.row.remark" class="remark">{{ entry.row.remark }}</small>
                 </button>
@@ -38,7 +39,7 @@
 import { computed } from 'vue'
 import { useLiveI18n } from '../useLiveI18n'
 import { displayDate } from '../shared'
-import { idKey, timeLabel, scheduleGroups, conflictingSchedules, operatorColorStyle } from './scheduleDisplay'
+import { idKey, isDeletedSchedule, timeLabel, scheduleGroups, conflictingSchedules, operatorColorStyle } from './scheduleDisplay'
 const props = defineProps({ rows: { type: Array, default: () => [] }, operators: { type: Array, default: () => [] }, accounts: { type: Array, default: () => [] }, employees: { type: Array, default: () => [] }, weeks: { type: Array, default: () => [] }, view: { type: String, default: 'channel' }, canEdit: Boolean })
 defineEmits(['open', 'add'])
 const { tr } = useLiveI18n()
@@ -55,17 +56,17 @@ const colorStyle = entry => operatorColorStyle(entry.operator && people.value.ge
 <style scoped lang="scss">
 .schedule-board h3 { margin: 20px 0 12px; font-size: 15px; }
 .board-scroll { overflow-x: auto; border: 1px solid var(--el-border-color-lighter); border-radius: 8px; }
-.board-table { width: 100%; min-width: 1160px; table-layout: fixed; border-collapse: collapse; color: var(--el-text-color-primary); }
+.board-table { width: 100%; min-width: 1600px; table-layout: fixed; border-collapse: collapse; color: var(--el-text-color-primary); }
 .board-table th, .board-table td { padding: 8px; border-bottom: 1px solid var(--el-border-color-lighter); border-right: 1px solid var(--el-border-color-lighter); vertical-align: top; text-align: left; }
 .board-table thead th { text-align: center; background: var(--el-fill-color-light); padding: 12px 8px; }
 .board-table th:first-child { width: 160px; }
 .board-table th span, .board-table th small { display: block; margin-top: 4px; color: var(--el-text-color-secondary); font-size: 12px; overflow-wrap: anywhere; }
 .board-table tbody th { padding-top: 14px; background: var(--el-bg-color); }
 .shift-card { display: flex; flex-direction: column; gap: 4px; width: 100%; margin-bottom: 7px; padding: 10px; border: 1px solid transparent; border-left: 4px solid var(--operator-color); border-radius: 6px; background: var(--operator-fill); color: var(--el-text-color-primary); font: inherit; font-size: 12px; text-align: left; cursor: pointer; overflow-wrap: anywhere; }
-.shift-card strong { font-variant-numeric: tabular-nums; }
+.shift-card strong { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .shift-card .host-name { font-weight: 600; font-size: 13px; }
-.shift-card.pending { border-top-style: dashed; border-right-style: dashed; border-bottom-style: dashed; border-top-color: var(--el-border-color-dark); border-right-color: var(--el-border-color-dark); border-bottom-color: var(--el-border-color-dark); }
-.shift-card.cancelled strong, .shift-card.cancelled .host-name { text-decoration: line-through; }
+.shift-card.deleted { opacity: 0.6; background: var(--el-fill-color-light); border-left-color: var(--el-text-color-placeholder); }
+.shift-card.deleted > :not(.state) { text-decoration: line-through; }
 .shift-card small, .state { color: var(--el-text-color-regular); }
 .conflict { color: var(--el-color-danger); }
 .remark { border-top: 1px solid var(--el-border-color-lighter); padding-top: 5px; }

@@ -229,18 +229,24 @@
 
             <div class="summary-cell product-cell">
               <span class="cell-label">{{ t('platformOrders.product') }}</span>
-              <span class="primary-value ellipsis">{{ displayValue(getFirstItem(order).productName) }}</span>
+              <span class="primary-value ellipsis">{{ displayValue(getSummaryItem(order, index).productName) }}</span>
             </div>
 
             <div class="summary-cell sku-cell" :class="{ 'sku-cell-problem': hasSkuIssue(order, index), 'sku-cell-no-stock': hasNoStock(order, index), 'sku-cell-shipped': isShipmentCompleted(getDisplayOrder(order, index)) }">
               <span class="cell-label">{{ t('platformOrders.sku') }}</span>
               <div class="sku-row">
-                <span :class="['secondary-value', 'ellipsis', { 'sku-value-problem': hasSkuIssue(order, index), 'sku-value-no-stock': hasNoStock(order, index), 'sku-value-shipped': isShipmentCompleted(getDisplayOrder(order, index)) }]">{{ displayValue(getSkuText(getFirstItem(order))) }}</span>
+                <router-link
+                  v-if="canOpenInventorySku(getSummaryItem(order, index))"
+                  :to="getInventorySkuRoute(getSummaryItem(order, index))"
+                  :class="['inventory-sku-link', 'secondary-value', 'ellipsis', { 'sku-value-no-stock': hasNoStock(order, index), 'sku-value-shipped': isShipmentCompleted(getDisplayOrder(order, index)) }]"
+                  @click.stop
+                >{{ displayValue(getSkuText(getSummaryItem(order, index))) }}</router-link>
+                <span v-else :class="['secondary-value', 'ellipsis', { 'sku-value-problem': hasSkuIssue(order, index), 'sku-value-no-stock': hasNoStock(order, index), 'sku-value-shipped': isShipmentCompleted(getDisplayOrder(order, index)) }]">{{ displayValue(getSkuText(getSummaryItem(order, index))) }}</span>
                 <el-tag v-if="isShipmentCompleted(getDisplayOrder(order, index))" type="success" effect="dark" size="small" class="sku-problem-tag">{{ t('platformOrders.skuShipped') }}</el-tag>
                 <el-tag v-else-if="isShipmentPending(getDisplayOrder(order, index))" type="info" size="small" class="sku-problem-tag">{{ t('platformOrders.skuShipmentCreated') }}</el-tag>
-                <el-tag v-if="hasSkuIssue(order, index) || hasNoStock(order, index)" :type="hasSkuIssue(order, index) ? 'danger' : 'warning'" effect="dark" size="small" class="sku-problem-tag">{{ getSkuStatusText(getFirstItem(getDisplayOrder(order, index))) }}</el-tag>
+                <el-tag v-if="hasSkuIssue(order, index) || hasNoStock(order, index)" :type="hasSkuIssue(order, index) ? 'danger' : 'warning'" effect="dark" size="small" class="sku-problem-tag">{{ getSkuStatusText(getSummaryItem(order, index)) }}</el-tag>
                 <el-tag v-if="isBrushOrder(getDisplayOrder(order, index))" type="info" size="small" class="sku-problem-tag">{{ t('platformOrders.skuIssueBrushOrder') }}</el-tag>
-                <el-button v-if="canEditSku(order, index)" link size="small" class="sku-edit-btn" :icon="Edit" @click.stop="startSkuEdit(order, index, getFirstItem(order))" v-hasPermi="['wms:platform:edit']">{{ t('platformOrders.labelEditSku') }}</el-button>
+                <el-button v-if="canEditSku(order, index)" link size="small" class="sku-edit-btn" :icon="Edit" @click.stop="startSkuEdit(order, index, getSummaryItem(order, index))" v-hasPermi="['wms:platform:edit']">{{ t('platformOrders.labelEditSku') }}</el-button>
               </div>
             </div>
 
@@ -319,7 +325,10 @@
                     <InfoLine :label="t('platformOrders.itemProductName')" :value="item.productName" strong />
                     <InfoLine :label="t('platformOrders.itemSkuId')" :value="item.skuId" />
                     <InfoLine :label="t('platformOrders.itemSkuName')" :value="item.skuName" />
-                    <InfoLine :label="t('platformOrders.itemSellerSku')" :value="item.sellerSku" />
+                    <InfoLine :label="t('platformOrders.itemSellerSku')">
+                      <router-link v-if="canOpenInventorySku(item)" :to="getInventorySkuRoute(item)" class="inventory-sku-link" @click.stop>{{ displayValue(item.sellerSku) }}</router-link>
+                      <span v-else>{{ displayValue(item.sellerSku) }}</span>
+                    </InfoLine>
                     <InfoLine :label="t('platformOrders.itemSkuStatus')">
                       <span :class="{ 'sku-value-shipped': isShipmentCompleted(getDisplayOrder(order, index)) }">{{ getSkuStatusText(item, getDisplayOrder(order, index)) }}</span>
                     </InfoLine>
@@ -721,6 +730,7 @@ import { ArrowDown, ArrowRight, CopyDocument, Edit, UploadFilled } from '@elemen
 import { listPlatformOrders, getPlatformOrder, getOrderStatusMap, updateOrderSku, createShipments, exportPlatformOrders, exportPlatformOrderWeeklyReport, importNotes, getAutoCreateConfig, updateAutoCreateConfig } from '@/api/wms/platformOrder'
 import { listAllPlatformShops, batchSyncOrders } from '@/api/wms/platformShop'
 import { formatDateTimeForQuery, formatLosAngelesTime } from '@/utils/laTime'
+import { getPlatformOrderExternalUrl as buildPlatformOrderExternalUrl } from '@/utils/platformOrderLink'
 import { getExportLanguageHeaders } from '@/utils/xlsxTranslate'
 import SkuSelect from '@/views/components/SkuSelect.vue'
 import useSettingsStore from '@/store/modules/settings'
@@ -1036,7 +1046,8 @@ async function ensureDetail(order, index) {
   }
   try {
     const res = await getPlatformOrder(orderId, order.platform, order.shopAuthId)
-    detailCache[key] = { ...order, ...(res.data || {}) }
+    // 保留当前商品行 ID，避免展开整单详情后编辑到第一条商品记录。
+    detailCache[key] = { ...order, ...(res.data || {}), id: order.id ?? res.data?.id }
   } catch {
     detailCache[key] = order
   }
@@ -1260,80 +1271,8 @@ function getPlatformTagType(platform) {
   return ''
 }
 
-function resolveTikTokSellerHost(region) {
-  const key = String(region || '').toUpperCase()
-  // 注意：美区域名是 seller-us（连字符），不是 seller.us
-  if (!key || key.includes('US') || key.includes('UNITED_STATES')) {
-    return 'https://seller-us.tiktok.com'
-  }
-  if (key.includes('GB') || key.includes('UK')) {
-    return 'https://seller-uk.tiktok.com'
-  }
-  if (key.includes('EU') || key.includes('DE') || key.includes('FR') || key.includes('IT') || key.includes('ES')) {
-    return 'https://seller.eu.tiktokglobalshop.com'
-  }
-  if (key.includes('SEA') || key.includes('SG') || key.includes('MY') || key.includes('TH') || key.includes('VN') || key.includes('PH') || key.includes('ID')) {
-    return 'https://seller.tiktokglobalshop.com'
-  }
-  return 'https://seller.tiktok.com'
-}
-
-function resolveTikTokShopRegion(region) {
-  const key = String(region || '').trim().toUpperCase()
-  const normalizedKey = key.replace(/[\s-]+/g, '_')
-  if (!key || ['US', 'USA', 'UNITED_STATES'].includes(normalizedKey)) return 'US'
-  if (['UK', 'GB', 'UNITED_KINGDOM'].includes(normalizedKey)) return 'GB'
-  return key
-}
-
-function resolveEbaySiteHost(region) {
-  const key = String(region || '').toUpperCase()
-  if (key.includes('GB') || key.includes('UK')) return 'https://www.ebay.co.uk'
-  if (key.includes('DE')) return 'https://www.ebay.de'
-  if (key.includes('AU')) return 'https://www.ebay.com.au'
-  if (key.includes('CA')) return 'https://www.ebay.ca'
-  if (key.includes('FR')) return 'https://www.ebay.fr'
-  if (key.includes('IT')) return 'https://www.ebay.it'
-  if (key.includes('ES')) return 'https://www.ebay.es'
-  return 'https://www.ebay.com'
-}
-
-/** 根据平台订单构造外部跳转链接，跳转到对应平台的订单详情 */
 function getPlatformOrderExternalUrl(order) {
-  const orderId = String(getOrderId(order) || '').trim()
-  if (!orderId) return ''
-  const platform = String(getPlatform(order) || '').toUpperCase()
-  const shop = shopList.value.find(item => String(item.id) === String(order?.shopAuthId))
-  const region = shop?.region || order?.regionCode || ''
-
-  if (platform === 'EBAY') {
-    const host = resolveEbaySiteHost(region)
-    const returnParams = new URLSearchParams({
-      search: `ordernumber:${orderId}`,
-      filter: 'status:ALL_ORDERS',
-      partialRefresh: 'true'
-    })
-    const returnUrl = `${host}/sh/ord/?${returnParams.toString()}`
-    const params = new URLSearchParams({
-      mode: 'SH',
-      orderid: orderId,
-      source: 'Orders',
-      ru: returnUrl
-    })
-    return `${host}/mesh/ord/details?${params.toString()}`
-  }
-  if (platform === 'TIKTOK') {
-    const host = resolveTikTokSellerHost(region)
-    const shopRegion = resolveTikTokShopRegion(region)
-    return `${host}/order/detail?order_no=${encodeURIComponent(orderId)}&shop_region=${encodeURIComponent(shopRegion)}`
-  }
-  if (platform === 'SHOPIFY') {
-    const shopifyOrderId = String(order?.shopifyOrderId || '').trim()
-    const shopHandle = String(shop?.shopId || order?.platformShopId || '').trim().replace(/\.myshopify\.com$/i, '')
-    if (!shopifyOrderId || !shopHandle) return ''
-    return `https://admin.shopify.com/store/${encodeURIComponent(shopHandle)}/orders/${encodeURIComponent(shopifyOrderId)}`
-  }
-  return ''
+  return buildPlatformOrderExternalUrl(order, shopList.value)
 }
 
 function getStatus(order) {
@@ -1410,8 +1349,33 @@ function getFirstItem(order) {
   return getLineItems(order)[0] || {}
 }
 
+function getSummaryItem(order, index) {
+  const listItem = getFirstItem(order)
+  // 列表按商品行展示，详情可能包含整单商品；不能取详情第一行的 SKU 状态。
+  if (listItem.lineItemId === null || listItem.lineItemId === undefined || listItem.lineItemId === '') {
+    return listItem
+  }
+  const detailItem = getLineItems(getDisplayOrder(order, index)).find(item =>
+    item.lineItemId !== null && item.lineItemId !== undefined
+      && String(item.lineItemId) === String(listItem.lineItemId))
+  return detailItem ? { ...listItem, ...detailItem } : listItem
+}
+
 function getSkuText(item) {
   return item?.sellerSku || item?.skuName || item?.skuId
+}
+
+function canOpenInventorySku(item) {
+  return !!String(item?.sellerSku || '').trim()
+    && ['IN_STOCK', 'NO_STOCK'].includes(item?.skuStatus)
+    && !!proxy?.$auth?.hasPermi('wms:inventory:all')
+}
+
+function getInventorySkuRoute(item) {
+  return {
+    name: 'Inventory',
+    query: { skuCode: String(item.sellerSku).trim(), fromPlatformOrder: '1' }
+  }
 }
 
 function isBrushOrder(order) {
@@ -1430,12 +1394,12 @@ function isShipmentPending(order) {
 
 function hasSkuIssue(order, index) {
   const displayOrder = getDisplayOrder(order, index)
-  return !isShipmentCompleted(displayOrder) && getFirstItem(displayOrder).skuStatus === 'UNMATCHED'
+  return !isShipmentCompleted(displayOrder) && getSummaryItem(order, index).skuStatus === 'UNMATCHED'
 }
 
 function hasNoStock(order, index) {
   const displayOrder = getDisplayOrder(order, index)
-  return !isShipmentCompleted(displayOrder) && getFirstItem(displayOrder).skuStatus === 'NO_STOCK'
+  return !isShipmentCompleted(displayOrder) && getSummaryItem(order, index).skuStatus === 'NO_STOCK'
 }
 
 function getSkuStatusText(item, order) {
@@ -2693,6 +2657,17 @@ onActivated(() => {
 
 .sku-row > .secondary-value {
   max-width: 100%;
+}
+
+.inventory-sku-link {
+  color: var(--el-color-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.inventory-sku-link:hover {
+  opacity: 0.8;
 }
 
 .sku-cell-shipped {

@@ -541,6 +541,7 @@ function resolveLiveModuleContentKey(item) {
   if (/\/dashboard(?:\/|$)|汇总看板/.test(text)) return 'liveDashboard'
   if (/\/schedule(?:\/|$)|排班计划/.test(text)) return 'liveSchedule'
   if (/\/streams(?:\/|$)|开播录入/.test(text)) return 'liveStreams'
+  if (/\/operation-records(?:\/|$)|运营记录/.test(text)) return 'liveOperations'
   if (/\/commissions(?:\/|$)|佣金管理/.test(text)) return 'liveCommissions'
   if (/\/accounts(?:\/|$)|直播平台/.test(text)) return 'liveAccounts'
   if (/\/rates(?:\/|$)|费率配置/.test(text)) return 'liveRates'

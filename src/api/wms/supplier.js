@@ -27,10 +27,18 @@ export function getSupplier(id) {
 }
 
 // 读取所选角色下未删除用户的联系方式（含停用账号，只读）
-export function getSupplierRoleContacts(roleId) {
+export function getSupplierRoleContacts(roleIds) {
+  const ids = (Array.isArray(roleIds) ? roleIds : [roleIds]).filter(id => id != null && id !== '')
+  if (!Array.isArray(roleIds) && ids.length === 1) {
+    return request({
+      url: '/wms/supplier/role/' + ids[0] + '/contacts',
+      method: 'get'
+    })
+  }
   return request({
-    url: '/wms/supplier/role/' + roleId + '/contacts',
-    method: 'get'
+    url: '/wms/supplier/roles/contacts',
+    method: 'get',
+    params: { roleIds: ids.join(',') }
   })
 }
 

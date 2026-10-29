@@ -35,7 +35,7 @@
               />
             </el-form-item>
           </el-col>
-          <el-col v-if="!isSupplierUser" :xs="24" :sm="24" :md="supplierFilterColSpan" :lg="supplierFilterColSpan">
+          <el-col v-if="showField('supplier') && !isSupplierUser" :xs="24" :sm="24" :md="supplierFilterColSpan" :lg="supplierFilterColSpan">
             <el-form-item :label="tr('供应商')" prop="supplierId">
               <el-select v-model="queryParams.supplierId" :placeholder="tr('请选择供应商')" clearable filterable style="width: 100%">
                 <el-option :label="tr('Luxeaf 自有')" :value="-1" />
@@ -47,11 +47,7 @@
         <el-row :gutter="16">
           <el-col :xs="24" :sm="12" :md="6" :lg="6">
             <el-form-item :label="tr('仓库')" prop="warehouseId">
-              <el-select style="width: 100%" v-model="queryParams.warehouseId" :placeholder="tr('请选择仓库')"
-                         filterable clearable>
-                <el-option v-for="item in useWmsStore().warehouseList" :key="item.id" :label="item.warehouseName"
-                           :value="item.id"/>
-              </el-select>
+              <WarehouseLocationSelect v-model="queryParams.warehouseId" clearable include-inactive filter-mode />
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="12" :md="6" :lg="6">
@@ -65,7 +61,7 @@
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="12" :md="6" :lg="6">
-            <el-form-item :label="tr('商品分类')" prop="itemCategory">
+            <el-form-item v-if="showField('category')" :label="tr('商品分类')" prop="itemCategory">
               <el-tree-select
                 v-model="queryParams.itemCategory"
                 :data="itemCategoryTreeSelectList"
@@ -82,7 +78,7 @@
         </el-row>
         <el-row :gutter="16">
           <el-col :xs="24" :sm="12" :md="6" :lg="6">
-            <el-form-item :label="tr('商品品牌')" prop="itemBrand">
+            <el-form-item v-if="showField('brand')" :label="tr('商品品牌')" prop="itemBrand">
               <el-select
                 v-model="selectedBrandGroups"
                 multiple
@@ -101,19 +97,19 @@
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="12" :md="6" :lg="6">
-            <el-form-item :label="tr('成色')" prop="itemCondition">
+            <el-form-item v-if="showField('condition')" :label="tr('成色')" prop="itemCondition">
               <el-select v-model="queryParams.itemCondition" clearable style="width: 100%" :placeholder="tr('请选择')">
                 <el-option v-for="opt in ITEM_CONDITION_OPTIONS" :key="opt" :label="opt" :value="opt" />
               </el-select>
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="12" :md="6" :lg="6">
-            <el-form-item :label="tr('年份')" prop="year">
+            <el-form-item v-if="showField('year')" :label="tr('年份')" prop="year">
               <el-input-number v-model="queryParams.year" :min="0" :max="9999" :controls="false" style="width: 100%" @keyup.enter="handleQuery" />
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="12" :md="6" :lg="6">
-            <el-form-item :label="tr('鉴定机构')" prop="authAgency">
+            <el-form-item v-if="showField('authAgency')" :label="tr('鉴定机构')" prop="authAgency">
               <el-select
                 v-model="queryParams.authAgency"
                 multiple
@@ -128,12 +124,12 @@
         </el-row>
         <el-row :gutter="16">
           <el-col :xs="24" :sm="12" :md="6" :lg="6">
-            <el-form-item :label="tr('数量')" prop="defaultQty">
+            <el-form-item v-if="showField('quantity')" :label="tr('数量')" prop="defaultQty">
               <el-input-number v-model="queryParams.defaultQty" :min="0" :controls="false" style="width: 100%" @keyup.enter="handleQuery" />
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="12" :md="6" :lg="6">
-            <el-form-item :label="tr('周转天数')" prop="turnoverDaysMin">
+            <el-form-item v-if="showField('turnoverDays')" :label="tr('周转天数')" prop="turnoverDaysMin">
               <el-input-number
                 v-model="queryParams.turnoverDaysMin"
                 :min="0"
@@ -146,13 +142,22 @@
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="12" :md="6" :lg="6">
-            <el-form-item :label="tr('已护理')" prop="cared">
+            <el-form-item v-if="showField('cared')" :label="tr('已护理')" prop="cared">
               <el-switch v-model="queryParams.cared" active-text="Yes" inactive-text="No" :active-value="true" :inactive-value="false" />
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="12" :md="6" :lg="6">
-            <el-form-item :label="tr('寄售信息')" prop="consignInfo">
-              <el-input v-model="queryParams.consignInfo" clearable :placeholder="tr('请输入')" @keyup.enter="handleQuery" />
+            <el-form-item :label="tr('采购人')" prop="consignInfo">
+              <el-autocomplete
+                v-model="queryParams.consignInfo"
+                class="purchaser-search"
+                clearable
+                trigger-on-focus
+                :fetch-suggestions="suggestPurchasers"
+                :placeholder="tr('请输入采购人')"
+                style="width: 100%"
+                @keyup.enter="handleQuery"
+              />
             </el-form-item>
           </el-col>
         </el-row>
@@ -173,7 +178,7 @@
             </el-form-item>
           </el-col>
           <el-col :xs="24" :sm="24" :md="priceFilterColSpan" :lg="priceFilterColSpan">
-            <el-form-item :label="tr('\u5165\u5e93\u65f6\u95f4')" prop="receiptTimeRange">
+            <el-form-item v-if="showField('receipt')" :label="tr('\u5165\u5e93\u65f6\u95f4')" prop="receiptTimeRange">
               <el-date-picker
                 v-model="queryParams.receiptTimeRange"
                 type="datetimerange"
@@ -187,7 +192,7 @@
               />
             </el-form-item>
           </el-col>
-          <el-col :xs="24" :sm="24" :md="priceFilterColSpan" :lg="priceFilterColSpan" v-if="canViewCostPrice">
+          <el-col :xs="24" :sm="24" :md="priceFilterColSpan" :lg="priceFilterColSpan" v-if="showCost">
             <el-form-item :label="tr('成本价')">
               <div class="query-price-range">
                 <el-form-item prop="costPriceMin" class="query-price-range-item">
@@ -200,7 +205,7 @@
               </div>
             </el-form-item>
           </el-col>
-          <el-col :xs="24" :sm="24" :md="priceFilterColSpan" :lg="priceFilterColSpan" v-if="canViewSellingPrice">
+          <el-col :xs="24" :sm="24" :md="priceFilterColSpan" :lg="priceFilterColSpan" v-if="showSelling">
             <el-form-item :label="tr('\u9500\u552e\u4ef7')">
               <div class="query-price-range">
                 <el-form-item prop="sellingPriceMin" class="query-price-range-item">
@@ -250,6 +255,7 @@
           >
             {{ tr('导出Excel') }}
           </el-button>
+          <el-button v-if="canImportInventory && !inventoryView.state.restricted" @click="inventoryImportVisible=true">{{ tr('导入库存') }}</el-button>
           <el-button
             @click="openExportTaskDialog"
           >
@@ -312,6 +318,7 @@
           </el-button>
           <el-divider direction="vertical" />
           <el-button
+            v-if="!inventoryView.state.restricted"
             type="success"
             icon="Upload"
             :disabled="selectedRows.length === 0 || !!queryParams.snapshotDate"
@@ -357,8 +364,8 @@
           <el-table-column :label="tr('仓库')" prop="warehouseGroupKey" min-width="240" align="center" show-overflow-tooltip>
             <template #default="{ row }">
               <div>{{ getWarehouseName(row) }}</div>
-              <div>{{ tr('仓库商品总数') }}：{{ getWarehouseSummaryQuantity(row) }}</div>
-              <div v-if="canViewCostPrice">{{ tr('仓库商品总价') }}：{{ formatMoney(getWarehouseSummaryAmount(row)) }}</div>
+              <div>{{ tr('一级仓库商品总数') }}：{{ getWarehouseSummaryQuantity(row) }}</div>
+              <div v-if="showCost">{{ tr('一级仓库商品总价') }}：{{ formatMoney(getWarehouseSummaryAmount(row)) }}</div>
             </template>
           </el-table-column>
           <el-table-column :label="tr('商品名称')" prop="warehouseItemGroupKey" min-width="480" align="center" show-overflow-tooltip>
@@ -378,7 +385,7 @@
               </span>
             </template>
           </el-table-column>
-          <el-table-column :label="tr('商品图片')" width="110" align="center">
+          <el-table-column v-if="showField('image')" :label="tr('商品图片')" width="110" align="center">
             <template #default="{ row }">
               <el-image
                 v-if="getItemImage(row)"
@@ -425,7 +432,7 @@
               </span>
             </template>
           </el-table-column>
-          <el-table-column :label="tr('供应商')" :min-width="isEn ? 140 : 120" align="center" show-overflow-tooltip>
+          <el-table-column v-if="showField('supplier')" :label="tr('供应商')" :min-width="isEn ? 140 : 120" align="center" show-overflow-tooltip>
             <template #default="{ row }">{{ formatSupplierName(row) }}</template>
           </el-table-column>
         </template>
@@ -449,7 +456,7 @@
               </span>
             </template>
           </el-table-column>
-          <el-table-column :label="tr('商品图片')" width="110" align="center">
+          <el-table-column v-if="showField('image')" :label="tr('商品图片')" width="110" align="center">
             <template #default="{ row }">
               <el-image
                 v-if="getItemImage(row)"
@@ -501,64 +508,79 @@
               {{ getWarehouseName(row) }}
             </template>
           </el-table-column>
-          <el-table-column :label="tr('供应商')" :min-width="isEn ? 140 : 120" align="center" show-overflow-tooltip>
+          <el-table-column v-if="showField('supplier')" :label="tr('供应商')" :min-width="isEn ? 140 : 120" align="center" show-overflow-tooltip>
             <template #default="{ row }">{{ formatSupplierName(row) }}</template>
           </el-table-column>
         </template>
 
         <!-- ========== 库存数量 ========== -->
-        <el-table-column :label="tr('库存数量')" prop="quantity" width="90" align="center">
+        <el-table-column v-if="showField('stockQuantity')" :label="tr('库存数量')" prop="quantity" width="90" align="center">
           <template #default="{ row }">
             {{ Number(row.quantity) }}
           </template>
         </el-table-column>
 
         <!-- ========== 新增列：入库时间 ========== -->
-        <el-table-column :label="tr('入库时间')" prop="receiptTime" width="168" align="center" sortable="custom">
+        <el-table-column v-if="showField('receipt')" :label="tr('入库时间')" prop="receiptTime" width="168" align="center" sortable="custom">
           <template #default="{ row }">
             {{ formatTime(row.receiptTime) }}
           </template>
         </el-table-column>
 
         <!-- ========== 新增列：出库时间 ========== -->
-        <el-table-column :label="tr('出库时间')" prop="shipmentTime" width="168" align="center" sortable="custom">
+        <el-table-column v-if="showField('shipment')" :label="tr('出库时间')" prop="shipmentTime" width="168" align="center" sortable="custom">
           <template #default="{ row }">
             <!-- 有出库历史但库存未清零时 shipmentTime 为 null，属于业务规则，显示 -- -->
             {{ formatTime(row.shipmentTime) }}
           </template>
         </el-table-column>
 
-        <el-table-column :label="tr('出库平台')" prop="outboundPlatform" :width="isEn ? 165 : 120" align="center" show-overflow-tooltip>
+        <el-table-column v-if="showField('outboundPlatform')" :label="tr('出库平台')" prop="outboundPlatform" :width="isEn ? 165 : 120" align="center" show-overflow-tooltip>
           <template #default="{ row }">
             {{ row.outboundPlatform || '--' }}
           </template>
         </el-table-column>
 
         <!-- ========== 新增列：周转天数 ========== -->
-        <el-table-column :label="tr('周转天数')" prop="turnoverDays" :width="isEn ? 150 : 125" align="center" sortable="custom">
+        <el-table-column v-if="showField('turnoverDays')" :label="tr('周转天数')" prop="turnoverDays" :width="isEn ? 150 : 125" align="center" sortable="custom">
           <template #default="{ row }">
             <span v-if="row.turnoverDays != null" :class="{ 'turnover-days-alert': isTurnoverDaysAlert(row.turnoverDays) }">{{ row.turnoverDays }}</span>
             <span v-else>--</span>
           </template>
         </el-table-column>
 
-        <!-- ========== 新增列：平均成本价 ========== -->
-        <el-table-column v-if="canViewCostPrice" :label="tr('平均成本价')" prop="avgReceiptCost" :width="isEn ? 165 : 135" align="center" sortable="custom">
+        <!-- ========== 商品成本价 ========== -->
+        <el-table-column v-if="showCost" :label="tr('成本价')" prop="costPrice" :width="isEn ? 165 : 135" align="center" sortable="custom">
+          <template #header="{ column }">
+            <span class="inventory-price-header">
+              {{ column.label }}
+              <el-tooltip :content="tr('该成本价是商品管理页面中的成本价')" placement="top" effect="dark">
+                <el-icon class="inventory-price-info" tabindex="0" :aria-label="tr('该成本价是商品管理页面中的成本价')" @click.stop @keydown.stop><InfoFilled /></el-icon>
+              </el-tooltip>
+            </span>
+          </template>
           <template #default="{ row }">
-            {{ formatMoney(row.avgReceiptCost) }}
+            {{ formatMoney(row.costPrice) }}
           </template>
         </el-table-column>
 
-        <!-- ========== 新增列：平均销售价 ========== -->
-        <el-table-column v-if="canViewSellingPrice" :label="tr('平均销售价')" prop="avgShipmentPrice" :width="isEn ? 178 : 135" align="center" sortable="custom">
+        <!-- ========== 商品销售价 ========== -->
+        <el-table-column v-if="showSelling" :label="tr('销售价')" prop="sellingPrice" :width="isEn ? 178 : 135" align="center" sortable="custom">
+          <template #header="{ column }">
+            <span class="inventory-price-header">
+              {{ column.label }}
+              <el-tooltip :content="tr('该销售价是商品管理页面中的销售价')" placement="top" effect="dark">
+                <el-icon class="inventory-price-info" tabindex="0" :aria-label="tr('该销售价是商品管理页面中的销售价')" @click.stop @keydown.stop><InfoFilled /></el-icon>
+              </el-tooltip>
+            </span>
+          </template>
           <template #default="{ row }">
-            <!-- 有出库历史但库存未清零时 avgShipmentPrice 正常显示；无出库时为 null，显示 -- -->
-            {{ formatMoney(row.avgShipmentPrice) }}
+            {{ formatMoney(row.sellingPrice) }}
           </template>
         </el-table-column>
 
         <!-- ========== 新增列：利润 ========== -->
-        <el-table-column v-if="canViewCostPrice && canViewSellingPrice" :label="tr('利润')" prop="totalProfit" width="110" align="center" sortable="custom">
+        <el-table-column v-if="showProfit" :label="tr('利润')" prop="totalProfit" width="110" align="center" sortable="custom">
           <template #default="{ row }">
             <!--
               totalProfit 语义：
@@ -605,13 +627,13 @@
               <h2 class="detail-title" data-runtime-i18n-ignore="true">{{ displayValue(detailItem?.itemName) }}</h2>
               <div class="detail-subtitle" data-runtime-i18n-ignore="true">
                 <span>SKU {{ displayValue(detailSku?.skuCode) }}</span>
-                <span v-if="getBrandName(detailItem)">·</span>
-                <span v-if="getBrandName(detailItem)">{{ getBrandName(detailItem) }}</span>
+                <span v-if="showField('brand') && getBrandName(detailItem)">·</span>
+                <span v-if="showField('brand') && getBrandName(detailItem)">{{ getBrandName(detailItem) }}</span>
               </div>
             </div>
             <div class="condition-mark">
               <span>{{ tr('成色') }}</span>
-              <strong>{{ displayValue(detailItem?.itemCondition) }}</strong>
+              <strong>{{ maskDetail('condition', displayValue(detailItem?.itemCondition)) }}</strong>
             </div>
           </div>
 
@@ -634,7 +656,7 @@
 
           <div class="detail-image-section">
             <div class="detail-section-title">{{ tr('商品图片') }} ({{ detailImages.length }})</div>
-            <div v-if="detailImages.length" class="detail-image-list">
+            <div v-if="showField('image') && detailImages.length" class="detail-image-list">
               <div v-for="(img, idx) in detailImages" :key="img.id || idx" class="detail-image-card">
                 <el-image
                   :src="img.thumbUrl || img.url"
@@ -660,13 +682,20 @@
                 </el-image>
               </div>
             </div>
-            <div v-else class="detail-empty">{{ tr('暂无图片') }}</div>
+            <div v-else class="detail-empty">{{ showField('image') ? tr('暂无图片') : '--' }}</div>
           </div>
         </template>
         <el-empty v-else :description="tr('暂无数据')" />
       </div>
     </el-drawer>
 
+    <el-dialog v-model="inventoryImportVisible" :title="tr('导入库存')" width="600px" :close-on-click-modal="false">
+      <el-alert :title="tr('导入按新增入库处理，不覆盖现有库存；房间留空时入库到一级仓库。')" type="info" :closable="false" />
+      <el-button class="mt10" @click="proxy.download('wms/inventory/importTemplate',{},'inventory_import.xlsx')">{{ tr('下载库存模板') }}</el-button>
+      <el-upload :http-request="uploadInventory" accept=".xlsx,.xls" :show-file-list="false" :disabled="inventoryImportBusy" class="mt10">
+        <el-button type="primary" :loading="inventoryImportBusy">{{ tr('选择文件并导入') }}</el-button>
+      </el-upload>
+    </el-dialog>
     <el-dialog v-model="exportTaskDialogVisible" :title="tr('导出记录')" width="860px">
       <el-table :data="exportTaskList" v-loading="exportTaskListLoading" border>
         <el-table-column prop="fileName" :label="tr('文件名')" min-width="250">
@@ -716,7 +745,10 @@
 </template>
 
 <script setup name="Inventory">
+import WarehouseLocationSelect from '@/components/WarehouseLocationSelect/index.vue'
+
 import {
+  importInventoryFile,
   deleteInventoryExportTask,
   downloadInventoryExportTask,
   getInventoryExportTask,
@@ -734,9 +766,11 @@ import { getRowspanMethod } from '@/utils/getRowSpanMethod'
 import { useWmsStore } from '@/store/modules/wms'
 import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
+import { useInventoryView } from '@/utils/inventoryView'
 import { blobValidate } from '@/utils/ruoyi'
 import { formatDateForQuery, formatDateTimeForQuery } from '@/utils/laTime'
 import { formatBrandNames, parseBrandIdList } from '@/utils/itemBrand'
+import { suggestPurchasers } from '@/utils/itemPurchaser'
 import { itemDimensionFields } from '@/utils/itemDetailFields'
 import PublishDialog from '@/views/wms/platform/listings/components/PublishDialog.vue'
 const route = useRoute()
@@ -746,8 +780,13 @@ const settingsStore = useSettingsStore()
 const isEn = computed(() => (settingsStore.language || 'zh-cn') === 'en')
 const spanMethod = computed(() => getRowspanMethod(inventoryList.value, rowSpanArray.value))
 const canViewSellingPrice = computed(() => proxy?.$auth?.hasPermi('wms:itemSellingPrice:view'))
+const inventoryView = useInventoryView()
+const showField = (key) => inventoryView.shows(key)
 const canViewCostPrice = computed(() => proxy?.$auth?.hasPermi('wms:itemCostPrice:view'))
-const visiblePriceFilterCount = computed(() => Number(canViewCostPrice.value) + Number(canViewSellingPrice.value))
+const showCost = computed(() => canViewCostPrice.value && showField('cost'))
+const showSelling = computed(() => canViewSellingPrice.value && showField('selling'))
+const showProfit = computed(() => showCost.value && showSelling.value && showField('profit') && !(inventoryView.state.restricted && Math.abs(Number(inventoryView.state.costFactor) - 1) > 0.0001))
+const visiblePriceFilterCount = computed(() => Number(showCost.value) + Number(showSelling.value))
 const priceFilterColSpan = computed(() => visiblePriceFilterCount.value === 0 ? 12 : visiblePriceFilterCount.value === 1 ? 8 : 6)
 const supplierFilterColSpan = computed(() => Math.min(24, priceFilterColSpan.value * 2))
 const snapshotDateColSpan = computed(() => {
@@ -759,6 +798,19 @@ const AUTH_AGENCY_OPTIONS = ['Entrupy', 'Real Authentication', 'Legitmark', 'Che
 const ITEM_CONDITION_OPTIONS = ['S', 'A', 'B', 'C', 'D']
 const defaultTime = [new Date(2000, 0, 1, 0, 0, 0), new Date(2000, 0, 1, 23, 59, 59)]
 
+const canImportInventory = computed(() => proxy?.$auth?.hasPermi('wms:inventory:all') && proxy?.$auth?.hasPermi('wms:receipt:all'))
+const inventoryImportVisible = ref(false), inventoryImportBusy = ref(false)
+async function uploadInventory({ file }) {
+  if (inventoryImportBusy.value) return
+  await proxy.$modal.confirm(tr('确认按模板数量新增入库？重复导入会增加库存。'))
+  inventoryImportBusy.value = true
+  try {
+    const result = await importInventoryFile(file)
+    proxy.$modal.msgSuccess(tr('库存导入成功') + ' / ' + (result.data || []).length + tr('张入库单'))
+    inventoryImportVisible.value = false
+    handleQuery()
+  } finally { inventoryImportBusy.value = false }
+}
 const inventoryList = ref([])
 const loading = ref(true)
 const exportLoading = ref(false)
@@ -792,43 +844,48 @@ const previewImageContext = ref({
   title: ''
 })
 const accessoryList = computed(() => splitTextList(detailItem.value?.accessories))
+const maskDetail = (key, value) => (inventoryView.state.restricted && !showField(key) ? '--' : value)
 const detailFieldList = computed(() => {
   const item = detailItem.value || {}
   const sku = detailSku.value || {}
   const fields = [
-    { label: tr('商品分类'), value: displayValue(getCategoryName(item)) },
-    { label: tr('商品品牌'), value: displayValue(getBrandName(item)) },
-    { label: tr('供应商'), value: formatSupplierName(item) },
-    { label: tr('年份'), value: displayValue(item.year) },
-    { label: tr('成色'), value: displayValue(item.itemCondition) },
-    { label: tr('包型'), value: displayValue(item.modelName) },
-    { label: tr('材质'), value: displayValue(item.materialName || item.material) },
-    { label: tr('外观材质'), value: displayValue(item.exteriorMaterial) },
-    { label: tr('产地'), value: displayValue(item.countryOfOrigin) }
+    { label: tr('商品分类'), value: maskDetail('category', displayValue(getCategoryName(item))) },
+    { label: tr('商品品牌'), value: maskDetail('brand', displayValue(getBrandName(item))) },
+    { label: tr('供应商'), value: maskDetail('supplier', formatSupplierName(item)) },
+    { label: tr('年份'), value: maskDetail('year', displayValue(item.year)) },
+    { label: tr('成色'), value: maskDetail('condition', displayValue(item.itemCondition)) },
+    { label: tr('包型'), value: maskDetail('model', displayValue(item.modelName)) },
+    { label: tr('材质'), value: maskDetail('material', displayValue(item.materialName || item.material)) },
+    { label: tr('外观材质'), value: maskDetail('exteriorMaterial', displayValue(item.exteriorMaterial)) },
+    { label: tr('产地'), value: maskDetail('origin', displayValue(item.countryOfOrigin)) }
   ]
   const dimFields = itemDimensionFields(item, { isEn: isEn.value })
   const sizeField = dimFields.find(field => field.key === 'size')
   const bagFields = dimFields.filter(field => field.key !== 'size')
   if (sizeField) {
-    fields.push(sizeField)
+    fields.push({ ...sizeField, value: maskDetail('size', sizeField.value) })
   }
-  if (canViewCostPrice.value) {
-    fields.push({ label: tr('成本价'), value: formatMoney(sku.costPrice) })
+  if (showCost.value || inventoryView.state.restricted) {
+    fields.push({ label: tr('成本价'), value: showCost.value ? formatMoney(sku.costPrice) : '--' })
   }
-  if (canViewSellingPrice.value) {
-    fields.push({ label: tr('销售价'), value: formatMoney(sku.sellingPrice) })
+  if (showSelling.value || inventoryView.state.restricted) {
+    fields.push({ label: tr('销售价'), value: showSelling.value ? formatMoney(sku.sellingPrice) : '--' })
   }
   bagFields.forEach((field, index) => {
-    fields.push(index === 0 ? { ...field, breakRow: true } : field)
+    const next = { ...field, value: maskDetail('dimensions', field.value) }
+    fields.push(index === 0 ? { ...next, breakRow: true } : next)
   })
+  const accessoriesHidden = inventoryView.state.restricted && !showField('accessories')
   fields.push(
-    { label: tr('数量'), value: displayValue(item.defaultQty) },
-    { label: tr('是否已护理'), value: formatCared(item.cared) },
-    { label: tr('鉴定机构'), value: displayValue(item.authAgency) },
-    { label: tr('寄售信息'), value: displayValue(item.consignInfo), wide: true },
-    { label: tr('瑕疵'), value: displayValue(item.defect), wide: true },
-    { label: tr('配件'), value: accessoryList.value.length ? '' : '--', type: 'accessories', wide: true },
-    { label: tr('备注'), value: displayValue(item.remark), wide: true }
+    { label: tr('数量'), value: maskDetail('quantity', displayValue(item.defaultQty)) },
+    { label: tr('是否已护理'), value: maskDetail('cared', formatCared(item.cared)) },
+    { label: tr('鉴定机构'), value: maskDetail('authAgency', displayValue(item.authAgency)) },
+    { label: tr('采购人'), value: maskDetail('purchaser', displayValue(item.consignInfo)), wide: true },
+    { label: tr('瑕疵'), value: maskDetail('defect', displayValue(item.defect)), wide: true },
+    accessoriesHidden
+      ? { label: tr('配件'), value: '--', wide: true }
+      : { label: tr('配件'), value: accessoryList.value.length ? '' : '--', type: 'accessories', wide: true },
+    { label: tr('备注'), value: maskDetail('remark', displayValue(item.remark)), wide: true }
   )
   return fields
 })
@@ -857,7 +914,7 @@ const filterNonZero = ref(false)
 const batchMode = ref(false)
 const publishDialogRef = ref(null)
 const queryType = ref('item')
-const queryParams = ref({
+const createDefaultQueryParams = () => ({
   pageNum: 1,
   pageSize: 10,
   skuId: undefined,
@@ -886,6 +943,7 @@ const queryParams = ref({
   orderByColumn: DEFAULT_INVENTORY_SORT.prop,
   isAsc: DEFAULT_INVENTORY_SORT.order
 })
+const queryParams = ref(createDefaultQueryParams())
 
 // 与商品管理一致：同名品牌合并显示，保留不同分类下的全部品牌 ID。
 const brandGroups = computed(() => {
@@ -925,7 +983,25 @@ const appliedRouteFilterKey = ref('')
 function applyRouteSkuFilter() {
   const skuCode = String(route.query.skuCode || '').trim()
   const inStockOnly = String(route.query.inStock || '') === '1'
-  const filterKey = `${skuCode}|${inStockOnly}`
+  const fromPlatformOrder = String(route.query.fromPlatformOrder || '') === '1'
+  const filterKey = `${skuCode}|${inStockOnly}|${fromPlatformOrder}`
+  if (skuCode && fromPlatformOrder) {
+    const skuQuery = { ...createDefaultQueryParams(), skuCode, pageSize: queryParams.value.pageSize }
+    const hasOtherFilters = Object.keys(skuQuery).some(key =>
+      !['pageNum', 'pageSize', 'orderByColumn', 'isAsc'].includes(key)
+        && JSON.stringify(queryParams.value[key]) !== JSON.stringify(skuQuery[key]))
+    if (filterKey === appliedRouteFilterKey.value && !hasOtherFilters
+      && !filterable.value && !filterNonZero.value && queryType.value === 'item') return false
+    // 订单中的匹配商品可能已售罄；清除缓存筛选和历史快照，按当前 SKU 展示全部库存。
+    clearInventorySelection()
+    queryParams.value = skuQuery
+    filterable.value = false
+    filterNonZero.value = false
+    queryType.value = 'item'
+    rowSpanArray.value = ['itemGroupKey', 'skuGroupKey', 'skuWarehouseGroupKey']
+    appliedRouteFilterKey.value = filterKey
+    return true
+  }
   if (!skuCode || (filterKey === appliedRouteFilterKey.value && queryParams.value.skuCode === skuCode && (!inStockOnly || filterable.value))) return false
   queryParams.value.skuCode = skuCode
   if (inStockOnly) {
@@ -1262,8 +1338,9 @@ function buildWarehouseSummaryMap(items = []) {
 }
 
 function getWarehouseSummaryEntry(row) {
-  if (row?.warehouseId != null && row.warehouseId !== '') {
-    const byId = warehouseSummaryMap.value.get(String(row.warehouseId))
+  const rootId = row?.rootWarehouseId ?? row?.warehouseId
+  if (rootId != null && rootId !== '') {
+    const byId = warehouseSummaryMap.value.get(String(rootId))
     if (byId) return byId
   }
   const name = String(row?.warehouseName ?? '')
@@ -1336,11 +1413,14 @@ function formatTime(t) {
 
 const getCurrentQuery = () => {
   const query = { ...queryParams.value }
-  if (!canViewCostPrice.value) {
+  // 从平台订单定位时精确匹配 SKU；手动搜索其他 SKU 仍使用原有模糊查询。
+  query.skuCodeExact = String(route.query.fromPlatformOrder || '') === '1'
+    && String(route.query.skuCode || '').trim() === String(query.skuCode || '').trim() || undefined
+  if (!showCost.value) {
     delete query.costPriceMin
     delete query.costPriceMax
   }
-  if (!canViewSellingPrice.value) {
+  if (!showSelling.value) {
     delete query.sellingPriceMin
     delete query.sellingPriceMax
   }
@@ -2011,8 +2091,9 @@ function handleBatchExportPdf() {
   }
   try {
     batchExportPdfLoading.value = true
-    const canViewCost = canViewCostPrice.value
-    const canViewSelling = canViewSellingPrice.value
+    const canViewCost = showCost.value
+    const canViewSelling = showSelling.value
+    const allowPrintCoefficient = canViewCost && !inventoryView.state.restricted
 
     // 列定义同时驱动表头、数据单元格和显隐设置，隐藏后不会占据表格空间。
     const columns = [
@@ -2054,7 +2135,7 @@ function handleBatchExportPdf() {
     if (canViewSelling) {
       columns.push({ key: 'avgSelling', label: tr('平均销售价'), className: 'number-cell', render: row => escapeHtml(formatMoney(row.avgShipmentPrice)) })
     }
-    if (canViewCost && canViewSelling) {
+    if (showProfit.value) {
       columns.push({ key: 'profit', label: tr('利润'), className: 'number-cell', render: row => escapeHtml(formatProfit(row.totalProfit)) })
     }
     columns.push(
@@ -2063,17 +2144,24 @@ function handleBatchExportPdf() {
       { key: 'countryOfOrigin', label: tr('产地'), render: row => escapeHtml(row.countryOfOrigin || '--') },
       { key: 'defect', label: tr('瑕疵'), render: row => escapeHtml(row.defect || '--') }
     )
+    const pdfField = {
+      image: 'image', supplier: 'supplier', quantity: 'stockQuantity', receiptTime: 'receipt',
+      shipmentTime: 'shipment', platform: 'outboundPlatform', turnoverDays: 'turnoverDays',
+      avgCost: 'cost', avgSelling: 'selling', profit: 'profit', condition: 'condition',
+      exteriorMaterial: 'exteriorMaterial', countryOfOrigin: 'origin', defect: 'defect'
+    }
+    const visibleColumns = columns.filter(column => !pdfField[column.key] || showField(pdfField[column.key]))
 
-    const headerHtml = columns
+    const headerHtml = visibleColumns
       .map(column => `<th data-column="${column.key}" class="${column.className || ''}">${escapeHtml(column.label)}</th>`)
       .join('')
     const rowsHtml = selectedRows.value.map(row => {
-      const cells = columns.map(column => (
+      const cells = visibleColumns.map(column => (
         `<td data-column="${column.key}" class="${column.className || ''}">${column.render(row)}</td>`
       )).join('')
       return `<tr>${cells}</tr>`
     }).join('')
-    const columnOptionsHtml = columns.map(column => `
+    const columnOptionsHtml = visibleColumns.map(column => `
       <label class="column-option">
         <input type="checkbox" data-column-toggle value="${column.key}" checked />
         <span>${escapeHtml(column.label)}</span>
@@ -2170,7 +2258,7 @@ function handleBatchExportPdf() {
       <div class="settings-title">${escapeHtml(pageText.settings)}</div>
       <button id="print-button" class="print-button" type="button">${escapeHtml(pageText.print)}</button>
     </div>
-    ${canViewCost ? `
+    ${allowPrintCoefficient ? `
     <div class="setting-row">
       <div class="setting-label">${escapeHtml(pageText.costCoefficient)}</div>
       <div class="setting-content">
@@ -2371,7 +2459,8 @@ async function initSupplierData() {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
+  await inventoryView.load()
   useWmsStore().getWarehouseList()
   useWmsStore().getItemBrandList()
   useWmsStore().getItemCategoryList()
@@ -2387,6 +2476,17 @@ onActivated(() => {
 
 </script>
 <style scoped lang="scss">
+.inventory-price-header {
+  display: inline-flex;
+  align-items: center;
+}
+
+.inventory-price-info {
+  margin-left: 4px;
+  color: var(--el-text-color-placeholder, #a8abb2);
+  font-size: 14px;
+  cursor: help;
+}
 .page-title {
   font-size: large;
 }
@@ -2397,6 +2497,13 @@ onActivated(() => {
 
 .statistic-query-form :deep(.el-form-item) {
   margin-bottom: 18px;
+}
+.statistic-query-form :deep(.purchaser-search) {
+  width: 100%;
+}
+.statistic-query-form :deep(.purchaser-search .el-input__inner),
+.statistic-query-form :deep(.purchaser-search .el-input__wrapper) {
+  cursor: text;
 }
 
 .inventory-statistic-page.is-en .statistic-query-form :deep(.el-form-item__label) {

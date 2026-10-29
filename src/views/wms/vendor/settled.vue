@@ -133,8 +133,11 @@
         </el-table-column>
       </el-table>
       <template #footer>
-        <el-button v-if="detail.recordStatus === 'CONFIRMED'" v-hasPermi="['wms:vendor:list']" type="primary" :loading="invoiceLoadingId === String(detail.id)" :disabled="detailLoading || invoiceLoadingId !== null" @click="exportInvoice(detail)">{{ text('发票打印', 'Export Invoice') }}</el-button>
         <el-button @click="detailVisible = false">{{ text('关闭', 'Close') }}</el-button>
+        <el-button type="success" plain icon="Download" :disabled="detailLoading || !(detail.lines || []).length" @click="exportRecordExcel">
+          {{ text('导出 Excel', 'Export Excel') }}
+        </el-button>
+        <el-button v-if="detail.recordStatus === 'CONFIRMED'" v-hasPermi="['wms:vendor:list']" type="primary" :loading="invoiceLoadingId === String(detail.id)" :disabled="detailLoading || invoiceLoadingId !== null" @click="exportInvoice(detail)">{{ text('发票打印', 'Export Invoice') }}</el-button>
       </template>
     </el-dialog>
   </div>
@@ -142,6 +145,7 @@
 
 <script setup name="SupplierSettled">
 import { computed, getCurrentInstance, onMounted, reactive, ref } from 'vue'
+import { ElMessageBox } from 'element-plus'
 import { useRouter } from 'vue-router'
 import { supplierDisplayName } from '@/utils/supplier'
 import { getCurrentSupplier, listSupplierNoPage } from '@/api/wms/supplier'
@@ -256,6 +260,50 @@ async function viewRecord(id) {
     detail.value = response.data || { lines: [] }
   } finally {
     detailLoading.value = false
+  }
+}
+
+async function exportRecordExcel() {
+  if (!detail.value.id) return
+  const settlementNo = String(detail.value.settlementNo || detail.value.id || 'settlement').replace(/[\\/:*?"<>|]/g, '_')
+  const withImages = await chooseExportWithImages()
+  if (withImages === null) return
+  await proxy.download(
+    `wms/supplier-settlement/settlement/records/${detail.value.id}/export?includeImages=${withImages}`,
+    {},
+    `${text('已结算明细', 'Settled_Details')}_${settlementNo}.xlsx`,
+    {
+      skipHeaderTranslate: true,
+      timeout: 0,
+      progressLabel: withImages
+        ? text('正在生成含图片的 Excel，请勿关闭窗口', 'Generating Excel with images. Please keep this window open')
+        : text('正在生成 Excel，请勿关闭窗口', 'Generating Excel. Please keep this window open'),
+      elapsedLabel: withImages
+        ? text('正在生成含图片的 Excel，请勿关闭窗口 · 已用时', 'Generating Excel with images · Elapsed')
+        : text('正在生成 Excel，请勿关闭窗口 · 已用时', 'Generating Excel · Elapsed')
+    }
+  )
+}
+
+async function chooseExportWithImages() {
+  try {
+    await ElMessageBox.confirm(
+      text(
+        '快速导出不包含商品图片，速度更快；包含商品图片会下载并嵌入图片，导出时间会增加。',
+        'Fast export excludes product images and finishes sooner. Including images downloads and embeds them, which takes longer.'
+      ),
+      text('选择导出方式', 'Choose export type'),
+      {
+        confirmButtonText: text('包含商品图片（较慢）', 'Include images (slower)'),
+        cancelButtonText: text('快速导出（不含图片）', 'Fast export (no images)'),
+        distinguishCancelAndClose: true,
+        closeOnClickModal: false,
+        type: 'info'
+      }
+    )
+    return true
+  } catch (action) {
+    return action === 'cancel' ? false : null
   }
 }
 

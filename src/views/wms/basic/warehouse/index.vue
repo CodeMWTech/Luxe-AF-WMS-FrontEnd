@@ -1,249 +1,86 @@
 <template>
-  <div class="app-container warehouse-page" :class="{ 'is-en': isEn }">
+  <div class="app-container warehouse-page" data-runtime-i18n-ignore="true">
     <el-card>
-
-      <el-row :gutter="10" class="mb8" type="flex" justify="space-between">
-        <el-col :span="6"><span style="font-size: large">{{ tr('仓库列表') }}</span></el-col>
-        <el-col :span="1.5">
-          <el-button
-            type="primary"
-            plain
-            icon="Plus"
-            @click="handleAdd"
-            v-hasPermi="['wms:warehouse:edit']"
-          >{{ tr('新增') }}</el-button>
-        </el-col>
-      </el-row>
-
-      <el-table v-loading="loading" :data="warehouseList" border class="mt20" :empty-text="tr('暂无') + tr('仓库')">
-        <el-table-column :label="tr('仓库名称')" prop="warehouseName" min-width="180" show-overflow-tooltip />
-        <el-table-column :label="tr('仓库编号')" prop="warehouseCode" min-width="160" show-overflow-tooltip />
-        <el-table-column :label="tr('创建时间')" prop="createTime" width="180"/>
-        <el-table-column v-hasPermi="['wms:warehouse:edit']" :label="tr('操作')" align="right" header-align="left" class-name="small-padding fixed-width" width="180">
-          <template #default="scope">
-            <el-button link type="primary" icon="Edit" @click="handleUpdate(scope.row)" v-hasPermi="['wms:warehouse:edit']">{{ tr('修改') }}</el-button>
-            <el-button link type="primary" icon="Delete" @click="handleDelete(scope.row)" v-hasPermi="['wms:warehouse:edit']">{{ tr('删除') }}</el-button>
+      <template #header><div class="toolbar"><strong>{{ tr('仓库与房间') }}</strong><el-button v-hasPermi="['wms:warehouse:edit']" type="primary" @click="add()">{{ tr('新增一级仓库') }}</el-button></div></template>
+      <el-table :data="nodes" row-key="id" border default-expand-all v-loading="loading">
+        <el-table-column prop="warehouseName" :label="tr('名称')" min-width="230" />
+        <el-table-column prop="warehouseCode" :label="tr('编号')" min-width="140" />
+        <el-table-column :label="tr('层级')" width="120"><template #default="{row}">{{ tr(row.warehouseLevel === 1 ? '一级仓库' : '房间') }}</template></el-table-column>
+        <el-table-column :label="tr('用途')" width="150"><template #default="{row}">{{ tr(row.isLiveRoom ? '直播间' : row.warehouseLevel === 2 ? '普通房间' : '仓库') }}</template></el-table-column>
+        <el-table-column prop="rootWarehouseName" :label="tr('所属一级仓库')" min-width="200" />
+        <el-table-column :label="tr('状态')" width="110"><template #default="{row}"><el-tag :type="row.status === 0 ? 'success' : 'info'">{{ tr(row.status === 0 ? '启用' : '停用') }}</el-tag></template></el-table-column>
+        <el-table-column prop="orderNum" :label="tr('排序')" width="110" />
+        <el-table-column :label="tr('操作')" min-width="340" class-name="warehouse-actions"><template #default="{row}">
+          <template v-if="canEdit">
+            <el-button link @click="edit(row)">{{ tr('修改') }}</el-button>
+            <el-button v-if="row.warehouseLevel === 1 && row.status === 0" link type="primary" @click="add(row)">{{ tr('新增房间') }}</el-button>
+            <el-button v-if="row.warehouseLevel === 2 && row.status === 0" link type="primary" @click="showQr(row)">{{ tr('二维码') }}</el-button>
+            <el-button link @click="toggle(row)">{{ statusActionLabel(row) }}</el-button>
+            <el-button link type="danger" @click="remove(row)">{{ tr('删除') }}</el-button>
           </template>
-        </el-table-column>
+        </template></el-table-column>
       </el-table>
-
     </el-card>
-    <!-- 添加或修改仓库对话框 -->
-    <el-dialog :title="dialog.title" v-model="dialog.visible" width="500px" append-to-body :close-on-click-modal="false">
-      <el-form ref="warehouseFormRef" :model="form" :rules="rules" :label-width="dialogLabelWidth">
-        <el-form-item :label="tr('名称')" prop="warehouseName">
-          <el-input v-model="form.warehouseName" :placeholder="tr('请输入') + tr('名称')" />
+    <el-dialog data-runtime-i18n-ignore="true" class="warehouse-dialog" v-model="visible" :title="tr(form.id ? '修改位置' : form.parentId ? '新增房间' : '新增一级仓库')" width="520px" :close-on-click-modal="false">
+      <el-form ref="formRef" :model="form" :label-width="isEnglish ? '130px' : '100px'" :rules="{ warehouseName: [{ required: true, message: tr('名称不能为空'), trigger: 'blur' }] }">
+        <el-form-item :label="tr('名称')" prop="warehouseName"><el-input v-model="form.warehouseName" maxlength="100" /></el-form-item>
+        <el-form-item :label="tr('编号')"><el-input v-model="form.warehouseCode" /></el-form-item>
+        <el-form-item v-if="form.warehouseLevel === 2">
+          <template #label>
+            <span class="live-room-label">
+              {{ tr('是否直播间') }}
+              <el-tooltip :content="tr('开启后在调货页面中，会出现show和调货两种模式，否则只有调货模式')" placement="top" effect="dark">
+                <el-icon class="live-room-info" tabindex="0" :aria-label="tr('开启后在调货页面中，会出现show和调货两种模式，否则只有调货模式')" @click.stop @keydown.stop><InfoFilled /></el-icon>
+              </el-tooltip>
+            </span>
+          </template>
+          <el-switch v-model="form.isLiveRoom" />
         </el-form-item>
-        <el-form-item :label="tr('编号')" prop="warehouseCode">
-          <el-input v-model="form.warehouseCode" :placeholder="tr('请输入') + tr('编号')" />
-        </el-form-item>
-        <el-form-item :label="tr('备注')" prop="remark">
-          <el-input v-model="form.remark" :placeholder="tr('请输入') + tr('备注')" />
-        </el-form-item>
+        <el-form-item :label="tr('排序')"><el-input-number v-model="form.orderNum" :min="0" /></el-form-item>
+        <el-form-item :label="tr('备注')"><el-input v-model="form.remark" type="textarea" /></el-form-item>
       </el-form>
-      <template #footer>
-        <div class="dialog-footer">
-          <el-button :loading="buttonLoading" type="primary" class="action-btn" @click="submitForm">{{ tr('确认') }}</el-button>
-          <el-button class="action-btn" @click="cancel">{{ tr('取消') }}</el-button>
-        </div>
-      </template>
+      <template #footer><el-button @click="visible=false">{{ tr('取消') }}</el-button><el-button type="primary" :loading="busy" @click="save">{{ tr('保存') }}</el-button></template>
+    </el-dialog>
+    <el-dialog data-runtime-i18n-ignore="true" class="warehouse-dialog" v-model="qrVisible" :title="tr('房间固定二维码')" width="480px">
+      <div class="qr-preview"><h3>{{ qr.locationName }}</h3><img :src="qr.image" width="280" height="280" :alt="qr.locationName" /><p>{{ tr('扫描后登录系统并进入此房间调货') }}</p></div>
+      <template #footer><el-button @click="downloadQr">{{ tr('下载') }}</el-button><el-button type="primary" @click="printQr">{{ tr('打印') }}</el-button></template>
     </el-dialog>
   </div>
 </template>
-
 <script setup name="Warehouse">
-import {
-  getWarehouse,
-  delWarehouse,
-  addWarehouse,
-  updateWarehouse,
-  listWarehouseNoPage
-} from '@/api/wms/warehouse';
-import {computed, getCurrentInstance, nextTick, onMounted, reactive, ref, toRefs} from 'vue';
-import {ElForm, ElMessageBox, ElTree} from 'element-plus';
-import useUserStore from "@/store/modules/user";
-import {useWmsStore} from "@/store/modules/wms";
+import { computed, onMounted, ref } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import QRCode from 'qrcode'
+import { warehouseTree, addWarehouse, updateWarehouse, delWarehouse, roomQr } from '@/api/wms/warehouse'
+import { useWmsStore } from '@/store/modules/wms'
+import useUserStore from '@/store/modules/user'
 import useSettingsStore from '@/store/modules/settings'
-import { translateByMap } from '@/locales/runtime-map'
-const wmsStore = useWmsStore();
-const settingsStore = useSettingsStore()
-const { proxy } = getCurrentInstance();
-
-const customNodeClass = (data, node) => {
-  if (data.warehouseCode) {
-    return 'warehouseCode';
-  }
-  return null
-}
-const warehouseList = ref([]);
-const buttonLoading = ref(false);
-const loading = ref(false);
-const showSearch = ref(true);
-const ids = ref([]);
-const single = ref(true);
-const multiple = ref(true);
-const total = ref(0);
-const queryFormRef = ref(ElForm);
-const warehouseFormRef = ref(ElForm);
-const dialog = reactive({
-  visible: false,
-  title: ''
-});
-const initFormData = {
-  id: undefined,
-  warehouseCode: undefined,
-  warehouseName: undefined,
-  remark: undefined,
-}
-const data = reactive({
-  form: {...initFormData},
-  queryParams: {
-    warehouseCode: undefined,
-    warehouseName: undefined,
-  },
-  rules: {
-    id: [
-      { required: true, message: "不能为空", trigger: "blur" }
-    ],
-    warehouseName: [
-      { required: true, message: "名称不能为空", trigger: "blur" }
-    ]
-  }
-});
-
-const { queryParams, form, rules } = toRefs(data);
-const tr = (text) => translateByMap(text, settingsStore.language || 'zh-cn')
-const isEn = computed(() => (settingsStore.language || 'zh-cn') === 'en')
-const dialogLabelWidth = computed(() => (isEn.value ? '100px' : '80px'))
-
-
-const selectedWarehouseId = ref()
-
-
-/** 查询仓库列表 */
-const getList = async () => {
-  loading.value = true;
-  const res = await listWarehouseNoPage(queryParams.value).finally(()=>{
-    loading.value = false;
-  });
-  warehouseList.value = res.data;
-  total.value = res.total;
-}
-
-/** 取消按钮 */
-const cancel = () => {
-  reset();
-  dialog.visible = false;
-}
-
-/** 表单重置 */
-const reset = () => {
-  form.value = {...initFormData};
-  warehouseFormRef.value.resetFields();
-}
-
-/** 搜索按钮操作 */
-const handleQuery = () => {
-  queryParams.value.pageNum = 1;
-  getList();
-}
-
-/** 重置按钮操作 */
-const resetQuery = () => {
-  queryFormRef.value.resetFields();
-  handleQuery();
-}
-
-// /** 多选框选中数据
-
-/** 新增按钮操作 */
-const handleAdd = async () => {
-
-      dialog.visible = true;
-      dialog.title = tr('新增') + tr('仓库');
-      nextTick(() => {
-        reset();
-      });
-}
-
-/** 修改按钮操作 */
-const handleUpdate = (data) => {
-  dialog.visible = true;
-  dialog.title = tr('修改') + tr('仓库');
-  nextTick(async () => {
-    reset();
-    const _id = data.id
-    const res = await getWarehouse(_id);
-    Object.assign(form.value, res.data);
-  });
-}
-
-/** 提交按钮 */
-const submitForm = () => {
-  warehouseFormRef.value.validate(async (valid) => {
-    if (valid) {
-      buttonLoading.value = true;
-      if (form.value.id) {
-        await updateWarehouse(form.value).finally(() =>  buttonLoading.value = false);
-      } else {
-        await addWarehouse(form.value).finally(() =>  buttonLoading.value = false);
-      }
-      proxy?.$modal.msgSuccess(form.value.id ? tr('修改成功') : tr('新增成功'));
-      dialog.visible = false;
-      await getList();
-      wmsStore.getWarehouseList()
-    }
-  });
-}
-
-/** 删除按钮操作 */
-const handleDelete = async (data) => {
-  const _ids = data.id;
-  await proxy?.$modal.confirm(tr('确认删除') + tr('仓库') + '【' + data.warehouseName + '】' + '？').finally(() => loading.value = false);
-  await delWarehouse(_ids);
-  proxy?.$modal.msgSuccess(tr("删除成功"));
-  await getList();
-  wmsStore.getWarehouseList()
-}
-
-/** 导出按钮操作 */
-const handleExport = () => {
-  proxy?.download('wms/warehouse/export', {
-    ...queryParams.value
-  }, `warehouse_${new Date().getTime()}.xlsx`)
-}
-onMounted(async () => {
-  await getList();
-});
+import { translateExact } from '@/locales/runtime-map'
+const settings = useSettingsStore(), user = useUserStore(), wms = useWmsStore()
+const tr = text => translateExact(text, settings.language || 'zh-cn')
+const isEnglish = computed(() => settings.language === 'en')
+const statusActionLabel = row => isEnglish.value ? (row.status === 0 ? 'Disable' : 'Enable') : tr(row.status === 0 ? '停用' : '启用')
+const confirmOptions = () => ({ confirmButtonText: tr('确认'), cancelButtonText: tr('取消') })
+const canEdit = computed(() => user.permissions.includes('*:*:*') || user.permissions.includes('wms:warehouse:edit'))
+const nodes=ref([]), loading=ref(false), visible=ref(false), busy=ref(false), form=ref({}), formRef=ref(), qrVisible=ref(false), qr=ref({})
+async function load() { loading.value=true; try { nodes.value=(await warehouseTree({})).data || [] } finally { loading.value=false } }
+function add(parent) { form.value={ parentId: parent?.id || 0, warehouseLevel: parent ? 2 : 1, status: 0, isLiveRoom: Boolean(parent), orderNum: 0 }; visible.value=true }
+function edit(row) { form.value={...row}; visible.value=true }
+async function refresh() { await Promise.all([load(), wms.getWarehouseList()]) }
+async function save() { await formRef.value.validate(); busy.value=true; try { await (form.value.id ? updateWarehouse(form.value) : addWarehouse(form.value)); visible.value=false; await refresh(); ElMessage.success(tr('保存成功')) } finally { busy.value=false } }
+async function toggle(row) { await ElMessageBox.confirm(tr(row.status === 0 ? '确认停用此位置？' : '确认启用此位置？'), tr('确认'), confirmOptions()); await updateWarehouse({...row,status:row.status === 0 ? 1 : 0}); await refresh() }
+async function remove(row) { await ElMessageBox.confirm(tr('确认软删除此位置？历史单据仍保留。'), tr('确认'), confirmOptions()); await delWarehouse(row.id); await refresh() }
+async function showQr(row) { const data=(await roomQr(row.id)).data; const url=new URL(`${import.meta.env.BASE_URL || '/'}inventory/room-transfer`, window.location.origin); url.searchParams.set('token',data.token); qr.value={...data,image:await QRCode.toDataURL(url.href,{width:600,margin:3,errorCorrectionLevel:'M'})}; qrVisible.value=true }
+function downloadQr() { const a=document.createElement('a'); a.href=qr.value.image; a.download=`${qr.value.locationName.replace(/[\/:*?"<>|]/g,'_')}.png`; a.click() }
+function printQr() { const popup=window.open('','_blank'); if (!popup) { ElMessage.warning(tr('请允许弹出打印窗口')); return } const title=popup.document.createElement('h2'); title.textContent=qr.value.locationName; const img=popup.document.createElement('img'); img.width=360; img.onload=()=>{popup.focus();popup.print()}; img.src=qr.value.image; popup.document.body.append(title,img) }
+onMounted(load)
 </script>
-<style lang="scss">
-.warehouse-page.is-en .el-form-item__label {
-  white-space: nowrap;
-}
-
-.warehouse-page .action-btn {
-  min-width: 96px;
-}
-
-.warehouse-page.is-en .action-btn {
-  min-width: 110px;
-}
-
-.custom-tree-node {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 14px;
-  padding-right: 8px;
-}
-.el-tree-node__content {
-  display: flex;
-  align-items: center;
-  height: 35px;
-  cursor: pointer;
-}
-.el-message-box__content {
-  font-size: 16px;
-}
+<style scoped>
+.toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.warehouse-page :deep(.el-table__header .cell), .warehouse-page :deep(.warehouse-actions .cell) { white-space: nowrap; word-break: normal; }
+.warehouse-dialog { max-width: calc(100vw - 32px); }
+.qr-preview { text-align: center; }
+.qr-preview img { max-width: 100%; }
+.live-room-label { display: inline-flex; align-items: center; }
+.live-room-info { margin-left: 4px; color: var(--el-text-color-placeholder, #a8abb2); font-size: 14px; cursor: help; }
 </style>

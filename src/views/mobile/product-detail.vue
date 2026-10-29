@@ -348,7 +348,7 @@ const basicFields = computed(() => {
     ...itemDimensionFields(item, { isEn: locale.value === 'en' }),
     { label: tr('是否已护理'), value: item.cared === null || item.cared === undefined ? '--' : tr(item.cared ? '是' : '否') },
     { label: tr('鉴定机构'), value: displayValue(item.authAgency) },
-    { label: tr('寄售信息'), value: displayValue(item.consignInfo) },
+    { label: tr('采购人'), value: displayValue(item.consignInfo) },
     { label: t('mobile.labelDefect'), value: displayValue(item.defect) },
     { label: t('mobile.labelAccessories'), value: displayValue(item.accessories) },
     { label: t('mobile.labelRemark'), value: displayValue(item.remark) }

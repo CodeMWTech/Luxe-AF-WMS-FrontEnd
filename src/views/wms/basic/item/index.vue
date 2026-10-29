@@ -6,7 +6,8 @@
       :supplier-options="supplierOptions"
       :is-supplier-user="isSupplierUser"
       :default-time="defaultTime"
-      :can-view-selling-price="canViewSellingPrice"
+      :can-view-selling-price="showSellingPrice"
+      :field-visible="fieldVisible"
       :ITEM_CONDITION_OPTIONS="ITEM_CONDITION_OPTIONS"
       :AUTH_AGENCY_OPTIONS="AUTH_AGENCY_OPTIONS"
       :tr="tr"
@@ -17,6 +18,7 @@
     <el-card class="mt20">
       <div class="item-content-layout" :class="{ 'is-category-collapsed': isCategoryPanelCollapsed }">
         <ItemCategoryPanel
+          v-if="fieldVisible('category')"
           v-model:collapsed="isCategoryPanelCollapsed"
           :tree-options="itemCategoryTreeOptionsList"
           :tr="tr"
@@ -30,14 +32,17 @@
           @layout-change="layoutItemTable"
         />
         <ItemTablePanel
+          v-if="inventoryView.state.loaded"
           ref="itemTableRef"
           :collapsed="isCategoryPanelCollapsed"
           :item-list="itemList"
           :query-params="queryParams"
           :total="total"
           :loading="loading"
-          :can-view-cost-price="canViewCostPrice"
-          :can-view-selling-price="canViewSellingPrice"
+          :can-view-cost-price="showCostPrice"
+          :can-view-selling-price="showSellingPrice"
+          :field-visible="fieldVisible"
+          :view-restricted="inventoryView.state.restricted"
           :amount-column-label="amountColumnLabel"
           :span-method="spanMethod"
           :get-item-row-key="getItemRowKey"
@@ -85,10 +90,10 @@
       :bag-dim-labels="bagDimLabels"
       :supplier-options="supplierOptions"
       :is-supplier-user="isSupplierUser"
-      :can-view-cost-price="canViewCostPrice"
-      :can-edit-cost-price="canEditCostPrice"
-      :can-view-selling-price="canViewSellingPrice"
-      :can-edit-selling-price="canEditSellingPrice"
+      :can-view-cost-price="showCostPrice"
+      :can-edit-cost-price="canEditCostPrice && !inventoryView.state.restricted"
+      :can-view-selling-price="showSellingPrice"
+      :can-edit-selling-price="canEditSellingPrice && !inventoryView.state.restricted"
       :has-item-model-context="hasItemModelContext"
       :selected-item-model="selectedItemModel"
       :filtered-item-model-list="filteredItemModelList"
@@ -351,6 +356,7 @@ import {useWmsStore} from '@/store/modules/wms'
 import { useItemCatalogDictStore } from '@/store/modules/itemCatalogDict'
 import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
+import { useInventoryView } from '@/utils/inventoryView'
 import { CircleCheckFilled, UploadFilled } from '@element-plus/icons-vue'
 import { formatDateTimeForQuery } from '@/utils/laTime'
 import { toCatalogId, withCategoryPathLabels, isCatalogLeafId } from '@/utils/wmsUtil'
@@ -401,7 +407,11 @@ const amountColumnLabel = computed(() => isEn.value ? 'Amount($)' : '金额($)')
 const fieldLabel = (text) => `${tr(text)}${isEn.value ? ': ' : '：'}`
 const canViewSellingPrice = computed(() => proxy?.$auth?.hasPermi('wms:itemSellingPrice:view'));
 const canEditSellingPrice = computed(() => proxy?.$auth?.hasPermi('wms:itemSellingPrice:edit'));
+const inventoryView = useInventoryView()
+const fieldVisible = (key) => inventoryView.shows(key)
 const canViewCostPrice = computed(() => proxy?.$auth?.hasPermi('wms:itemCostPrice:view'));
+const showCostPrice = canViewCostPrice
+const showSellingPrice = canViewSellingPrice
 const canEditCostPrice = computed(() => proxy?.$auth?.hasPermi('wms:itemCostPrice:edit'));
 /** 成本价变更时，销售价 = 成本价 × 该系数（保留两位小数） */
 const SELLING_PRICE_FROM_COST_MULTIPLIER = 1.8
@@ -599,7 +609,8 @@ const EXTERIOR_MATERIAL_OPTIONS = [
   { value: 'Satin', zh: '缎面' },
   { value: 'Suede', zh: '麂皮' },
   { value: 'Velvet', zh: '天鹅绒' },
-  { value: 'Wicker', zh: '藤编' }
+  { value: 'Wicker', zh: '藤编' },
+  { value: 'Other', zh: '其他' }
 ]
 const COUNTRY_OF_ORIGIN_OPTIONS = [
   { value: 'France', zh: '法国' },
@@ -764,6 +775,7 @@ const ensureMainImageLoaded = (row) => {
 }
 
 const preloadMainImages = (rows) => {
+  if (!fieldVisible('image')) return
   if (!Array.isArray(rows) || !rows.length) return
   rows.forEach((row) => {
     ensureMainImageLoaded(row)
@@ -832,7 +844,7 @@ const data = reactive({
     cared: undefined,           // 是否已护理
     defaultQty: undefined,      // 默认数量
     authAgency: [],             // 列表筛选：鉴定机构多选
-    consignInfo: undefined,     // 寄售信息
+    consignInfo: undefined,     // 采购人
     createTimeRange: [],        // 创建时间区间 [开始, 结束]
     sellingPriceMin: undefined, // 销售价下限(元)
     sellingPriceMax: undefined, // 销售价上限(元)
@@ -905,7 +917,7 @@ const formRules = computed(() => ({
   bagDepth: [requiredNumber(isEn.value ? 'Bag Depth cannot be empty' : '宽不能为空')],
   bagHeight: [requiredNumber(isEn.value ? 'Bag Height cannot be empty' : '高不能为空')],
   accessories: [{ required: true, message: tr('配件不能为空'), trigger: [] }],
-  consignInfo: [{ required: true, message: tr('寄售信息不能为空'), trigger: [] }]
+  consignInfo: [{ required: true, message: tr('采购人不能为空'), trigger: [] }]
 }))
 const appliedRouteSkuCode = ref('')
 
@@ -1137,7 +1149,7 @@ watch(
 )
 const getList = async (requestConfig = {}) => {
   const query = { ...queryParams.value };
-  if (!canViewSellingPrice.value) {
+  if (!showSellingPrice.value) {
     delete query.sellingPriceMin;
     delete query.sellingPriceMax;
   }
@@ -1881,7 +1893,7 @@ const treeRef = ref(null)
 /** 导出按钮操作 */
 const handleExport = async () => {
   const query = { ...queryParams.value }
-  if (!canViewSellingPrice.value) {
+  if (!showSellingPrice.value) {
     delete query.sellingPriceMin
     delete query.sellingPriceMax
   }
@@ -2175,6 +2187,7 @@ const downloadQrcode = async (row) => {
   // this.$message.warn('下载中，请稍后...')
 }
 onMounted(async () => {
+  await inventoryView.load()
   initSupplierData();
   nextTick(() => {
     applyRouteSkuFilter()

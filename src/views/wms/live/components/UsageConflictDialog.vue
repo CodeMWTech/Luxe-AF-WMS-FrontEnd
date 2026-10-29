@@ -25,7 +25,7 @@
       <el-table-column prop="employeeName" :label="tr('主播')" min-width="130" show-overflow-tooltip />
       <el-table-column prop="accountLabel" :label="tr('直播平台')" min-width="190" show-overflow-tooltip><template #default="s"><LivePlatformTag :account="s.row" :accounts="accounts" /></template></el-table-column>
       <el-table-column prop="rateTypeName" :label="tr('费率类型')" min-width="120" show-overflow-tooltip />
-      <el-table-column :label="tr('时段')" :min-width="isEn ? 150 : 125">
+      <el-table-column :label="tr('时段')" min-width="200">
         <template #default="scope">{{ timeRange(scope.row) }}</template>
       </el-table-column>
     </el-table>
@@ -37,7 +37,7 @@
 import LivePlatformTag from './LivePlatformTag.vue'
 import { useLiveI18n } from '../useLiveI18n'
 import { WarningFilled } from '@element-plus/icons-vue'
-import { displayDate } from '../shared'
+import { displayTime, displayDate } from '../shared'
 const { tr, isEn } = useLiveI18n()
 defineProps({
   accounts: { type: Array, default: () => [] },
@@ -49,7 +49,7 @@ defineProps({
 defineEmits(['update:modelValue'])
 
 function timeRange(row) {
-  return `${String(row.startTime || '').slice(0, 5)}–${String(row.endTime || '').slice(0, 5)}`
+  return `${displayTime(row.startTime)}–${displayTime(row.endTime)}`
 }
 </script>
 
