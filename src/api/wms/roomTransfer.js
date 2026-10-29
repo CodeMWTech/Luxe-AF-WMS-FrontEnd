@@ -11,3 +11,7 @@ export const cancelTransfer = (id, data) => request({ url: `${root}/${id}/cancel
 export const reverseTransfer = id => request({ url: `${root}/${id}/reverse`, method: 'post' })
 
 export const copyFailedTransfer = id => request({ url: `${root}/${id}/copyFailed`, method: 'post' })
+
+export const pendingShows = () => request({ url: root + '/show/pending' })
+export const getShow = id => request({ url: root + '/show/' + id })
+export const resolveShow = (id, data) => request({ url: root + '/' + id + '/show/resolve', method: 'post', data })
