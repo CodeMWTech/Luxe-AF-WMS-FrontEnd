@@ -1,33 +1,38 @@
 <template>
   <div class="app-container supplier-page" :class="{ 'is-en': isEn }">
     <el-card>
-      <el-form :model="queryParams" ref="queryRef" :inline="true" :label-width="queryLabelWidth" class="supplier-query-form">
-        <el-form-item :label="tr('供应商名称')" prop="supplierName">
-          <el-input
-            v-model="queryParams.supplierName"
-            :placeholder="tr('请输入') + tr('供应商名称')"
-            clearable
-            @keyup.enter="handleQuery"
-          />
-        </el-form-item>
-        <el-form-item :label="tr('供应商编码')" prop="supplierCode">
-          <el-input
-            v-model="queryParams.supplierCode"
-            :placeholder="tr('请输入') + tr('供应商编码')"
-            clearable
-            @keyup.enter="handleQuery"
-          />
-        </el-form-item>
-        <el-form-item :label="tr('状态')" prop="status">
-          <el-select v-model="queryParams.status" :placeholder="tr('请选择') + tr('状态')" clearable>
-            <el-option :label="tr('正常')" :value="0" />
-            <el-option :label="tr('停用')" :value="1" />
-          </el-select>
-        </el-form-item>
-        <el-form-item>
+      <el-form :model="queryParams" ref="queryRef" label-position="top" class="supplier-query-form">
+        <div class="supplier-query-fields">
+          <el-form-item :label="tr('Legal Name（发票名称）')" prop="supplierName">
+            <el-input
+              v-model="queryParams.supplierName"
+              :placeholder="tr('请输入发票名称')"
+              clearable
+              @keyup.enter="handleQuery"
+            />
+          </el-form-item>
+          <el-form-item :label="tr('Nick Name（内部昵称）')" prop="supplierShortName">
+            <el-input v-model="queryParams.supplierShortName" :placeholder="tr('请输入内部昵称')" clearable @keyup.enter="handleQuery" />
+          </el-form-item>
+          <el-form-item :label="tr('供应商编码')" prop="supplierCode">
+            <el-input
+              v-model="queryParams.supplierCode"
+              :placeholder="tr('请输入') + tr('供应商编码')"
+              clearable
+              @keyup.enter="handleQuery"
+            />
+          </el-form-item>
+          <el-form-item :label="tr('状态')" prop="status">
+            <el-select v-model="queryParams.status" :placeholder="tr('请选择') + tr('状态')" clearable>
+              <el-option :label="tr('正常')" :value="0" />
+              <el-option :label="tr('停用')" :value="1" />
+            </el-select>
+          </el-form-item>
+        </div>
+        <div class="supplier-query-actions">
           <el-button type="primary" icon="Search" class="action-btn" @click="handleQuery">{{ tr('搜索') }}</el-button>
           <el-button icon="Refresh" class="action-btn" @click="resetQuery">{{ tr('重置') }}</el-button>
-        </el-form-item>
+        </div>
       </el-form>
     </el-card>
 
@@ -48,8 +53,8 @@
 
       <el-table v-loading="loading" :data="supplierList" border class="mt20" :empty-text="tr('暂无') + tr('供应商')">
         <el-table-column label="id" prop="id" v-if="false"/>
-        <el-table-column :label="tr('供应商名称')" prop="supplierName" min-width="150" show-overflow-tooltip />
-        <el-table-column :label="tr('供应商简称')" prop="supplierShortName" min-width="130" show-overflow-tooltip />
+        <el-table-column :label="tr('Legal Name（发票名称）')" prop="supplierName" min-width="200" show-overflow-tooltip />
+        <el-table-column :label="tr('Nick Name（内部昵称）')" prop="supplierShortName" min-width="200" show-overflow-tooltip />
         <el-table-column :label="tr('供应商编码')" prop="supplierCode" min-width="130" show-overflow-tooltip />
         <el-table-column :label="tr('关联角色')" prop="roleName" min-width="130" show-overflow-tooltip />
         <el-table-column :label="tr('联系人')" prop="contactPerson" min-width="120" show-overflow-tooltip />
@@ -83,13 +88,13 @@
     </el-card>
 
     <!-- 添加或修改供应商对话框 -->
-    <el-drawer :title="title" v-model="open" append-to-body size="50%">
-      <el-form ref="supplierRef" :model="form" :rules="rules" :label-width="drawerLabelWidth">
-        <el-form-item :label="tr('供应商名称')" prop="supplierName">
-          <el-input v-model="form.supplierName" :placeholder="tr('请输入') + tr('供应商名称')" />
+    <el-drawer :title="title" v-model="open" append-to-body size="min(900px, 96vw)" class="supplier-edit-drawer">
+      <el-form ref="supplierRef" :model="form" :rules="rules" :label-width="drawerLabelWidth" class="supplier-edit-form">
+        <el-form-item :label="tr('Legal Name（发票名称）')" prop="supplierName">
+          <el-input v-model="form.supplierName" :placeholder="tr('请输入') + tr('Legal Name（发票名称）')" />
         </el-form-item>
-        <el-form-item :label="tr('供应商简称')" prop="supplierShortName">
-          <el-input v-model="form.supplierShortName" :placeholder="tr('未填写时显示供应商名称')" maxlength="100" show-word-limit clearable />
+        <el-form-item :label="tr('Nick Name（内部昵称）')" prop="supplierShortName">
+          <el-input v-model="form.supplierShortName" :placeholder="tr('内部页面优先显示；可与其他Legal Name共用')" maxlength="100" show-word-limit clearable />
         </el-form-item>
         <el-form-item :label="tr('供应商编码')" prop="supplierCode">
           <el-input v-model="form.supplierCode" :placeholder="tr('请输入') + tr('供应商编码')" />
@@ -177,6 +182,7 @@ const data = reactive({
     pageNum: 1,
     pageSize: 10,
     supplierName: undefined,
+    supplierShortName: undefined,
     supplierCode: undefined,
     status: undefined,
   },
@@ -193,8 +199,7 @@ const data = reactive({
 const { queryParams, form, rules } = toRefs(data);
 const tr = (text) => translateByMap(text, settingsStore.language || 'zh-cn')
 const isEn = computed(() => (settingsStore.language || 'zh-cn') === 'en')
-const queryLabelWidth = computed(() => isEn.value ? '140px' : '100px')
-const drawerLabelWidth = computed(() => isEn.value ? '150px' : '100px')
+const drawerLabelWidth = computed(() => isEn.value ? '190px' : '180px')
 
 // Both dropdowns select the same user ID, so a phone can never belong to a different contact.
 const selectedContact = computed(() => roleContacts.value.find(user => user.userId === form.value.contactUserId))
@@ -388,11 +393,92 @@ getList();
   white-space: nowrap;
 }
 
+.supplier-page .supplier-query-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.supplier-query-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 16px 24px;
+}
+
+.supplier-query-form .el-form-item {
+  min-width: 0;
+  margin: 0;
+}
+
+.supplier-page .supplier-query-form .el-form-item__label {
+  height: auto;
+  margin-bottom: 8px;
+  padding: 0;
+  line-height: 22px;
+  white-space: normal;
+}
+
+.supplier-query-form .el-form-item__content {
+  min-width: 0;
+}
+
+.supplier-query-form .el-input,
+.supplier-query-form .el-select {
+  width: 100%;
+}
+
+.supplier-query-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.supplier-query-actions .el-button + .el-button {
+  margin-left: 0;
+}
+
 .supplier-page .action-btn {
   min-width: 96px;
 }
 
 .supplier-page.is-en .action-btn {
   min-width: 110px;
+}
+
+.supplier-edit-drawer .el-drawer__body {
+  padding: 24px 28px;
+}
+
+.supplier-edit-form .el-form-item {
+  margin-bottom: 20px;
+}
+
+.supplier-edit-form .el-form-item__label {
+  box-sizing: border-box;
+  padding-right: 18px;
+  line-height: 32px;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+@media (max-width: 760px) {
+  .supplier-edit-drawer .el-drawer__body {
+    padding: 20px 16px;
+  }
+
+  .supplier-edit-form .el-form-item {
+    display: block;
+  }
+
+  .supplier-edit-form .el-form-item__label {
+    width: 100% !important;
+    justify-content: flex-start;
+    padding-right: 0;
+  }
+
+  .supplier-edit-form .el-form-item__content {
+    margin-left: 0 !important;
+  }
 }
 </style>
