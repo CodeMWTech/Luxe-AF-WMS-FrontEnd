@@ -1273,6 +1273,7 @@ const zhToEnMap = {
   下载文件: 'Download File',
   文件预览: 'File Preview',
   预览失败: 'Preview failed',
+  下载失败: 'Download failed',
   '请先选择要上传的文件': 'Please select a file to upload first',
   '一次最多选择 20 个文件': 'You can select up to 20 files at once',
   '当前文件类型暂不支持在线预览，请下载后查看。': 'This file type cannot be previewed online. Please download it instead.',
