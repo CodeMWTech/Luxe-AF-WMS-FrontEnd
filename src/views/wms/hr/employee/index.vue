@@ -807,8 +807,8 @@ const requiredUploadKeys = ref({})
 const hrCapabilities = ref({})
 const permissionNoticeExpanded = ref(false)
 
-const uploadUrl = import.meta.env.VITE_APP_BASE_API + '/system/oss/upload'
-const previewUrlApi = import.meta.env.VITE_APP_BASE_API + '/system/oss/preview/'
+const uploadUrl = import.meta.env.VITE_APP_BASE_API + '/wms/employee/attachments/upload'
+const previewUrlApi = import.meta.env.VITE_APP_BASE_API + '/wms/employee/attachments/preview/'
 
 const uploadDialogOpen = ref(false)
 const uploadDialogLoading = ref(false)
@@ -2087,9 +2087,27 @@ function removeAttachment(item) {
 }
 
 function downloadAttachment(item) {
-  if (item?.ossId) {
-    proxy.$download.oss(item.ossId)
+  if (!item?.ossId) {
+    proxy.$modal.msgError(tr('附件信息异常，请刷新页面后重试'))
+    return
   }
+  axios({
+    method: 'get',
+    url: import.meta.env.VITE_APP_BASE_API + '/wms/employee/attachments/download/' + item.ossId,
+    responseType: 'blob',
+    headers: { Authorization: 'Bearer ' + getToken() }
+  }).then(async (res) => {
+    if (blobValidate(res.data)) {
+      const encoded = res.headers['download-filename']
+      const name = encoded ? decodeURIComponent(encoded) : (item.fileName || 'download')
+      saveAs(new Blob([res.data], { type: 'application/octet-stream' }), name)
+      return
+    }
+    const rspObj = JSON.parse(await res.data.text())
+    proxy.$modal.msgError(rspObj?.msg || tr('下载失败'))
+  }).catch(() => {
+    proxy.$modal.msgError(tr('下载失败'))
+  })
 }
 
 loadCapabilities().then(() => {
