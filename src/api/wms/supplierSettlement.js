@@ -40,6 +40,14 @@ export function listSupplierSettlementRecords(query) {
   })
 }
 
+export function getSupplierSettlementRecordSummary(query) {
+  return request({
+    url: '/wms/supplier-settlement/settlement/records/summary',
+    method: 'get',
+    params: query
+  })
+}
+
 export function getSupplierSettlementRecord(id) {
   return request({
     url: '/wms/supplier-settlement/settlement/records/' + id,
@@ -51,5 +59,28 @@ export function deleteSupplierSettlementDraft(id) {
   return request({
     url: '/wms/supplier-settlement/settlement/records/' + id,
     method: 'delete'
+  })
+}
+
+export function voidSupplierSettlementRecord(id, data) {
+  return request({
+    url: '/wms/supplier-settlement/settlement/records/' + id + '/void',
+    method: 'post',
+    data
+  })
+}
+
+export function updateSupplierSettlementDates(id, data) {
+  return request({
+    url: '/wms/supplier-settlement/settlement/records/' + id + '/dates',
+    method: 'put',
+    data
+  })
+}
+
+export function restoreSupplierSettlementRecord(id) {
+  return request({
+    url: '/wms/supplier-settlement/settlement/records/' + id + '/restore',
+    method: 'post'
   })
 }
