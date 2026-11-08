@@ -542,10 +542,9 @@
         </el-table-column>
 
         <!-- ========== 新增列：周转天数 ========== -->
-        <el-table-column v-if="showField('turnoverDays')" :label="tr('周转天数')" prop="turnoverDays" :width="isEn ? 150 : 125" align="center" sortable="custom">
+        <el-table-column v-if="showField('turnoverDays')" :label="tr('周转天数')" prop="turnoverDays" :width="isEn ? 240 : 200" align="center" sortable="custom">
           <template #default="{ row }">
-            <span v-if="row.turnoverDays != null" :class="{ 'turnover-days-alert': isTurnoverDaysAlert(row.turnoverDays) }">{{ row.turnoverDays }}</span>
-            <span v-else>--</span>
+            <span :class="{ 'turnover-days-alert': row.turnoverDays != null && isTurnoverDaysAlert(row.turnoverDays) }">{{ formatTurnoverDays(row, tr) }}</span>
           </template>
         </el-table-column>
 
@@ -772,6 +771,7 @@ import { formatDateForQuery, formatDateTimeForQuery } from '@/utils/laTime'
 import { formatBrandNames, parseBrandIdList } from '@/utils/itemBrand'
 import { suggestPurchasers } from '@/utils/itemPurchaser'
 import { itemDimensionFields } from '@/utils/itemDetailFields'
+import { formatTurnoverDays } from '@/utils/inventoryTurnover'
 import PublishDialog from '@/views/wms/platform/listings/components/PublishDialog.vue'
 const route = useRoute()
 
@@ -2116,7 +2116,7 @@ function handleBatchExportPdf() {
       { key: 'receiptTime', label: tr('入库时间'), render: row => escapeHtml(formatTime(row.receiptTime)) },
       { key: 'shipmentTime', label: tr('出库时间'), render: row => escapeHtml(formatTime(row.shipmentTime)) },
       { key: 'platform', label: tr('出库平台'), render: row => escapeHtml(row.outboundPlatform || '--') },
-      { key: 'turnoverDays', label: tr('周转天数'), className: 'number-cell', render: row => row.turnoverDays != null ? escapeHtml(row.turnoverDays) : '--' }
+      { key: 'turnoverDays', label: tr('周转天数'), className: 'turnover-cell', render: row => escapeHtml(formatTurnoverDays(row, tr)) }
     ]
     if (canViewCost) {
       columns.push({
@@ -2237,6 +2237,7 @@ function handleBatchExportPdf() {
     .image-cell { width: 80px; text-align: center; }
     td.image-cell img { width: 72px; height: 72px; object-fit: cover; border-radius: 4px; display: block; margin: 0 auto; }
     .number-cell { text-align: right; white-space: nowrap; }
+    .turnover-cell { text-align: center; white-space: normal; overflow-wrap: anywhere; }
     @page { size: landscape; margin: 6mm; }
     @media print {
       body { padding: 0; background: #fff; }

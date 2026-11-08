@@ -117,6 +117,7 @@ import { computed, getCurrentInstance, nextTick, onBeforeUnmount, onMounted, ref
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { itemDimensionFields } from '@/utils/itemDetailFields'
+import { formatTurnoverDays } from '@/utils/inventoryTurnover'
 import { translateByMap } from '@/locales/runtime-map'
 import { useI18n } from 'vue-i18n'
 import { getItem, getItemImages } from '@/api/wms/item'
@@ -375,7 +376,7 @@ const inventoryFields = computed(() => {
   const item = detail.value || {}
   return [
     { label: t('mobile.labelQuantity'), value: displayValue(item.quantity) },
-    { label: t('mobile.labelTurnoverDays'), value: displayValue(item.turnoverDays) }
+    { label: t('mobile.labelTurnoverDays'), value: formatTurnoverDays(item, tr) }
   ]
 })
 
@@ -457,6 +458,16 @@ async function loadInventoryFromHistory(skuId, skuCode) {
 }
 
 async function loadInventoryExtra(skuId, skuCode) {
+  // 优先使用库存看板的采购/销售口径；流水无法区分单据业务类型。
+  if (skuCode) {
+    try {
+      const res = await listInventory({ skuCode, skuCodeExact: true, pageNum: 1, pageSize: 100 }, { silentError: true })
+      const summary = summarizeInventoryRows(res?.rows || [])
+      if (summary) return summary
+    } catch (_) {
+      // 无看板权限或接口失败时，其他数据仍可展示，但不自行推算周转。
+    }
+  }
   const fromHistory = await loadInventoryFromHistory(skuId, skuCode)
   if (fromHistory) return fromHistory
 
