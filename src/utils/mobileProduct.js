@@ -50,7 +50,7 @@ function businessTodayParts() {
 }
 
 /**
- * 周转天数口径（对齐库存看板 SQL）：
+ * 旧版日期差工具（不再用于库存看板；新口径必须由后端按采购/销售类型计算）：
  * 1) 无入库时间 → 无法计算
  * 2) 库存未清零 → 今天 - 入库日期
  * 3) 库存已清零且有出库 → 出库日期 - 入库日期
@@ -189,6 +189,7 @@ export function buildDetailViewModel(payload = {}, images = []) {
     shipmentTime: pickField(merged, 'shipmentTime'),
     outboundPlatform: pickField(merged, 'outboundPlatform'),
     turnoverDays: pickField(merged, 'turnoverDays'),
+    turnoverStatus: pickField(merged, 'turnoverStatus'),
     costPrice: pickField(sku, 'costPrice') ?? pickField(merged, 'costPrice', 'avgReceiptCost'),
     sellingPrice: pickField(sku, 'sellingPrice') ?? pickField(merged, 'sellingPrice', 'avgShipmentPrice'),
     totalProfit: pickField(merged, 'totalProfit'),
@@ -235,10 +236,11 @@ export function mergeInventoryIntoDetail(detail, inventoryRow = {}) {
   if (!detail || !inventoryRow) return detail
   detail.quantity = pickField(inventoryRow, 'quantity') ?? detail.quantity
   detail.warehouseName = pickField(inventoryRow, 'warehouseName') ?? detail.warehouseName
-  detail.receiptTime = pickField(inventoryRow, 'receiptTime') ?? detail.receiptTime
-  detail.shipmentTime = pickField(inventoryRow, 'shipmentTime') ?? detail.shipmentTime
   detail.outboundPlatform = pickField(inventoryRow, 'outboundPlatform') ?? detail.outboundPlatform
-  detail.turnoverDays = pickField(inventoryRow, 'turnoverDays') ?? detail.turnoverDays
+  // 看板的null是明确的不可计算结果，不能保留旧天数或根据库位数量本地补算。
+  for (const field of ['receiptTime', 'shipmentTime', 'turnoverDays', 'turnoverStatus']) {
+    if (Object.prototype.hasOwnProperty.call(inventoryRow, field)) detail[field] = inventoryRow[field]
+  }
   detail.totalProfit = pickField(inventoryRow, 'totalProfit') ?? detail.totalProfit
   detail.trackingNumber = pickField(inventoryRow, 'trackingNumber', 'itemTrackingNumber') ?? detail.trackingNumber
   detail.platformOrderNo = pickField(inventoryRow, 'platformOrderNo', 'orderNo', 'outboundOrderNo') ?? detail.platformOrderNo
@@ -249,10 +251,6 @@ export function mergeInventoryIntoDetail(detail, inventoryRow = {}) {
   }
   if ((detail.sellingPrice === null || detail.sellingPrice === undefined) && inventoryRow.sellingPrice !== undefined) {
     detail.sellingPrice = inventoryRow.sellingPrice
-  }
-  // 历史接口/部分库存接口不带周转天数时，按看板口径本地补算
-  if (detail.turnoverDays === null || detail.turnoverDays === undefined) {
-    detail.turnoverDays = computeTurnoverDays(detail.receiptTime, detail.shipmentTime, detail.quantity)
   }
   return detail
 }
@@ -297,7 +295,9 @@ export function summarizeInventoryHistoryRows(rows = [], warehouseMap) {
     shipmentTime,
     shipmentOrderNo,
     outboundPlatform: undefined,
-    turnoverDays: computeTurnoverDays(receiptTime, shipmentTime, quantityValue)
+    // 流水orderType无法区分采购/销售，不能据此计算周转天数。
+    turnoverDays: undefined,
+    turnoverStatus: undefined
   }
 }
 
@@ -335,6 +335,7 @@ export function summarizeInventoryRows(rows = []) {
     shipmentTime: primary.shipmentTime,
     outboundPlatform: primary.outboundPlatform,
     turnoverDays: primary.turnoverDays,
+    turnoverStatus: primary.turnoverStatus,
     totalProfit: primary.totalProfit,
     costPrice: primary.costPrice,
     sellingPrice: primary.sellingPrice

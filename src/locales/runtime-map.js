@@ -520,6 +520,7 @@ const zhToEnMap = {
   出库时间: 'Outbound Time',
   出库平台: 'Outbound Platform',
   周转天数: 'Turnover Days',
+  '非销售出库，无法统计': 'Non-sales outbound, cannot calculate',
   最小周转天数: 'Minimum days',
   库存数量: 'Stock Qty',
   利润: 'Profit',
