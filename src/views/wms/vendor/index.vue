@@ -265,16 +265,23 @@
 
       <div class="settlement-target">
         <span class="settlement-target__label">{{ text('本次结算金额', 'Current settlement amount') }}</span>
-        <el-input-number
-          v-model="settlementTargetAmount"
-          :min="0.01"
-          :max="settlementTargetMaxAmount"
-          :precision="2"
-          :controls="false"
-          class="settlement-target__input"
-          :placeholder="text('输入本次结算总额', 'Enter total amount')"
-          @keyup.enter="applySettlementTarget"
-        />
+        <div
+          class="settlement-target__input-wrap"
+          :class="{ 'is-blocked': !canEnterSettlementTarget }"
+          @click="handleSettlementTargetAreaClick"
+        >
+          <el-input-number
+            v-model="settlementTargetAmount"
+            :min="canEnterSettlementTarget ? 0.01 : 0"
+            :max="settlementTargetInputMax"
+            :precision="2"
+            :controls="false"
+            :disabled="!canEnterSettlementTarget"
+            class="settlement-target__input"
+            :placeholder="text('输入本次结算总额', 'Enter total amount')"
+            @keyup.enter="applySettlementTarget"
+          />
+        </div>
         <el-button
           type="primary"
           plain
@@ -579,9 +586,13 @@ const settlementTargetMaxAmount = computed(() => selectedPreviewLines.value.redu
   const availableCents = amountInCents(settlementAvailableAmount(line))
   return availableCents > 0 ? totalCents + availableCents : totalCents
 }, 0) / 100)
+const canEnterSettlementTarget = computed(() => settlementTargetMaxAmount.value >= 0.01)
+const settlementTargetInputMax = computed(() => (
+  canEnterSettlementTarget.value ? settlementTargetMaxAmount.value : 0
+))
 const hasValidSettlementTarget = computed(() => {
   const amount = Number(settlementTargetAmount.value)
-  return Number.isFinite(amount) && amount > 0 && settlementTargetMaxAmount.value > 0
+  return canEnterSettlementTarget.value && Number.isFinite(amount) && amount > 0 && settlementTargetMaxAmount.value > 0
 })
 const forceSkuVisible = ref(false)
 const forceSkuLoading = ref(false)
@@ -754,6 +765,23 @@ function decimalPayload(value) {
   const sign = cents < 0 ? '-' : ''
   const abs = Math.abs(cents)
   return `${sign}${Math.trunc(abs / 100)}.${String(abs % 100).padStart(2, '0')}`
+}
+
+function settlementTargetBlockedReason() {
+  const lines = preview.value.lines || []
+  if (!lines.length) {
+    return text('下方没有 SKU，无法输入本次结算金额。', 'There is no SKU below, so the settlement amount cannot be entered.')
+  }
+  const hasSettleableSku = lines.some(line => amountInCents(settlementAvailableAmount(line)) > 0)
+  if (!hasSettleableSku) {
+    return text('下方没有可结算金额的 SKU，无法输入本次结算金额。', 'No SKU below has an amount available to settle.')
+  }
+  return text('请先勾选下方可结算的 SKU，再输入本次结算金额。', 'Select a settleable SKU below before entering the settlement amount.')
+}
+
+function handleSettlementTargetAreaClick() {
+  if (canEnterSettlementTarget.value) return
+  proxy.$modal.alertWarning(settlementTargetBlockedReason())
 }
 
 async function applySettlementTarget(showSuccess = true) {
@@ -1566,8 +1594,20 @@ onMounted(async () => {
   font-weight: 600;
 }
 
-.settlement-target__input {
+.settlement-target__input-wrap {
   width: 190px;
+}
+
+.settlement-target__input-wrap.is-blocked {
+  cursor: pointer;
+}
+
+.settlement-target__input-wrap.is-blocked :deep(.el-input-number) {
+  pointer-events: none;
+}
+
+.settlement-target__input {
+  width: 100%;
 }
 
 .settlement-target__tip {
