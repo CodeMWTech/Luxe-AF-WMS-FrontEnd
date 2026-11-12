@@ -350,7 +350,7 @@ const inventoryViewFields = [
   { key: 'quantity', label: '数量' },
   { key: 'stockQuantity', label: '库存数量' },
   { key: 'receipt', label: '入库信息' },
-  { key: 'shipment', label: '出库时间' },
+  { key: 'shipment', label: '本库位最后出库时间' },
   { key: 'outboundPlatform', label: '出库平台' },
   { key: 'turnoverDays', label: '周转天数' },
   { key: 'selling', label: '销售价' },
