@@ -1,4 +1,7 @@
 export const WMS_EXPORT_HEADER_MAP = {
+  '首次入库时间': 'First Inbound Time',
+  '本库位首次入库时间': 'First Inbound at This Location',
+  '本库位最后出库时间': 'Last Outbound at This Location',
   '\u5546\u54c1\u540d\u79f0': 'Item Name',
   '\u5546\u54c1\u56fe\u7247': 'Item Image',
   'SKU\u7f16\u53f7': 'SKU Code',
