@@ -79,7 +79,13 @@
         <div class="mobile-field-list">
           <div v-for="field in inventoryFields" :key="field.label" class="mobile-field-row">
             <div class="mobile-field-row__label">{{ field.label }}</div>
-            <div class="mobile-field-row__value">{{ field.value }}</div>
+            <div class="mobile-field-row__value">
+              <el-popover v-if="field.turnover" trigger="click" :width="300" placement="top">
+                <template #reference><el-button link :aria-label="tr('查看周转计算依据')">{{ field.value }} ⓘ</el-button></template>
+                <div v-for="(line, index) in turnoverExplanation(detail, tr)" :key="index">{{ line }}</div>
+              </el-popover>
+              <template v-else>{{ field.value }}</template>
+            </div>
           </div>
         </div>
       </section>
@@ -117,7 +123,7 @@ import { computed, getCurrentInstance, nextTick, onBeforeUnmount, onMounted, ref
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { itemDimensionFields } from '@/utils/itemDetailFields'
-import { formatTurnoverDays } from '@/utils/inventoryTurnover'
+import { formatTurnoverDays, turnoverExplanation } from '@/utils/inventoryTurnover'
 import { translateByMap } from '@/locales/runtime-map'
 import { useI18n } from 'vue-i18n'
 import { getItem, getItemImages } from '@/api/wms/item'
@@ -359,15 +365,16 @@ const basicFields = computed(() => {
 const inboundFields = computed(() => {
   const item = detail.value || {}
   return [
-    { label: t('mobile.labelReceiptTime'), value: formatTime(item.receiptTime) },
-    { label: t('mobile.labelWarehouse'), value: displayValue(item.warehouseName) }
+    { label: tr('首次入库时间'), value: formatTime(item.firstActualReceiptTime) },
+    { label: tr('本库位首次入库时间'), value: formatTime(item.receiptTime) },
+    { label: t('mobile.labelWarehouse'), value: displayValue(item.timeLocationName || item.warehouseName) }
   ]
 })
 
 const outboundFields = computed(() => {
   const item = detail.value || {}
   return [
-    { label: t('mobile.labelShipmentTime'), value: formatTime(item.shipmentTime) },
+    { label: tr('本库位最后出库时间'), value: formatTime(item.shipmentTime) },
     { label: t('mobile.labelOutboundPlatform'), value: displayValue(item.outboundPlatform) }
   ]
 })
@@ -376,7 +383,7 @@ const inventoryFields = computed(() => {
   const item = detail.value || {}
   return [
     { label: t('mobile.labelQuantity'), value: displayValue(item.quantity) },
-    { label: t('mobile.labelTurnoverDays'), value: formatTurnoverDays(item, tr) }
+    { label: t('mobile.labelTurnoverDays'), value: formatTurnoverDays(item, tr), turnover: true }
   ]
 })
 
@@ -458,7 +465,7 @@ async function loadInventoryFromHistory(skuId, skuCode) {
 }
 
 async function loadInventoryExtra(skuId, skuCode) {
-  // 优先使用库存看板的采购/销售口径；流水无法区分单据业务类型。
+  // 优先使用看板独立返回的库位展示和全 SKU 周转依据；不在移动端推算。
   if (skuCode) {
     try {
       const res = await listInventory({ skuCode, skuCodeExact: true, pageNum: 1, pageSize: 100 }, { silentError: true })
