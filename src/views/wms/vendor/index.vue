@@ -263,6 +263,21 @@
         </el-descriptions-item>
       </el-descriptions>
 
+      <div class="settlement-dates">
+        <div class="settlement-date-field">
+          <span>{{ text('执行日期', 'Execution date') }}</span>
+          <el-date-picker v-model="settlementExecutionDate" type="date" value-format="YYYY-MM-DD"
+            :placeholder="text('选择执行日期', 'Select execution date')" :clearable="false" />
+          <small>{{ text('默认是洛杉矶当天，可按实际业务日期修改。', 'Defaults to today in Los Angeles and can be changed.') }}</small>
+        </div>
+        <div class="settlement-date-field">
+          <span>{{ text('付款日期', 'Payment date') }}</span>
+          <el-date-picker v-model="settlementPaymentDate" type="date" value-format="YYYY-MM-DD"
+            :placeholder="text('尚未付款可留空', 'Leave blank if unpaid')" clearable />
+          <small>{{ text('填写银行账单对应的实际付款日期。', 'Enter the actual bank payment date.') }}</small>
+        </div>
+      </div>
+
       <div class="settlement-target">
         <span class="settlement-target__label">{{ text('本次结算金额', 'Current settlement amount') }}</span>
         <div
@@ -576,6 +591,8 @@ const previewTableRef = ref()
 const previewSelectionCache = ref(new Map())
 const previewPagination = reactive({ pageNum: 1, pageSize: 50 })
 const settlementTargetAmount = ref()
+const settlementExecutionDate = ref(businessToday())
+const settlementPaymentDate = ref()
 const previewPageLines = computed(() => {
   const start = (previewPagination.pageNum - 1) * previewPagination.pageSize
   return (preview.value.lines || []).slice(start, start + previewPagination.pageSize)
@@ -765,6 +782,12 @@ function decimalPayload(value) {
   const sign = cents < 0 ? '-' : ''
   const abs = Math.abs(cents)
   return `${sign}${Math.trunc(abs / 100)}.${String(abs % 100).padStart(2, '0')}`
+}
+
+function businessToday() {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit'
+  }).format(new Date())
 }
 
 function settlementTargetBlockedReason() {
@@ -1220,6 +1243,8 @@ async function generateSettlementPreview(supplierId) {
       }))
     }
     settlementTargetAmount.value = undefined
+    settlementExecutionDate.value = businessToday()
+    settlementPaymentDate.value = undefined
     previewSelectionCache.value = new Map()
     previewVisible.value = true
     await nextTick()
@@ -1260,6 +1285,8 @@ function settlementRequest(recordStatus) {
     contractVersion: detail.contractVersion,
     supplierId: detail.supplierId,
     previewGeneratedAt: detail.generatedAt,
+    executionDate: settlementExecutionDate.value || businessToday(),
+    paymentDate: settlementPaymentDate.value || undefined,
     productQuantity: sumField('productQuantity'),
     soldQuantity: sumField('soldQuantity'),
     returnedQuantity: sumField('returnedQuantity'),
@@ -1271,6 +1298,10 @@ function settlementRequest(recordStatus) {
 }
 
 async function confirmSettlement(recordStatus = 'CONFIRMED') {
+  if (!settlementExecutionDate.value) {
+    proxy.$modal.msgWarning(text('请选择执行日期', 'Select an execution date'))
+    return
+  }
   if (settlementTargetAmount.value !== undefined && settlementTargetAmount.value !== null) {
     const applied = await applySettlementTarget(false)
     if (!applied) return
@@ -1363,6 +1394,8 @@ async function openDraftFromRoute() {
       }))
     }
     settlementTargetAmount.value = undefined
+    settlementExecutionDate.value = record.executionDate || businessToday()
+    settlementPaymentDate.value = record.paymentDate || undefined
     previewSelectionCache.value = new Map()
     previewVisible.value = true
     await nextTick()
@@ -1588,6 +1621,27 @@ onMounted(async () => {
   margin: 12px 0;
 }
 
+.settlement-dates {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(280px, 1fr));
+  gap: 16px;
+  margin: 16px 0;
+  padding: 14px 16px;
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 8px;
+  background: var(--el-fill-color-lighter);
+}
+
+.settlement-date-field {
+  display: grid;
+  grid-template-columns: 90px minmax(170px, 220px) 1fr;
+  align-items: center;
+  gap: 10px;
+}
+
+.settlement-date-field > span { font-weight: 600; }
+.settlement-date-field small { color: var(--el-text-color-secondary); }
+
 .settlement-target__label {
   flex: 0 0 auto;
   color: var(--el-text-color-regular);
@@ -1707,6 +1761,8 @@ onMounted(async () => {
 }
 
 @media (max-width: 768px) {
+  .settlement-dates { grid-template-columns: 1fr; }
+  .settlement-date-field { grid-template-columns: 1fr; }
   .listed-time-filter {
     width: 100%;
     margin-right: 0;
