@@ -177,8 +177,23 @@
               />
             </el-form-item>
           </el-col>
+          <el-col v-if="showField('receipt')" :xs="24" :sm="24" :md="priceFilterColSpan" :lg="priceFilterColSpan">
+            <el-form-item :label="tr('首次入库时间')" :label-width="isEn ? '168px' : '110px'" prop="firstActualReceiptTimeRange">
+              <el-date-picker
+                v-model="queryParams.firstActualReceiptTimeRange"
+                type="datetimerange"
+                :range-separator="tr('至')"
+                format="MM/DD/YYYY HH:mm:ss"
+                value-format="YYYY-MM-DD HH:mm:ss"
+                :default-time="defaultTime"
+                :start-placeholder="tr('开始时间')"
+                :end-placeholder="tr('结束时间')"
+                style="width: 100%"
+              />
+            </el-form-item>
+          </el-col>
           <el-col :xs="24" :sm="24" :md="priceFilterColSpan" :lg="priceFilterColSpan">
-            <el-form-item v-if="showField('receipt')" :label="tr('\u5165\u5e93\u65f6\u95f4')" prop="receiptTimeRange">
+            <el-form-item v-if="showField('receipt')" :label="tr('本库位首次入库时间')" :label-width="isEn ? '210px' : '145px'" prop="receiptTimeRange">
               <el-date-picker
                 v-model="queryParams.receiptTimeRange"
                 type="datetimerange"
@@ -192,6 +207,8 @@
               />
             </el-form-item>
           </el-col>
+        </el-row>
+        <el-row v-if="showCost || showSelling" :gutter="16" class="query-price-row">
           <el-col :xs="24" :sm="24" :md="priceFilterColSpan" :lg="priceFilterColSpan" v-if="showCost">
             <el-form-item :label="tr('成本价')">
               <div class="query-price-range">
@@ -520,15 +537,22 @@
           </template>
         </el-table-column>
 
+        <!-- 全 SKU 首次实际入库，独立于本库位日期及周转字段展示权限。 -->
+        <el-table-column v-if="showField('receipt')" :label="tr('首次入库时间')" prop="firstActualReceiptTime" :width="isEn ? 225 : 190" align="center" sortable="custom">
+          <template #default="{ row }">
+            {{ formatTime(row.firstActualReceiptTime) }}
+          </template>
+        </el-table-column>
+
         <!-- ========== 新增列：入库时间 ========== -->
-        <el-table-column v-if="showField('receipt')" :label="tr('入库时间')" prop="receiptTime" width="168" align="center" sortable="custom">
+        <el-table-column v-if="showField('receipt')" :label="tr('本库位首次入库时间')" prop="receiptTime" :width="isEn ? 245 : 190" align="center" sortable="custom">
           <template #default="{ row }">
             {{ formatTime(row.receiptTime) }}
           </template>
         </el-table-column>
 
         <!-- ========== 新增列：出库时间 ========== -->
-        <el-table-column v-if="showField('shipment')" :label="tr('出库时间')" prop="shipmentTime" width="168" align="center" sortable="custom">
+        <el-table-column v-if="showField('shipment')" :label="tr('本库位最后出库时间')" prop="shipmentTime" :width="isEn ? 245 : 190" align="center" sortable="custom">
           <template #default="{ row }">
             <!-- 有出库历史但库存未清零时 shipmentTime 为 null，属于业务规则，显示 -- -->
             {{ formatTime(row.shipmentTime) }}
@@ -544,7 +568,12 @@
         <!-- ========== 新增列：周转天数 ========== -->
         <el-table-column v-if="showField('turnoverDays')" :label="tr('周转天数')" prop="turnoverDays" :width="isEn ? 240 : 200" align="center" sortable="custom">
           <template #default="{ row }">
-            <span :class="{ 'turnover-days-alert': row.turnoverDays != null && isTurnoverDaysAlert(row.turnoverDays) }">{{ formatTurnoverDays(row, tr) }}</span>
+            <el-tooltip placement="top" effect="dark">
+              <template #content>
+                <div v-for="(line, index) in turnoverExplanation(row, tr)" :key="index">{{ line }}</div>
+              </template>
+              <span tabindex="0" :aria-label="turnoverExplanation(row, tr).join('；')" :class="{ 'turnover-days-alert': row.turnoverDays != null && isTurnoverDaysAlert(row.turnoverDays) }">{{ formatTurnoverDays(row, tr) }}</span>
+            </el-tooltip>
           </template>
         </el-table-column>
 
@@ -771,7 +800,7 @@ import { formatDateForQuery, formatDateTimeForQuery } from '@/utils/laTime'
 import { formatBrandNames, parseBrandIdList } from '@/utils/itemBrand'
 import { suggestPurchasers } from '@/utils/itemPurchaser'
 import { itemDimensionFields } from '@/utils/itemDetailFields'
-import { formatTurnoverDays } from '@/utils/inventoryTurnover'
+import { formatTurnoverDays, turnoverExplanation } from '@/utils/inventoryTurnover'
 import PublishDialog from '@/views/wms/platform/listings/components/PublishDialog.vue'
 const route = useRoute()
 
@@ -931,6 +960,7 @@ const createDefaultQueryParams = () => ({
   authAgency: [],
   consignInfo: undefined,
   createTimeRange: [],
+  firstActualReceiptTimeRange: [],
   receiptTimeRange: [],
   snapshotDate: undefined,
   costPriceMin: undefined,
@@ -1429,6 +1459,11 @@ const getCurrentQuery = () => {
     query.endTime = formatDateTimeForQuery(query.createTimeRange[1])
   }
   delete query.createTimeRange
+  if (query.firstActualReceiptTimeRange && query.firstActualReceiptTimeRange.length === 2) {
+    query.firstActualReceiptStartTime = formatDateTimeForQuery(query.firstActualReceiptTimeRange[0])
+    query.firstActualReceiptEndTime = formatDateTimeForQuery(query.firstActualReceiptTimeRange[1])
+  }
+  delete query.firstActualReceiptTimeRange
   if (query.receiptTimeRange && query.receiptTimeRange.length === 2) {
     query.receiptStartTime = formatDateTimeForQuery(query.receiptTimeRange[0])
     query.receiptEndTime = formatDateTimeForQuery(query.receiptTimeRange[1])
@@ -1467,8 +1502,9 @@ const INVENTORY_EXPORT_HEADER_MAP = {
   SKU编号: 'SKU Code',
   仓库: 'Warehouse',
   库存数量: 'Stock Qty',
-  入库时间: 'Inbound Time',
-  出库时间: 'Outbound Time',
+  首次入库时间: 'First Inbound Time',
+  本库位首次入库时间: 'First Inbound at This Location',
+  本库位最后出库时间: 'Last Outbound at This Location',
   出库平台: 'Outbound Platform',
   周转天数: 'Turnover Days',
   平均成本价: 'Avg Cost Price',
@@ -2113,8 +2149,9 @@ function handleBatchExportPdf() {
       { key: 'supplier', label: tr('供应商'), render: row => escapeHtml(formatSupplierName(row)) },
       { key: 'warehouse', label: tr('仓库'), render: row => escapeHtml(row.warehouseName || '--') },
       { key: 'quantity', label: tr('库存数量'), className: 'number-cell', render: row => row.quantity != null ? escapeHtml(row.quantity) : '--' },
-      { key: 'receiptTime', label: tr('入库时间'), render: row => escapeHtml(formatTime(row.receiptTime)) },
-      { key: 'shipmentTime', label: tr('出库时间'), render: row => escapeHtml(formatTime(row.shipmentTime)) },
+      { key: 'firstActualReceiptTime', label: tr('首次入库时间'), render: row => escapeHtml(formatTime(row.firstActualReceiptTime)) },
+      { key: 'receiptTime', label: tr('本库位首次入库时间'), render: row => escapeHtml(formatTime(row.receiptTime)) },
+      { key: 'shipmentTime', label: tr('本库位最后出库时间'), render: row => escapeHtml(formatTime(row.shipmentTime)) },
       { key: 'platform', label: tr('出库平台'), render: row => escapeHtml(row.outboundPlatform || '--') },
       { key: 'turnoverDays', label: tr('周转天数'), className: 'turnover-cell', render: row => escapeHtml(formatTurnoverDays(row, tr)) }
     ]
@@ -2145,7 +2182,7 @@ function handleBatchExportPdf() {
       { key: 'defect', label: tr('瑕疵'), render: row => escapeHtml(row.defect || '--') }
     )
     const pdfField = {
-      image: 'image', supplier: 'supplier', quantity: 'stockQuantity', receiptTime: 'receipt',
+      image: 'image', supplier: 'supplier', quantity: 'stockQuantity', firstActualReceiptTime: 'receipt', receiptTime: 'receipt',
       shipmentTime: 'shipment', platform: 'outboundPlatform', turnoverDays: 'turnoverDays',
       avgCost: 'cost', avgSelling: 'selling', profit: 'profit', condition: 'condition',
       exteriorMaterial: 'exteriorMaterial', countryOfOrigin: 'origin', defect: 'defect'
