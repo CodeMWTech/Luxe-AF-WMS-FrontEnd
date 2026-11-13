@@ -185,11 +185,16 @@ export function buildDetailViewModel(payload = {}, images = []) {
     remark: pickField(item, 'remark', 'itemRemark') || pickField(merged, 'remark', 'itemRemark'),
     quantity: pickField(merged, 'quantity'),
     warehouseName: pickField(merged, 'warehouseName'),
+    firstActualReceiptTime: pickField(merged, 'firstActualReceiptTime'),
     receiptTime: pickField(merged, 'receiptTime'),
     shipmentTime: pickField(merged, 'shipmentTime'),
     outboundPlatform: pickField(merged, 'outboundPlatform'),
     turnoverDays: pickField(merged, 'turnoverDays'),
     turnoverStatus: pickField(merged, 'turnoverStatus'),
+    turnoverStartTime: pickField(merged, 'turnoverStartTime'),
+    turnoverEndTime: pickField(merged, 'turnoverEndTime'),
+    turnoverEndType: pickField(merged, 'turnoverEndType'),
+    timeLocationName: pickField(merged, 'timeLocationName') || pickField(merged, 'warehouseName'),
     costPrice: pickField(sku, 'costPrice') ?? pickField(merged, 'costPrice', 'avgReceiptCost'),
     sellingPrice: pickField(sku, 'sellingPrice') ?? pickField(merged, 'sellingPrice', 'avgShipmentPrice'),
     totalProfit: pickField(merged, 'totalProfit'),
@@ -238,7 +243,7 @@ export function mergeInventoryIntoDetail(detail, inventoryRow = {}) {
   detail.warehouseName = pickField(inventoryRow, 'warehouseName') ?? detail.warehouseName
   detail.outboundPlatform = pickField(inventoryRow, 'outboundPlatform') ?? detail.outboundPlatform
   // 看板的null是明确的不可计算结果，不能保留旧天数或根据库位数量本地补算。
-  for (const field of ['receiptTime', 'shipmentTime', 'turnoverDays', 'turnoverStatus']) {
+  for (const field of ['firstActualReceiptTime', 'receiptTime', 'shipmentTime', 'turnoverDays', 'turnoverStatus', 'turnoverStartTime', 'turnoverEndTime', 'turnoverEndType', 'timeLocationName']) {
     if (Object.prototype.hasOwnProperty.call(inventoryRow, field)) detail[field] = inventoryRow[field]
   }
   detail.totalProfit = pickField(inventoryRow, 'totalProfit') ?? detail.totalProfit
@@ -273,9 +278,6 @@ function sortByCreateTimeDesc(rows = []) {
 export function summarizeInventoryHistoryRows(rows = [], warehouseMap) {
   if (!Array.isArray(rows) || !rows.length) return null
 
-  const receiptRows = sortByCreateTimeDesc(
-    rows.filter(row => String(row.orderType) === INVENTORY_HISTORY_ORDER_TYPE.RECEIPT)
-  )
   const shipmentRows = sortByCreateTimeDesc(
     rows.filter(row => String(row.orderType) === INVENTORY_HISTORY_ORDER_TYPE.SHIPMENT)
   )
@@ -283,21 +285,27 @@ export function summarizeInventoryHistoryRows(rows = [], warehouseMap) {
   const quantity = latestRow?.afterQuantity ?? latestRow?.beforeQuantity
 
   const quantityValue = quantity
-  const receiptTime = receiptRows[0]?.createTime
+  // 流水接口为分页数据，不能确认全历史最早入库；库位日期必须由看板返回。
+  const receiptTime = undefined
   // 库存未清零时，看板强制不展示出库时间
-  const shipmentTime = (Number(quantityValue) === 0) ? shipmentRows[0]?.createTime : undefined
+  const shipmentTime = undefined
   const shipmentOrderNo = (Number(quantityValue) === 0) ? shipmentRows[0]?.orderNo : undefined
 
   return {
     quantity: quantityValue,
     warehouseName: resolveWarehouseName(latestRow?.warehouseId, warehouseMap),
+    timeLocationName: resolveWarehouseName(latestRow?.warehouseId, warehouseMap),
+    firstActualReceiptTime: undefined,
     receiptTime,
     shipmentTime,
     shipmentOrderNo,
     outboundPlatform: undefined,
     // 流水orderType无法区分采购/销售，不能据此计算周转天数。
     turnoverDays: undefined,
-    turnoverStatus: undefined
+    turnoverStatus: undefined,
+    turnoverStartTime: undefined,
+    turnoverEndTime: undefined,
+    turnoverEndType: undefined
   }
 }
 
@@ -331,11 +339,16 @@ export function summarizeInventoryRows(rows = []) {
   return {
     quantity: totalQty,
     warehouseName: warehouseNames.join('、') || primary.warehouseName,
+    firstActualReceiptTime: primary.firstActualReceiptTime,
     receiptTime: primary.receiptTime,
     shipmentTime: primary.shipmentTime,
     outboundPlatform: primary.outboundPlatform,
     turnoverDays: primary.turnoverDays,
     turnoverStatus: primary.turnoverStatus,
+    turnoverStartTime: primary.turnoverStartTime,
+    turnoverEndTime: primary.turnoverEndTime,
+    turnoverEndType: primary.turnoverEndType,
+    timeLocationName: primary.locationName || primary.warehouseName,
     totalProfit: primary.totalProfit,
     costPrice: primary.costPrice,
     sellingPrice: primary.sellingPrice
