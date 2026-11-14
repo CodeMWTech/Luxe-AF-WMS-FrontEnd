@@ -505,7 +505,7 @@ export default {
     editSkuTitle: 'Edit SKU',
     oldSku: 'Old SKU',
     newSku: 'New SKU',
-    newSkuPlaceholder: 'Select a new SKU from inventory',
+    newSkuPlaceholder: 'Type a SKU to search, or click Select',
     select: 'Select',
     confirm: 'Confirm',
     cancel: 'Cancel',
