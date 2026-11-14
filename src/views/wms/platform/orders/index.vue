@@ -649,14 +649,33 @@
         </el-form-item>
         <el-form-item :label="t('platformOrders.newSku')">
           <div style="display: flex; gap: 8px; width: 100%">
-            <el-input :model-value="skuEditForm.newSku" :placeholder="t('platformOrders.newSkuPlaceholder')" readonly style="flex: 1" />
+            <el-autocomplete
+              v-model="skuEditForm.newSku"
+              class="sku-edit-search"
+              :fetch-suggestions="searchSkuSuggestions"
+              :placeholder="t('platformOrders.newSkuPlaceholder')"
+              :trigger-on-focus="false"
+              :debounce="300"
+              clearable
+              value-key="skuCode"
+              fit-input-width
+              @select="handleSkuSuggestion"
+              @input="handleSkuInput"
+            >
+              <template #default="{ item }">
+                <div class="sku-edit-suggestion">
+                  <span>{{ item.skuCode }}</span>
+                  <small v-if="item.itemName">{{ item.itemName }}</small>
+                </div>
+              </template>
+            </el-autocomplete>
             <el-button @click="openSkuSelect" :disabled="!skuEditForm.oldSku">{{ t('platformOrders.select') }}</el-button>
           </div>
         </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="cancelSkuEdit">{{ t('platformOrders.cancel') }}</el-button>
-        <el-button type="primary" :loading="skuSaving" :disabled="!skuEditForm.newSku" @click="saveSkuEdit">{{ t('platformOrders.save') }}</el-button>
+        <el-button type="primary" :loading="skuSaving" :disabled="!skuEditPickedCode" @click="saveSkuEdit">{{ t('platformOrders.save') }}</el-button>
       </template>
     </el-dialog>
 
@@ -733,6 +752,7 @@ import { formatDateTimeForQuery, formatLosAngelesTime } from '@/utils/laTime'
 import { getPlatformOrderExternalUrl as buildPlatformOrderExternalUrl } from '@/utils/platformOrderLink'
 import { getExportLanguageHeaders } from '@/utils/xlsxTranslate'
 import SkuSelect from '@/views/components/SkuSelect.vue'
+import { listItemSkuPage } from '@/api/wms/itemSku'
 import useSettingsStore from '@/store/modules/settings'
 
 const InfoLine = defineComponent({
@@ -936,7 +956,9 @@ const skuEditOpen = ref(false)
 const skuEditOrder = ref(null)
 const skuEditIndex = ref(-1)
 const skuEditForm = ref({ oldSku: '', newSku: '' })
+const skuEditPickedCode = ref('')
 const skuSaving = ref(false)
+let skuSuggestSequence = 0
 
 // SKU 库选择状态
 const skuSelectShow = ref(false)
@@ -1731,12 +1753,53 @@ function startSkuEdit(order, index, item) {
   skuEditOrder.value = order
   skuEditIndex.value = index
   skuEditForm.value = { oldSku: getSkuText(item) || '-', newSku: '' }
+  skuEditPickedCode.value = ''
   selectedSkuForEdit.value = []
   skuEditOpen.value = true
 }
 
+function markSkuPicked(skuCode, raw) {
+  const code = String(skuCode || '').trim()
+  skuEditForm.value.newSku = code
+  skuEditPickedCode.value = code
+  selectedSkuForEdit.value = raw ? [raw] : []
+}
+
+function searchSkuSuggestions(queryString, callback) {
+  const keyword = String(queryString || '').trim()
+  if (keyword.length < 2) {
+    callback([])
+    return
+  }
+  const sequence = ++skuSuggestSequence
+  listItemSkuPage({ skuCode: keyword, pageNum: 1, pageSize: 10 }).then((res) => {
+    if (sequence !== skuSuggestSequence) return
+    const rows = (Array.isArray(res?.rows) ? res.rows : []).map((raw) => ({
+      skuCode: raw?.itemSku?.skuCode || raw?.skuCode || '',
+      itemName: raw?.item?.itemName || raw?.itemName || '',
+      raw
+    })).filter((item) => item.skuCode)
+    callback(rows)
+  }).catch(() => {
+    if (sequence === skuSuggestSequence) callback([])
+  })
+}
+
+function handleSkuSuggestion(item) {
+  markSkuPicked(item?.skuCode, item?.raw)
+}
+
+function handleSkuInput(value) {
+  const text = String(value || '').trim()
+  if (text !== skuEditPickedCode.value) {
+    skuEditPickedCode.value = ''
+    selectedSkuForEdit.value = []
+  }
+}
+
 function saveSkuEdit() {
-  if (!skuEditForm.value.newSku.trim()) {
+  const newSku = skuEditPickedCode.value.trim()
+  if (!newSku) {
     proxy.$modal.msgWarning(t('platformOrders.skuRequired'))
     return
   }
@@ -1749,7 +1812,7 @@ function saveSkuEdit() {
     return
   }
   skuSaving.value = true
-  updateOrderSku(rowId, orderId, platform, skuEditForm.value.newSku.trim()).then(() => {
+  updateOrderSku(rowId, orderId, platform, newSku).then(() => {
     proxy.$modal.msgSuccess(t('platformOrders.skuUpdateSuccess'))
     cancelSkuEdit()
     getList()
@@ -1766,16 +1829,16 @@ function openSkuSelect() {
 
 function handleSkuSelected(row) {
   skuSelectShow.value = false
-  const skuCode = row?.itemSku?.skuCode || row?.skuCode || ''
-  skuEditForm.value.newSku = skuCode
-  selectedSkuForEdit.value = [row]
+  markSkuPicked(row?.itemSku?.skuCode || row?.skuCode || '', row)
 }
 
 function cancelSkuEdit() {
+  skuSuggestSequence += 1
   skuEditOpen.value = false
   skuEditOrder.value = null
   skuEditIndex.value = -1
   skuEditForm.value = { oldSku: '', newSku: '' }
+  skuEditPickedCode.value = ''
   selectedSkuForEdit.value = []
 }
 
@@ -1984,6 +2047,27 @@ onActivated(() => {
 <style lang="scss">
 .platform-orders-page {
   background: transparent;
+}
+
+.sku-edit-search {
+  flex: 1;
+  width: 100%;
+}
+
+.sku-edit-suggestion {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1.35;
+  padding: 4px 0;
+
+  small {
+    overflow: hidden;
+    color: #909399;
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 }
 
 // ==================== Page Hint ====================

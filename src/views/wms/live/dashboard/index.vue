@@ -132,8 +132,18 @@
     </el-card>
     <el-card class="live-card" shadow="never">
       <template #header>{{ tr('主播汇总 · 总薪酬 = 开播薪酬 + 佣金收入') }}</template>
-      <el-table :data="data.employeeSummary" stripe>
-        <el-table-column type="index" :label="tr('排名')" :min-width="isEn ? 145 : 70" /><el-table-column prop="employeeName" :label="tr('主播')" ><template #default="s"><LiveEmployeeName :name="s.row.employeeName" :status="s.row.employeeStatus" /></template></el-table-column><el-table-column prop="sessions" :label="tr('总场次')" /><el-table-column prop="hours" :label="tr('总工时')"><template #default="s">{{ Number(s.row.hours || 0).toFixed(2) }}h</template></el-table-column><el-table-column :label="tr('GMV 合计')"><template #default="s">{{ money(s.row.gmv) }}</template></el-table-column><el-table-column :label="tr('GMV/小时')"><template #default="s">{{ money(s.row.gmvPerHour) }}</template></el-table-column><el-table-column prop="megaSessions" :label="tr('MEGA场次')" /><el-table-column :label="tr('开播薪酬')"><template #default="s">{{ money(s.row.streamCompensation) }}</template></el-table-column><el-table-column :label="tr('佣金收入')"><template #default="s">{{ money(s.row.commissionIncome) }}</template></el-table-column><el-table-column :label="tr('总薪酬')"><template #default="s"><strong>{{ money(s.row.totalCompensation) }}</strong></template></el-table-column><el-table-column :label="tr('占比')"><template #default="s">{{ s.row.share }}%</template></el-table-column>
+      <el-table :data="data.employeeSummary" stripe :default-sort="{ prop: 'totalCompensation', order: 'descending' }">
+        <el-table-column type="index" :label="tr('排名')" :min-width="isEn ? 145 : 70" />
+        <el-table-column prop="employeeName" :label="tr('主播')"><template #default="s"><LiveEmployeeName :name="s.row.employeeName" :status="s.row.employeeStatus" /></template></el-table-column>
+        <el-table-column prop="sessions" :label="tr('总场次')" sortable :sort-method="summarySort.sessions" />
+        <el-table-column prop="hours" :label="tr('总工时')" sortable :sort-method="summarySort.hours"><template #default="s">{{ Number(s.row.hours || 0).toFixed(2) }}h</template></el-table-column>
+        <el-table-column prop="gmv" :label="tr('GMV 合计')" sortable :sort-method="summarySort.gmv"><template #default="s">{{ money(s.row.gmv) }}</template></el-table-column>
+        <el-table-column prop="gmvPerHour" :label="tr('GMV/小时')" sortable :sort-method="summarySort.gmvPerHour"><template #default="s">{{ money(s.row.gmvPerHour) }}</template></el-table-column>
+        <el-table-column prop="megaSessions" :label="tr('MEGA场次')" sortable :sort-method="summarySort.megaSessions" />
+        <el-table-column prop="streamCompensation" :label="tr('开播薪酬')" sortable :sort-method="summarySort.streamCompensation"><template #default="s">{{ money(s.row.streamCompensation) }}</template></el-table-column>
+        <el-table-column prop="commissionIncome" :label="tr('佣金收入')" sortable :sort-method="summarySort.commissionIncome"><template #default="s">{{ money(s.row.commissionIncome) }}</template></el-table-column>
+        <el-table-column prop="totalCompensation" :label="tr('总薪酬')" sortable :sort-method="summarySort.totalCompensation"><template #default="s"><strong>{{ money(s.row.totalCompensation) }}</strong></template></el-table-column>
+        <el-table-column prop="share" :label="tr('占比')" sortable :sort-method="summarySort.share"><template #default="s">{{ s.row.share }}%</template></el-table-column>
       </el-table>
     </el-card>
   </div>
@@ -323,6 +333,24 @@ function statusTagType(status) {
 function goToRecord(row) {
   const path = row.status === '多录' ? '/live-payroll/streams' : '/live-payroll/schedule'
   router.push({ path, query: { date: row.date, employeeId: row.employeeId, accountId: row.accountId } })
+}
+function sortNumber(key) {
+  return (left, right) => {
+    const a = Number(left?.[key] ?? 0)
+    const b = Number(right?.[key] ?? 0)
+    return (Number.isNaN(a) ? 0 : a) - (Number.isNaN(b) ? 0 : b)
+  }
+}
+const summarySort = {
+  sessions: sortNumber('sessions'),
+  hours: sortNumber('hours'),
+  gmv: sortNumber('gmv'),
+  gmvPerHour: sortNumber('gmvPerHour'),
+  megaSessions: sortNumber('megaSessions'),
+  streamCompensation: sortNumber('streamCompensation'),
+  commissionIncome: sortNumber('commissionIncome'),
+  totalCompensation: sortNumber('totalCompensation'),
+  share: sortNumber('share')
 }
 function exportSummary() { downloadCsv(tr('主播薪酬汇总-{0}-{1}.csv', [dateRange.value[0], dateRange.value[1]]), [{ key: 'employeeName', label: tr('主播') }, { key: 'sessions', label: tr('场次') }, { key: 'hours', label: tr('工时') }, { key: 'streamCompensation', label: tr('开播薪酬') }, { key: 'commissionIncome', label: tr('佣金') }, { key: 'totalCompensation', label: tr('总薪酬') }], data.employeeSummary) }
 function exportChecklist() {
