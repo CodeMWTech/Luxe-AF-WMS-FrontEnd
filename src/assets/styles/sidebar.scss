@@ -75,7 +75,14 @@
     }
 
     .el-menu-item .el-menu-tooltip__trigger {
-      display: inline-block !important;
+      display: inline-flex !important;
+      align-items: center;
+      justify-content: center;
+      padding: 0 !important;
+
+      .svg-icon {
+        margin: 0 !important;
+      }
     }
 
     // menu hover
@@ -121,14 +128,6 @@
     .sub-menu-title-noDropdown {
       padding: 0 !important;
       position: relative;
-
-      .el-tooltip {
-        padding: 0 !important;
-
-        .svg-icon {
-          margin-left: 20px;
-        }
-      }
     }
 
     .el-sub-menu {
@@ -136,11 +135,11 @@
 
       &>.el-sub-menu__title {
         padding: 0 !important;
+        justify-content: center;
 
         .svg-icon {
-          margin-left: 20px;
+          margin: 0 !important;
         }
-
       }
     }
 

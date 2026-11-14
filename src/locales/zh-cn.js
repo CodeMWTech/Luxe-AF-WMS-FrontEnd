@@ -505,7 +505,7 @@ export default {
     editSkuTitle: '编辑SKU',
     oldSku: '原SKU',
     newSku: '新SKU',
-    newSkuPlaceholder: '请从库中选择新SKU',
+    newSkuPlaceholder: '输入 SKU 搜索，或点击选择',
     select: '选择',
     confirm: '确定',
     cancel: '取消',

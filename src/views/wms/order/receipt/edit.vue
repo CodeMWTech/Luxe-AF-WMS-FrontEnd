@@ -191,6 +191,7 @@ import {useRoute} from "vue-router";
 import {useWmsStore} from '@/store/modules/wms'
 import { numSub, generateNo } from '@/utils/ruoyi'
 import {getWarehouseAndSkuKey} from "@/utils/wmsUtil";
+import { historicalLocations } from '@/api/wms/warehouse'
 import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
 import { useOrderEditLeaveGuard } from '@/views/wms/order/composables/useOrderEditLeaveGuard'
@@ -212,6 +213,27 @@ const loading = ref(false)
 const skuSelectRef = ref(null)
 // 扫码枪模式标记
 const scanMode = ref(false)
+const DEFAULT_RECEIPT_ROOT_WAREHOUSE = 'DTLA LUXE AF OFFICE'
+
+function normalizeWarehouseName(name) {
+  return String(name || '').replace(/\s+/g, ' ').trim().toLocaleUpperCase()
+}
+
+async function applyDefaultReceiptWarehouse() {
+  if (form.value.id || form.value.warehouseId) return
+  try {
+    const response = await historicalLocations()
+    const target = normalizeWarehouseName(DEFAULT_RECEIPT_ROOT_WAREHOUSE)
+    const root = (response.data || []).find(node =>
+      Number(node.warehouseLevel) === 1
+      && node.delFlag === 0
+      && node.status === 0
+      && normalizeWarehouseName(node.warehouseName) === target
+    )
+    if (root && !form.value.id && !form.value.warehouseId) form.value.warehouseId = root.id
+  } catch (_) {}
+}
+
 const initFormData = {
   id: undefined,
   orderNo: undefined,
@@ -504,7 +526,7 @@ const updateToInvalid = async () => {
   doSave(-1)
 }
 
-onMounted(() => {
+onMounted(async () => {
   if (!wmsStore.warehouseList.length) {
     wmsStore.getWarehouseList()
   }
@@ -519,6 +541,7 @@ onMounted(() => {
     loadDetail(id)
   } else {
     form.value.orderNo = 'RK' + generateNo()
+    await applyDefaultReceiptWarehouse()
     captureFormSnapshot()
   }
 })

@@ -59,12 +59,14 @@
       </el-descriptions>
       <el-form v-else ref="formRef" :model="dialog.form" :rules="rules" :disabled="!canEdit" :label-width="isEn ? '128px' : '92px'">
         <div class="dialog-grid">
-          <el-form-item :label="tr('日期')" prop="scheduleDate"><el-date-picker v-model="dialog.form.scheduleDate" type="date" value-format="YYYY-MM-DD" :format="LIVE_DATE_FORMAT" @change="handleHostOrDateChange" /></el-form-item>
-          <el-form-item :label="tr('主播')" prop="employeeId"><LiveEmployeeSelect v-model="dialog.form.employeeId"  @change="handleHostOrDateChange" :employees="hostOptions" /></el-form-item>
+          <el-form-item :label="tr('日期')" prop="scheduleDate"><el-date-picker v-model="dialog.form.scheduleDate" type="date" value-format="YYYY-MM-DD" :format="LIVE_DATE_FORMAT" @change="handlePlatformOrDateChange" /></el-form-item>
           <el-form-item :label="tr('直播平台')" prop="accountId">
+            <LiveAccountSelect v-model="dialog.form.accountId" :disabled="!dialog.form.scheduleDate" :placeholder="accountPlaceholder" @change="handlePlatformOrDateChange" :accounts="schedulePlatforms" />
+          </el-form-item>
+          <el-form-item :label="tr('主播')" prop="employeeId">
             <div class="rate-type-field">
-              <LiveAccountSelect v-model="dialog.form.accountId" :disabled="!dialog.form.employeeId || !dialog.form.scheduleDate || dialog.loadingRateAccounts" :placeholder="accountPlaceholder" @change="handleAccountChange" :accounts="scheduleAccounts" />
-              <small v-if="dialog.form.employeeId && dialog.form.scheduleDate && !dialog.loadingRateAccounts && !scheduleAccounts.length">{{ tr('该主播在该日期没有已配置场次的直播平台') }}</small>
+              <LiveEmployeeSelect v-model="dialog.form.employeeId" :disabled="!dialog.form.accountId || !dialog.form.scheduleDate || dialog.loadingRateHosts" :placeholder="hostPlaceholder" @change="handleHostChange" :employees="scheduleHosts" />
+              <small v-if="dialog.form.accountId && dialog.form.scheduleDate && !dialog.loadingRateHosts && !scheduleHosts.length">{{ tr('该直播平台在该日期没有已配置场次的主播') }}</small>
             </div>
           </el-form-item>
           <el-form-item :label="tr('场次类型')" prop="rateTypeId">
@@ -88,7 +90,7 @@
       <template #footer>
         <div class="schedule-dialog-footer">
           <el-button v-if="dialog.form.id && canRemove && !isDeletedSchedule(dialog.form)" :loading="dialog.deleting" :disabled="dialog.saving" type="danger" plain @click="remove(dialog.form)">{{ tr('删除排班') }}</el-button>
-          <div class="schedule-dialog-actions"><el-button :disabled="dialog.deleting || dialog.saving" @click="dialog.open=false">{{ tr('取消') }}</el-button><el-button v-if="canEdit && !isDeletedSchedule(dialog.form)" type="primary" :loading="dialog.saving" :disabled="dialog.loadingRateTypes || dialog.deleting" @click="submit">{{ tr('保存') }}</el-button></div>
+          <div class="schedule-dialog-actions"><el-button :disabled="dialog.deleting || dialog.saving" @click="dialog.open=false">{{ tr('取消') }}</el-button><el-button v-if="canEdit && !isDeletedSchedule(dialog.form)" type="primary" :loading="dialog.saving" :disabled="dialog.loadingRateTypes || dialog.loadingRateHosts || dialog.deleting" @click="submit">{{ tr('保存') }}</el-button></div>
         </div>
       </template>
     </el-dialog>
@@ -110,7 +112,7 @@ import LiveAccountSelect from '../components/LiveAccountSelect.vue'
 import { useLiveI18n } from '../useLiveI18n'
 import LiveEmployeeSelect from '../components/LiveEmployeeSelect.vue'
 import { onActivated, computed, getCurrentInstance, onMounted, reactive, ref } from 'vue'
-import { addSchedule, deleteSchedule, getLiveOptions, listScheduleCalendar, listScheduleRateAccounts, listScheduleRateTypes, updateSchedule, listScheduleOperators, updateScheduleOperatorColor, listScheduleHosts } from '@/api/wms/livePayroll'
+import { addSchedule, deleteSchedule, getLiveOptions, listScheduleCalendar, listScheduleRateHosts, listScheduleRateTypes, updateSchedule, listScheduleOperators, updateScheduleOperatorColor, listScheduleHosts } from '@/api/wms/livePayroll'
 import { displayTime, displayDateTime, LIVE_TIME_FORMAT, displayDate, downloadCsv, isoDate, LIVE_DATE_FORMAT, weekRange, selectedWeekRange, liveEmployeeOptionLabel } from '../shared'
 const { tr, isEn, messageNode } = useLiveI18n()
 // Keep translated picker buttons, while Day.js always formats the period as am/pm.
@@ -161,26 +163,36 @@ function loadSelectedWeek() {
 }
 const selectedWeek = ref(loadSelectedWeek()), query = reactive({ employeeId: null, accountId: null, rateTypeId: null })
 const options = reactive({ employees: [], accounts: [], rateTypes: [] }), rows = ref([])
-const dialog = reactive({ open: false, form: {}, loaded: null, rateTypes: [], rateAccountIds: [], loadingRateTypes: false, loadingRateAccounts: false, saving: false, deleting: false })
+const dialog = reactive({ open: false, form: {}, loaded: null, rateTypes: [], rateHostIds: [], loadingRateTypes: false, loadingRateHosts: false, saving: false, deleting: false })
 let rateTypeRequestSequence = 0
-let rateAccountRequestSequence = 0
+let rateHostRequestSequence = 0
 const hasScheduleRateScope = computed(() => Boolean(dialog.form.scheduleDate && dialog.form.employeeId && dialog.form.accountId))
-const scheduleAccounts = computed(() => {
-  const allowed = new Set((dialog.rateAccountIds || []).map(id => String(id)))
+const schedulePlatforms = computed(() => {
+  const accounts = options.accounts || []
   const currentId = dialog.form.accountId
-  if (dialog.loadingRateAccounts) {
-    return options.accounts.filter(account => currentId != null && String(account.id) === String(currentId))
+  if (currentId != null && !accounts.some(account => String(account.id) === String(currentId))) {
+    return [...accounts, { id: currentId, accountCode: dialog.form.accountLabel || '-', displayName: dialog.form.accountLabel || '-' }]
   }
-  return options.accounts.filter(account => allowed.has(String(account.id))
-    || (currentId != null && String(account.id) === String(currentId)))
+  return accounts
 })
-const accountPlaceholder = computed(() => {
-  if (!dialog.form.employeeId || !dialog.form.scheduleDate) return tr('请先选择主播')
-  if (dialog.loadingRateAccounts) return tr('正在筛选已配置的直播平台')
-  return scheduleAccounts.value.length ? tr('请选择直播平台') : tr('该主播在该日期没有已配置场次的直播平台')
+const scheduleHosts = computed(() => {
+  const allowed = new Set((dialog.rateHostIds || []).map(id => String(id)))
+  const currentId = dialog.form.employeeId
+  if (dialog.loadingRateHosts) {
+    return hostOptions.value.filter(host => currentId != null && String(host.value) === String(currentId))
+  }
+  return hostOptions.value.filter(host => allowed.has(String(host.value))
+    || (currentId != null && String(host.value) === String(currentId) && dialog.form.id))
+})
+const accountPlaceholder = computed(() => dialog.form.scheduleDate ? tr('请选择直播平台') : tr('请先选择日期'))
+const hostPlaceholder = computed(() => {
+  if (!dialog.form.scheduleDate) return tr('请先选择日期')
+  if (!dialog.form.accountId) return tr('请先选择直播平台')
+  if (dialog.loadingRateHosts) return tr('正在筛选已配置的主播')
+  return scheduleHosts.value.length ? tr('请选择主播') : tr('该直播平台在该日期没有已配置场次的主播')
 })
 const rateTypePlaceholder = computed(() => {
-  if (!hasScheduleRateScope.value) return tr('请先选择日期、主播和直播平台')
+  if (!hasScheduleRateScope.value) return tr('请先选择日期、直播平台和主播')
   if (dialog.loadingRateTypes) return tr('正在加载场次类型')
   return dialog.rateTypes.length ? tr('请选择场次类型') : tr('当前组合无已激活场次')
 })
@@ -231,34 +243,34 @@ async function load() {
   } finally { if (sequence === loadSequence) loading.value = false }
 }
 function defaultScheduleDate() { const today = isoDate(); return today >= weekDateRange.value[0] && today <= weekDateRange.value[1] ? today : weekDateRange.value[0] }
-async function refreshScheduleRateAccounts() {
+async function refreshScheduleHosts() {
   if (isDeletedSchedule(dialog.form) || !canEdit.value) return
-  const requestSequence = ++rateAccountRequestSequence
-  const employeeId = dialog.form.employeeId
+  const requestSequence = ++rateHostRequestSequence
+  const accountId = dialog.form.accountId
   const scheduleDate = dialog.form.scheduleDate
-  if (!employeeId || !scheduleDate) {
-    dialog.rateAccountIds = []
-    dialog.form.accountId = null
-    dialog.loadingRateAccounts = false
+  if (!accountId || !scheduleDate) {
+    dialog.rateHostIds = []
+    dialog.form.employeeId = null
+    dialog.loadingRateHosts = false
     return
   }
-  dialog.loadingRateAccounts = true
-  dialog.rateAccountIds = []
+  dialog.loadingRateHosts = true
+  dialog.rateHostIds = []
   try {
-    const res = await listScheduleRateAccounts({ employeeId, scheduleDate })
-    if (requestSequence !== rateAccountRequestSequence) return
+    const res = await listScheduleRateHosts({ accountId, scheduleDate })
+    if (requestSequence !== rateHostRequestSequence) return
     const ids = res.data || []
-    dialog.rateAccountIds = ids
+    dialog.rateHostIds = ids
     const loaded = dialog.loaded
-    const keepSavedPlatform = loaded && dialog.form.id
-      && String(dialog.form.employeeId) === String(loaded.employeeId)
-      && dialog.form.scheduleDate === loaded.scheduleDate
+    const keepSavedHost = loaded && dialog.form.id
       && String(dialog.form.accountId) === String(loaded.accountId)
-    if (canEdit.value && !keepSavedPlatform && !ids.some(id => String(id) === String(dialog.form.accountId))) {
-      dialog.form.accountId = null
+      && dialog.form.scheduleDate === loaded.scheduleDate
+      && String(dialog.form.employeeId) === String(loaded.employeeId)
+    if (canEdit.value && !keepSavedHost && !ids.some(id => String(id) === String(dialog.form.employeeId))) {
+      dialog.form.employeeId = null
     }
   } finally {
-    if (requestSequence === rateAccountRequestSequence) dialog.loadingRateAccounts = false
+    if (requestSequence === rateHostRequestSequence) dialog.loadingRateHosts = false
   }
 }
 async function refreshScheduleRateTypes() {
@@ -276,26 +288,26 @@ async function refreshScheduleRateTypes() {
     if (requestSequence === rateTypeRequestSequence) dialog.loadingRateTypes = false
   }
 }
-async function handleHostOrDateChange() {
-  await refreshScheduleRateAccounts()
+async function handlePlatformOrDateChange() {
+  await refreshScheduleHosts()
   dialog.form.rateTypeId = null
   await refreshScheduleRateTypes()
 }
-async function handleAccountChange() {
+async function handleHostChange() {
   dialog.form.rateTypeId = null
   await refreshScheduleRateTypes()
 }
 async function openDialog(row = {}) {
   if (dialog.deleting || dialog.saving || (!row.id && !canEdit.value)) return
-  ++rateAccountRequestSequence; ++rateTypeRequestSequence
-  dialog.loadingRateAccounts = false; dialog.loadingRateTypes = false
+  ++rateHostRequestSequence; ++rateTypeRequestSequence
+  dialog.loadingRateHosts = false; dialog.loadingRateTypes = false
   dialog.form = { delFlag: row.delFlag || '0', deletedBy: row.deletedBy, deletedTime: row.deletedTime, accountLabel: row.accountLabel, rateTypeName: row.rateTypeName, id: row.id, employeeName: row.employeeName || '', scheduleDate: row.scheduleDate || defaultScheduleDate(), employeeId: row.employeeId || null, accountId: row.accountId || null, rateTypeId: row.rateTypeId || null, startTime: row.startTime || '09:00:00', endTime: row.endTime || '17:00:00', remark: row.remark || '', operatorId: row.operatorEmployeeId ?? row.operatorId ?? null, operatorName: row.operatorName || '' }
   dialog.loaded = row.id ? { employeeId: dialog.form.employeeId, scheduleDate: dialog.form.scheduleDate, accountId: dialog.form.accountId } : null
   if (dialog.form.operatorId != null) dialog.form.operatorId = operators.value.find(o => idKey(o.employeeId) === idKey(dialog.form.operatorId))?.employeeId || dialog.form.operatorId
   dialog.open = true
   dialog.rateTypes = row.rateTypeId ? [{ id: row.rateTypeId, typeName: row.rateTypeName || '-' }] : []
   if (isDeletedSchedule(row) || !canEdit.value) return
-  await refreshScheduleRateAccounts()
+  await refreshScheduleHosts()
   await refreshScheduleRateTypes()
 }
 async function submit() {
