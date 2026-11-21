@@ -1635,6 +1635,8 @@ function scrollToFirstFormError() {
 }
 
 const submitForm = async () => {
+  // 保存前清理 SKU 首尾空白，确保全空白输入也参与必填校验。
+  form.value.skuCode = String(form.value.skuCode ?? '').trim();
   try {
     await itemFormRef.value.validate();
   } catch {
@@ -1663,7 +1665,7 @@ const submitForm = async () => {
     }
   }
   const submitSkuList = (skuForm.itemSkuList || []).map((sku) => {
-    const nextSku = { ...sku };
+    const nextSku = { ...sku, skuCode: String(sku.skuCode ?? '').trim() };
     if (!canEditCostPrice.value) {
       delete nextSku.costPrice;
     }
