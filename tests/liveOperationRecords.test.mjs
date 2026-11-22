@@ -14,9 +14,10 @@ async function setup(api) {
     .replace(/^import (\w+) from ['"]([^'"]+)['"];?$/gm, (_, binding, name) => `const ${binding} = modules[${JSON.stringify(name)}]`)
     .replace('export default', 'return'))({
       vue: { ...vue, onMounted() {}, onActivated() {} },
-      '@/api/wms/livePayroll': { listOperationRecords: async () => ({ rows: [], total: 0 }), getOperationRecordOptions: async () => ({ data: {} }), exportOperationRecords: async () => {}, ...api },
+      '@/api/wms/livePayroll': { listOperationRecords: async () => ({ rows: [], total: 0 }), getOperationRecordOptions: async () => ({ data: {} }), exportOperationRecords: async () => {}, exportOperationTimes: async () => {}, getOperationRecordSummary: async () => ({ data: { liveHours: 0, nonliveHours: 0 } }), listOperationTimes: async () => ({ rows: [], total: 0 }), createOperationTime: async () => {}, updateOperationTime: async () => {}, deleteOperationTime: async () => {}, ...api },
       '../components/LiveAccountSelect.vue': {}, '../components/LivePlatformTag.vue': {},
       '../useLiveI18n': { useLiveI18n: () => ({ tr: text => text, isEn: vue.ref(false) }) },
+      'element-plus': { ElMessage: { success() {}, warning() {} }, ElMessageBox: { confirm: async () => {} } },
       '../shared': { displayDate: text => text, isoDate: () => '2026-10-22', LIVE_DATE_FORMAT: 'MM/DD/YYYY', money: n => `$${n}` },
       './recordDisplay': display
     })
@@ -33,10 +34,13 @@ test('operator identity includes nickname and distinguishes missing and unassign
 
 test('actual duration never substitutes scheduled or payroll hours for missing input', () => {
   assert.equal(display.actualDurationLabel(null), '—')
-  assert.equal(display.actualDurationLabel(95), '1时 35分')
-  assert.equal(display.actualDurationLabel(95, true), '1h 35m')
-  assert.equal(display.actualDurationLabel(1440), '24时 0分')
-  assert.equal(display.actualDurationLabel(0), '0时 0分')
+  assert.equal(display.actualDurationLabel(95), '1.58h')
+  assert.equal(display.actualDurationLabel(150), '2.50h')
+  assert.equal(display.actualDurationLabel(95, true), '1.58h')
+  assert.equal(display.actualDurationLabel(1440), '24.00h')
+  assert.equal(display.actualDurationLabel(0), '0.00h')
+  assert.equal(display.hoursText(2.5), '2.50h')
+  assert.equal(display.hoursText(null), '—')
 })
 
 test('pagination and export share applied filters and export ignores unsaved edits and page limits', async () => {
@@ -49,19 +53,41 @@ test('pagination and export share applied filters and export ignores unsaved edi
   page.query.accountId = '10'
   page.dateRange.value = ['2026-10-01', '2026-10-22']
   await page.handleQuery()
-  assert.deepEqual(calls[0], { operatorEmployeeId: '9007199254740999', accountId: '10', startDate: '2026-10-01', endDate: '2026-10-22', pageNum: 1, pageSize: 20 })
+  assert.deepEqual(calls[0], { operatorEmployeeId: '9007199254740999', accountId: '10', startDate: '2026-10-01', endDate: '2026-10-22', sortOrder: 'desc', pageNum: 1, pageSize: 20 })
   page.pagination.pageNum = 2
   await page.load()
   page.query.operatorEmployeeId = 'edited-without-query'
-  await page.exportRows()
+  await page.exportLiveRows()
   assert.equal(calls[1].pageNum, 2)
-  assert.deepEqual(exports[0][0], { operatorEmployeeId: '9007199254740999', accountId: '10', startDate: '2026-10-01', endDate: '2026-10-22' })
-  assert.equal(exports[0][1], '运营记录_2026-10-22.xlsx')
+  assert.deepEqual(exports[0][0], { operatorEmployeeId: '9007199254740999', accountId: '10', startDate: '2026-10-01', endDate: '2026-10-22', sortOrder: 'desc' })
+  assert.equal(exports[0][1], '运营记录直播场次_2026-10-22.xlsx')
   await page.resetQuery()
+  assert.equal(page.query.scope, '20')
+  assert.equal(page.query.sortOrder, 'desc')
   assert.equal(page.pagination.pageNum, 1)
+  assert.equal(page.pagination.pageSize, 20)
   assert.equal(page.dateRange.value, null)
   assert.equal(calls.at(-1).operatorEmployeeId, undefined)
   assert.equal(calls.at(-1).accountId, undefined)
+})
+
+test('display range chooses the latest page size and all keeps the chosen page size', async () => {
+  const calls = []
+  const page = await setup({ listOperationRecords: async query => { calls.push(query); return { rows: [], total: 80 } } })
+  page.pagination.pageSize = 100
+  page.pagination.pageNum = 4
+  await page.handleQuery()
+  assert.deepEqual(calls[0], { operatorEmployeeId: undefined, accountId: undefined, startDate: undefined, endDate: undefined, sortOrder: 'desc', pageNum: 1, pageSize: 20 })
+  page.query.scope = '50'
+  await page.handleQuery()
+  assert.equal(calls[1].pageNum, 1)
+  assert.equal(calls[1].pageSize, 50)
+  page.query.scope = 'all'
+  page.pagination.pageSize = 100
+  page.pagination.pageNum = 3
+  await page.handleQuery()
+  assert.equal(calls[2].pageNum, 1)
+  assert.equal(calls[2].pageSize, 100)
 })
 
 test('late requests cannot overwrite the most recently queried operator', async () => {
@@ -85,8 +111,8 @@ test('failed queries clear stale results and export loading resets after rejecti
     exportOperationRecords: async () => { throw new Error('download failed') }
   })
   await page.load()
-  await assert.rejects(page.exportRows(), /download failed/)
-  assert.equal(page.exportLoading.value, false)
+  await assert.rejects(page.exportLiveRows(), /download failed/)
+  assert.equal(page.liveExportLoading.value, false)
   fail = true
   await page.handleQuery()
   assert.deepEqual(page.rows.value, [])

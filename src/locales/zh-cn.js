@@ -1037,6 +1037,8 @@ export default {
     searchPlaceholder: '请输入 SKU',
     search: '搜索',
     searchTip: '与「商品管理」列表相同数据源，按 SKU 精确搜索。',
+    hideZeroStock: '过滤掉库存为0的商品',
+    zeroStockHidden: '该 SKU 库存为 0。取消勾选后可以查看已售出的商品。',
     noImage: '暂无图片',
     viewDetail: '详细信息',
     noSkuFound: '未找到该 SKU，请检查输入是否正确。',
