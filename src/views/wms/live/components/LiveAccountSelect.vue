@@ -1,5 +1,5 @@
 <template>
-  <el-select :model-value="modelValue" filterable :disabled="disabled" :placeholder="placeholder" :filter-method="filterAccounts" @update:model-value="$emit('update:modelValue', $event)" @change="$emit('change', $event)" @visible-change="keyword = ''" @clear="keyword = ''">
+  <el-select :model-value="modelValue" filterable :clearable="clearable" :disabled="disabled" :placeholder="placeholder" :filter-method="filterAccounts" @update:model-value="$emit('update:modelValue', $event)" @change="$emit('change', $event)" @visible-change="keyword = ''" @clear="keyword = ''">
     <template v-if="selectedAccount" #prefix><LivePlatformTag :platform="selectedAccount.platform" :label="selectedAccount.accountCode" /></template>
     <el-option v-for="account in visibleAccounts" :key="account.id" :label="account.displayName || account.accountCode || '-'" :value="account.id">
       <LiveAccountLabel :account="account" />
@@ -17,7 +17,8 @@ const props = defineProps({
   modelValue: { type: [String, Number], default: null },
   accounts: { type: Array, default: () => [] },
   disabled: { type: Boolean, default: false },
-  placeholder: { type: String, default: '' }
+  placeholder: { type: String, default: '' },
+  clearable: { type: Boolean, default: false }
 })
 defineEmits(['update:modelValue', 'change'])
 const keyword = ref('')

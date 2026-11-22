@@ -24,17 +24,18 @@ function serializeResults(results = []) {
 
 function readStorage() {
   if (typeof sessionStorage === 'undefined') {
-    return { skuCode: '', searched: false, results: [] }
+    return { skuCode: '', searched: false, results: [], hideZeroStock: true }
   }
   try {
     const cached = JSON.parse(sessionStorage.getItem(STORAGE_KEY) || '{}')
     return {
       skuCode: cached.skuCode || '',
       searched: Boolean(cached.searched),
-      results: Array.isArray(cached.results) ? cached.results : []
+      results: Array.isArray(cached.results) ? cached.results : [],
+      hideZeroStock: cached.hideZeroStock !== false
     }
   } catch {
-    return { skuCode: '', searched: false, results: [] }
+    return { skuCode: '', searched: false, results: [], hideZeroStock: true }
   }
 }
 
@@ -44,7 +45,8 @@ function writeStorage(state) {
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify({
       skuCode: state.skuCode,
       searched: state.searched,
-      results: serializeResults(state.results)
+      results: serializeResults(state.results),
+      hideZeroStock: state.hideZeroStock !== false
     }))
   } catch {
     // raw 字段过大或不可序列化时忽略持久化
@@ -58,6 +60,7 @@ export const useMobileSkuSearchStore = defineStore('mobileSkuSearch', {
       if (payload.skuCode !== undefined) this.skuCode = payload.skuCode
       if (payload.searched !== undefined) this.searched = payload.searched
       if (payload.results !== undefined) this.results = payload.results
+      if (payload.hideZeroStock !== undefined) this.hideZeroStock = payload.hideZeroStock
       writeStorage(this)
     },
     restoreFromStorage() {
@@ -65,11 +68,13 @@ export const useMobileSkuSearchStore = defineStore('mobileSkuSearch', {
       this.skuCode = cached.skuCode
       this.searched = cached.searched
       this.results = cached.results
+      this.hideZeroStock = cached.hideZeroStock !== false
     },
     clearSearchState() {
       this.skuCode = ''
       this.searched = false
       this.results = []
+      this.hideZeroStock = true
       writeStorage(this)
     }
   }

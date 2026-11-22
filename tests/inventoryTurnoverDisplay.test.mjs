@@ -65,12 +65,19 @@ test('missing receipt, missing sales and non-sales have explicit explanations an
 })
 
 test('mobile propagates calculation fields and clears stale explanation on missing or restricted data', () => {
-  const row={quantity:0,warehouseName:'B',turnoverStartTime:'2026-11-01 10:00:00',turnoverEndTime:'2026-11-10 12:00:00',turnoverEndType:'SALES_CLEARANCE'}
-  const summary=mobile.summarizeInventoryRows([row,{quantity:1,warehouseName:'C'}])
-  assert.equal(summary.timeLocationName,'B')
-  assert.equal(summary.turnoverEndTime,row.turnoverEndTime)
+  const row={quantity:0,warehouseName:'B',shipmentTime:'2026-11-02 09:20:00',turnoverStartTime:'2026-11-01 10:00:00',turnoverEndTime:'2026-11-10 12:00:00',turnoverEndType:'SALES_CLEARANCE'}
+  const stocked={quantity:1,warehouseName:'C',locationName:'C',turnoverStartTime:'2026-07-23 17:17:00',turnoverEndTime:'2026-11-22 00:00:00',turnoverEndType:'CURRENT_DATE'}
+  const summary=mobile.summarizeInventoryRows([row,stocked])
+  assert.equal(summary.quantity,1)
+  assert.equal(summary.timeLocationName,'C')
+  assert.equal(summary.shipmentTime,null)
+  assert.equal(summary.turnoverEndTime,stocked.turnoverEndTime)
+  const cleared=mobile.summarizeInventoryRows([row])
+  assert.equal(cleared.timeLocationName,'B')
+  assert.equal(cleared.shipmentTime,row.shipmentTime)
   const detail=mobile.mergeInventoryIntoDetail({},summary)
-  assert.equal(detail.turnoverStartTime,row.turnoverStartTime)
+  assert.equal(detail.turnoverStartTime,stocked.turnoverStartTime)
+  assert.equal(detail.shipmentTime,null)
   mobile.mergeInventoryIntoDetail(detail,{turnoverStartTime:null,turnoverEndTime:null,turnoverEndType:null})
   assert.equal(detail.turnoverStartTime,null); assert.equal(detail.turnoverEndTime,null)
   const history=mobile.summarizeInventoryHistoryRows([{orderType:1,createTime:'2026-01-01',afterQuantity:1}])

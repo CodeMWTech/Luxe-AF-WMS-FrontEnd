@@ -1,14 +1,21 @@
-export function operatorLabel(row, tr = text => text) {
+export function operatorLabel(row, tr = text => text, missingKey = '未指定运营') {
   const id = row.operatorEmployeeId ?? row.value
-  if (id == null) return tr('未指定运营')
+  if (id == null) return tr(missingKey)
   const name = row.operatorName || row.label || `[ID: ${id}]`
   const nickname = String(row.operatorNickName ?? row.nickName ?? '').trim()
   return nickname ? `${name}（${nickname}）` : name
 }
 
+export function hoursText(value) {
+  if (value == null || value === '') return '—'
+  const number = Number(value)
+  if (!Number.isFinite(number)) return '—'
+  return `${number.toFixed(2)}h`
+}
+
 export function actualDurationLabel(minutes, english = false) {
   if (minutes == null) return '—'
-  return english ? `${Math.floor(minutes / 60)}h ${minutes % 60}m` : `${Math.floor(minutes / 60)}时 ${minutes % 60}分`
+  return hoursText(minutes / 60, english)
 }
 
 export function operationRecordFilters(query, dateRange) {
@@ -16,6 +23,7 @@ export function operationRecordFilters(query, dateRange) {
     operatorEmployeeId: query.operatorEmployeeId || undefined,
     accountId: query.accountId || undefined,
     startDate: dateRange?.[0] || undefined,
-    endDate: dateRange?.[1] || undefined
+    endDate: dateRange?.[1] || undefined,
+    sortOrder: query.sortOrder === 'asc' ? 'asc' : 'desc'
   }
 }
