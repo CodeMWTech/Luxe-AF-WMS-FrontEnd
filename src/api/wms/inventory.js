@@ -74,6 +74,15 @@ export function listInventoryBoardWarehouseSummary(query) {
   })
 }
 
+// 当前库存列表筛选范围内的去重 SKU 数
+export function getInventoryBoardSkuCount(query) {
+  return request({
+    url: '/wms/inventory/boardList/sku-count',
+    method: 'get',
+    params: query
+  })
+}
+
 // 导出库存看板商品维度数据
 export function exportInventoryBoardItem(data, config = {}) {
   return request({
