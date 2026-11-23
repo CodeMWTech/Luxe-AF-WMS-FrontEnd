@@ -207,6 +207,7 @@
         <el-button type="primary" :loading="dateSaving" @click="saveDates">{{ text('保存', 'Save') }}</el-button>
       </template>
     </el-dialog>
+    <InvoicePreviewDialog ref="invoicePreview" :title="text('发票预览', 'Invoice preview')" :name-label="text('文件名', 'File name')" :print-label="text('打印', 'Print')" :download-label="text('下载', 'Download')" :close-label="text('关闭', 'Close')" />
   </div>
 </template>
 
@@ -215,6 +216,10 @@ import { computed, getCurrentInstance, onMounted, reactive, ref } from 'vue'
 import { ElMessageBox } from 'element-plus'
 import { useRouter } from 'vue-router'
 import { supplierDisplayName } from '@/utils/supplier'
+import { invoiceFileName } from '@/utils/invoiceFile'
+import { blobValidate } from '@/utils/ruoyi'
+import request from '@/utils/request'
+import InvoicePreviewDialog from '@/components/InvoicePreviewDialog.vue'
 import { getCurrentSupplier, listSupplierNoPage } from '@/api/wms/supplier'
 import { deleteSupplierSettlementDraft, getSupplierSettlementRecord, getSupplierSettlementRecordSummary, listSupplierSettlementRecords, restoreSupplierSettlementRecord, updateSupplierSettlementDates, voidSupplierSettlementRecord } from '@/api/wms/supplierSettlement'
 
@@ -223,6 +228,7 @@ const router = useRouter()
 const loading = ref(false)
 const exportLoading = ref(false)
 const invoiceLoadingId = ref(null)
+const invoicePreview = ref(null)
 const restoreLoadingId = ref(null)
 const detailLoading = ref(false)
 const detailVisible = ref(false)
@@ -312,10 +318,19 @@ async function exportInvoice(row) {
   if (!row?.id || row.recordStatus !== 'CONFIRMED' || invoiceLoadingId.value !== null) return
   invoiceLoadingId.value = String(row.id)
   try {
-    const number = String(row.settlementNo || row.id).replace(/[^A-Za-z0-9_-]/g, '_')
-    await proxy.download(`wms/supplier-settlement/settlement/records/${row.id}/invoice`, {}, `Invoice_${number}.pdf`, {
-      timeout: 120000, skipHeaderTranslate: true, progressLabel: text('正在生成 Invoice', 'Generating Invoice')
+    const data = await request({
+      url: `wms/supplier-settlement/settlement/records/${row.id}/invoice`,
+      method: 'post',
+      responseType: 'blob',
+      timeout: 120000
     })
+    if (!blobValidate(data)) {
+      const rsp = JSON.parse(await data.text())
+      proxy.$modal.msgError(rsp.msg || text('发票生成失败', 'Invoice could not be created'))
+      return
+    }
+    const file = data instanceof Blob ? data : new Blob([data], { type: 'application/pdf' })
+    invoicePreview.value?.show(file, invoiceFileName(supplierDisplayName(row), row.executionDate))
   } finally { invoiceLoadingId.value = null }
 }
 

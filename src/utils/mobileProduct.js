@@ -333,16 +333,19 @@ export async function enrichOutboundPlatform(summary, merchantMap) {
 
 export function summarizeInventoryRows(rows = []) {
   if (!Array.isArray(rows) || !rows.length) return null
-  const totalQty = rows.reduce((sum, row) => sum + Number(row.quantity || 0), 0)
-  const primary = rows[0]
-  const warehouseNames = [...new Set(rows.map(row => row.warehouseName).filter(Boolean))]
+  const stocked = rows.filter(row => Number(row.quantity) > 0)
+  const sourceRows = stocked.length ? stocked : rows
+  const totalQty = sourceRows.reduce((sum, row) => sum + Number(row.quantity || 0), 0)
+  const primary = sourceRows[0]
+  const warehouseNames = [...new Set(sourceRows.map(row => row.warehouseName).filter(Boolean))]
+  const cleared = totalQty <= 0
   return {
     quantity: totalQty,
     warehouseName: warehouseNames.join('、') || primary.warehouseName,
     firstActualReceiptTime: primary.firstActualReceiptTime,
     receiptTime: primary.receiptTime,
-    shipmentTime: primary.shipmentTime,
-    outboundPlatform: primary.outboundPlatform,
+    shipmentTime: cleared ? primary.shipmentTime : null,
+    outboundPlatform: cleared ? primary.outboundPlatform : null,
     turnoverDays: primary.turnoverDays,
     turnoverStatus: primary.turnoverStatus,
     turnoverStartTime: primary.turnoverStartTime,

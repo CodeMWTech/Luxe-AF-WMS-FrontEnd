@@ -71,6 +71,7 @@
       </template>
       <template #footer><el-button v-hasPermi="['wms:live:settlement:list']" type="primary" :loading="invoiceLoadingId === String(detail.batch?.id)" :disabled="!detail.batch || invoiceLoadingId !== null" @click="exportInvoice(detail.batch)">{{ tr('发票打印') }}</el-button><el-button @click="exportBatch">{{ tr('导出本批次') }}</el-button><el-button @click="detail.open=false">{{ tr('关闭') }}</el-button></template>
     </el-dialog>
+    <InvoicePreviewDialog ref="invoicePreview" :title="tr('发票预览')" :name-label="tr('文件名')" :print-label="tr('打印')" :download-label="tr('下载')" :close-label="tr('关闭')" />
   </div>
 </template>
 <script setup>
@@ -82,6 +83,10 @@ import ManualAdjustmentDialog from './ManualAdjustmentDialog.vue'
 import LiveEmployeeSelect from '../components/LiveEmployeeSelect.vue'
 import { displayDateTime, money, displayDate, isoDate, LIVE_DATE_FORMAT, settlementStatusLabel, adjustmentStatusLabel, downloadCsv } from '../shared'
 import { flattenSettlement, selectedSettlementGroups, sortSettlementCandidates } from './settlementDisplay'
+import { invoiceFileName } from '@/utils/invoiceFile'
+import { blobValidate } from '@/utils/ruoyi'
+import request from '@/utils/request'
+import InvoicePreviewDialog from '@/components/InvoicePreviewDialog.vue'
 const { tr, isEn, messageNode } = useLiveI18n()
 const memoLabel = computed(() => isEn.value ? 'Memo' : '备注')
 const { proxy } = getCurrentInstance()
@@ -93,6 +98,7 @@ const manualDialog = ref()
 const candidateTable = ref()
 const detail = reactive({ open: false, batch: null })
 const invoiceLoadingId = ref(null)
+const invoicePreview = ref(null)
 const paymentLoadingId = ref(null)
 const selectedAmount = computed(() => selection.value.reduce((total, row) => total + Number(row.amount), 0))
 const flatten = data => flattenSettlement(data, tr, { isEnglish: isEn.value })
@@ -183,10 +189,19 @@ async function exportInvoice(batch) {
   if (!batch?.id || invoiceLoadingId.value !== null) return
   invoiceLoadingId.value = String(batch.id)
   try {
-    const number = String(batch.settlementNo || batch.id).replace(/[^A-Za-z0-9_-]/g, '_')
-    await proxy.download(`wms/live/settlements/${batch.id}/invoice`, {}, `Invoice_${number}.pdf`, {
-      timeout: 120000, skipHeaderTranslate: true, progressLabel: tr('正在生成 Invoice')
+    const data = await request({
+      url: `wms/live/settlements/${batch.id}/invoice`,
+      method: 'post',
+      responseType: 'blob',
+      timeout: 120000
     })
+    if (!blobValidate(data)) {
+      const rsp = JSON.parse(await data.text())
+      proxy.$modal.msgError(rsp.msg || tr('发票生成失败'))
+      return
+    }
+    const file = data instanceof Blob ? data : new Blob([data], { type: 'application/pdf' })
+    invoicePreview.value?.show(file, invoiceFileName(batch.employeeName, batch.settlementDate))
   } finally { invoiceLoadingId.value = null }
 }
 function exportBatch() {

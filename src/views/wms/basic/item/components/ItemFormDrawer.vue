@@ -370,28 +370,24 @@
                 </el-form-item>
               </el-col>
             </el-row>
-            <!-- 采购人：可手填，也可点下方气泡写入。已有内容保留，点气泡只追加。 -->
+            <!-- 采购人：从固定选项中选择；编辑历史商品时保留旧值。 -->
             <el-row :gutter="24">
-              <el-col :span="24">
+              <el-col :span="12">
                 <el-form-item :label="tr('采购人')" prop="consignInfo">
-                  <el-input
+                  <el-select
                     v-model="form.consignInfo"
-                    type="textarea"
-                    :rows="2"
-                    :placeholder="tr('请输入采购人，或点击下方标签快速填入')"
-                  />
-                  <div class="purchaser-tags mt8">
-                    <el-tag
-                      v-for="item in PURCHASER_OPTIONS"
-                      :key="item"
-                      class="accessory-tag"
-                      type="info"
-                      effect="plain"
-                      @click="appendPurchaserTag(item)"
-                    >
-                      {{ item }}
-                    </el-tag>
-                  </div>
+                    :placeholder="tr('请选择采购人')"
+                    clearable
+                    style="width: 100%"
+                  >
+                    <el-option v-for="item in PURCHASER_OPTIONS" :key="item" :label="item" :value="item" />
+                    <el-option
+                      v-if="form.id && form.consignInfo && !PURCHASER_OPTIONS.includes(form.consignInfo)"
+                      :label="form.consignInfo"
+                      :value="form.consignInfo"
+                      disabled
+                    />
+                  </el-select>
                 </el-form-item>
               </el-col>
             </el-row>
@@ -596,13 +592,6 @@ const emit = defineEmits([
   'cancel'
 ])
 
-function appendPurchaserTag(tag) {
-  const val = props.form.consignInfo || ''
-  const parts = String(val).split(/[,，、\n]+/).map(s => s.trim()).filter(Boolean)
-  if (parts.includes(tag)) return
-  props.form.consignInfo = parts.length ? parts.concat(tag).join(', ') : tag
-}
-
 const itemFormRef = ref(null)
 const itemImageUploadRef = ref(null)
 const defectTagsExpanded = ref(false)
@@ -680,8 +669,7 @@ defineExpose({
 .exterior-material-select :deep(.el-select__selection) {
   flex-wrap: wrap;
 }
-.accessory-tags,
-.purchaser-tags {
+.accessory-tags {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;

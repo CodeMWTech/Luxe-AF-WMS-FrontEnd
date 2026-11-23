@@ -220,6 +220,7 @@
       <el-row :gutter="10" class="mb8" type="flex" justify="space-between" align="middle">
         <el-col :xs="24" :sm="8" :md="10" :lg="12">
           <span class="page-title">{{ tr('未入库商品') }}</span>
+          <span class="sku-count-label">{{ tr('共计 {count} 条 SKU').replace('{count}', unstockedSkuCountDisplay) }}</span>
         </el-col>
         <el-col :xs="24" :sm="16" :md="14" :lg="12" class="stats-col">
           <div class="stats-toolbar">
@@ -483,6 +484,10 @@ const selectedRows = ref([])
 const selectedRowMap = ref(new Map())
 let suppressUnstockedSelectionChange = false
 const total = ref(0)
+const unstockedSkuCount = ref(null)
+const unstockedSkuCountDisplay = computed(() => unstockedSkuCount.value === null
+  ? '--'
+  : unstockedSkuCount.value.toLocaleString('en-US'))
 const totalAmount = ref(null)
 const totalCount = ref(0)
 const tableRef = ref(null)
@@ -851,17 +856,25 @@ const totalCountDisplay = computed(() => {
   return Math.max(0, Math.trunc(n))
 })
 
+let listRequestId = 0
 function getList() {
+  const requestId = ++listRequestId
+  unstockedSkuCount.value = null
   loading.value = true
   listUnstockedSkus(buildRequestQuery())
     .then(async (response) => {
+      if (requestId !== listRequestId) return
       list.value = response.rows || []
       total.value = response.total ?? 0
+      const count = Number(response.total)
+      if (response.total != null && Number.isSafeInteger(count) && count >= 0) {
+        unstockedSkuCount.value = count
+      }
       loading.value = false
       await restoreUnstockedSelection()
     })
     .catch(() => {
-      loading.value = false
+      if (requestId === listRequestId) loading.value = false
     })
 }
 
@@ -950,6 +963,13 @@ onMounted(() => {
 <style scoped lang="scss">
 .page-title {
   font-size: large;
+}
+
+.sku-count-label {
+  margin-left: 12px;
+  color: var(--el-text-color-regular, #606266);
+  font-size: 14px;
+  white-space: nowrap;
 }
 
 .mt12 {

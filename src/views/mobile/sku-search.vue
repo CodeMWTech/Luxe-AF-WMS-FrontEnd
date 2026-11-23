@@ -10,15 +10,16 @@
         />
         <el-button type="primary" :loading="loading" @click="handleSearch">{{ t('mobile.search') }}</el-button>
       </div>
+      <el-checkbox v-model="hideZeroStock" class="mobile-zero-filter" @change="saveFilter">{{ t('mobile.hideZeroStock') }}</el-checkbox>
       <p class="mobile-tip">{{ t('mobile.searchTip') }}</p>
     </section>
 
-    <section v-if="searched && !loading && results.length === 0" class="mobile-card">
-      <div class="mobile-empty">{{ t('mobile.noSkuFound') }}</div>
+    <section v-if="searched && !loading && visibleResults.length === 0" class="mobile-card">
+      <div class="mobile-empty">{{ emptyMessage }}</div>
     </section>
 
     <section
-      v-for="item in results"
+      v-for="item in visibleResults"
       :key="`${item.source}-${item.skuId || item.skuCode}`"
       class="mobile-card mobile-result-card"
     >
@@ -92,19 +93,30 @@ import { storeToRefs } from 'pinia'
 import { ElMessage } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 import { listItemSkuPage } from '@/api/wms/itemSku'
+import { listInventory } from '@/api/wms/inventory'
 import { getItemImages } from '@/api/wms/item'
 import { useWmsStore } from '@/store/modules/wms'
 import { useMobileSkuSearchStore } from '@/store/modules/mobileSkuSearch'
 import {
   displayValue,
   formatMoney,
+  getInventoryStatusText,
+  normalizeInventorySearchRow,
   normalizeSkuSearchRow
 } from '@/utils/mobileProduct'
 
 const router = useRouter()
 const wmsStore = useWmsStore()
 const searchStore = useMobileSkuSearchStore()
-const { skuCode, searched, results } = storeToRefs(searchStore)
+const { skuCode, searched, results, hideZeroStock } = storeToRefs(searchStore)
+const visibleResults = computed(() => hideZeroStock.value
+  ? results.value.filter(item => Number(item.quantity) > 0)
+  : results.value)
+const emptyMessage = computed(() => (
+  hideZeroStock.value && results.value.length > 0
+    ? t('mobile.zeroStockHidden')
+    : t('mobile.noSkuFound')
+))
 const { t } = useI18n()
 const { proxy } = getCurrentInstance()
 
@@ -122,15 +134,58 @@ function resolveSkuId(item) {
 }
 
 function displayInventoryStatus(item) {
-  if (item.inventoryStatus === '商品已建档') {
-    return t('mobile.statusArchived')
-  }
   const qty = Number(item.quantity)
   if (Number.isFinite(qty) && qty > 0) {
-    return t('mobile.statusInStock', { qty })
+    const place = (item.stockLocations || []).filter(Boolean).join('、')
+    const status = t('mobile.statusInStock', { qty })
+    return place ? `${status}（${place}）` : status
   }
-  if (item.inventoryStatus) return item.inventoryStatus
-  return t('mobile.statusNoStock')
+  if (Number.isFinite(qty) && qty <= 0) return t('mobile.statusNoStock')
+  if (item.inventoryStatus === '商品已建档') return t('mobile.statusArchived')
+  return item.inventoryStatus || t('mobile.statusNoStock')
+}
+
+function rememberStockLocation(item, row) {
+  if (Number(row.quantity) <= 0 || !row.warehouseName) return
+  if (!item.stockLocations) item.stockLocations = []
+  if (!item.stockLocations.includes(row.warehouseName)) item.stockLocations.push(row.warehouseName)
+}
+
+function groupInventoryRows(rows) {
+  const grouped = new Map()
+  rows.forEach(row => {
+    const item = normalizeInventorySearchRow(row)
+    const key = String(item.skuId || item.skuCode || '')
+    const current = grouped.get(key)
+    if (!current) {
+      item.stockLocations = []
+      rememberStockLocation(item, item)
+      grouped.set(key, item)
+      return
+    }
+    current.quantity = Number(current.quantity || 0) + Number(item.quantity || 0)
+    current.inventoryStatus = getInventoryStatusText(current.quantity)
+    rememberStockLocation(current, item)
+  })
+  return [...grouped.values()]
+}
+
+function mergeInventory(catalogRows, inventoryRows) {
+  const inventoryBySku = new Map(inventoryRows.map(item => [String(item.skuId), item]))
+  const merged = catalogRows.map(item => {
+    const stock = inventoryBySku.get(String(item.skuId))
+    if (!stock) return item
+    inventoryBySku.delete(String(item.skuId))
+    return {
+      ...item,
+      quantity: stock.quantity,
+      inventoryStatus: getInventoryStatusText(stock.quantity),
+      warehouseName: stock.warehouseName,
+      stockLocations: stock.stockLocations || []
+    }
+  })
+  inventoryBySku.forEach(item => merged.push(item))
+  return merged
 }
 
 function getImageListFromResponse(res) {
@@ -190,27 +245,29 @@ async function handleSearch() {
   searched.value = true
   results.value = []
   try {
-    const skuRes = await listItemSkuPage({
-      skuCode: keyword,
-      skuCodeExact: true,
-      pageNum: 1,
-      pageSize: 20
-    })
+    const [skuRes, inventoryRes] = await Promise.all([
+      listItemSkuPage({ skuCode: keyword, skuCodeExact: true, pageNum: 1, pageSize: 20 }),
+      listInventory({ skuCode: keyword, skuCodeExact: true, pageNum: 1, pageSize: 100 }, { silentError: true }).catch(() => ({ rows: [] }))
+    ])
     const skuRows = Array.isArray(skuRes?.rows) ? skuRes.rows : []
-    const nextResults = skuRows.map(row => enrichSearchRow(normalizeSkuSearchRow(row)))
-    results.value = nextResults
+    const inventoryRows = Array.isArray(inventoryRes?.rows) ? inventoryRes.rows : []
+    results.value = mergeInventory(
+      skuRows.map(row => enrichSearchRow(normalizeSkuSearchRow(row))),
+      groupInventoryRows(inventoryRows)
+    )
+    await preloadResultImages(visibleResults.value.length ? visibleResults.value : results.value)
 
-    if (!results.value.length) {
-      ElMessage.warning(t('mobile.skuNotFound'))
-      searchStore.saveSearchState({ skuCode: keyword, searched: true, results: [] })
+    if (!visibleResults.value.length) {
+      ElMessage.warning(emptyMessage.value)
+      searchStore.saveSearchState({ skuCode: keyword, searched: true, results: results.value, hideZeroStock: hideZeroStock.value })
       return
     }
 
-    await preloadResultImages(results.value)
     searchStore.saveSearchState({
       skuCode: keyword,
       searched: true,
-      results: results.value
+      results: results.value,
+      hideZeroStock: hideZeroStock.value
     })
   } catch (error) {
     ElMessage.error(error?.message || t('mobile.searchFailed'))
@@ -228,7 +285,8 @@ function openDetail(item) {
   searchStore.saveSearchState({
     skuCode: skuCode.value,
     searched: searched.value,
-    results: results.value
+    results: results.value,
+    hideZeroStock: hideZeroStock.value
   })
   router.push({
     name: 'MobileProductDetail',
@@ -238,6 +296,10 @@ function openDetail(item) {
       ElMessage.error(error?.message || t('mobile.loadDetailFailed'))
     }
   })
+}
+
+function saveFilter() {
+  searchStore.saveSearchState({ hideZeroStock: hideZeroStock.value })
 }
 
 onMounted(() => {
@@ -259,6 +321,7 @@ onActivated(() => {
 </script>
 
 <style scoped lang="scss">
+.mobile-zero-filter { margin-top: 10px; }
 .mobile-tip {
   margin: 10px 0 0;
   font-size: 12px;

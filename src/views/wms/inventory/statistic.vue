@@ -251,13 +251,32 @@
       <div class="table-toolbar mb8">
         <div class="toolbar-left">
           <span class="page-title">{{ tr('库存统计') }}</span>
+          <el-tooltip :content="tr('按当前列表筛选条件统计，每个 SKU 只计一次')" placement="top">
+            <span class="sku-count-label ml10" tabindex="0">{{ tr('共计 {count} 条 SKU').replace('{count}', inventorySkuCountDisplay) }}</span>
+          </el-tooltip>
           <el-tag v-if="queryParams.snapshotDate" class="ml10" type="info">
             {{ tr('日终库存快照') }}：{{ queryParams.snapshotDate }}
           </el-tag>
         </div>
         <div class="toolbar-right">
-          <el-checkbox v-model="filterNonZero" :label="tr('过滤掉库存不为0的商品')" size="large" @change="handleChangeFilterNonZero"/>
-          <el-checkbox v-model="filterable" :label="tr('过滤掉库存为0的商品')" size="large" @change="handleChangeFilterZero"/>
+          <div class="toolbar-filters-summary">
+            <div v-if="showCost || showField('stockQuantity')" class="inventory-summary">
+              <template v-if="showCost">
+                <span class="inventory-summary-label">{{ tr('库存总金额') }}：</span>
+                <span class="inventory-summary-value">{{ inventorySummaryAmountDisplay }}</span>
+              </template>
+              <span v-if="showCost && showField('stockQuantity')" class="inventory-summary-separator">|</span>
+              <template v-if="showField('stockQuantity')">
+                <span class="inventory-summary-label">{{ tr('库存总件数') }}：</span>
+                <span class="inventory-summary-value">{{ inventorySummaryQuantityDisplay }}{{ inventorySummaryQuantity === null ? '' : tr('件') }}</span>
+              </template>
+              <el-tooltip :content="tr('按当前筛选条件统计现有库存；选择历史日期时统计该日日终库存。金额按库位平均入库成本计算。')" placement="top" effect="dark">
+                <el-icon class="inventory-summary-info" tabindex="0" :aria-label="tr('按当前筛选条件统计现有库存；选择历史日期时统计该日日终库存。金额按库位平均入库成本计算。')"><InfoFilled /></el-icon>
+              </el-tooltip>
+            </div>
+            <el-checkbox v-model="filterNonZero" :label="tr('只查无库存商品')" size="large" @change="handleChangeFilterNonZero"/>
+            <el-checkbox v-model="filterable" :label="tr('只查有库存商品')" size="large" @change="handleChangeFilterZero"/>
+          </div>
           <el-button
             :type="batchMode ? 'warning' : 'default'"
             @click="toggleBatchMode"
@@ -779,6 +798,7 @@ import {
   importInventoryFile,
   deleteInventoryExportTask,
   downloadInventoryExportTask,
+  getInventoryBoardSkuCount,
   getInventoryExportTask,
   listInventoryBoard,
   listInventoryExportTasks,
@@ -858,6 +878,16 @@ const tableRef = ref(null)
 let suppressInventorySelectionChange = false
 const rowSpanArray = ref(['itemGroupKey', 'skuGroupKey', 'skuWarehouseGroupKey'])
 const warehouseSummaryMap = ref(new Map())
+const inventorySkuCount = ref(null)
+const inventorySkuCountDisplay = computed(() => inventorySkuCount.value === null
+  ? '--'
+  : inventorySkuCount.value.toLocaleString('en-US'))
+const inventorySummaryQuantity = ref(null)
+const inventorySummaryAmount = ref(null)
+const inventorySummaryQuantityDisplay = computed(() => inventorySummaryQuantity.value === null
+  ? '--'
+  : Number(inventorySummaryQuantity.value).toLocaleString('en-US'))
+const inventorySummaryAmountDisplay = computed(() => formatMoney(inventorySummaryAmount.value))
 const detailDrawer = ref({
   visible: false,
   loading: false,
@@ -1728,8 +1758,12 @@ async function translateInventoryExportXlsx(blobData) {
 }
 
 /** 与列表筛选项一致，不传分页、排序（汇总无分页） */
-const getWarehouseSummaryQuery = () => {
-  const full = getCurrentQuery()
+const getWarehouseSummaryQuery = (full = getCurrentQuery()) => {
+  const { pageNum, pageSize, orderByColumn, isAsc, ...rest } = full
+  return rest
+}
+
+const getInventorySkuCountQuery = (full) => {
   const { pageNum, pageSize, orderByColumn, isAsc, ...rest } = full
   return rest
 }
@@ -1842,24 +1876,39 @@ async function fetchAllInventoryBoardRows() {
   return allRows
 }
 
+let listRequestId = 0
 const getList = async () => {
+  const requestId = ++listRequestId
   const query = getCurrentQuery()
   loading.value = true
+  inventorySkuCount.value = null
+  inventorySummaryQuantity.value = null
+  inventorySummaryAmount.value = null
+  warehouseSummaryMap.value = new Map()
   try {
-    let res
-    if (queryType.value === 'warehouse') {
-      const summaryQuery = getWarehouseSummaryQuery()
-      const [summaryRsp, listRsp] = await Promise.all([
-        listInventoryBoardWarehouseSummary(summaryQuery),
-        listInventoryBoard(query, queryType.value)
-      ])
-      res = listRsp
-      const raw = summaryRsp?.data
-      const summaryItems = Array.isArray(raw) ? raw : []
-      warehouseSummaryMap.value = buildWarehouseSummaryMap(summaryItems)
-    } else {
-      warehouseSummaryMap.value = new Map()
-      res = await listInventoryBoard(query, queryType.value)
+    const [listResult, summaryResult, skuCountResult] = await Promise.allSettled([
+      listInventoryBoard(query, queryType.value),
+      listInventoryBoardWarehouseSummary(getWarehouseSummaryQuery(query)),
+      getInventoryBoardSkuCount(getInventorySkuCountQuery(query))
+    ])
+    if (requestId !== listRequestId) return
+    if (listResult.status === 'rejected') throw listResult.reason
+    const res = listResult.value
+    if (skuCountResult.status === 'fulfilled' && skuCountResult.value?.data != null) {
+      const count = Number(skuCountResult.value.data)
+      if (Number.isSafeInteger(count) && count >= 0) inventorySkuCount.value = count
+    }
+    if (summaryResult.status === 'fulfilled' && Array.isArray(summaryResult.value?.data?.warehouses)) {
+      const { warehouses, totalQuantity, totalAmount } = summaryResult.value.data
+      const quantity = Number(totalQuantity)
+      if (Number.isFinite(quantity)) inventorySummaryQuantity.value = quantity
+      if (totalAmount !== null && totalAmount !== undefined) {
+        const amount = Number(totalAmount)
+        if (Number.isFinite(amount)) inventorySummaryAmount.value = amount
+      }
+      if (queryType.value === 'warehouse') {
+        warehouseSummaryMap.value = buildWarehouseSummaryMap(warehouses)
+      }
     }
     const rows = normalizeInventoryBoardRows(filterInventoryBoardRows(res.rows || []))
 
@@ -1868,7 +1917,7 @@ const getList = async () => {
     total.value = res.total ?? 0
     await restoreInventorySelection()
   } finally {
-    loading.value = false
+    if (requestId === listRequestId) loading.value = false
   }
 }
 
@@ -2529,6 +2578,12 @@ onActivated(() => {
   font-size: large;
 }
 
+.sku-count-label {
+  color: var(--el-text-color-regular, #606266);
+  font-size: 14px;
+  white-space: nowrap;
+}
+
 .mt12 {
   margin-top: 12px;
 }
@@ -2586,7 +2641,46 @@ onActivated(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 16px;
+}
+
+.toolbar-filters-summary {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  min-width: 0;
+}
+
+.inventory-summary {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  line-height: 32px;
+}
+
+.inventory-summary-label {
+  color: var(--el-text-color-regular, #606266);
+}
+
+.inventory-summary-value {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--el-color-primary);
+}
+
+.inventory-summary-separator {
+  margin: 0 12px;
+  color: var(--el-border-color-darker, #d4d7de);
+}
+
+.inventory-summary-info {
+  margin-left: 8px;
+  color: var(--el-text-color-placeholder, #a8abb2);
+  cursor: help;
 }
 
 .toolbar-left {
@@ -2599,9 +2693,18 @@ onActivated(() => {
   display: flex;
   justify-content: flex-end;
   align-items: center;
-  flex-wrap: nowrap;
+  flex: 1 1 760px;
+  flex-wrap: wrap;
   gap: 8px;
   min-width: 0;
+}
+
+@media (max-width: 768px) {
+  .toolbar-right,
+  .toolbar-filters-summary,
+  .inventory-summary {
+    justify-content: flex-start;
+  }
 }
 
 .toolbar-right :deep(.el-checkbox) {

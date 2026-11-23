@@ -1025,6 +1025,8 @@ export default {
     searchPlaceholder: 'Enter SKU',
     search: 'Search',
     searchTip: 'Same data source as Item Management; exact SKU match only.',
+    hideZeroStock: 'Hide zero-stock items',
+    zeroStockHidden: 'This SKU has no stock. Uncheck the filter to see sold items.',
     noImage: 'No image',
     viewDetail: 'Details',
     noSkuFound: 'SKU not found. Please check your input.',

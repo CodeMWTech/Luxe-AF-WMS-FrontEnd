@@ -68,7 +68,16 @@ export function listInventoryBoard(query,type) {
 // 仓库维度看板：按当前筛选条件汇总（不分页）
 export function listInventoryBoardWarehouseSummary(query) {
   return request({
-    url: '/wms/inventory/boardList/warehouse/summary',
+    url: '/wms/inventory/boardList/warehouse/summary-with-total',
+    method: 'get',
+    params: query
+  })
+}
+
+// 当前库存列表筛选范围内的去重 SKU 数
+export function getInventoryBoardSkuCount(query) {
+  return request({
+    url: '/wms/inventory/boardList/sku-count',
     method: 'get',
     params: query
   })
