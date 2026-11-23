@@ -2,29 +2,13 @@
   <div class="app-container warehouse-products">
     <el-card>
       <div class="toolbar"><h2>{{ t('仓库商品总览') }}</h2>
-        <div><el-button @click="openOriginalPage">{{ t(status === 'unstocked' ? '打开未入库页面' : '打开库存统计页面') }}</el-button>
-          <el-button v-if="canMap" @click="openMappings">{{ t('采购人仓库映射') }}</el-button></div></div>
+        <div><el-button v-if="canMap" @click="openMappings">{{ t('采购人仓库映射') }}</el-button></div></div>
       <el-form :model="query" label-width="90px" @submit.prevent="search">
         <el-row :gutter="16">
           <el-col :xs="24" :md="12"><el-form-item :label="t('仓库')" required>
-            <WarehouseLocationSelect v-model="query.warehouseId" clearable include-inactive filter-mode @change="search" />
+            <WarehouseLocationSelect v-model="query.warehouseId" clearable include-inactive filter-mode @change="onWarehouseChange" />
           </el-form-item></el-col>
-          <el-col :xs="24" :md="6"><el-form-item :label="t('商品名称')"><el-input v-model="query.itemName" clearable @keyup.enter="search" /></el-form-item></el-col>
-          <el-col :xs="24" :md="6"><el-form-item :label="t('SKU编号')"><el-input v-model="query.skuCode" clearable @keyup.enter="search" /></el-form-item></el-col>
-        </el-row>
-        <el-row :gutter="16">
-          <el-col :xs="24" :md="6"><el-form-item :label="t('商品分类')">
-            <el-tree-select v-model="query.itemCategory" :data="wmsStore.itemCategoryTreeList"
-              :props="{ value: 'id', label: 'label', children: 'children' }" value-key="id"
-              check-strictly clearable filterable style="width:100%" />
-          </el-form-item></el-col>
-          <el-col :xs="24" :md="6"><el-form-item :label="t('商品品牌')">
-            <el-select v-model="query.itemBrand" multiple clearable filterable style="width:100%">
-              <el-option v-for="brand in wmsStore.itemBrandList" :key="brand.id" :label="brand.brandName" :value="brand.id" />
-            </el-select>
-          </el-form-item></el-col>
-          <el-col :xs="24" :md="6"><el-form-item :label="t('采购人')"><el-input v-model="query.consignInfo" clearable @keyup.enter="search" /></el-form-item></el-col>
-          <el-col :xs="24" :md="6" class="actions"><el-button type="primary" @click="search">{{ t('查询') }}</el-button><el-button @click="reset">{{ t('重置') }}</el-button></el-col>
+          <el-col :xs="24" :md="12" class="actions"><el-button type="primary" @click="search">{{ t('查询') }}</el-button><el-button @click="reset">{{ t('重置') }}</el-button></el-col>
         </el-row>
       </el-form>
     </el-card>
@@ -39,8 +23,16 @@
               {{ t(tab.title) }} {{ summary[tab.status]?.total ?? 0 }} {{ t('条') }}
             </el-radio-button>
           </el-radio-group>
-          <div class="summary-actions"><span>{{ t(activeTab.quantityLabel) }}：{{ formatQty(summary[status]?.quantity) }}</span>
-            <el-button type="primary" :loading="exporting" @click="exportCurrent">{{ t('导出Excel') }}</el-button></div>
+          <div class="summary-actions">
+            <span v-if="canCost && summary[status]?.totalAmount != null" class="summary-amount">
+              {{ t(activeTab.amountLabel) }}：{{ formatTotalAmount(summary[status].totalAmount) }}
+              <el-tooltip :content="t(amountTip)" placement="top">
+                <el-icon class="summary-info" tabindex="0" :aria-label="t(amountTip)"><InfoFilled /></el-icon>
+              </el-tooltip>
+            </span>
+            <span>{{ t(activeTab.quantityLabel) }}：{{ formatQty(summary[status]?.quantity) }}</span>
+            <el-button type="primary" :loading="exporting" @click="exportCurrent">{{ t('导出Excel') }}</el-button>
+          </div>
         </div>
         <el-table :data="rows" v-loading="loading" border>
           <el-table-column prop="itemName" :label="t('商品名称')" min-width="180" show-overflow-tooltip />
@@ -69,18 +61,15 @@
     </el-card>
 
     <el-dialog v-model="mappingVisible" :title="t('采购人仓库映射')" width="780px">
-      <el-alert :title="`${t('未映射或未填写采购人的 SKU 不会进入具体仓库；补录采购人或保存映射后才会归属。')} ${t('当前选择下未归属的未入库 SKU（全系统）')}：${unassignedCount}（${t('未映射')} ${unmappedCount}，${t('采购人未填写')} ${missingPurchaserCount}）`"
+      <el-alert :title="`${t('未映射的 SKU 不会进入具体仓库；选择仓库并保存后即可归属。')} ${t('未入库 SKU 总计（全系统）')}：${unstockedSkuCount}；${t('当前选择下未归属的未入库 SKU（全系统）')}：${unassignedCount}（${t('未映射')} ${unmappedCount}，${t('采购人未填写')} ${missingPurchaserCount}）`"
         type="warning" :closable="false" class="mapping-hint" />
-      <div v-if="unmappedBreakdown.length" class="mapping-breakdown">
-        {{ t('未映射主要来源（前五项）') }}：{{ unmappedBreakdown.map(row => `${row.purchaserValue} ${row.itemCount}`).join('；') }}
-      </div>
       <el-table :data="mappingRows" v-loading="mappingLoading" border max-height="55vh">
         <el-table-column prop="purchaserValue" :label="t('采购人')" min-width="200" show-overflow-tooltip>
-          <template #default="{ row }">{{ row.purchaserValue || t('采购人未填写，请先在商品管理补录') }}</template>
+          <template #default="{ row }">{{ row.purchaserValue || t('采购人未填写') }}</template>
         </el-table-column>
         <el-table-column prop="itemCount" :label="t('未入库 SKU 条数')" width="140" />
         <el-table-column :label="t('目标仓库')" min-width="260">
-          <template #default="{ row }"><el-select v-model="row.warehouseId" clearable filterable :disabled="!row.purchaserValue?.trim()" :placeholder="t('未映射')" style="width:100%">
+          <template #default="{ row }"><el-select v-model="row.warehouseId" clearable filterable :placeholder="t('未映射')" style="width:100%">
             <el-option v-for="warehouse in warehouses" :key="warehouse.id" :value="warehouse.id"
               :label="mappingWarehouseLabel(warehouse)"
               :disabled="warehouse.mappingUnavailable || warehouse.status !== 0 || warehouse.delFlag !== 0" />
@@ -97,11 +86,10 @@
 import { computed, getCurrentInstance, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import WarehouseLocationSelect from '@/components/WarehouseLocationSelect/index.vue'
+import { InfoFilled } from '@element-plus/icons-vue'
 import { historicalLocations, warehouseOptions } from '@/api/wms/warehouse'
 import { warehouseProductSummary, warehouseProductPage, exportWarehouseProducts,
   purchaserWarehouseMappings, savePurchaserWarehouseMappings } from '@/api/wms/warehouseProducts'
-import { PURCHASER_OPTIONS } from '@/utils/itemPurchaser'
-import { useWmsStore } from '@/store/modules/wms'
 import useSettingsStore from '@/store/modules/settings'
 import { translateByMap } from '@/locales/runtime-map'
 import { blobValidate } from '@/utils/ruoyi'
@@ -114,35 +102,37 @@ const EN = {
     'Categories may overlap or omit zero-stock records. The main warehouse includes direct stock only.',
   未入库: 'Not Inbound', 当前有库存: 'In Stock', 历史已售出: 'Sold Historically',
   预计件数: 'Expected Qty', 库存件数: 'Stock Qty', 已售件数: 'Sold Qty',
+  预计总金额: 'Expected Total Cost', 库存总金额: 'Total Inventory Cost', 已售总金额: 'Historical Sold Cost',
   最近售出时间: 'Latest Sale', 目标仓库: 'Target Warehouse', 未映射: 'Unmapped',
   采购人未填写: 'Purchaser missing',
-  '采购人未填写，请先在商品管理补录': 'Purchaser missing; fill it in Item Management first',
   商品管理成本价: 'Item Cost Price', 商品管理销售价: 'Item Selling Price',
   已删除: 'Deleted', 不可用: 'Unavailable',
   '未入库 SKU 条数': 'Unstocked SKU rows',
+  '未入库 SKU 总计（全系统）': 'Total unstocked SKUs (all warehouses)',
+  '采购人仓库映射存在冲突': 'Conflicting warehouse mappings for the same purchaser',
   '当前选择下未归属的未入库 SKU（全系统）': 'Unassigned unstocked SKUs with current selections (all warehouses)',
-  '未映射主要来源（前五项）': 'Largest unmapped purchasers (top five)',
-  打开未入库页面: 'Open Unstocked Items', 打开库存统计页面: 'Open Inventory Statistics',
-  原页面不可用: 'Original page is unavailable',
-  '未映射或未填写采购人的 SKU 不会进入具体仓库；补录采购人或保存映射后才会归属。':
-    'Unmapped or missing purchasers have no warehouse; fill in the purchaser or save a mapping to assign them.'
+  '金额按当前仓库中各 SKU 的数量乘以商品管理中的当前成本价汇总；成本价未填写按 0。历史已售出金额不是销售收入，也不是售出时成本。':
+    'Sum of each SKU quantity times its current Item Management cost in this warehouse. Missing costs count as zero. Sold value is neither sales revenue nor historical cost.',
+  '未映射的 SKU 不会进入具体仓库；选择仓库并保存后即可归属。':
+    'Unmapped SKUs have no warehouse; select a warehouse and save the mapping to assign them.'
 }
 const settings = useSettingsStore()
 const isEn = computed(() => (settings.language || 'zh-cn') === 'en')
 const t = text => isEn.value ? (EN[text] || translateByMap(text, 'en')) : text
 const { proxy } = getCurrentInstance()
 const router = useRouter()
-const wmsStore = useWmsStore()
 const canMap = computed(() => proxy?.$auth?.hasPermi('wms:inventory:purchaserMap'))
 const canCost = computed(() => proxy?.$auth?.hasPermi('wms:itemCostPrice:view'))
 const canSelling = computed(() => proxy?.$auth?.hasPermi('wms:itemSellingPrice:view'))
 const tabs = [
-  { status: 'unstocked', title: '未入库', quantityLabel: '预计件数' },
-  { status: 'stocked', title: '当前有库存', quantityLabel: '库存件数' },
-  { status: 'sold', title: '历史已售出', quantityLabel: '已售件数' }
+  { status: 'unstocked', title: '未入库', quantityLabel: '预计件数', amountLabel: '预计总金额' },
+  { status: 'stocked', title: '当前有库存', quantityLabel: '库存件数', amountLabel: '库存总金额' },
+  { status: 'sold', title: '历史已售出', quantityLabel: '已售件数', amountLabel: '已售总金额' }
 ]
-const blankQuery = () => ({ warehouseId: undefined, itemName: '', skuCode: '', itemCategory: undefined,
-  itemBrand: [], consignInfo: '', pageNum: 1, pageSize: 10 })
+const DEFAULT_WAREHOUSE_NAME = 'DTLA LUXE AF OFFICE'
+const amountTip = '金额按当前仓库中各 SKU 的数量乘以商品管理中的当前成本价汇总；成本价未填写按 0。历史已售出金额不是销售收入，也不是售出时成本。'
+const normalizeWarehouseName = name => String(name || '').replace(/\s+/g, ' ').trim().toLocaleUpperCase()
+const blankQuery = () => ({ warehouseId: undefined, pageNum: 1, pageSize: 10 })
 const query = reactive(blankQuery())
 const status = ref('unstocked')
 const activeTab = computed(() => tabs.find(tab => tab.status === status.value))
@@ -155,21 +145,21 @@ const mappingVisible = ref(false)
 const mappingLoading = ref(false)
 const mappingSaving = ref(false)
 const mappingRows = ref([])
+const unstockedSkuCount = computed(() => mappingRows.value
+  .reduce((sum, item) => sum + Number(item.itemCount || 0), 0))
 const missingPurchaserCount = computed(() => mappingRows.value
-  .filter(item => !item.purchaserValue?.trim())
+  .filter(item => !item.purchaserValue?.trim() && item.warehouseId == null)
   .reduce((sum, item) => sum + Number(item.itemCount || 0), 0))
 const unmappedCount = computed(() => mappingRows.value.filter(item => item.purchaserValue?.trim() && item.warehouseId == null)
   .reduce((sum, item) => sum + Number(item.itemCount || 0), 0))
 const unassignedCount = computed(() => unmappedCount.value + missingPurchaserCount.value)
-const unmappedBreakdown = computed(() => mappingRows.value
-  .filter(item => item.purchaserValue?.trim() && item.warehouseId == null && Number(item.itemCount) > 0)
-  .sort((a, b) => Number(b.itemCount) - Number(a.itemCount))
-  .slice(0, 5))
 const warehouses = ref([])
 let requestSerial = 0
-const params = () => ({ ...query, itemBrand: [...query.itemBrand], pageNum: undefined, pageSize: undefined })
+let warehouseSelectionTouched = false
+const params = () => ({ warehouseId: query.warehouseId })
 const formatQty = value => value == null ? '--' : Number(value).toLocaleString()
 const formatMoney = value => value == null ? '--' : Number(value).toFixed(2)
+const formatTotalAmount = value => `$${Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const mappingWarehouseLabel = warehouse => {
   const name = warehouse.locationName || warehouse.warehouseName
   if (warehouse.delFlag !== 0) return `${name} (${t('已删除')})`
@@ -206,14 +196,9 @@ async function search() {
   } finally { if (serial === requestSerial) loading.value = false }
 }
 function changeStatus() { query.pageNum = 1; loadPage() }
-function reset() { ++requestSerial; Object.assign(query, blankQuery()); summary.value = {}; rows.value = []; total.value = 0; loading.value = false }
+function onWarehouseChange() { warehouseSelectionTouched = true; search() }
+function reset() { warehouseSelectionTouched = true; ++requestSerial; Object.assign(query, blankQuery()); summary.value = {}; rows.value = []; total.value = 0; loading.value = false }
 function openItem(row) { router.push({ name: 'Item', query: { skuCode: row.skuCode } }).catch(() => {}) }
-function openOriginalPage() {
-  const needle = status.value === 'unstocked' ? 'unstocked' : 'statistic'
-  const target = router.getRoutes().find(route => route.path.toLowerCase().includes(needle))
-  if (target) router.push(target.path).catch(() => {})
-  else proxy.$modal.msgWarning(t('原页面不可用'))
-}
 async function exportCurrent() {
   exporting.value = true
   try {
@@ -240,18 +225,34 @@ async function openMappings() {
       .map(warehouse => ({ ...warehouse, mappingUnavailable: true }))
     warehouses.value = [...active, ...mappedHistorical]
     const found = new Map()
-    for (const item of mappingResponse.data || []) found.set(item.purchaserValue.trim().toLowerCase(), { ...item })
-    for (const value of PURCHASER_OPTIONS) {
-      const key = value.trim().toLowerCase()
-      if (!found.has(key)) found.set(key, { purchaserValue: value, warehouseId: null, itemCount: 0 })
+    for (const item of mappingResponse.data || []) {
+      const purchaserValue = String(item.purchaserValue || '').trim()
+      const key = purchaserValue.toLowerCase()
+      const existing = found.get(key)
+      if (!existing) {
+        found.set(key, { ...item, purchaserValue, itemCount: Number(item.itemCount || 0) })
+        continue
+      }
+      if (existing.warehouseId != null && item.warehouseId != null &&
+          String(existing.warehouseId) !== String(item.warehouseId)) {
+        throw new Error(t('采购人仓库映射存在冲突'))
+      }
+      existing.itemCount += Number(item.itemCount || 0)
+      if (existing.warehouseId == null && item.warehouseId != null) {
+        existing.warehouseId = item.warehouseId
+        existing.warehouseName = item.warehouseName
+      }
     }
     mappingRows.value = [...found.values()]
+  } catch (error) {
+    mappingVisible.value = false
+    proxy.$modal.msgError(error?.message || t('加载失败'))
   } finally { mappingLoading.value = false }
 }
 async function saveMappings() {
   mappingSaving.value = true
   try {
-    await savePurchaserWarehouseMappings(mappingRows.value.filter(item => item.purchaserValue?.trim() && item.warehouseId != null)
+    await savePurchaserWarehouseMappings(mappingRows.value
       .map(({ purchaserValue, warehouseId }) => ({ purchaserValue, warehouseId })))
     mappingVisible.value = false
     proxy.$modal.msgSuccess(t('保存成功'))
@@ -259,9 +260,20 @@ async function saveMappings() {
   } catch (error) { proxy.$modal.msgError(error?.message || t('保存失败')) }
   finally { mappingSaving.value = false }
 }
-onMounted(() => {
-  if (!wmsStore.itemBrandList.length) wmsStore.getItemBrandList()
-  if (!wmsStore.itemCategoryTreeList.length) wmsStore.getItemCategoryTreeList()
+onMounted(async () => {
+  try {
+    const response = await historicalLocations()
+    if (warehouseSelectionTouched || query.warehouseId) return
+    const root = (response.data || []).find(node =>
+      Number(node.warehouseLevel) === 1
+      && Number(node.delFlag) === 0
+      && Number(node.status) === 0
+      && normalizeWarehouseName(node.warehouseName) === DEFAULT_WAREHOUSE_NAME
+    )
+    if (!root) return
+    query.warehouseId = root.id
+    await search()
+  } catch (_) {}
 })
 </script>
 
@@ -272,6 +284,7 @@ onMounted(() => {
 .results { margin-top:16px; }
 .summary-row { margin:16px 0; }
 .summary-actions { display:flex; align-items:center; gap:16px; }
+.summary-amount { display:inline-flex; align-items:center; gap:4px; }
+.summary-info { color:#98a2b3; cursor:help; font-size:14px; }
 .mapping-hint { margin-bottom:12px; }
-.mapping-breakdown { margin-bottom:12px; color:var(--el-text-color-regular); line-height:1.5; }
 </style>

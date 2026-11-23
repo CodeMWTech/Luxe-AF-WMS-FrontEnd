@@ -68,7 +68,7 @@ export function listInventoryBoard(query,type) {
 // 仓库维度看板：按当前筛选条件汇总（不分页）
 export function listInventoryBoardWarehouseSummary(query) {
   return request({
-    url: '/wms/inventory/boardList/warehouse/summary',
+    url: '/wms/inventory/boardList/warehouse/summary-with-total',
     method: 'get',
     params: query
   })

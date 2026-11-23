@@ -1397,24 +1397,6 @@ function buildWarehouseSummaryMap(items = []) {
   return map
 }
 
-function aggregateWarehouseSummary(items) {
-  let quantity = 0
-  let amountCents = 0
-  let amountAvailable = true
-  for (const item of items) {
-    const itemQuantity = Number(item.totalQuantity)
-    const itemAmount = Number(item.totalAmount)
-    if (!Number.isFinite(itemQuantity)) return null
-    quantity += itemQuantity
-    if (item.totalAmount === null || item.totalAmount === undefined || !Number.isFinite(itemAmount)) {
-      amountAvailable = false
-    } else {
-      amountCents += Math.round(itemAmount * 100)
-    }
-  }
-  return { quantity, amount: amountAvailable ? amountCents / 100 : null }
-}
-
 function getWarehouseSummaryEntry(row) {
   const rootId = row?.rootWarehouseId ?? row?.warehouseId
   if (rootId != null && rootId !== '') {
@@ -1916,15 +1898,16 @@ const getList = async () => {
       const count = Number(skuCountResult.value.data)
       if (Number.isSafeInteger(count) && count >= 0) inventorySkuCount.value = count
     }
-    if (summaryResult.status === 'fulfilled' && Array.isArray(summaryResult.value?.data)) {
-      const summaryItems = summaryResult.value.data
-      const summary = aggregateWarehouseSummary(summaryItems)
-      if (summary) {
-        inventorySummaryQuantity.value = summary.quantity
-        inventorySummaryAmount.value = summary.amount
-        if (queryType.value === 'warehouse') {
-          warehouseSummaryMap.value = buildWarehouseSummaryMap(summaryItems)
-        }
+    if (summaryResult.status === 'fulfilled' && Array.isArray(summaryResult.value?.data?.warehouses)) {
+      const { warehouses, totalQuantity, totalAmount } = summaryResult.value.data
+      const quantity = Number(totalQuantity)
+      if (Number.isFinite(quantity)) inventorySummaryQuantity.value = quantity
+      if (totalAmount !== null && totalAmount !== undefined) {
+        const amount = Number(totalAmount)
+        if (Number.isFinite(amount)) inventorySummaryAmount.value = amount
+      }
+      if (queryType.value === 'warehouse') {
+        warehouseSummaryMap.value = buildWarehouseSummaryMap(warehouses)
       }
     }
     const rows = normalizeInventoryBoardRows(filterInventoryBoardRows(res.rows || []))

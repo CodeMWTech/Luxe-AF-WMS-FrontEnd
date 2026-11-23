@@ -351,6 +351,7 @@ onMounted(() => {
 .inventory-history-page .filter-form {
   display: flex;
   flex-wrap: wrap;
+  align-items: flex-start;
   column-gap: 16px;
 }
 
