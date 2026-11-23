@@ -6,6 +6,10 @@ export const PURCHASER_OPTIONS = [
   'Ebay 1',
   'Ebay 2 - Dee',
   'Ebay 3 - Sally',
+  'Ebay4',
+  'WN',
+  'GM ROOM',
+  'HALL',
   'Whole Company',
   'Others'
 ]
