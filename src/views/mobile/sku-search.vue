@@ -288,10 +288,6 @@ function openDetail(item) {
     results: results.value,
     hideZeroStock: hideZeroStock.value
   })
-
-function saveFilter() {
-  searchStore.saveSearchState({ hideZeroStock: hideZeroStock.value })
-}
   router.push({
     name: 'MobileProductDetail',
     params: { skuId: String(skuId) }
@@ -300,6 +296,10 @@ function saveFilter() {
       ElMessage.error(error?.message || t('mobile.loadDetailFailed'))
     }
   })
+}
+
+function saveFilter() {
+  searchStore.saveSearchState({ hideZeroStock: hideZeroStock.value })
 }
 
 onMounted(() => {
