@@ -271,7 +271,13 @@
           <span v-else class="chart__scope-empty">{{ t('全部直播间 · 全部分类 · 全部品牌 · 全部时间') }}</span>
         </div>
         <p v-if="focusId === 'rank'" class="chart__note" @click.stop>{{ t(chartNote.rank) }}</p>
-        <div class="chart__plot"><div ref="rankEl" class="chart__canvas" /></div>
+        <div class="chart__plot" :class="{ 'has-side': focusId === 'rank' && rankPieRows.length }">
+          <div ref="rankEl" class="chart__canvas" />
+          <div v-if="focusId === 'rank' && rankPieRows.length" class="chart__pie" @click.stop>
+            <header>{{ t('已售出 · 各直播间占比') }}</header>
+            <div ref="rankPieEl" class="chart__pie-canvas" />
+          </div>
+        </div>
       </article>
 
       <article class="chart" :class="chartClass('rateRank')">
@@ -299,7 +305,7 @@
         <div class="chart__plot" :class="{ 'has-side': focusId === 'rateRank' && rateRankPieRows.length }">
           <div ref="rateRankEl" class="chart__canvas" />
           <div v-if="focusId === 'rateRank' && rateRankPieRows.length" class="chart__pie" @click.stop>
-            <header>{{ t('已售出 · 各直播间占比') }}</header>
+            <header>{{ t('售罄率 · 各直播间占比') }}</header>
             <div ref="rateRankPieEl" class="chart__pie-canvas" />
           </div>
         </div>
@@ -647,6 +653,9 @@ const EN = {
   '当前账号没有查看价格的权限时，此卡不显示金额。利润按当前商品资料中的售价与成本价计算，商品改价后重新进入本页即会变化。': 'If this account cannot view prices, no amount is shown. Profit uses the current selling and cost prices in the item record, so it changes after prices are updated.',
   各直播间占每种状态的比例: 'Each room share of every status',
   '已售出利润 · 各直播间占比': 'Sold profit · share by room',
+  '已售出 · 各直播间占比': 'Sold · share by room',
+  '售罄率 · 各直播间占比': 'Sell-through · share by room',
+  '在库成本 · 各直播间占比': 'Inventory cost · share by room',
   '（已选品牌如下）': ' (selected brands below)',
   '内，由本直播间出库且销售出库单已完成的商品数量合计': '— total quantity shipped from this room on finished sales outbound orders',
   '内，已售出商品按 售价 − 成本价 计算出的利润合计': '— profit on sold items, selling price minus cost price',
@@ -750,6 +759,7 @@ const EN = {
   '每一间一条柱子，未入库、已入库、已售出分别堆叠。三种口径互相独立，柱子的高度只是这三种口径摆在一起对比，不代表这间一共有多少件货。': 'One bar per room, with not inbound, in stock, and sold stacked separately. The three measures are independent, so the bar height is only a side-by-side comparison and is not the total piece count for that room.',
   '按已售出件数从多到少排序。已售出指已完成销售的出库，和上面「已售出排名」的口径一致。': 'Ranked by sold quantity from high to low. Sold means completed sales outbound, the same measure as the Sold ranking above.',
   '售罄率 = 已售出 ÷（已入库 + 已售出）。按这个比例从高到低排序。已入库或已售出都为 0 的直播间，比例按 0 排在最后。': 'Sell-through = sold ÷ (in stock + sold), ranked from high to low. Rooms with both in stock and sold at 0 are shown as 0 and placed last.',
+  '售罄率 = 已售出 ÷（已入库 + 已售出）。按这个比例从高到低排序。已入库或已售出都为 0 的直播间，比例按 0 排在最后。右侧饼图把这些售罄率相加作为分母，看每一间占的比重。': 'Sell-through = sold ÷ (in stock + sold), ranked from high to low. Rooms with both at 0 are placed last. The pie on the right sums these rates as the denominator to show each room\u2019s share.',
   '成本 = 成本价 × 件数，只统计「已入库」这一项。成本价没填的货不计入。它表示这间里还压着多少钱的货，不是利润。': 'Cost = cost price × quantity, counting only the in-stock pieces. Pieces without a cost price are left out. It shows how much money is still tied up in the room, not profit.',
   各品牌占比: 'Share by brand',
   这些品牌实际算进了哪些分类: 'Categories included for these brands',
@@ -1226,14 +1236,26 @@ const profitPieRows = computed(() => {
     .filter(row => row.value > 0)
 })
 const profitPieEl = ref(null)
-/** 售罄率排名放大时的饼图：各直播间已售出件数的占比。 */
+/**
+ * 售罄率排名放大时的饼图：按各直播间售罄率的相对高低分配占比。
+ * 口径 = 该间售罄率 ÷ 所有直播间售罄率之和，与左侧柱子的排序口径一致，
+ * 所以饼图里靠前的扇区就是左图排在上面的那几间。
+ */
 const rateRankPieRows = computed(() => {
   if (focusId.value !== 'rateRank') return []
+  return shownRooms.value
+    .map(room => ({ id: room.id, name: room.name, value: sellRate(room) || 0 }))
+    .filter(row => row.value > 0)
+})
+const rateRankPieEl = ref(null)
+/** 已售出排名放大时的饼图：各直播间已售出件数占全部已售出的比例。 */
+const rankPieRows = computed(() => {
+  if (focusId.value !== 'rank') return []
   return shownRooms.value
     .map(room => ({ id: room.id, name: room.name, value: Number(room.sold) || 0 }))
     .filter(row => row.value > 0)
 })
-const rateRankPieEl = ref(null)
+const rankPieEl = ref(null)
 /** 在库成本放大时的饼图：各直播间占用资金的占比。 */
 const costPieRows = computed(() => {
   if (focusId.value !== 'cost') return []
@@ -1302,7 +1324,7 @@ const chartNote = computed(() => ({
   rank: '按已售出件数从多到少排序。已售出指已完成销售的出库，和上面「已售出排名」的口径一致。',
   rateRank: hasRange.value
     ? `${t('统计区间')} ${rangeLabel.value} ${t('内：售罄率 = 区间已售出 ÷（区间已售出 + 当前已入库）。区间只作用于已售出，已入库仍是现在的库存，所以这个比例是区间口径，和整页其他数字不能直接比。')}`
-    : '售罄率 = 已售出 ÷（已入库 + 已售出）。按这个比例从高到低排序。已入库或已售出都为 0 的直播间，比例按 0 排在最后。',
+    : '售罄率 = 已售出 ÷（已入库 + 已售出）。按这个比例从高到低排序。已入库或已售出都为 0 的直播间，比例按 0 排在最后。右侧饼图把这些售罄率相加作为分母，看每一间占的比重。',
   cost: '成本 = 成本价 × 件数，只统计「已入库」这一项。成本价没填的货不计入。它表示这间里还压着多少钱的货，不是利润。'
 }))
 const splitUnstockedEl = ref(null)
@@ -1705,11 +1727,19 @@ function render() {
   }
   if (focusId.value === 'mix') shownRooms.value.forEach(room => keep(null, pieEls.get(room.id))?.setOption(pieOption(room, true), true))
   // 三张按直播间的饼图：8 间全画不合并，统一用固定配色
+  if (rankPieRows.value.length) {
+    keep(null, rankPieEl.value)?.setOption(splitPie(rankPieRows.value, { all: true, color: name => roomColor(name) }), true)
+  }
   if (profitPieRows.value.length) {
     keep(null, profitPieEl.value)?.setOption(splitPie(profitPieRows.value, { all: true, color: name => roomColor(name) }), true)
   }
   if (rateRankPieRows.value.length) {
-    keep(null, rateRankPieEl.value)?.setOption(splitPie(rateRankPieRows.value, { all: true, color: name => roomColor(name) }), true)
+    // 这里的值是售罄率百分比，不是件数，tooltip 要按百分比显示并标明原值
+    keep(null, rateRankPieEl.value)?.setOption(splitPie(rateRankPieRows.value, {
+      all: true,
+      color: name => roomColor(name),
+      format: value => `${Number(value || 0).toFixed(1)}%`
+    }), true)
   }
   if (costPieRows.value.length) {
     keep(null, costPieEl.value)?.setOption(splitPie(costPieRows.value, { all: true, format: moneyText, color: name => roomColor(name) }), true)
