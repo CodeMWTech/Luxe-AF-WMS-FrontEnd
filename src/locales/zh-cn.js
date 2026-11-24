@@ -15,6 +15,8 @@ export default {
     passwordPlaceholder: '密码',
     codePlaceholder: '验证码',
     rememberMe: '记住密码',
+    skipAnimation: '跳过动画',
+    replayAnimation: '重播动画',
     login: '登 录',
     loggingIn: '登 录 中...',
     consentSummary: '登录即同意接收 Luxe AF 排班短信，并遵守',
