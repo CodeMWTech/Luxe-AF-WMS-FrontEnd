@@ -15,6 +15,8 @@ export default {
     passwordPlaceholder: 'Password',
     codePlaceholder: 'Verification code',
     rememberMe: 'Remember me',
+    skipAnimation: 'Skip animation',
+    replayAnimation: 'Replay animation',
     login: 'Log in',
     loggingIn: 'Logging in...',
     consentSummary: 'By logging in, you agree to receive work-schedule SMS from Luxe AF. See ',
