@@ -296,7 +296,13 @@
           <span v-else class="chart__scope-empty">{{ t('全部直播间 · 全部分类 · 全部品牌 · 全部时间') }}</span>
         </div>
         <p v-if="focusId === 'rateRank'" class="chart__note" @click.stop>{{ t(chartNote.rateRank) }}</p>
-        <div class="chart__plot"><div ref="rateRankEl" class="chart__canvas" /></div>
+        <div class="chart__plot" :class="{ 'has-side': focusId === 'rateRank' && rateRankPieRows.length }">
+          <div ref="rateRankEl" class="chart__canvas" />
+          <div v-if="focusId === 'rateRank' && rateRankPieRows.length" class="chart__pie" @click.stop>
+            <header>{{ t('已售出 · 各直播间占比') }}</header>
+            <div ref="rateRankPieEl" class="chart__pie-canvas" />
+          </div>
+        </div>
       </article>
 
       <article class="chart" :class="chartClass('profit')">
@@ -391,10 +397,16 @@
           <span v-else class="chart__scope-empty">{{ t('全部直播间 · 全部分类 · 全部品牌 · 全部时间') }}</span>
         </div>
         <p v-if="focusId === 'cost'" class="chart__note" @click.stop>{{ t(chartNote.cost) }}</p>
-        <div class="chart__plot"><div ref="costEl" class="chart__canvas" /></div>
+        <div class="chart__plot" :class="{ 'has-side': focusId === 'cost' && costPieRows.length }">
+          <div ref="costEl" class="chart__canvas" />
+          <div v-if="focusId === 'cost' && costPieRows.length" class="chart__pie" @click.stop>
+            <header>{{ t('在库成本 · 各直播间占比') }}</header>
+            <div ref="costPieEl" class="chart__pie-canvas" />
+          </div>
+        </div>
       </article>
     </section>
-    <section v-if="focusId && categoryId" class="split-board" v-loading="splitLoading">
+    <section v-if="focusId === 'mix' && categoryId" class="split-board" v-loading="splitLoading">
       <article>
         <header>{{ t('未入库') }} · {{ t('各品牌占比') }}</header>
         <div ref="splitUnstockedEl" class="split-board__canvas" />
@@ -429,7 +441,7 @@
         @click="pickRoom(room.id)"
       >
         <header>
-          <strong>{{ room.name }}</strong>
+          <strong class="room-chip" :style="{ '--room-color': roomColor(room.name) }">{{ room.name }}</strong>
           <span>{{ rateText(room.stocked, room.sold) }}</span>
         </header>
         <div :ref="el => setPieEl(room.id, el)" class="room__pie" />
@@ -445,11 +457,31 @@
     <el-card>
       <section ref="detailBlockRef" class="detail-block">
         <header class="detail-block__head">
-          <div>
+          <div class="detail-block__title">
             <h3>{{ t('全部状态 · 商品明细') }}</h3>
             <p>{{ t('未入库只统计已映射到直播间的商品，已入库是当前在库数量，已售出按出库完成时间统计。三个数量口径独立，不能相加当作总数。') }}</p>
           </div>
-          <span class="detail-block__count">{{ t('共') }} {{ formatQty(detailTotal) }} {{ t('条') }}</span>
+          <div class="detail-block__tools">
+            <el-select v-model="detailSortBy" size="small" class="detail-block__sort" @change="onDetailSortChange">
+              <el-option v-for="option in detailSortFields" :key="option.id" :label="t(option.label)" :value="option.id" />
+            </el-select>
+            <el-select v-model="detailSortOrder" size="small" class="detail-block__order" @change="onDetailSortChange">
+              <el-option :label="t('降序')" value="desc" />
+              <el-option :label="t('升序')" value="asc" />
+            </el-select>
+            <el-tooltip placement="top" :show-after="150" popper-class="chart-scope-tip">
+              <template #content>
+                <div class="chart-scope-tip__inner">
+                  <b>{{ t('默认排序') }}</b>
+                  <span>{{ t('先按已入库从多到少排；已入库数量相同时，按已售出从多到少排；再相同按 SKU 排。') }}</span>
+                </div>
+              </template>
+              <span class="detail-block__resethover">
+                <el-button size="small" class="detail-block__reset" :disabled="isDefaultSort" @click="resetDetailSort">{{ t('恢复默认') }}</el-button>
+              </span>
+            </el-tooltip>
+            <span class="detail-block__count">{{ t('共') }} {{ formatQty(detailTotal) }} {{ t('条') }}</span>
+          </div>
         </header>
         <div v-if="detailScope.length" class="chart__scope" @click.stop>
           <span v-for="chip in detailScope" :key="chip.key" class="chart__scope-item" :class="'is-' + chip.key">
@@ -465,8 +497,11 @@
           row-key="skuId"
           :row-class-name="detailRowClass"
         >
-          <el-table-column :label="t('直播间')" width="110">
-            <template #default="{ row }">{{ row.roomName || '--' }}</template>
+          <el-table-column :label="t('直播间')" width="120">
+            <template #default="{ row }">
+              <span v-if="row.roomName" class="room-chip" :style="{ '--room-color': roomColor(row.roomName) }">{{ row.roomName }}</span>
+              <span v-else>--</span>
+            </template>
           </el-table-column>
           <el-table-column :label="t('商品')" min-width="220">
             <template #default="{ row }">
@@ -681,6 +716,17 @@ const EN = {
   算哪些: 'Include',
   怎么看: 'Show',
   排序: 'Sort',
+  升序: 'Ascending',
+  降序: 'Descending',
+  恢复默认: 'Reset',
+  默认排序: 'Default sort',
+  '先按已入库从多到少排；已入库数量相同时，按已售出从多到少排；再相同按 SKU 排。': 'In stock high to low first; when tied, sold high to low; then by SKU.',
+  '已入库': 'In stock',
+  '已售出': 'Sold',
+  '未入库': 'Not in stock',
+  '成本价': 'Cost price',
+  '销售价': 'Selling price',
+  '直播间': 'Room',
   已售出占比: 'Sold share',
   已入库占比: 'In-stock share',
   未入库占比: 'Not-inbound share',
@@ -711,13 +757,22 @@ const EN = {
   未挂分类: 'No category',
   点击放大: 'Click to enlarge',
   点击收回: 'Click to collapse',
-  暂无数量: 'No quantity'
+  暂无数量: 'No quantity',
+  其他: 'Other',
+  包含: 'Includes',
+  '还有 {0} 个品牌': '{0} more brands'
 }
 const settings = useSettingsStore()
 const isEn = computed(() => (settings.language || 'zh-cn') === 'en')
 const t = text => isEn.value ? (EN[text] || translateByMap(text, 'en')) : text
 /** 切换语言后图表里的图例和坐标文字要跟着重绘。 */
-watch(isEn, async () => { await nextTick(); render() })
+watch(isEn, async () => {
+  await nextTick()
+  render()
+  // 品牌饼图的数据里带着品牌名，「其他」这类文案也随语言变化，所以直接重新拉一次
+  if (focusId.value === 'mix' && categoryId.value) await loadBrandSplit()
+  else renderSplits()
+})
 const { proxy } = getCurrentInstance()
 const wmsStore = useWmsStore()
 
@@ -729,6 +784,36 @@ const detailPageSize = ref(20)
 const detailLoading = ref(false)
 const detailShowsCost = ref(false)
 const detailShowsPrice = ref(false)
+/**
+ * 商品明细排序：先选字段，再选升序/降序。
+ * 没有单独的「默认」项——已入库 + 降序就是默认顺序，在界面上用小字注明。
+ */
+const detailSortFields = [
+  { id: 'stocked', label: '已入库' },
+  { id: 'sold', label: '已售出' },
+  { id: 'unstocked', label: '未入库' },
+  { id: 'costPrice', label: '成本价' },
+  { id: 'sellingPrice', label: '销售价' },
+  { id: 'roomName', label: '直播间' },
+  { id: 'skuCode', label: 'SKU' }
+]
+const detailSortBy = ref('stocked')
+const detailSortOrder = ref('desc')
+/** 默认排序：已入库 + 降序。已经是默认时「恢复默认」按钮置灰。 */
+const isDefaultSort = computed(() => detailSortBy.value === 'stocked' && detailSortOrder.value === 'desc')
+function detailSortParams() {
+  return { sortBy: detailSortBy.value, sortOrder: detailSortOrder.value }
+}
+function onDetailSortChange() {
+  detailPage.value = 1
+  loadDetails()
+}
+function resetDetailSort() {
+  if (isDefaultSort.value) return
+  detailSortBy.value = 'stocked'
+  detailSortOrder.value = 'desc'
+  onDetailSortChange()
+}
 const detailTableRef = ref(null)
 const skuFind = ref('')
 const activeSku = ref('')
@@ -794,7 +879,8 @@ async function loadDetails() {
       skuCode: activeSku.value ? skuFind.value.trim() : undefined,
       pageNum: detailPage.value,
       pageSize: detailPageSize.value,
-      ...soldRangeParams()
+      ...soldRangeParams(),
+      ...detailSortParams()
     }).catch(() => ({ rows: [], total: 0 }))
     const rows = result.rows || []
     for (const row of rows) {
@@ -1140,6 +1226,23 @@ const profitPieRows = computed(() => {
     .filter(row => row.value > 0)
 })
 const profitPieEl = ref(null)
+/** 售罄率排名放大时的饼图：各直播间已售出件数的占比。 */
+const rateRankPieRows = computed(() => {
+  if (focusId.value !== 'rateRank') return []
+  return shownRooms.value
+    .map(room => ({ id: room.id, name: room.name, value: Number(room.sold) || 0 }))
+    .filter(row => row.value > 0)
+})
+const rateRankPieEl = ref(null)
+/** 在库成本放大时的饼图：各直播间占用资金的占比。 */
+const costPieRows = computed(() => {
+  if (focusId.value !== 'cost') return []
+  if (!shownRooms.value.some(room => room.costVisible)) return []
+  return shownRooms.value
+    .map(room => ({ id: room.id, name: room.name, value: Number(room.stockedCost) || 0 }))
+    .filter(row => row.value > 0)
+})
+const costPieEl = ref(null)
 const rankEl = ref(null)
 const rateRankEl = ref(null)
 const profitEl = ref(null)
@@ -1209,6 +1312,45 @@ const brandSplit = ref([])
 const splitLoading = ref(false)
 let splitToken = 0
 const SPLIT_COLORS = ['#2f6fe0', '#1298b0', '#e989c8', '#7a5bd0', '#f08a24', '#1b9a5a', '#5c86f6', '#d46eae', '#8eaddf', '#3ed6e6', '#f6b4d8', '#6aa4ff']
+/**
+ * 8 个直播间的固定配色，顺序与 ROOM_NAMES 一一对应。
+ * 特意挑色相跨度大的颜色（蓝、青、粉、紫、橙、绿、黄、玫红），
+ * 避免蓝/紫/浅蓝这类相近色在小圆点里分不出来。
+ */
+const ROOM_PALETTE = [
+  '#2f6fe0', // Ebay1 蓝
+  '#1298b0', // Ebay2 青
+  '#e989c8', // Ebay3 粉
+  '#7a5bd0', // Ebay4 紫
+  '#f08a24', // TK1 橙
+  '#1b9a5a', // TK2 绿
+  '#c9a227', // TK3 金
+  '#d64545'  // WN 红（原来用玫红，和 Ebay3 的粉太接近，换成明确的红）
+]
+/** 「其他」合并项专用中性灰，不参与直播间取色，避免与任何直播间撞色。 */
+const OTHERS_COLOR = '#b0b8c4'
+/**
+ * 直播间固定配色：按 ROOM_NAMES 的顺序锁定，同一间在饼图、图例、明细表里永远是同一个颜色，
+ * 不随当前选中了几间、排序如何而变。新增直播间时按顺序往后取色。
+ */
+const ROOM_COLOR_MAP = (() => {
+  const map = new Map()
+  ROOM_NAMES.forEach((name, index) => {
+    map.set(name.trim().toLowerCase(), ROOM_PALETTE[index % ROOM_PALETTE.length])
+  })
+  return map
+})()
+function roomColor(name) {
+  const key = String(name || '').trim().toLowerCase()
+  if (!key) return SPLIT_COLORS[0]
+  if (ROOM_COLOR_MAP.has(key)) return ROOM_COLOR_MAP.get(key)
+  // 「其他」是合并项，不是真实直播间，固定用中性灰，避免和任何直播间的颜色撞色
+  if (key === t('其他').trim().toLowerCase() || key === '其他' || key === 'other') return OTHERS_COLOR
+  // 名字不在 8 个直播间里（例如以后新增的），按名字散列到一个稳定颜色
+  let hash = 0
+  for (let i = 0; i < key.length; i += 1) hash = (hash * 31 + key.charCodeAt(i)) % 1000003
+  return SPLIT_COLORS[hash % SPLIT_COLORS.length]
+}
 const pieEls = new Map()
 const charts = []
 
@@ -1420,19 +1562,69 @@ function emptyChart(el, text) {
     xAxis: { show: false }, yAxis: { show: false }, series: []
   }, true)
 }
-function splitPie(rows) {
-  const data = rows.filter(row => row.value > 0).map((row, index) => ({
-    name: row.name,
-    value: row.value,
-    itemStyle: { color: SPLIT_COLORS[index % SPLIT_COLORS.length] }
+/**
+ * 饼图配置。
+ * - 品牌饼图（默认）：项数超过 6 个时只画前 5 名，其余合并成「其他」，悬停「其他」可看明细。
+ * - 直播间饼图（options.all = true）：8 个直播间全部画出，不合并，每间固定配色。
+ * options.format：数值格式化，默认按件数；金额类传 moneyText。
+ * options.color：取色函数；直播间饼图传 roomColor 保证与明细表一致。
+ */
+function splitPie(rows, options = {}) {
+  const compact = options.compact === true
+  const formatValue = typeof options.format === 'function' ? options.format : formatQty
+  const showAll = options.all === true
+  const MAX_SLICES = 6
+  const TOP = MAX_SLICES - 1
+  const ranked = rows
+    .filter(row => Number(row.value) > 0)
+    .sort((a, b) => Number(b.value) - Number(a.value))
+  const total = ranked.reduce((sum, row) => sum + Number(row.value), 0)
+  const share = value => (total > 0 ? (Number(value) / total * 100).toFixed(1) : '0.0')
+  // 品牌饼图超出 6 项才合并；直播间饼图始终全画
+  const merge = !showAll && ranked.length > MAX_SLICES
+  const head = merge ? ranked.slice(0, TOP) : ranked
+  const tail = merge ? ranked.slice(TOP) : []
+  const items = head.map(row => ({ name: row.name, value: Number(row.value) }))
+  if (tail.length) {
+    items.push({
+      name: t('其他'),
+      value: tail.reduce((sum, row) => sum + Number(row.value), 0),
+      others: tail.map(row => ({ name: row.name, value: Number(row.value), share: share(row.value) }))
+    })
+  }
+  const colorOf = typeof options.color === 'function' ? options.color : null
+  const data = items.map((item, index) => ({
+    name: item.name,
+    value: item.value,
+    itemStyle: { color: colorOf ? colorOf(item.name, index) : SPLIT_COLORS[index % SPLIT_COLORS.length] }
   }))
+  const othersByName = new Map(items.filter(item => item.others).map(item => [item.name, item.others]))
   return {
-    tooltip: { trigger: 'item' },
-    legend: { type: 'scroll', bottom: 0 },
+    tooltip: {
+      trigger: 'item',
+      confine: true,
+      formatter: params => {
+        const detail = othersByName.get(params.name)
+        const title = `<b>${params.name}</b><br/>${formatValue(params.value)} · ${share(params.value)}%`
+        if (!detail || !detail.length) return title
+        // 「其他」里有哪些品牌全部列出来，不再截断，避免出现「还有 N 个」这种看不懂的话
+        const lines = detail.map(item => `${item.name} ${formatValue(item.value)} · ${item.share}%`)
+        return `${title}<br/><span style="color:#98a2b3">${t('包含')}：</span><br/>${lines.join('<br/>')}`
+      }
+    },
+    legend: compact
+      ? {
+          type: 'scroll', bottom: 0, itemWidth: 8, itemHeight: 8, itemGap: 6,
+          textStyle: { fontSize: 11 }, pageIconSize: 8, pageTextStyle: { fontSize: 10 }
+        }
+      : { type: 'scroll', bottom: 0 },
     graphic: data.length ? [] : [{ type: 'text', left: 'center', top: 'middle', style: { text: t('暂无数量'), fill: '#98a2b3', fontSize: 12 } }],
     series: [{
-      type: 'pie', radius: ['36%', '58%'], center: ['50%', '42%'],
-      label: { show: data.length > 0, formatter: '{b}\n{d}%' },
+      type: 'pie',
+      radius: ['34%', '52%'],
+      center: ['50%', '44%'],
+      label: { show: data.length > 0, formatter: '{b}\n{d}%', fontSize: 11, lineHeight: 14 },
+      labelLine: { show: data.length > 0, length: 8, length2: 8 },
       itemStyle: { borderColor: '#fff', borderWidth: 2 },
       data
     }]
@@ -1512,8 +1704,15 @@ function render() {
     rankBar(costEl.value, costed.map(room => ({ name: room.name, value: room.stockedCost || 0 })), ['#A9C6FF', '#5C9BFF', '#2459C0'], moneyText, orient.value.cost === 'v')
   }
   if (focusId.value === 'mix') shownRooms.value.forEach(room => keep(null, pieEls.get(room.id))?.setOption(pieOption(room, true), true))
+  // 三张按直播间的饼图：8 间全画不合并，统一用固定配色
   if (profitPieRows.value.length) {
-    keep(null, profitPieEl.value)?.setOption(splitPie(profitPieRows.value), true)
+    keep(null, profitPieEl.value)?.setOption(splitPie(profitPieRows.value, { all: true, color: name => roomColor(name) }), true)
+  }
+  if (rateRankPieRows.value.length) {
+    keep(null, rateRankPieEl.value)?.setOption(splitPie(rateRankPieRows.value, { all: true, color: name => roomColor(name) }), true)
+  }
+  if (costPieRows.value.length) {
+    keep(null, costPieEl.value)?.setOption(splitPie(costPieRows.value, { all: true, format: moneyText, color: name => roomColor(name) }), true)
   }
   nextTick(() => charts.forEach(chart => chart.resize()))
 }
@@ -1673,7 +1872,7 @@ watch(orient, async () => { await nextTick(); render() }, { deep: true })
 watch([roomIds, focusId, categoryId, brandIds], async () => {
   await nextTick()
   render()
-  if (focusId.value && categoryId.value) await loadBrandSplit()
+  if (focusId.value === 'mix' && categoryId.value) await loadBrandSplit()
   else splitToken += 1
 }, { deep: true })
 const lastSyncAt = ref('')
@@ -1913,11 +2112,11 @@ onBeforeUnmount(() => {
 .chart-scope-tip__inner { display: flex; flex-direction: column; gap: 4px; max-width: 340px; line-height: 1.6; }
 .chart-scope-tip__inner b { color: #98c1ff; font-weight: 700; }
 .chart-scope-tip__inner span { color: #fff; word-break: break-word; white-space: pre-line; }
-.split-board { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
-.split-board article { min-height: 280px; padding: 12px; background: #fff; border: 1px solid #e7eef8; border-radius: 12px; }
-.split-board header { font-weight: 700; color: #1d2939; }
+.split-board { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 12px; margin-bottom: 12px; }
+.split-board article { padding: 12px 12px 10px; background: #fff; border: 1px solid #e7eef8; border-radius: 12px; }
+.split-board header { font-weight: 700; color: #1d2939; margin-bottom: 4px; }
 .split-board p { margin: 6px 0 0; color: #98a2b3; font-size: 12px; line-height: 1.5; }
-.split-board__canvas { height: 240px; }
+.split-board__canvas { height: 280px; }
 .chart-mix { margin-top: 12px; padding: 14px 16px; border: 1px solid #e7eef8; border-radius: 12px; background: #f7f9ff; }
 .chart-mix h3 { margin: 0; font-size: 15px; color: #2f6fe0; }
 .chart-mix p { margin: 8px 0 0; color: #667085; line-height: 1.6; }
@@ -1987,6 +2186,12 @@ onBeforeUnmount(() => {
 .detail-block__head h3 { margin: 0; font-size: 16px; font-weight: 700; color: #2f6fe0; }
 .detail-block__head p { margin: 4px 0 0; max-width: 760px; color: #98a2b3; font-size: 12px; line-height: 1.6; }
 .detail-block__count { flex: none; color: #667085; font-size: 13px; }
+.detail-block__title { min-width: 0; }
+.detail-block__tools { display: flex; align-items: center; gap: 10px; flex: none; }
+.detail-block__sort { width: 128px; }
+.detail-block__order { width: 92px; }
+.detail-block__reset { margin-left: 2px; }
+.detail-block__resethover { display: inline-flex; }
 .detail-block__item {
   display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   color: #101828; font-weight: 600; line-height: 1.4;
@@ -1999,6 +2204,12 @@ onBeforeUnmount(() => {
 .detail-block__foot { display: flex; justify-content: flex-end; margin-top: 12px; }
 .detail-block__table :deep(.sku-highlight-row > td) { background: #fffbe6 !important; }
 .detail-block__table :deep(.sku-highlight-row .detail-block__sku) { color: #b45309; font-weight: 700; }
+/* 直播间色块：整块填充该直播间的固定配色，颜色与饼图完全一致 */
+.room-chip {
+  display: inline-block; padding: 2px 10px; border-radius: 4px;
+  background: var(--room-color); color: #fff;
+  font-size: 12px; font-weight: 600; line-height: 1.6; white-space: nowrap;
+}
 .live-rooms__filters > label.is-sku { flex: 0 0 220px; max-width: 220px; }
 .room { padding: 12px; text-align: left; cursor: pointer; }
 .room.is-on { border-color: #b9d0ff; box-shadow: 0 8px 24px rgba(47, 111, 224, 0.16); background: linear-gradient(180deg, #f5f8ff, #fff); }
