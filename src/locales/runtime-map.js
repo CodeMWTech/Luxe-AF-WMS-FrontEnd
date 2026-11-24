@@ -543,6 +543,7 @@ const zhToEnMap = {
   总库存: 'Total Inventory',
   仓库商品总览: 'Warehouse Products',
   采购人仓库映射: 'Purchaser to Warehouse Mapping',
+  直播间数据分析: 'Live Room Analysis',
   '90天以上': 'Over 90 days',
   '1-45天': '1-45 days',
   '46-90天': '46-90 days',
